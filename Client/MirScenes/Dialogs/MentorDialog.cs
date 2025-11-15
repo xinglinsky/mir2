@@ -93,7 +93,7 @@ namespace Client.MirScenes.Dialogs
             {
                 if (MentorLevel != 0)
                 {
-                    GameScene.Scene.ChatDialog.ReceiveChat("You already have a Mentor.", ChatType.System);
+                    GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Mentor_AlreadyHasMentor, ChatType.System);
                     return;
                 }
 
@@ -130,7 +130,7 @@ namespace Client.MirScenes.Dialogs
                     return;
                 }
 
-                MirMessageBox messageBox = new MirMessageBox(string.Format("Cancelling a Mentorship early will cause a cooldown. Are you sure?"), MirMessageBoxButtons.YesNo);
+                MirMessageBox messageBox = new MirMessageBox(GameLanguage.Mentor_CancelWarning, MirMessageBoxButtons.YesNo);
 
                 messageBox.YesButton.Click += (oo, ee) => Network.Enqueue(new C.CancelMentor { });
                 messageBox.NoButton.Click += (oo, ee) => { messageBox.Dispose(); };
@@ -174,7 +174,7 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true,
                 Font = new Font(Settings.FontName, 7F),
                 Visible = false,
-                Text = "ONLINE",
+                Text = GameLanguage.Mentor_Online,
             };
 
             StudentNameLabel = new MirLabel
@@ -225,7 +225,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 NotControl = true,
                 Font = new Font(Settings.FontName, 7F),
-                Text = "MENTOR",
+                Text = GameLanguage.Mentor_MentorLabel,
             };
 
             StudentLabel = new MirLabel
@@ -238,7 +238,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 NotControl = true,
                 Font = new Font(Settings.FontName, 7F),
-                Text = "MENTEE",
+                Text = GameLanguage.Mentor_MenteeLabel,
             };
 
             MenteeEXPLabel = new MirLabel
@@ -282,30 +282,30 @@ namespace Client.MirScenes.Dialogs
             if (GameScene.User.Level > MentorLevel)
             {
                 MentorNameLabel.Text = GameScene.User.Name;
-                MentorLevelLabel.Text = "Lv " + GameScene.User.Level.ToString();
+                MentorLevelLabel.Text = GameLanguage.Mentor_LevelPrefix + GameScene.User.Level.ToString();
                 MentorOnlineLabel.Visible = false;
 
                 StudentNameLabel.Text = MentorName;
-                StudentLevelLabel.Text = "Lv " + MentorLevel.ToString();
+                StudentLevelLabel.Text = GameLanguage.Mentor_LevelPrefix + MentorLevel.ToString();
                 if (MentorOnline)
                     StudentOnlineLabel.Visible = true;
                 else
                     StudentOnlineLabel.Visible = false;
 
                 MenteeEXPLabel.Visible = true;
-                MenteeEXPLabel.Text = "MENTEE EXP: " + MenteeEXP;
+                MenteeEXPLabel.Text = string.Format(GameLanguage.Mentor_MenteeExp, MenteeEXP);
             }
             else
             {
                 MentorNameLabel.Text = MentorName;
-                MentorLevelLabel.Text = "Lv " + MentorLevel.ToString();
+                MentorLevelLabel.Text = GameLanguage.Mentor_LevelPrefix + MentorLevel.ToString();
                 if (MentorOnline)
                     MentorOnlineLabel.Visible = true;
                 else
                     MentorOnlineLabel.Visible = false;
 
                 StudentNameLabel.Text = GameScene.User.Name;
-                StudentLevelLabel.Text = "Lv " + GameScene.User.Level.ToString();
+                StudentLevelLabel.Text = GameLanguage.Mentor_LevelPrefix + GameScene.User.Level.ToString();
                 StudentOnlineLabel.Visible = false;
             }
         }

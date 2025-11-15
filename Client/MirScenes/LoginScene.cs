@@ -563,6 +563,21 @@ namespace Client.MirScenes
 
             public InputKeyDialog(LoginDialog loginDialog)
             {
+                _loginDialog = loginDialog;
+
+                Index = 1080;
+                Library = Libraries.Prguse;
+                Location = new Point((Client.Settings.ScreenWidth - Size.Width) / 2 + 285, (Client.Settings.ScreenHeight - Size.Height) / 2 + 150);
+                Visible = true;
+
+                KeyEscButton = new MirButton
+                {
+                    Text = GameLanguage.InputKey_Esc,
+                    HoverIndex = 301,
+                    Index = 300,
+                    Library = Libraries.Title,
+                    Location = new Point(12, 12),
+                    Parent = this,
                     PressedIndex = 302,
                     CenterText = true
                 };

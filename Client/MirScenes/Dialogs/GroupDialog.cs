@@ -169,12 +169,12 @@ namespace Client.MirScenes.Dialogs
         {
             if (GroupList.Count >= Globals.MaxGroup)
             {
-                GameScene.Scene.ChatDialog.ReceiveChat("Your group already has the maximum number of members.", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Group_MaxMembers, ChatType.System);
                 return;
             }
             if (GroupList.Count > 0 && GroupList[0] != MapObject.User.Name)
             {
-                GameScene.Scene.ChatDialog.ReceiveChat("You are not the leader of your group.", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Group_NotLeader, ChatType.System);
                 return;
             }
 
@@ -185,13 +185,13 @@ namespace Client.MirScenes.Dialogs
         {
             if (GroupList.Count >= Globals.MaxGroup)
             {
-                GameScene.Scene.ChatDialog.ReceiveChat("Your group already has the maximum number of members.", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Group_MaxMembers, ChatType.System);
                 return;
             }
             if (GroupList.Count > 0 && GroupList[0] != MapObject.User.Name)
             {
 
-                GameScene.Scene.ChatDialog.ReceiveChat("You are not the leader of your group.", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Group_NotLeader, ChatType.System);
                 return;
             }
 
@@ -209,7 +209,7 @@ namespace Client.MirScenes.Dialogs
             if (GroupList.Count > 0 && GroupList[0] != MapObject.User.Name)
             {
 
-                GameScene.Scene.ChatDialog.ReceiveChat("You are not the leader of your group.", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Group_NotLeader, ChatType.System);
                 return;
             }
 

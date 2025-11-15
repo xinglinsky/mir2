@@ -155,20 +155,46 @@ Read;Client;Read;读取
 Delete;Client;Delete;删除
 BlockList;Client;Block List;黑名单
 EnterMailToName;Client;Please enter the name of the person you would like to mail.;请输入你想要发送邮件的玩家名字。
-BeenPoisoned;Client;You have been poisoned;你中毒了。
 AddFriend;Client;Add;添加好友
 RemoveFriend;Client;Remove;删除好友
 FriendMemo;Client;Memo;备注
 FriendMail;Client;Mail;邮件
 FriendWhisper;Client;Whisper;密语
-FriendEnterAddName;Client;Please enter the name of the person you would like to Add.;请输入你想添加为好友的玩家名字。
+FriendEnterAddName;Client;Please enter the name of the person you would like to Add.;请输入你想添加为好友的玩家名字.
 FriendEnterBlockName;Client;Please enter the name of the person you would like to Block.;请输入你想拉黑的玩家名字.
+Friend_RemoveConfirm;Client;Are you sure you wish to remove '{0}'?;你确定要删除好友“{0}”吗？
+System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
 AddMentor;Client;Add Mentor;添加师父/徒弟
 RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
 MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
 MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字.
+Mentor_Online;Client;ONLINE;在线
+Mentor_MentorLabel;Client;MENTOR;师父
+Mentor_MenteeLabel;Client;MENTEE;徒弟
+Mentor_MenteeExp;Client;MENTEE EXP: {0};徒弟经验: {0}
+Mentor_LevelPrefix;Client;Lv ;Lv 
+Mentor_AlreadyHasMentor;Client;You already have a Mentor.;你已经拥有一位师父.
+Mentor_CancelWarning;Client;Cancelling a Mentorship early will cause a cooldown. Are you sure?;提前解除师徒关系将会产生冷却时间，确定要继续吗？
 NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系.
 RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
+FriendRequest;Client;Friend Request;好友请求
+FriendRequestAccept;Client;Accept Friend Request;接受好友请求
+FriendRequestDecline;Client;Decline Friend Request;拒绝好友请求
+MentorRequest;Client;Mentor Request;师徒请求
+MentorRequestAccept;Client;Accept Mentor Request;接受师徒请求
+MentorRequestDecline;Client;Decline Mentor Request;拒绝师徒请求
+RelationshipRequest;Client;Relationship Request;关系请求
+RelationshipRequestAccept;Client;Accept Relationship Request;接受关系请求
+RelationshipRequestDecline;Client;Decline Relationship Request;拒绝关系请求
+GroupInvite;Client;Group Invite;组队邀请
+GroupInviteAccept;Client;Accept Group Invite;接受组队邀请
+GroupInviteDecline;Client;Decline Group Invite;拒绝组队邀请
+GuildInvite;Client;Guild Invite;行会邀请
+GuildInviteAccept;Client;Accept Guild Invite;接受行会邀请
+GuildInviteDecline;Client;Decline Guild Invite;拒绝行会邀请
+SystemMessage;Client;System Message;系统消息
+SystemMessageInfo;Client;System Message Info;系统消息信息
+
 SkillMode_Tilde;Client;[Skill Mode: ~];[技能模式: ~]
 SkillMode_Ctrl;Client;[Skill Mode: Ctrl];[技能模式: Ctrl]
 MainDialog_HP;Client;HP {0}/{1};HP {0}/{1}
@@ -329,8 +355,10 @@ Group_InviteQuestion;Client;Do you want to group with {0}?;你要与 {0} 组队�
 GroupSwitch;Client;Allow/Disallow Group Requests;允许/禁止 组队请求
 GroupAdd;Client;Add;添加
 GroupRemove;Client;Remove;移除
-GroupAddEnterName;Client;Please enter the name of the person you wish to add.;请输入你想要邀请组队的玩家名字。
-GroupRemoveEnterName;Client;Please enter the name of the person you wish to remove.;请输入你想要移出队伍的玩家名字。
+GroupAddEnterName;Client;Please enter the name of the person you wish to add.;请输入你想要邀请组队的玩家名字.
+GroupRemoveEnterName;Client;Please enter the name of the person you wish to remove.;请输入你想要移出队伍的玩家名字.
+Group_MaxMembers;Client;Your group already has the maximum number of members.;你的队伍人数已达到上限.
+Group_NotLeader;Client;You are not the leader of your group.;你不是队长，无法执行此操作.
 TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
 
 Quest_ShareQuestion;Client;{0} would like to share a quest with you. Do you accept?;{0} 想与你共享一个任务，是否接受？
@@ -344,11 +372,25 @@ RequestDivorce;Client;Request Divorce;请求离婚
 MailLover;Client;Mail Lover;给爱人发送邮件
 WhisperLover;Client;Whisper Lover;给爱人密语
 
+Relationship_LoverLabel;Client;Lover:  {0};爱人:  {0}
+Relationship_Location;Client;Location:  {0};所在位置:  {0}
+Relationship_LocationOffline;Client;Location:  Offline;所在位置:  离线
+Relationship_Date;Client;Date: ;日期: 
+Relationship_Length;Client;Length: ;相伴时长: 
+Relationship_DivorcedDate;Client;Divorced Date:  {0};离婚日期:  {0}
+Relationship_TimeSinceDays;Client;Time Since: {0} Days;已分开: {0} 天
+Relationship_MarriageDate;Client;Marriage Date:  {0};结婚日期:  {0}
+Relationship_LengthDays;Client;Length: {0} Days;相伴时长: {0} 天
+Relationship_AlreadyMarried;Client;You're already married.;你已经结婚了。
+Relationship_NotMarried;Client;You're not married.;你还没有结婚。
+Relationship_LoverNotOnline;Client;Lover is not online;你的爱人当前不在线。
+Relationship_AllowBlockRecall;Client;Allow/Block Recall;允许/禁止 召回
+
 NoAccountID;Client;The AccountID does not exist.;该账号不存在。
 IncorrectPasswordAccountID;Client;Incorrect Password and AccountID combination.;账号或密码错误。
 Item_LocationAt;Client;{0} at {1};{0} 位于 {1}
-Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你。
-Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已降为 0。
+Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你.
+Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已降为 0.
 Error_CouldNotGetDisplayResolutions;Client;Could not get display resolutions;无法获取显示器分辨率
 Error_GetDisplayResolutionIssue;Client;Get Display Resolution Issue;获取显示器分辨率时发生错误
 Error_InvalidClientResolution;Client;Invalid Client Resolution;无效的客户端分辨率
