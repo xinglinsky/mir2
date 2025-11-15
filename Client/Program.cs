@@ -3,6 +3,7 @@ using Launcher;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using Client.Resolution;
+using Shared;
 
 namespace Client
 {
@@ -165,14 +166,14 @@ namespace Client
             var parsedOK = DisplayResolutions.GetDisplayResolutions();
             if (!parsedOK)
             {
-                MessageBox.Show("Could not get display resolutions", "Get Display Resolution Issue", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(GameLanguage.Error_CouldNotGetDisplayResolutions, GameLanguage.Error_GetDisplayResolutionIssue, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Environment.Exit(0);
             }
 
             if (!DisplayResolutions.IsSupported(Settings.Resolution))
             {
                 MessageBox.Show($"Client does not support {Settings.Resolution}. Setting Resolution to 1024x768.",
-                                "Invalid Client Resolution",
+                                GameLanguage.Error_InvalidClientResolution,
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
 

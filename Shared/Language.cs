@@ -235,7 +235,68 @@
                          RequestMarriage = "Request Marriage",
                          RequestDivorce = "Request Divorce",
                          MailLover = "Mail Lover",
-                         WhisperLover = "Whisper Lover";
+                         WhisperLover = "Whisper Lover",
+
+                         // Skill related
+                         Skill_NoSuitableWeapon = "You must be wearing a suitable weapon to perform this skill",
+                         Skill_CannotCast = "You cannot cast {0} for another {1} seconds.",
+                         Skill_UseThrusting = "Use Thrusting.",
+                         Skill_DoNotUseThrusting = "Do not use Thrusting.",
+                         Skill_UseHalfMoon = "Use Half Moon.",
+                         Skill_DoNotUseHalfMoon = "Do not use Half Moon.",
+                         Skill_UseCrossHalfMoon = "Use Cross Half Moon.",
+                         Skill_DoNotUseCrossHalfMoon = "Do not use Cross Half Moon.",
+                         Skill_UseDoubleSlash = "Use Double Slash.",
+                         Skill_DoNotUseDoubleSlash = "Do not use Double Slash.",
+
+                         // System messages
+                         System_NothingFound = "Nothing Found.",
+                         System_PleaseEnterInfo = "Please enter the required information.",
+                         System_PersonObservingLoggedOff = "The person you was observing has logged off.",
+                         System_UnknownTypeRequired = "Unknown Type Required",
+
+                         // Group related
+                         Group_YouLeft = "You have left the group.",
+                         Group_PlayerLeft = "{0} has left the group.",
+                         Group_PlayerJoined = "{0} has joined the group.",
+                         Group_InviteQuestion = "Do you want to group with {0}?",
+
+                         // Quest related
+                         Quest_ShareQuestion = "{0} would like to share a quest with you. Do you accept?",
+
+                         // Item related
+                         Item_LocationAt = "{0} at {1}",
+                         Item_NoLongerLoyal = "{0} is no longer loyal to you.",
+                         Item_DuraDroppedToZero = "{0}'s dura has dropped to 0.",
+                         Item_AddsDurability = "Adds +{0} Durability",
+                         Item_AddsAccuracy = "Adds +{0} Accuracy",
+                         Item_AddsASpeed = "Adds +{0} A.Speed",
+                         Item_AddsFreezing = "Adds +{0} Freezing",
+                         Item_AddsPoison = "Adds +{0} Poison",
+                         Item_AddsAgility = "Adds +{0} Agility",
+                         Item_AddsPoisonResist = "Adds +{0} Poison Resist",
+                         Item_AddsMagicResist = "Adds +{0} Magic Resist",
+                         Item_InstantRun = "Instant Run",
+                         Item_Socket = "Socket : {0}",
+                         Item_SocketEmpty = "Empty",
+                         Item_SocketOpenHint = "Ctrl + Right Click To Open Sockets",
+                         Item_SellingPrice = "Selling Price : {0} Gold",
+                         Item_CantDropOnDeath = "Can't drop on death",
+                         Item_CantDrop = "Can't drop",
+                         Item_CantUpgrade = "Can't upgrade",
+                         Item_CantSell = "Can't sell",
+                         Item_CantTrade = "Can't trade",
+                         Item_CantStore = "Can't store",
+                         Item_CantRepair = "Can't repair",
+
+                         // Damage types
+                         Damage_Miss = "Miss",
+                         Damage_Crit = "Crit",
+
+                         // Error messages
+                         Error_CouldNotGetDisplayResolutions = "Could not get display resolutions",
+                         Error_GetDisplayResolutionIssue = "Get Display Resolution Issue",
+                         Error_InvalidClientResolution = "Invalid Client Resolution";
 
     //Server
     public static string Welcome = "Welcome to the {0} Server.",
@@ -519,6 +580,67 @@
         GameLanguage.RequestDivorce = reader.ReadString("Language", "RequestDivorce", GameLanguage.RequestDivorce);
         GameLanguage.MailLover = reader.ReadString("Language", "MailLover", GameLanguage.MailLover);
         GameLanguage.WhisperLover = reader.ReadString("Language", "WhisperLover", GameLanguage.WhisperLover);
+
+        // Skill related
+        GameLanguage.Skill_NoSuitableWeapon = reader.ReadString("Language", "Skill_NoSuitableWeapon", GameLanguage.Skill_NoSuitableWeapon);
+        GameLanguage.Skill_CannotCast = reader.ReadString("Language", "Skill_CannotCast", GameLanguage.Skill_CannotCast);
+        GameLanguage.Skill_UseThrusting = reader.ReadString("Language", "Skill_UseThrusting", GameLanguage.Skill_UseThrusting);
+        GameLanguage.Skill_DoNotUseThrusting = reader.ReadString("Language", "Skill_DoNotUseThrusting", GameLanguage.Skill_DoNotUseThrusting);
+        GameLanguage.Skill_UseHalfMoon = reader.ReadString("Language", "Skill_UseHalfMoon", GameLanguage.Skill_UseHalfMoon);
+        GameLanguage.Skill_DoNotUseHalfMoon = reader.ReadString("Language", "Skill_DoNotUseHalfMoon", GameLanguage.Skill_DoNotUseHalfMoon);
+        GameLanguage.Skill_UseCrossHalfMoon = reader.ReadString("Language", "Skill_UseCrossHalfMoon", GameLanguage.Skill_UseCrossHalfMoon);
+        GameLanguage.Skill_DoNotUseCrossHalfMoon = reader.ReadString("Language", "Skill_DoNotUseCrossHalfMoon", GameLanguage.Skill_DoNotUseCrossHalfMoon);
+        GameLanguage.Skill_UseDoubleSlash = reader.ReadString("Language", "Skill_UseDoubleSlash", GameLanguage.Skill_UseDoubleSlash);
+        GameLanguage.Skill_DoNotUseDoubleSlash = reader.ReadString("Language", "Skill_DoNotUseDoubleSlash", GameLanguage.Skill_DoNotUseDoubleSlash);
+
+        // System messages
+        GameLanguage.System_NothingFound = reader.ReadString("Language", "System_NothingFound", GameLanguage.System_NothingFound);
+        GameLanguage.System_PleaseEnterInfo = reader.ReadString("Language", "System_PleaseEnterInfo", GameLanguage.System_PleaseEnterInfo);
+        GameLanguage.System_PersonObservingLoggedOff = reader.ReadString("Language", "System_PersonObservingLoggedOff", GameLanguage.System_PersonObservingLoggedOff);
+        GameLanguage.System_UnknownTypeRequired = reader.ReadString("Language", "System_UnknownTypeRequired", GameLanguage.System_UnknownTypeRequired);
+
+        // Group related
+        GameLanguage.Group_YouLeft = reader.ReadString("Language", "Group_YouLeft", GameLanguage.Group_YouLeft);
+        GameLanguage.Group_PlayerLeft = reader.ReadString("Language", "Group_PlayerLeft", GameLanguage.Group_PlayerLeft);
+        GameLanguage.Group_PlayerJoined = reader.ReadString("Language", "Group_PlayerJoined", GameLanguage.Group_PlayerJoined);
+        GameLanguage.Group_InviteQuestion = reader.ReadString("Language", "Group_InviteQuestion", GameLanguage.Group_InviteQuestion);
+
+        // Quest related
+        GameLanguage.Quest_ShareQuestion = reader.ReadString("Language", "Quest_ShareQuestion", GameLanguage.Quest_ShareQuestion);
+
+        // Item related
+        GameLanguage.Item_LocationAt = reader.ReadString("Language", "Item_LocationAt", GameLanguage.Item_LocationAt);
+        GameLanguage.Item_NoLongerLoyal = reader.ReadString("Language", "Item_NoLongerLoyal", GameLanguage.Item_NoLongerLoyal);
+        GameLanguage.Item_DuraDroppedToZero = reader.ReadString("Language", "Item_DuraDroppedToZero", GameLanguage.Item_DuraDroppedToZero);
+        GameLanguage.Item_AddsDurability = reader.ReadString("Language", "Item_AddsDurability", GameLanguage.Item_AddsDurability);
+        GameLanguage.Item_AddsAccuracy = reader.ReadString("Language", "Item_AddsAccuracy", GameLanguage.Item_AddsAccuracy);
+        GameLanguage.Item_AddsASpeed = reader.ReadString("Language", "Item_AddsASpeed", GameLanguage.Item_AddsASpeed);
+        GameLanguage.Item_AddsFreezing = reader.ReadString("Language", "Item_AddsFreezing", GameLanguage.Item_AddsFreezing);
+        GameLanguage.Item_AddsPoison = reader.ReadString("Language", "Item_AddsPoison", GameLanguage.Item_AddsPoison);
+        GameLanguage.Item_AddsAgility = reader.ReadString("Language", "Item_AddsAgility", GameLanguage.Item_AddsAgility);
+        GameLanguage.Item_AddsPoisonResist = reader.ReadString("Language", "Item_AddsPoisonResist", GameLanguage.Item_AddsPoisonResist);
+        GameLanguage.Item_AddsMagicResist = reader.ReadString("Language", "Item_AddsMagicResist", GameLanguage.Item_AddsMagicResist);
+        GameLanguage.Item_InstantRun = reader.ReadString("Language", "Item_InstantRun", GameLanguage.Item_InstantRun);
+        GameLanguage.Item_Socket = reader.ReadString("Language", "Item_Socket", GameLanguage.Item_Socket);
+        GameLanguage.Item_SocketEmpty = reader.ReadString("Language", "Item_SocketEmpty", GameLanguage.Item_SocketEmpty);
+        GameLanguage.Item_SocketOpenHint = reader.ReadString("Language", "Item_SocketOpenHint", GameLanguage.Item_SocketOpenHint);
+        GameLanguage.Item_SellingPrice = reader.ReadString("Language", "Item_SellingPrice", GameLanguage.Item_SellingPrice);
+        GameLanguage.Item_CantDropOnDeath = reader.ReadString("Language", "Item_CantDropOnDeath", GameLanguage.Item_CantDropOnDeath);
+        GameLanguage.Item_CantDrop = reader.ReadString("Language", "Item_CantDrop", GameLanguage.Item_CantDrop);
+        GameLanguage.Item_CantUpgrade = reader.ReadString("Language", "Item_CantUpgrade", GameLanguage.Item_CantUpgrade);
+        GameLanguage.Item_CantSell = reader.ReadString("Language", "Item_CantSell", GameLanguage.Item_CantSell);
+        GameLanguage.Item_CantTrade = reader.ReadString("Language", "Item_CantTrade", GameLanguage.Item_CantTrade);
+        GameLanguage.Item_CantStore = reader.ReadString("Language", "Item_CantStore", GameLanguage.Item_CantStore);
+        GameLanguage.Item_CantRepair = reader.ReadString("Language", "Item_CantRepair", GameLanguage.Item_CantRepair);
+
+        // Damage types
+        GameLanguage.Damage_Miss = reader.ReadString("Language", "Damage_Miss", GameLanguage.Damage_Miss);
+        GameLanguage.Damage_Crit = reader.ReadString("Language", "Damage_Crit", GameLanguage.Damage_Crit);
+
+        // Error messages
+        GameLanguage.Error_CouldNotGetDisplayResolutions = reader.ReadString("Language", "Error_CouldNotGetDisplayResolutions", GameLanguage.Error_CouldNotGetDisplayResolutions);
+        GameLanguage.Error_GetDisplayResolutionIssue = reader.ReadString("Language", "Error_GetDisplayResolutionIssue", GameLanguage.Error_GetDisplayResolutionIssue);
+        GameLanguage.Error_InvalidClientResolution = reader.ReadString("Language", "Error_InvalidClientResolution", GameLanguage.Error_InvalidClientResolution);
     }
 
 
@@ -756,6 +878,67 @@
         reader.Write("Language", "RequestDivorce", GameLanguage.RequestDivorce);
         reader.Write("Language", "MailLover", GameLanguage.MailLover);
         reader.Write("Language", "WhisperLover", GameLanguage.WhisperLover);
+
+        // Skill related
+        reader.Write("Language", "Skill_NoSuitableWeapon", GameLanguage.Skill_NoSuitableWeapon);
+        reader.Write("Language", "Skill_CannotCast", GameLanguage.Skill_CannotCast);
+        reader.Write("Language", "Skill_UseThrusting", GameLanguage.Skill_UseThrusting);
+        reader.Write("Language", "Skill_DoNotUseThrusting", GameLanguage.Skill_DoNotUseThrusting);
+        reader.Write("Language", "Skill_UseHalfMoon", GameLanguage.Skill_UseHalfMoon);
+        reader.Write("Language", "Skill_DoNotUseHalfMoon", GameLanguage.Skill_DoNotUseHalfMoon);
+        reader.Write("Language", "Skill_UseCrossHalfMoon", GameLanguage.Skill_UseCrossHalfMoon);
+        reader.Write("Language", "Skill_DoNotUseCrossHalfMoon", GameLanguage.Skill_DoNotUseCrossHalfMoon);
+        reader.Write("Language", "Skill_UseDoubleSlash", GameLanguage.Skill_UseDoubleSlash);
+        reader.Write("Language", "Skill_DoNotUseDoubleSlash", GameLanguage.Skill_DoNotUseDoubleSlash);
+
+        // System messages
+        reader.Write("Language", "System_NothingFound", GameLanguage.System_NothingFound);
+        reader.Write("Language", "System_PleaseEnterInfo", GameLanguage.System_PleaseEnterInfo);
+        reader.Write("Language", "System_PersonObservingLoggedOff", GameLanguage.System_PersonObservingLoggedOff);
+        reader.Write("Language", "System_UnknownTypeRequired", GameLanguage.System_UnknownTypeRequired);
+
+        // Group related
+        reader.Write("Language", "Group_YouLeft", GameLanguage.Group_YouLeft);
+        reader.Write("Language", "Group_PlayerLeft", GameLanguage.Group_PlayerLeft);
+        reader.Write("Language", "Group_PlayerJoined", GameLanguage.Group_PlayerJoined);
+        reader.Write("Language", "Group_InviteQuestion", GameLanguage.Group_InviteQuestion);
+
+        // Quest related
+        reader.Write("Language", "Quest_ShareQuestion", GameLanguage.Quest_ShareQuestion);
+
+        // Item related
+        reader.Write("Language", "Item_LocationAt", GameLanguage.Item_LocationAt);
+        reader.Write("Language", "Item_NoLongerLoyal", GameLanguage.Item_NoLongerLoyal);
+        reader.Write("Language", "Item_DuraDroppedToZero", GameLanguage.Item_DuraDroppedToZero);
+        reader.Write("Language", "Item_AddsDurability", GameLanguage.Item_AddsDurability);
+        reader.Write("Language", "Item_AddsAccuracy", GameLanguage.Item_AddsAccuracy);
+        reader.Write("Language", "Item_AddsASpeed", GameLanguage.Item_AddsASpeed);
+        reader.Write("Language", "Item_AddsFreezing", GameLanguage.Item_AddsFreezing);
+        reader.Write("Language", "Item_AddsPoison", GameLanguage.Item_AddsPoison);
+        reader.Write("Language", "Item_AddsAgility", GameLanguage.Item_AddsAgility);
+        reader.Write("Language", "Item_AddsPoisonResist", GameLanguage.Item_AddsPoisonResist);
+        reader.Write("Language", "Item_AddsMagicResist", GameLanguage.Item_AddsMagicResist);
+        reader.Write("Language", "Item_InstantRun", GameLanguage.Item_InstantRun);
+        reader.Write("Language", "Item_Socket", GameLanguage.Item_Socket);
+        reader.Write("Language", "Item_SocketEmpty", GameLanguage.Item_SocketEmpty);
+        reader.Write("Language", "Item_SocketOpenHint", GameLanguage.Item_SocketOpenHint);
+        reader.Write("Language", "Item_SellingPrice", GameLanguage.Item_SellingPrice);
+        reader.Write("Language", "Item_CantDropOnDeath", GameLanguage.Item_CantDropOnDeath);
+        reader.Write("Language", "Item_CantDrop", GameLanguage.Item_CantDrop);
+        reader.Write("Language", "Item_CantUpgrade", GameLanguage.Item_CantUpgrade);
+        reader.Write("Language", "Item_CantSell", GameLanguage.Item_CantSell);
+        reader.Write("Language", "Item_CantTrade", GameLanguage.Item_CantTrade);
+        reader.Write("Language", "Item_CantStore", GameLanguage.Item_CantStore);
+        reader.Write("Language", "Item_CantRepair", GameLanguage.Item_CantRepair);
+
+        // Damage types
+        reader.Write("Language", "Damage_Miss", GameLanguage.Damage_Miss);
+        reader.Write("Language", "Damage_Crit", GameLanguage.Damage_Crit);
+
+        // Error messages
+        reader.Write("Language", "Error_CouldNotGetDisplayResolutions", GameLanguage.Error_CouldNotGetDisplayResolutions);
+        reader.Write("Language", "Error_GetDisplayResolutionIssue", GameLanguage.Error_GetDisplayResolutionIssue);
+        reader.Write("Language", "Error_InvalidClientResolution", GameLanguage.Error_InvalidClientResolution);
     }
 
 
