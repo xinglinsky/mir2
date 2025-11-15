@@ -6708,6 +6708,7 @@ namespace Client.MirScenes
                     GradeString = GameLanguage.ItemGradeHeroic;
                     break;
             }
+            string itemName = GameLanguage.GetItemName(HoverItem.Info.FriendlyName);
             MirLabel nameLabel = new MirLabel
             {
                 AutoSize = true,
@@ -6715,7 +6716,7 @@ namespace Client.MirScenes
                 Location = new Point(4, 4),
                 OutLine = true,
                 Parent = ItemLabel,
-                Text = HoverItem.Info.Grade != ItemGrade.None ? string.Format("{0}{1}{2}", HoverItem.Info.FriendlyName, "\n", GradeString) : HoverItem.Info.FriendlyName,
+                Text = HoverItem.Info.Grade != ItemGrade.None ? string.Format("{0}{1}{2}", itemName, "\n", GradeString) : itemName,
             };
 
             if (HoverItem.RefineAdded > 0)

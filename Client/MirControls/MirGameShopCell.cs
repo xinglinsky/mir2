@@ -211,7 +211,8 @@ namespace Client.MirControls
                     if (Item.CreditPrice * Quantity <= GameScene.Credit)
                     {
                         CreditCost = Item.CreditPrice * Quantity;
-                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy {1} x \n{0}({3}) for {2} Credits?", Item.Info.FriendlyName, Quantity, CreditCost, Item.Count), MirMessageBoxButtons.YesNo);
+                        string itemName = GameLanguage.GetItemName(Item.Info.FriendlyName);
+                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy {1} x \n{0}({3}) for {2} Credits?", itemName, Quantity, CreditCost, Item.Count), MirMessageBoxButtons.YesNo);
                         messageBox.YesButton.Click += (o, e) => Network.Enqueue(new C.GameshopBuy { GIndex = Item.GIndex, Quantity = Quantity, PType = pType });
                         messageBox.NoButton.Click += (o, e) => { };
                         messageBox.Show();
@@ -223,7 +224,8 @@ namespace Client.MirControls
                     if (Item.GoldPrice * Quantity <= GameScene.Gold)
                     {
                         GoldCost = Item.GoldPrice * Quantity;
-                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy{1} x \n{0}({3}) for {2} Gold?", Item.Info.FriendlyName, Quantity, GoldCost, Item.Count), MirMessageBoxButtons.YesNo);
+                        string itemName = GameLanguage.GetItemName(Item.Info.FriendlyName);
+                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy{1} x \n{0}({3}) for {2} Gold?", itemName, Quantity, GoldCost, Item.Count), MirMessageBoxButtons.YesNo);
                         messageBox.YesButton.Click += (o, e) => Network.Enqueue(new C.GameshopBuy { GIndex = Item.GIndex, Quantity = Quantity, PType = pType });
                         messageBox.NoButton.Click += (o, e) => { };
                         messageBox.Show();
@@ -263,7 +265,7 @@ namespace Client.MirControls
 
         public void UpdateText()
         {
-            nameLabel.Text = Item.Info.FriendlyName;
+            nameLabel.Text = GameLanguage.GetItemName(Item.Info.FriendlyName);
             nameLabel.Text = nameLabel.Text.Length > 17 ? nameLabel.Text.Substring(0, 17) : nameLabel.Text;
             nameLabel.ForeColour = GameScene.Scene.GradeNameColor(Item.Info.Grade);
             if (Item.CanBuyGold)

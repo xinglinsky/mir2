@@ -65,7 +65,7 @@ namespace Client.MirControls
             NewIcon.Visible = false;
 
             if (Item == null || Item.Info == null) return;
-            NameLabel.Text = Item.Info.FriendlyName;
+            NameLabel.Text = GameLanguage.GetItemName(Item.Info.FriendlyName);
             CountLabel.Text = (Item.Count <= 1) ? "" : Item.Count.ToString();
 
             NewIcon.Visible = !Item.IsShopItem || MultipleAvailable;

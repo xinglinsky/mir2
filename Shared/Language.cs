@@ -814,6 +814,8 @@
         GameLanguage.Error_CouldNotGetDisplayResolutions = reader.ReadString("Language", "Error_CouldNotGetDisplayResolutions", GameLanguage.Error_CouldNotGetDisplayResolutions);
         GameLanguage.Error_GetDisplayResolutionIssue = reader.ReadString("Language", "Error_GetDisplayResolutionIssue", GameLanguage.Error_GetDisplayResolutionIssue);
         GameLanguage.Error_InvalidClientResolution = reader.ReadString("Language", "Error_InvalidClientResolution", GameLanguage.Error_InvalidClientResolution);
+
+        LoadDatabaseTranslations(languageIniPath);
     }
 
 
@@ -1221,6 +1223,8 @@
         GameLanguage.NoBagSpace = reader.ReadString("Language", "NoBagSpace", GameLanguage.NoBagSpace);
         GameLanguage.AllowingMentorRequests = reader.ReadString("Language", "AllowingMentorRequests", GameLanguage.AllowingMentorRequests);
         GameLanguage.BlockingMentorRequests = reader.ReadString("Language", "BlockingMentorRequests", GameLanguage.BlockingMentorRequests);
+
+        LoadDatabaseTranslations(languageIniPath);
     }
 
     public static void SaveServerLanguage(string languageIniPath)
@@ -1260,5 +1264,153 @@
         reader.Write("Language", "NoBagSpace", GameLanguage.NoBagSpace);
         reader.Write("Language", "AllowingMentorRequests", GameLanguage.AllowingMentorRequests);
         reader.Write("Language", "BlockingMentorRequests", GameLanguage.BlockingMentorRequests);
+    }
+
+    private static readonly Dictionary<string, string> ItemNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> MonsterNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> NpcNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> MagicNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> QuestNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    public static string GetItemName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty);
+        string key = "Item_" + id;
+
+        string value;
+        if (ItemNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetMonsterName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("-", string.Empty);
+        string key = "Monster_" + id;
+
+        string value;
+        if (MonsterNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetNPCName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("-", string.Empty);
+        string key = "NPC_" + id;
+
+        string value;
+        if (NpcNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetMagicName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("-", string.Empty);
+        string key = "Magic_" + id;
+
+        string value;
+        if (MagicNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetQuestName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("-", string.Empty);
+        string key = "Quest_" + id;
+
+        string value;
+        if (QuestNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    private static void LoadDatabaseTranslations(string languageIniPath)
+    {
+        ItemNameById.Clear();
+        MonsterNameById.Clear();
+        NpcNameById.Clear();
+        MagicNameById.Clear();
+        QuestNameById.Clear();
+
+        if (!File.Exists(languageIniPath))
+            return;
+
+        string[] lines;
+        try
+        {
+            lines = File.ReadAllLines(languageIniPath);
+        }
+        catch
+        {
+            return;
+        }
+
+        bool inLanguageSection = false;
+
+        foreach (string rawLine in lines)
+        {
+            string line = rawLine.Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
+            {
+                inLanguageSection = string.Equals(line, "[Language]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (!inLanguageSection) continue;
+
+            int index = line.IndexOf('=');
+            if (index <= 0 || index >= line.Length - 1) continue;
+
+            string key = line.Substring(0, index).Trim();
+            string value = line.Substring(index + 1);
+
+            if (string.IsNullOrEmpty(key)) continue;
+
+            if (key.StartsWith("Item_", StringComparison.OrdinalIgnoreCase))
+            {
+                ItemNameById[key] = value;
+            }
+            else if (key.StartsWith("Monster_", StringComparison.OrdinalIgnoreCase))
+            {
+                MonsterNameById[key] = value;
+            }
+            else if (key.StartsWith("NPC_", StringComparison.OrdinalIgnoreCase))
+            {
+                NpcNameById[key] = value;
+            }
+            else if (key.StartsWith("Magic_", StringComparison.OrdinalIgnoreCase))
+            {
+                MagicNameById[key] = value;
+            }
+            else if (key.StartsWith("Quest_", StringComparison.OrdinalIgnoreCase))
+            {
+                QuestNameById[key] = value;
+            }
+        }
     }
 }

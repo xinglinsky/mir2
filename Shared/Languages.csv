@@ -1,413 +1,3071 @@
-Key;Scope;en;zh-CN
-PetMode_Both;Client;[Pet: Attack and Move];[宠物: 攻击并移动]
-PetMode_MoveOnly;Client;[Pet: Do Not Attack];[宠物: 仅移动]
-PetMode_AttackOnly;Client;[Pet: Do Not Move];[宠物: 仅攻击]
-PetMode_None;Client;[Pet: Do Not Attack or Move];[宠物: 不攻击且不移动]
-PetMode_FocusMasterTarget;Client;[Pet: Focus Master Target];[宠物: 集火主人目标]
-
-AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平]
+﻿Key;Scope;en;zh-CN
+AC;Client;AC + {0}~{1} (+{2});防御 + {0}~{1} (+{2})
+AC2;Client;AC + {0}~{1};防御 + {0}~{1}
+Account_Banned;Client;This account is banned. Reason: {0} ExpiryDate: {1} Duration: {2:#,##0} Hours, {3} Minutes, {4} Seconds;该账号已被封禁。原因: {0} 解封时间: {1} 剩余时长: {2:#,##0} 小时 {3} 分 {4} 秒
+Account_Created;Client;Your account was created successfully.;你的账号已创建成功.
+Account_CreationDisabled;Client;Account creation is currently disabled.;当前禁止注册新账号.
+Account_EmailNotAcceptable;Client;Your E-Mail Address is not acceptable.;你的邮箱地址不符合要求.
+Account_IDAlreadyExists;Client;An Account with this ID already exists.;该账号 ID 已被注册.
+Account_IDNotAcceptable;Client;Your AccountID is not acceptable.;你的账号 ID 不符合要求.
+Account_PasswordNotAcceptable;Client;Your Password is not acceptable.;你的密码不符合要求.
+Account_SecretAnswerNotAcceptable;Client;Your Secret Answer is not acceptable.;你的密保答案不符合要求.
+Account_SecretQuestionNotAcceptable;Client;Your Secret Question is not acceptable.;你的密保问题不符合要求.
+Account_UserNameNotAcceptable;Client;Your User Name is not acceptable.;你的用户名不符合要求.
+Accuracy;Client;Accuracy: + {0} (+{1});准确: + {0} (+{1})
+Accuracy2;Client;Accuracy: + {0};准确: + {0}
+AddFriend;Client;Add;添加好友
+AddMentor;Client;Add Mentor;添加师父/徒弟
+Agility;Client;Agility: + {0} (+{1});敏捷: + {0} (+{1})
+Agility2;Client;Agility: + {0};敏捷: + {0}
+AllowingMentorRequests;Server;You're now allowing mentor requests.;你现在允许师徒请求。
+ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧.
+AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人.
+AttackMode_All;Client;[Mode: Attack All];[模式: 全体攻击]
+AttackMode_EnemyGuild;Client;[Mode: Enemy Guild];[模式: 敌对行会]
 AttackMode_Group;Client;[Mode: Group];[模式: 组队]
 AttackMode_Guild;Client;[Mode: Guild];[模式: 行会]
-AttackMode_EnemyGuild;Client;[Mode: Enemy Guild];[模式: 敌对行会]
+AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平]
 AttackMode_RedBrown;Client;[Mode: Red/Brown];[模式: 善恶决斗]
-AttackMode_All;Client;[Mode: Attack All];[模式: 全体攻击]
-
-LogOutTip;Client;Do you want to log out of Legend of Mir?;您确定要返回登录界面吗？
-ExitTip;Client;Do you want to quit Legend of Mir?;您确定要退出传奇2吗？
-DiedTip;Client;You have died, Do you want to revive in town?;你已经死亡，是否回城复活？
-DropTip;Client;Are you sure you want to drop {0}?;你确定要丢弃 {0} 吗？
-
-Inventory;Client;Inventory ({0});背包 ({0})
-Character;Client;Character ({0});角色 ({0})
-Skills;Client;Skills ({0});技能 ({0})
-Quests;Client;Quests ({0});任务 ({0})
-Options;Client;Options ({0});设置 ({0})
-Menu;Client;Menu;菜单
-GameShop;Client;Game Shop ({0});商城 ({0})
+AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
+Autostart;Client;Auto start;自动启动
 BigMap;Client;BigMap ({0});大地图 ({0})
-DuraPanel;Client;Dura Panel;耐久度面板
-Mail;Client;Mail;邮件
-Exit;Client;Exit ({0});退出 ({0})
-LogOut;Client;Log Out ({0});返回登录 ({0})
-Help;Client;Help ({0});帮助 ({0})
-Keybinds;Client;Keybinds;按键设置
-Ranking;Client;Ranking ({0});排行 ({0})
-Creatures;Client;Creatures ({0});宠物 ({0})
-Mount;Client;Mount ({0});坐骑 ({0})
-Fishing;Client;Fishing ({0});钓鱼 ({0})
-Friends;Client;Friends ({0});好友 ({0})
-Mentor;Client;Mentor ({0});师徒 ({0})
-Relationship;Client;Relationship ({0});关系 ({0})
-Groups;Client;Groups ({0});队伍 ({0})
-Guild;Client;Guild ({0});行会 ({0})
-
-Trade;Client;Trade ({0});交易 ({0})
-Size;Client;Size;大小
+BlockingMentorRequests;Server;You're now blocking mentor requests.;你现在禁止师徒请求。
+BlockList;Client;Block List;黑名单
+CanNotDrop;Server;You cannot drop items on this map;你不能在这个地图丢弃物品。
+CanNotDungeon;Server;You cannot use Dungeon Escapes here;你不能在这里使用地牢逃脱卷轴。
+CannotLeaveGame;Client;Cannot leave game for {0} seconds;在 {0} 秒内无法离开游戏。
+CanNotRandom;Server;You cannot use Random Teleports here;你不能在这里使用随机传送卷轴。
+CannotResurrection;Server;You cannot use Resurrection Scrolls whilst alive;你在存活时不能使用复活卷轴。
+Character;Client;Character ({0});角色 ({0})
+CharacterCreated;Client;Your character was created successfully.;你的角色已创建成功。
+CharacterDeleted;Client;Your character was deleted successfully.;你的角色已成功删除。
+CharacterNameExists;Client;A Character with this name already exists.;该角色名已被占用.
+Character_EnterName;Client;Please enter the characters name.;请输入角色名.
+Character_GenderNotExist;Client;The gender you selected does not exist. Contact a GM for assistance.;你选择的性别不存在。如有疑问请联系管理员.
+Character_IncorrectEntry;Client;Incorrect Entry.;输入不正确.
+Character_LoginDelay;Client;You cannot log onto this character for another {0} seconds.;你需要等待 {0} 秒后才能登录该角色.
+Character_NotExist;Client;The character you selected does not exist. Contact a GM for assistance.;你选择的角色不存在。如有疑问请联系管理员.
 ChatSettings;Client;Chat Settings;聊天设置
-Rotate;Client;Rotate;旋转
+Chat_All;Client;All;全部
+Chat_Group;Client;Group;队伍
+Chat_Guild;Client;Guild;行会
+Chat_Lover;Client;Lover;情侣
+Chat_Mentor;Client;Mentor;师徒
+Chat_Report;Client;Report;举报
+Chat_Short;Client;Shout;喊话
+Chat_Whisper;Client;Whisper;密语
+ClassRequired;Client;Class Required : {0};需要职业: {0}
+Client_WrongVersion;Client;Wrong version, please update your game. Game will now Close;客户端版本不匹配，请更新游戏。游戏即将关闭.
 Close;Client;Close ({0});关闭 ({0})
-GameMaster;Client;GameMaster;游戏管理员
-
+CouldNotFindPlayer;Server;Could not find player {0};找不到玩家 {0}。
+Count;Client; Count {0};数量 {0}
+CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色.
+Creatures;Client;Creatures ({0});宠物 ({0})
+Credit;Client;Credit;积分
+Damage_Crit;Client;Crit;暴击
+Damage_Miss;Client;Miss;未命中
+DateSent;Client;Date Sent : {0};发送时间: {0}
+DC;Client;DC + {0}~{1} (+{2});攻击 + {0}~{1} (+{2})
+DC2;Client;DC + {0}~{1};攻击 + {0}~{1}
+Delete;Client;Delete;删除
+DeleteCharacter;Client;Are you sure you want to Delete the character {0};你确定要删除角色 {0} 吗？
+DeleteCharactersDisabled;Client;Deleting characters is currently disabled.;当前禁止删除角色.
+DiedTip;Client;You have died, Do you want to revive in town?;你已经死亡，是否回城复活？
+DropAmount;Client;Drop Amount:;丢弃数量:
+DropTip;Client;Are you sure you want to drop {0}?;你确定要丢弃 {0} 吗？
+Durability;Client;Durability;耐久度
+DuraPanel;Client;Dura Panel;耐久度面板
+EnterMailToName;Client;Please enter the name of the person you would like to mail.;请输入你想要发送邮件的玩家名字。
+Error_CouldNotGetDisplayResolutions;Client;Could not get display resolutions;无法获取显示器分辨率
+Error_GetDisplayResolutionIssue;Client;Get Display Resolution Issue;获取显示器分辨率时发生错误
+Error_InvalidClientResolution;Client;Invalid Client Resolution;无效的客户端分辨率
+Exit;Client;Exit ({0});退出 ({0})
+ExitTip;Client;Do you want to quit Legend of Mir?;您确定要退出传奇2吗？
+ExpandedStorageExpiresOn;Both;Expanded Storage Expires On;扩展仓库到期时间
+ExpandedStorageLocked;Client;Expanded Storage Locked;扩展仓库已锁定
+ExperienceGained;Client;Experience Gained {0};获得经验 {0}
 Expire;Client;Expire: {0};到期时间: {0}
 ExpireNever;Client;Expire: Never;到期时间: 永不过期
 ExpirePaused;Client;Expire: Paused;到期时间: 已暂停
-Never;Client;Never;从不
-
-PatchErr;Client;Could not get Patch Information;无法获取补丁信息
-LastOnline;Client;Last Online;最后在线
-
-Gold;Client;Gold;金币
-Credit;Client;Credit;积分
-GameShop_BuyWithGold;Client;Buy with Gold;使用金币购买
-GameShop_BuyWithCredits;Client;Buy with Credits;使用积分购买
-GameShop_BuyWithGoldHint;Client;Buy item(s) with Gold.;使用金币购买物品。
-GameShop_BuyWithCreditsHint;Client;Buy item(s) with Credits.;使用积分购买物品。
-GameShop_ShowAll;Client;Show All;全部
-GameShop_PageText;Client;{0} / {1};第 {0} / {1} 页
-
-Resolution;Client;Resolution;分辨率
-Autostart;Client;Auto start;自动启动
-Usrname;Client;Username;账号
-Password;Client;Password;密码
-
-ShuttingDown;Client;Disconnected: Server is shutting down.;已断开连接：服务器正在关闭。
-MaxCombine;Client;Max Combine Count : {0}{1}Shift + Left click to split the stack;最大堆叠数量: {0}{1}按住 Shift + 左键 可以分开堆叠
-Count;Client; Count {0};数量 {0}
-ExtraSlots8;Client;Are you sure you would like to buy 8 extra slots for 1,000,000 gold?Next purchase you can unlock 4 extra slots up to a maximum of 40 slots.;你确定要花费 1,000,000 金币购买 8 个额外格子吗？下一次购买可以解锁 4 个额外格子，最多 40 个格子。
-ExtraSlots4;Client;Are you sure you would like to unlock 4 extra slots? for gold: {0:###,###};你确定要解锁 4 个额外格子吗？需要金币: {0:###,###}
-
-Chat_All;Client;All;全部
-Chat_Short;Client;Shout;喊话
-Chat_Whisper;Client;Whisper;密语
-Chat_Lover;Client;Lover;情侣
-Chat_Mentor;Client;Mentor;师徒
-Chat_Group;Client;Group;队伍
-Chat_Guild;Client;Guild;行会
-
-ExpandedStorageLocked;Client;Expanded Storage Locked;扩展仓库已锁定
-ExtraStorage;Client;Would you like to rent extra storage for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币租用 10 天的扩展仓库？
 ExtendYourRentalPeriod;Client;Would you like to extend your rental period for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币续租 10 天扩展仓库？
-ExpandedStorageExpiresOn;Both;Expanded Storage Expires On;扩展仓库到期时间
-GameName;Both;Legend of Mir 2;传奇2
-
-CannotLeaveGame;Client;Cannot leave game for {0} seconds;在 {0} 秒内无法离开游戏。
-SelectKey;Client;Select the Key for: {0};为 {0} 选择按键
-WeaponSpiritFire;Client;Your weapon is glowed by spirit of fire.;你的武器被火之精灵附体。
-SpiritsFireDisappeared;Client;The spirits of fire disappeared.;火之精灵已消散。
-WeddingRing;Client;WeddingRing;结婚戒指
-ItemTextFormat;Client;{0}{1}{2} {3};{0}{1}{2} {3}
-DropAmount;Client;Drop Amount:;丢弃数量:
-
-LowMana;Client;Not Enough Mana to cast.;魔法值不足，无法施放。
-NotFemale;Both;You are not Female.;你不是女性角色。
-NotMale;Both;You are not Male.;你不是男性角色。
-NoCreatures;Client;You do not own any creatures.;你尚未拥有任何宠物。
-NoMount;Client;You do not own a mount.;你尚未拥有坐骑.
-NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿.
-NotInGuild;Both;You are not in a guild.;你尚未加入行会.
-AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
-NoBagSpace;Both;You do not have enough space.;你的背包空间不足。
-
-CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色.
-InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求.
-NoClass;Client;The class you selected does not exist. Contact a GM for assistance.;你选择的职业不存在，如有疑问请联系管理员.
-ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
-CharacterNameExists;Client;A Character with this name already exists.;该角色名已被占用.
-
-Client_WrongVersion;Client;Wrong version, please update your game. Game will now Close;客户端版本不匹配，请更新游戏。游戏即将关闭.
-Account_CreationDisabled;Client;Account creation is currently disabled.;当前禁止注册新账号.
-Account_IDNotAcceptable;Client;Your AccountID is not acceptable.;你的账号 ID 不符合要求.
-Account_PasswordNotAcceptable;Client;Your Password is not acceptable.;你的密码不符合要求.
-Account_EmailNotAcceptable;Client;Your E-Mail Address is not acceptable.;你的邮箱地址不符合要求.
-Account_UserNameNotAcceptable;Client;Your User Name is not acceptable.;你的用户名不符合要求.
-Account_SecretQuestionNotAcceptable;Client;Your Secret Question is not acceptable.;你的密保问题不符合要求.
-Account_SecretAnswerNotAcceptable;Client;Your Secret Answer is not acceptable.;你的密保答案不符合要求.
-Account_IDAlreadyExists;Client;An Account with this ID already exists.;该账号 ID 已被注册.
-Account_Created;Client;Your account was created successfully.;你的账号已创建成功.
-PasswordChange_Disabled;Client;Password Changing is currently disabled.;当前禁止修改密码.
-PasswordChange_CurrentNotAcceptable;Client;The current Password is not acceptable.;当前密码不符合要求.
-PasswordChange_NewNotAcceptable;Client;Your new Password is not acceptable.;你的新密码不符合要求.
-PasswordChange_Success;Client;Your password was changed successfully.;你的密码已成功修改.
-Login_Disabled;Client;Logging in is currently disabled.;当前禁止登录游戏.
-Login_PasswordChangeRequired;Client;The account's password must be changed before logging in.;该账号必须先修改密码才能登录.
-Account_Banned;Client;This account is banned. Reason: {0} ExpiryDate: {1} Duration: {2:#,##0} Hours, {3} Minutes, {4} Seconds;该账号已被封禁。原因: {0} 解封时间: {1} 剩余时长: {2:#,##0} 小时 {3} 分 {4} 秒
-Character_GenderNotExist;Client;The gender you selected does not exist. Contact a GM for assistance.;你选择的性别不存在。如有疑问请联系管理员.
-Character_EnterName;Client;Please enter the characters name.;请输入角色名.
-Character_IncorrectEntry;Client;Incorrect Entry.;输入不正确.
-DeleteCharactersDisabled;Client;Deleting characters is currently disabled.;当前禁止删除角色.
-Character_NotExist;Client;The character you selected does not exist. Contact a GM for assistance.;你选择的角色不存在。如有疑问请联系管理员.
-Character_LoginDelay;Client;You cannot log onto this character for another {0} seconds.;你需要等待 {0} 秒后才能登录该角色.
-StartGame_Disabled;Client;Starting the game is currently disabled.;当前禁止进入游戏.
-StartGame_NotLoggedIn;Client;You are not logged in.;你尚未登录.
-StartGame_CharacterNotFound;Client;Your character could not be found.;找不到你的角色.
-
-WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱.
-WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出.
-TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
-AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人.
-ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧.
-ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧。
-
-DateSent;Client;Date Sent : {0};发送时间: {0}
-Send;Client;Send;发送
-Reply;Client;Reply;回复
-Read;Client;Read;读取
-Delete;Client;Delete;删除
-BlockList;Client;Block List;黑名单
-EnterMailToName;Client;Please enter the name of the person you would like to mail.;请输入你想要发送邮件的玩家名字。
-AddFriend;Client;Add;添加好友
-RemoveFriend;Client;Remove;删除好友
-FriendMemo;Client;Memo;备注
-FriendMail;Client;Mail;邮件
-FriendWhisper;Client;Whisper;密语
+ExtraSlots4;Client;Are you sure you would like to unlock 4 extra slots? for gold: {0:###,###};你确定要解锁 4 个额外格子吗？需要金币: {0:###,###}
+ExtraSlots8;Client;Are you sure you would like to buy 8 extra slots for 1,000,000 gold?Next purchase you can unlock 4 extra slots up to a maximum of 40 slots.;你确定要花费 1,000,000 金币购买 8 个额外格子吗？下一次购买可以解锁 4 个额外格子，最多 40 个格子。
+ExtraStorage;Client;Would you like to rent extra storage for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币租用 10 天的扩展仓库？
+FaceToTrade;Server;You must face someone to trade.;你必须面对目标玩家才能交易。
+Fishing;Client;Fishing ({0});钓鱼 ({0})
 FriendEnterAddName;Client;Please enter the name of the person you would like to Add.;请输入你想添加为好友的玩家名字.
 FriendEnterBlockName;Client;Please enter the name of the person you would like to Block.;请输入你想拉黑的玩家名字.
-Friend_RemoveConfirm;Client;Are you sure you wish to remove '{0}'?;你确定要删除好友“{0}”吗？
-System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
-AddMentor;Client;Add Mentor;添加师父/徒弟
-RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
-MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
-MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字.
-Mentor_Online;Client;ONLINE;在线
-Mentor_MentorLabel;Client;MENTOR;师父
-Mentor_MenteeLabel;Client;MENTEE;徒弟
-Mentor_MenteeExp;Client;MENTEE EXP: {0};徒弟经验: {0}
-Mentor_LevelPrefix;Client;Lv ;Lv 
-Mentor_AlreadyHasMentor;Client;You already have a Mentor.;你已经拥有一位师父.
-Mentor_CancelWarning;Client;Cancelling a Mentorship early will cause a cooldown. Are you sure?;提前解除师徒关系将会产生冷却时间，确定要继续吗？
-NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系.
-RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
+FriendMail;Client;Mail;邮件
+FriendMemo;Client;Memo;备注
 FriendRequest;Client;Friend Request;好友请求
 FriendRequestAccept;Client;Accept Friend Request;接受好友请求
 FriendRequestDecline;Client;Decline Friend Request;拒绝好友请求
-MentorRequest;Client;Mentor Request;师徒请求
-MentorRequestAccept;Client;Accept Mentor Request;接受师徒请求
-MentorRequestDecline;Client;Decline Mentor Request;拒绝师徒请求
-RelationshipRequest;Client;Relationship Request;关系请求
-RelationshipRequestAccept;Client;Accept Relationship Request;接受关系请求
-RelationshipRequestDecline;Client;Decline Relationship Request;拒绝关系请求
+Friends;Client;Friends ({0});好友 ({0})
+FriendWhisper;Client;Whisper;密语
+Friend_RemoveConfirm;Client;Are you sure you wish to remove '{0}'?;你确定要删除好友“{0}”吗？
+GameMaster;Client;GameMaster;游戏管理员
+GameName;Both;Legend of Mir 2;传奇2
+GameShop;Client;Game Shop ({0});商城 ({0})
+GameShop_BuyWithCredits;Client;Buy with Credits;使用积分购买
+GameShop_BuyWithCreditsHint;Client;Buy item(s) with Credits.;使用积分购买物品。
+GameShop_BuyWithGold;Client;Buy with Gold;使用金币购买
+GameShop_BuyWithGoldHint;Client;Buy item(s) with Gold.;使用金币购买物品。
+GameShop_PageText;Client;{0} / {1};第 {0} / {1} 页
+GameShop_ShowAll;Client;Show All;全部
+Gold;Client;Gold;金币
+GroupAdd;Client;Add;添加
+GroupAddEnterName;Client;Please enter the name of the person you wish to add.;请输入你想要邀请组队的玩家名字.
 GroupInvite;Client;Group Invite;组队邀请
 GroupInviteAccept;Client;Accept Group Invite;接受组队邀请
 GroupInviteDecline;Client;Decline Group Invite;拒绝组队邀请
+GroupRemove;Client;Remove;移除
+GroupRemoveEnterName;Client;Please enter the name of the person you wish to remove.;请输入你想要移出队伍的玩家名字.
+Groups;Client;Groups ({0});队伍 ({0})
+GroupSwitch;Client;Allow/Disallow Group Requests;允许/禁止 组队请求
+Group_InviteQuestion;Client;Do you want to group with {0}?;你要与 {0} 组队吗？
+Group_MaxMembers;Client;Your group already has the maximum number of members.;你的队伍人数已达到上限.
+Group_NotLeader;Client;You are not the leader of your group.;你不是队长，无法执行此操作.
+Group_PlayerJoined;Client;{0} has joined the group.;{0} 已加入队伍。
+Group_PlayerLeft;Client;{0} has left the group.;{0} 已离开队伍。
+Group_YouLeft;Client;You have left the group.;你已离开队伍。
+Guild;Client;Guild ({0});行会 ({0})
 GuildInvite;Client;Guild Invite;行会邀请
 GuildInviteAccept;Client;Accept Guild Invite;接受行会邀请
 GuildInviteDecline;Client;Decline Guild Invite;拒绝行会邀请
-SystemMessage;Client;System Message;系统消息
-SystemMessageInfo;Client;System Message Info;系统消息信息
-
-SkillMode_Tilde;Client;[Skill Mode: ~];[技能模式: ~]
-SkillMode_Ctrl;Client;[Skill Mode: Ctrl];[技能模式: Ctrl]
+Help;Client;Help ({0});帮助 ({0})
+HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
+HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
+HeroInventory;Client;Hero Inventory ({0});英雄背包 ({0})
+HeroSkills;Client;Hero Skills ({0});英雄技能 ({0})
+Holy;Client;Holy: + {0} (+{1});神圣: + {0} (+{1})
+Holy2;Client;Holy: + {0};神圣: + {0}
+IncorrectPasswordAccountID;Client;Incorrect Password and AccountID combination.;账号或密码错误。
+InputKey_Delete;Client;Delete;删除
+InputKey_Enter;Client;Enter;回车
+InputKey_Esc;Client;Esc;Esc
+InputKey_Random;Client;Random;随机
+InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求.
+Inventory;Client;Inventory ({0});背包 ({0})
+InventoryIncreased;Server;Inventory size increased.;背包容量已增加。
+ItemDescription;Client;Item Description;物品说明
+ItemGradeCommon;Client;Common;普通
+ItemGradeHeroic;Client;Heroic;英雄
+ItemGradeLegendary;Client;Legendary;传说
+ItemGradeMythical;Client;Mythical;神话
+ItemGradeRare;Client;Rare;稀有
+ItemTextFormat;Client;{0}{1}{2} {3};{0}{1}{2} {3}
+ItemTypeAmulet;Client;Amulet;护符
+ItemTypeArmour;Client;Armour;盔甲
+ItemTypeAwakening;Client;Awakening;觉醒材料
+ItemTypeBait;Client;Bait;鱼饵
+ItemTypeBells;Client;Bells;铃铛
+ItemTypeBelt;Client;Belt;腰带
+ItemTypeBook;Client;Book;书籍
+ItemTypeBoots;Client;Boots;靴子
+ItemTypeBracelet;Client;Bracelet;手镯
+ItemTypeCraftingMaterial;Client;CraftingMaterial;材料
+ItemTypeDeco;Client;Deco;装饰品
+ItemTypeFinder;Client;Finder;探鱼器
+ItemTypeFish;Client;Fish;鱼类
+ItemTypeFloat;Client;Float;浮漂
+ItemTypeFood;Client;Food;食物
+ItemTypeGem;Client;Gem;宝玉
+ItemTypeHelmet;Client;Helmet;头盔
+ItemTypeHook;Client;Hook;鱼钩
+ItemTypeMask;Client;Mask;面具
+ItemTypeMeat;Client;Meat;肉类
+ItemTypeMonsterSpawn;Client;SpawnEgg;召唤蛋
+ItemTypeMount;Client;Mount;坐骑
+ItemTypeNecklace;Client;Necklace;项链
+ItemTypeOre;Client;Ore;矿石
+ItemTypePets;Client;Pets;宠物道具
+ItemTypePotion;Client;Potion;药水
+ItemTypeQuest;Client;Quest;任务物品
+ItemTypeReel;Client;Reel;鱼线轮
+ItemTypeReins;Client;Reins;缰绳
+ItemTypeRibbon;Client;Ribbon;缎带
+ItemTypeRing;Client;Ring;戒指
+ItemTypeSaddle;Client;Saddle;马鞍
+ItemTypeScript;Client;Script;脚本
+ItemTypeScroll;Client;Scroll;卷轴
+ItemTypeSealedHero;Client;SealedHero;封印英雄
+ItemTypeStone;Client;Stone;宝石
+ItemTypeTorch;Client;Torch;火把
+ItemTypeTransform;Client;Transform;变身道具
+ItemTypeWeapon;Client;Weapon;武器
+Item_3rdEyeBracelet;Both;3rdEyeBracelet;天眼手镯
+Item_8TrigramWheel;Both;8TrigramWheel;八卦轮
+Item_AccuracyGem;Both;AccuracyGem;命中宝石
+Item_AccuracyOrb;Both;AccuracyOrb;命中灵珠
+Item_AccuracyPotion;Both;AccuracyPotion;精准药水
+Item_AdamantineBelt;Both;AdamantineBelt;精金腰带
+Item_AdamantineNecklace;Both;AdamantineNecklace;精金项链
+Item_AdamantNecklace;Both;AdamantNecklace;坚钢项链
+Item_AdamintineOre;Both;AdamintineOre;精金矿石
+Item_AddsAccuracy;Client;Adds +{0} Accuracy;增加 +{0} 命中
+Item_AddsAgility;Client;Adds +{0} Agility;增加 +{0} 敏捷
+Item_AddsASpeed;Client;Adds +{0} A.Speed;增加 +{0} 攻击速度
+Item_AddsDurability;Client;Adds +{0} Durability;增加 +{0} 耐久
+Item_AddsFreezing;Client;Adds +{0} Freezing;增加 +{0} 冰冻
+Item_AddsMagicResist;Client;Adds +{0} Magic Resist;增加 +{0} 魔法抗性
+Item_AddsPoison;Client;Adds +{0} Poison;增加 +{0} 中毒
+Item_AddsPoisonResist;Client;Adds +{0} Poison Resist;增加 +{0} 毒性抗性
+Item_AdmissionOrb;Both;AdmissionOrb;入场宝珠
+Item_AgilityGem;Both;AgilityGem;敏捷宝石
+Item_AgilityOrb;Both;AgilityOrb;敏捷灵珠
+Item_Algae;Both;Algae;水藻
+Item_AmberNecklace;Both;AmberNecklace;琥珀项链
+Item_AmberPendant;Both;AmberPendant;琥珀坠饰
+Item_Amethyst;Both;Amethyst;紫水晶
+Item_AmethystNecklace;Both;AmethystNecklace;紫晶项链
+Item_Amulet;Both;Amulet;护身符
+Item_AmuletBundle;Both;Amulet(Bundle);护身符礼包
+Item_AmuletOfRevival;Both;AmuletOfRevival;复活护符
+Item_AncientArmourF;Both;AncientArmour(F);远古铠甲（女）
+Item_AncientArmourM;Both;AncientArmour(M);远古铠甲（男）
+Item_AncientBanga[Green];Both;AncientBanga[Green];上古帮甲[绿]
+Item_AncientBanga[Purple];Both;AncientBanga[Purple];上古帮甲[紫]
+Item_AncientLeather;Both;AncientLeather;远古皮革
+Item_AncientScyther;Both;AncientScyther;上古镰杀者
+Item_AncientTree;Both;AncientTree;远古之树
+Item_Antidote;Both;Antidote;解毒剂
+Item_AntidoteMarble;Both;AntidoteMarble;解毒石珠
+Item_Apple;Both;Apple;苹果
+Item_ApusBow;Both;ApusBow;阿普斯之弓
+Item_ArmourBookACC;Both;ArmourBook(ACC);护甲之书（命中）
+Item_ArmourBookDC;Both;ArmourBook(DC);护甲之书（物攻）
+Item_ArmourBookMC;Both;ArmourBook(MC);护甲之书（魔攻）
+Item_ArmourBookSC;Both;ArmourBook(SC);护甲之书（道攻）
+Item_ArmourCastTool;Both;ArmourCastTool;护甲铸造工具
+Item_AwakeningSoul0;Both;AwakeningSoul0;觉醒之魂
+Item_AwakeningSoul1;Both;AwakeningSoul1;觉醒之魂
+Item_AwakeningSoul2;Both;AwakeningSoul2;觉醒之魂
+Item_AwakeningSoul3;Both;AwakeningSoul3;觉醒之魂
+Item_BaboonLeather;Both;BaboonLeather;山魈皮革
+Item_BabyDragonEgg;Both;BabyDragonEgg;幼龙蛋
+Item_BabyPigEgg;Both;BabyPigEgg;小猪蛋
+Item_BackStep;Both;BackStep;后跳
+Item_BaekdonEgg;Both;BaekdonEgg;白顿蛋
+Item_BaekTaGlove;Both;BaekTaGlove;白塔护腕
+Item_BallOfDoom;Both;BallOfDoom;末日之球手镯
+Item_BallOfDoom1;Both;BallOfDoom1;末日之球手镯1
+Item_BallOfDoom2;Both;BallOfDoom2;末日之球手镯2
+Item_BallOfDoom3;Both;BallOfDoom3;末日之球手镯3
+Item_BallOfDoom4;Both;BallOfDoom4;末日之球手镯4
+Item_BallOfDoom5;Both;BallOfDoom5;末日之球手镯5
+Item_BambooPipe;Both;BambooPipe;竹笛
+Item_BarbarianSword;Both;BarbarianSword;蛮族之剑
+Item_BaseDressF;Both;BaseDress(F);新手服（女）
+Item_BaseDressM;Both;BaseDress(M);新手服（男）
+Item_BastardSword;Both;BastardSword;重剑
+Item_BatPoison;Both;BatPoison;蝙蝠毒液
+Item_BatTeeth;Both;BatTeeth;蝙蝠牙齿
+Item_BattleCry;Both;BattleCry;战吼
+Item_BatWings;Both;BatWings;蝙蝠翅膀
+Item_BeastLeather;Both;BeastLeather;野兽皮革
+Item_Beef;Both;Beef;牛肉
+Item_BeefDumpling;Both;BeefDumpling;牛肉饺子
+Item_BeefRib;Both;BeefRib;牛肋骨
+Item_BeltOfDarkness;Both;BeltOfDarkness;黑暗腰带
+Item_BeltOfStrength1;Both;BeltOfStrength1;力量腰带
+Item_BeltOfStrength2;Both;BeltOfStrength2;力量腰带
+Item_BeltOfStrength3;Both;BeltOfStrength3;力量腰带
+Item_BeltOfStrength4;Both;BeltOfStrength4;力量腰带
+Item_BeltOfStrength5;Both;BeltOfStrength5;力量腰带
+Item_BenedictionOil;Both;BenedictionOil;祝福油
+Item_BengalTiger;Both;BengalTiger;孟加拉虎
+Item_BichonTales1;Both;BichonTales(1);比奇传说（1）
+Item_BichonTales2;Both;BichonTales(2);比奇传说（2）
+Item_BichonTales3;Both;BichonTales(3);比奇传说（3）
+Item_BichonToken;Both;BichonToken;比奇令牌
+Item_BindingShot;Both;BindingShot;束缚箭
+Item_BlackBoots;Both;BlackBoots;黑色战靴
+Item_BlackCreatureStone;Both;BlackCreatureStone;黑色灵兽石
+Item_BlackCrystalPendant;Both;BlackCrystalPendant;黑晶坠饰
+Item_BlackCrystalRing;Both;BlackCrystalRing;黑晶戒指
+Item_BlackDragonArmorF;Both;BlackDragonArmor(F);黑龙战甲（女）
+Item_BlackDragonArmorF1;Both;BlackDragonArmor(F)1;黑龙战甲（女）1
+Item_BlackDragonArmorF2;Both;BlackDragonArmor(F)2;黑龙战甲（女）2
+Item_BlackDragonArmorF3;Both;BlackDragonArmor(F)3;黑龙战甲（女）3
+Item_BlackDragonArmorF4;Both;BlackDragonArmor(F)4;黑龙战甲（女）4
+Item_BlackDragonArmorF5;Both;BlackDragonArmor(F)5;黑龙战甲（女）5
+Item_BlackDragonArmorM;Both;BlackDragonArmor(M);黑龙战甲（男）
+Item_BlackDragonArmorM1;Both;BlackDragonArmor(M)1;黑龙战甲（男）1
+Item_BlackDragonArmorM2;Both;BlackDragonArmor(M)2;黑龙战甲（男）2
+Item_BlackDragonArmorM3;Both;BlackDragonArmor(M)3;黑龙战甲（男）3
+Item_BlackDragonArmorM4;Both;BlackDragonArmor(M)4;黑龙战甲（男）4
+Item_BlackDragonArmorM5;Both;BlackDragonArmor(M)5;黑龙战甲（男）5
+Item_BlackDragonSlayer;Both;BlackDragonSlayer;黑龙屠龙斩
+Item_BlackDragonSoulSabre;Both;BlackDragonSoulSabre;黑龙魂刃
+Item_BlackDragonStaff;Both;BlackDragonStaff;黑龙法杖
+Item_BlackIronBangle;Both;BlackIronBangle;玄铁镯
+Item_BlackIronBelt;Both;BlackIronBelt;玄铁腰带
+Item_BlackIronBracelet;Both;BlackIronBracelet;玄铁手镯
+Item_BlackIronCrowSwords;Both;BlackIronCrowSwords;玄铁乌鸦双刀
+Item_BlackIronHelmet;Both;BlackIronHelmet;玄铁头盔
+Item_BlackIronOre;Both;BlackIronOre;玄铁矿石
+Item_BlackKittenEgg;Both;BlackKittenEgg;黑猫蛋
+Item_BlackLeopard;Both;BlackLeopard;黑豹
+Item_BlackMask;Both;BlackMask;黑面具
+Item_BlackNecklace;Both;BlackNecklace;黑色项链
+Item_BlackPearlRing;Both;BlackPearlRing;黑珍珠戒指
+Item_BlackRibbon;Both;BlackRibbon;黑丝带
+Item_BlackRing;Both;BlackRing;黑色戒指
+Item_BlackThread;Both;BlackThread;黑丝线
+Item_BlackTigerArmourF;Both;BlackTigerArmour(F);黑虎铠甲（女）
+Item_BlackTigerArmourM;Both;BlackTigerArmour(M);黑虎铠甲（男）
+Item_BlackTigerF;Both;BlackTiger(F);黑虎套装（女）
+Item_BlackTigerHammer;Both;BlackTigerHammer;黑虎战锤
+Item_BlackTigerM;Both;BlackTiger(M);黑虎套装（男）
+Item_BlackWolf;Both;BlackWolf;黑狼
+Item_BladeAvalanche;Both;BladeAvalanche;旋风斩
+Item_BladeOfSorcery;Both;BladeOfSorcery;巫术之刃
+Item_BladesOfDarkness;Both;BladesOfDarkness;暗黑双刃
+Item_BladesOfMagi;Both;BladesOfMagi;魔导师双刃
+Item_BladesOfVelocity;Both;BladesOfVelocity;迅捷双刃
+Item_BlessCarnation+1;Both;BlessCarnation(+1);祝福康乃馨(+1)
+Item_BlessCarnation+2;Both;BlessCarnation(+2);祝福康乃馨(+2)
+Item_BlessCarnation+3;Both;BlessCarnation(+3);祝福康乃馨(+3)
+Item_BlessCarnation+4;Both;BlessCarnation(+4);祝福康乃馨(+4)
+Item_BlessCarnation+5;Both;BlessCarnation(+5);祝福康乃馨(+5)
+Item_BlessedArmour;Both;BlessedArmour;神圣战甲术
+Item_Blink;Both;Blink;闪烁
+Item_Blizzard;Both;Blizzard;暴风雪
+Item_BloodPill;Both;BloodPill;血丹
+Item_BloodStealerSword;Both;BloodStealerSword;噬血之剑
+Item_BloodThirstyBow;Both;BloodThirstyBow;嗜血之弓
+Item_BloodWine;Both;BloodWine;血酒
+Item_BlueCrystalNecklace;Both;BlueCrystalNecklace;蓝晶项链
+Item_BlueDarkArmourF;Both;BlueDarkArmour(F);蓝暗铠甲（女）
+Item_BlueDarkArmourM;Both;BlueDarkArmour(M);蓝暗铠甲（男）
+Item_BlueFishingRod;Both;BlueFishingRod;蓝色鱼竿
+Item_BlueFoxBracelet;Both;BlueFoxBracelet;蓝狐手镯
+Item_BlueFoxCollar;Both;BlueFoxCollar;蓝狐项圈
+Item_BlueFoxRing;Both;BlueFoxRing;蓝狐戒指
+Item_BlueJadeNecklace;Both;BlueJadeNecklace;蓝玉项链
+Item_BlueJadePendant;Both;BlueJadePendant;蓝玉坠饰
+Item_BlueMarshmallow;Both;BlueMarshmallow;蓝色棉花糖
+Item_BlueOctagonalBox;Both;BlueOctagonalBox;蓝色八角宝箱
+Item_BluePill;Both;BluePill;蓝色药丸
+Item_Bluerecoverywater;Both;Bluerecoverywater;蓝色恢复药水
+Item_BlueRibbon;Both;BlueRibbon;蓝丝带
+Item_BlueRing;Both;BlueRing;蓝宝石戒指
+Item_BlueThunderNecklace;Both;BlueThunderNecklace;蓝雷项链
+Item_BlueTiger;Both;BlueTiger;蓝虎
+Item_BlueWolf;Both;BlueWolf;蓝狼
+Item_BluishGreenBloodSlaughterPike;Both;BluishGreenBloodSlaughterPike;青血屠戮长矛
+Item_BluJadePendant;Both;BluJadePendant;蓝玉坠饰
+Item_BoarTooth;Both;BoarTooth;野猪獠牙
+Item_BodyGlyph0;Both;BodyGlyph;体魄雕文
+Item_BodyGlyph1;Both;BodyGlyph;体魄雕文
+Item_BodyGlyph2;Both;BodyGlyph;体魄雕文
+Item_BodyGlyph3;Both;BodyGlyph;体魄雕文
+Item_BokMaWheel;Both;BokMaWheel;驱魔轮
+Item_Bone;Both;Bone;骨头
+Item_BoneBow;Both;BoneBow;骨弓
+Item_BoneBroth;Both;BoneBroth;骨头汤
+Item_BoneCarvedFan;Both;BoneCarvedFan;骨雕折扇
+Item_BoneDecapitator;Both;BoneDecapitator;白骨斩首刀
+Item_BoneDumpling;Both;BoneDumpling;骨头饺子
+Item_BoneHammer;Both;BoneHammer;骨锤
+Item_BoneHood;Both;BoneHood;白骨兜帽
+Item_BoneRobeF;Both;BoneRobe(F);白骨长袍（女）
+Item_BoneRobeM;Both;BoneRobe(M);白骨长袍（男）
+Item_BookofMana;Both;BookofMana;魔力之书
+Item_BookofSpirit;Both;BookofSpirit;灵魂之书
+Item_BootsOfDarkness;Both;BootsOfDarkness;黑暗战靴
+Item_BootsOfStrength1;Both;BootsOfStrength1;力量战靴1
+Item_BootsOfStrength2;Both;BootsOfStrength2;力量战靴2
+Item_BootsOfStrength3;Both;BootsOfStrength3;力量战靴3
+Item_BootsOfStrength4;Both;BootsOfStrength4;力量战靴4
+Item_BootsOfStrength5;Both;BootsOfStrength5;力量战靴5
+Item_BossyF;Both;Bossy(F);女强人套装
+Item_BossyM;Both;Bossy(M);总裁套装
+Item_BoundlessRing;Both;BoundlessRing;无尽戒指
+Item_BowOfForce;Both;BowOfForce;强力之弓
+Item_BoxofHolyWater1;Both;BoxofHolyWater1;圣水礼盒
+Item_BraceletOfAgony;Both;BraceletOfAgony;苦痛手镯
+Item_BraceletOfAgony1;Both;BraceletOfAgony1;苦痛手镯1
+Item_BraceletOfAgony2;Both;BraceletOfAgony2;苦痛手镯2
+Item_BraceletOfAgony3;Both;BraceletOfAgony3;苦痛手镯3
+Item_BraceletOfAgony4;Both;BraceletOfAgony4;苦痛手镯4
+Item_BraceletOfAgony5;Both;BraceletOfAgony5;苦痛手镯5
+Item_BracerOfMagic;Both;BracerOfMagic;魔力护腕
+Item_BrassHelmet;Both;BrassHelmet;黄铜头盔
+Item_BraveryGem;Both;BraveryGem;勇气宝石
+Item_BraveryGlyph0;Both;BraveryGlyph0;勇气雕文
+Item_BraveryGlyph1;Both;BraveryGlyph1;勇气雕文
+Item_BraveryGlyph2;Both;BraveryGlyph2;勇气雕文
+Item_BraveryGlyph3;Both;BraveryGlyph3;勇气雕文
+Item_BraveryOrb;Both;BraveryOrb;勇气灵珠
+Item_BrokenSword;Both;BrokenSword;断裂长剑
+Item_BronzeAxe;Both;BronzeAxe;青铜斧
+Item_BronzeBell;Both;BronzeBell;青铜铃
+Item_BronzeBelt;Both;BronzeBelt;青铜腰带
+Item_BronzeChestnut;Both;BronzeChestnut;青铜栗子
+Item_BronzeGlove;Both;BronzeGlove;青铜护腕
+Item_BronzeHelmet;Both;BronzeHelmet;青铜头盔
+Item_BronzeHoaSword;Both;BronzeHoaSword;青铜花剑
+Item_BronzeShortSword;Both;BronzeShortSword;青铜短剑
+Item_BronzeStrap;Both;BronzeStrap;青铜束带
+Item_BronzeSword;Both;BronzeSword;青铜剑
+Item_BronzeWarriorSword;Both;BronzeWarriorSword;青铜勇士剑
+Item_BrownChestnut;Both;BrownChestnut;褐色栗子
+Item_BrownWolf;Both;BrownWolf;棕狼
+Item_BugBlood;Both;BugBlood;虫血
+Item_BugBracelet;Both;BugBracelet;虫蛀手镯
+Item_BugEye;Both;BugEye;昆虫复眼
+Item_BugLeg;Both;BugLeg;虫腿
+Item_BugNecklace;Both;BugNecklace;虫蛀项链
+Item_BugRing;Both;BugRing;虫蛀戒指
+Item_BugShell;Both;BugShell;虫壳
+Item_BugSpecimen;Both;BugSpecimen;昆虫标本
+Item_BurstSword;Both;BurstSword;爆裂之剑
+Item_ButcheringBlades;Both;ButcheringBlades;屠戮双刃
+Item_Candle;Both;Candle;蜡烛
+Item_CannibalFruit;Both;CannibalFruit;食人花果
+Item_CannibalFruitTea;Both;CannibalFruitTea;食人果茶
+Item_CannibalLeaf;Both;CannibalLeaf;食人花叶
+Item_CannibalLeaves;Both;CannibalLeaves;食人花叶
+Item_CannibalPoison;Both;CannibalPoison;食人毒液
+Item_CannibalSeed;Both;CannibalSeed;食人花种子
+Item_CannibalStem;Both;CannibalStem;食人花茎
+Item_CannibalWine;Both;CannibalWine;食人酒
+Item_CanniTea;Both;CanniTea;食人茶
+Item_CantDrop;Client;Can't drop;无法丢弃
+Item_CantDropOnDeath;Client;Can't drop on death;死亡时不会掉落
+Item_CantRepair;Client;Can't repair;无法修理
+Item_CantSell;Client;Can't sell;无法出售
+Item_CantStore;Client;Can't store;无法存仓
+Item_CantTrade;Client;Can't trade;无法交易
+Item_CantUpgrade;Client;Can't upgrade;无法升级
+Item_CatTognue;Both;CatTognue;猫之舌
+Item_CaveReport;Both;CaveReport;洞穴报告
+Item_ChainBelt;Both;ChainBelt;锁链腰带
+Item_CharleySword;Both;CharleySword;查理之剑
+Item_CharmRing;Both;CharmRing;魅力戒指
+Item_CheongboBeltARCH;Both;CheongboBelt(ARCH);青宝腰带·弓手
+Item_CheongboBeltASSA;Both;CheongboBelt(ASSA);青宝腰带·刺客
+Item_CheongboBeltTAO;Both;CheongboBelt(TAO);青宝腰带·道士
+Item_CheongboBeltWAR;Both;CheongboBelt(WAR);青宝腰带·战士
+Item_CheongboBeltWIZ;Both;CheongboBelt(WIZ);青宝腰带·法师
+Item_CheongboBootsARCH;Both;CheongboBoots(ARCH);青宝战靴·弓手
+Item_CheongboBootsASSA;Both;CheongboBoots(ASSA);青宝战靴·刺客
+Item_CheongboBootsTAO;Both;CheongboBoots(TAO);青宝战靴·道士
+Item_CheongboBootsWAR;Both;CheongboBoots(WAR);青宝战靴·战士
+Item_CheongboBootsWIZ;Both;CheongboBoots(WIZ);青宝战靴·法师
+Item_CheongboHelmetARCH;Both;CheongboHelmet(ARCH);青宝头盔·弓手
+Item_CheongboHelmetASSA;Both;CheongboHelmet(ASSA);青宝头盔·刺客
+Item_CheongboHelmetTAO;Both;CheongboHelmet(TAO);青宝头盔·道士
+Item_CheongboHelmetWAR;Both;CheongboHelmet(WAR);青宝头盔·战士
+Item_CheongboHelmetWIZ;Both;CheongboHelmet(WIZ);青宝头盔·法师
+Item_Cherries;Both;Cherries;樱桃
+Item_Cherry;Both;Cherry;樱桃
+Item_ChickEgg;Both;ChickEgg;小鸡蛋
+Item_Chicken;Both;Chicken;鸡肉
+Item_ChickenBroth;Both;ChickenBroth;鸡汤
+Item_ChickenDumpling;Both;ChickenDumpling;鸡肉饺子
+Item_ClawNecklace;Both;ClawNecklace;利爪项链
+Item_ClawPendant;Both;ClawPendant;利爪坠饰
+Item_CleanSkull;Both;CleanSkull;洁净头骨
+Item_ClearRing;Both;ClearRing;清明戒指
+Item_CloudRing;Both;CloudRing;云纹戒指
+Item_CompoundBow;Both;CompoundBow;复合弓
+Item_Concentration;Both;Concentration;集中射击
+Item_ConquerorSpear;Both;ConquerorSpear;征服之矛
+Item_ConvexLens;Both;ConvexLens;凸透镜坠
+Item_CookBook;Both;CookBook;食谱
+Item_CopperOre;Both;CopperOre;铜矿石
+Item_CopperRing;Both;CopperRing;铜戒指
+Item_CoralRing;Both;CoralRing;珊瑚戒指
+Item_CorpsFlower;Both;CorpsFlower;尸花
+Item_CostumeGirl;Both;CostumeGirl;时装少女装扮
+Item_CounterAttack;Both;CounterAttack;反击
+Item_CraftingBook;Both;CraftingBook;制造手册
+Item_CraftRing1;Both;CraftRing1;工艺戒指
+Item_CraftRing10;Both;CraftRing10;工艺戒指
+Item_CraftRing2;Both;CraftRing2;工艺戒指
+Item_CraftRing3;Both;CraftRing3;工艺戒指
+Item_CraftRing4;Both;CraftRing4;工艺戒指
+Item_CraftRing5;Both;CraftRing5;工艺戒指
+Item_CraftRing6;Both;CraftRing6;工艺戒指
+Item_CraftRing7;Both;CraftRing7;工艺戒指
+Item_CraftRing8;Both;CraftRing8;工艺戒指
+Item_CraftRing9;Both;CraftRing9;工艺戒指
+Item_CraneArmourF;Both;CraneArmour(F);仙鹤铠甲（女）
+Item_CraneArmourM;Both;CraneArmour(M);仙鹤铠甲（男）
+Item_CreatureMirror;Both;CreatureMirror;灵兽之镜
+Item_CreatureNuts;Both;CreatureNuts;灵兽坚果
+Item_CreditToken1;Both;CreditToken1;积分凭证1
+Item_CreditToken2;Both;CreditToken2;积分凭证2
+Item_CreditToken3;Both;CreditToken3;积分凭证3
+Item_CreditToken4;Both;CreditToken4;积分凭证4
+Item_CreditToken5;Both;CreditToken5;积分凭证5
+Item_CreditToken6;Both;CreditToken6;积分凭证6
+Item_CreditToken7;Both;CreditToken7;积分凭证7
+Item_CreditToken8;Both;CreditToken8;积分凭证8
+Item_CresentSlash;Both;CresentSlash;新月斩
+Item_CrimsonRubyRing;Both;CrimsonRubyRing;深红红宝戒指
+Item_CrippleShot;Both;CrippleShot;致残箭
+Item_CrossHalfMoon;Both;CrossHalfMoon;交叉半月
+Item_CrossPurified;Both;CrossPurified;净化十字坠
+Item_CrystalArmourF;Both;CrystalArmour(F);水晶铠甲（女）
+Item_CrystalArmourM;Both;CrystalArmour(M);水晶铠甲（男）
+Item_Curse;Both;Curse;诅咒术
+Item_CursedMaleficBow;Both;CursedMaleficBow;诅咒恶弓
+Item_CuspidNecklace;Both;CuspidNecklace;尖牙项链
+Item_Dagger;Both;Dagger;匕首
+Item_DarkBody;Both;DarkBody;暗影之躯
+Item_DCStone;Both;DCStone;物攻石
+Item_DCStoneL;Both;DCStone(L);物攻石（大）
+Item_DCStoneM;Both;DCStone(M);物攻石（中）
+Item_DCStoneS;Both;DCStone(S);物攻石（小）
+Item_DCStoneXL;Both;DCStone(XL);物攻石（特大）
+Item_DCTorch3;Both;DCTorch3;物攻火把3
+Item_DCTorch[2h];Both;DCTorch[2h];物攻火把[2小时]
+Item_DCTorch[3h];Both;DCTorch[3h];物攻火把[3小时]
+Item_DeathBow;Both;DeathBow;死亡之弓
+Item_DeathGauntlet;Both;DeathGauntlet;死亡护手
+Item_DeerBlood;Both;DeerBlood;鹿血
+Item_DeerHorn;Both;DeerHorn;鹿角
+Item_DeerMeat;Both;DeerMeat;鹿肉块
+Item_DelayedExplosion;Both;DelayedExplosion;延时爆裂
+Item_DemonicBells;Both;DemonicBells;魔铃项链
+Item_DemonLeather;Both;DemonLeather;恶魔皮革
+Item_DemonMask;Both;DemonMask;魔面具坠
+Item_DemonRubyRing;Both;DemonRubyRing;魔红宝石戒指
+Item_DemonShadow;Both;DemonShadow;魔影头盔
+Item_DestructionLiquor;Both;DestructionLiquor;毁灭之酒
+Item_DestructionLiquor1;Both;DestructionLiquor1;毁灭之酒1
+Item_DestructionLiquor3;Both;DestructionLiquor3;毁灭之酒3
+Item_DestructionLiquor5;Both;DestructionLiquor5;毁灭之酒5
+Item_DestructionWater3;Both;DestructionWater3;毁灭之水3
+Item_DestructionWater7;Both;DestructionWater7;毁灭之水7
+Item_DevilGirl;Both;DevilGirl;恶魔少女装扮
+Item_DevilGirl1;Both;DevilGirl1;恶魔少女装扮1
+Item_Dice;Both;Dice;骰子
+Item_DisillusionGem;Both;DisillusionGem;破幻宝石
+Item_DisillusionOrb;Both;DisillusionOrb;破幻灵珠
+Item_DollyMask;Both;DollyMask;玩偶面具
+Item_DoubleBlades;Both;DoubleBlades;双刀
+Item_DoubleFlower;Both;DoubleFlower;双花戒指
+Item_DoubleFlower1;Both;DoubleFlower1;双花戒指
+Item_DoubleFlower2;Both;DoubleFlower2;双花戒指
+Item_DoubleFlower3;Both;DoubleFlower3;双花戒指
+Item_DoubleFlower4;Both;DoubleFlower4;双花戒指
+Item_DoubleFlower5;Both;DoubleFlower5;双花戒指
+Item_DoubleShot;Both;DoubleShot;二连射
+Item_DoubleSlash;Both;DoubleSlash;双重斩
+Item_Dragon'sRoyalBlades;Both;Dragon'sRoyalBlades;龙皇双刃
+Item_DragonBloodSword;Both;DragonBloodSword;龙血之剑
+Item_DragonBoots;Both;DragonBoots;龙纹战靴
+Item_DragonBracelet;Both;DragonBracelet;龙纹手镯
+Item_DragonNecklace;Both;DragonNecklace;龙纹项链
+Item_DragonNecklace1;Both;DragonNecklace1;龙纹项链1
+Item_DragonNecklace2;Both;DragonNecklace2;龙纹项链2
+Item_DragonNecklace3;Both;DragonNecklace3;龙纹项链3
+Item_DragonNecklace4;Both;DragonNecklace4;龙纹项链4
+Item_DragonNecklace5;Both;DragonNecklace5;龙纹项链5
+Item_DragonPendant;Both;DragonPendant;龙纹坠饰
+Item_DragonPendant1;Both;DragonPendant1;龙纹坠饰1
+Item_DragonPendant2;Both;DragonPendant2;龙纹坠饰2
+Item_DragonPendant3;Both;DragonPendant3;龙纹坠饰3
+Item_DragonPendant4;Both;DragonPendant4;龙纹坠饰4
+Item_DragonPendant5;Both;DragonPendant5;龙纹坠饰5
+Item_DragonRing;Both;DragonRing;龙纹戒指
+Item_DragonRobeF;Both;DragonRobe(F);龙纹长袍（女）
+Item_DragonRobeM;Both;DragonRobe(M);龙纹长袍（男）
+Item_DragonScale;Both;DragonScale;龙鳞
+Item_DragonSlayer;Both;DragonSlayer;屠龙刀
+Item_DragonStaff;Both;DragonStaff;龙纹法杖
+Item_DragonSword;Both;DragonSword;龙纹剑
+Item_DragonTorch;Both;DragonTorch;龙焰火把
+Item_DreadBow;Both;DreadBow;恐惧之弓
+Item_DualTitanAmulet;Both;DualTitanAmulet;双泰坦手镯
+Item_Dumpling;Both;Dumpling;饺子
+Item_DungeonEscape;Both;DungeonEscape;地宫脱离卷
+Item_DurabilityGem;Both;DurabilityGem;耐久宝石
+Item_DurabilityOrb;Both;DurabilityOrb;耐久灵珠
+Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已降为 0.
+Item_EbonyBangle;Both;EbonyBangle;乌木镯
+Item_EbonyBow;Both;EbonyBow;乌木弓
+Item_EbonyBracelet;Both;EbonyBracelet;乌木手镯
+Item_EbonyFruit;Both;EbonyFruit;乌木果
+Item_EbonyNecklace;Both;EbonyNecklace;乌木项链
+Item_EbonyPendant;Both;EbonyPendant;乌木坠饰
+Item_EbonySword;Both;EbonySword;乌木剑
+Item_EggBroth;Both;EggBroth;鸡蛋汤
+Item_EggDumpling;Both;EggDumpling;鸡蛋饺子
+Item_ElectricShock;Both;ElectricShock;雷电术
+Item_ElementalBarrier;Both;ElementalBarrier;元素屏障
+Item_ElementalShot;Both;ElementalShot;元素射击
+Item_ElixirOfDefensive[1d];Both;ElixirOfDefensive[1d];防御灵药（1天）
+Item_ElixirOfGinseng[1d];Both;ElixirOfGinseng[1d];参灵药（1天）
+Item_ElixirOfMight[1d];Both;ElixirOfMight[1d];力量灵药（1天）
+Item_ElixirOfPhysical;Both;ElixirOfPhysical;体魄灵药
+Item_ElkWoodenBow;Both;ElkWoodenBow;麋鹿木弓
+Item_ElusionNecklace;Both;ElusionNecklace;闪避项链
+Item_EmeraldOre;Both;EmeraldOre;绿宝石矿
+Item_EnchantedAmulet;Both;EnchantedAmulet;魔咒手镯
+Item_EnduranceGem;Both;EnduranceGem;坚韧宝石
+Item_EnduranceOrb;Both;EnduranceOrb;坚韧灵珠
+Item_EnergyRepulsor;Both;EnergyRepulsor;能量反震
+Item_EnergyShield;Both;EnergyShield;能量护盾
+Item_EnternalFlame;Both;EnternalFlame;永恒之焰
+Item_Entrapment;Both;Entrapment;缠绕
+Item_EvadeBracelet;Both;EvadeBracelet;闪避手镯
+Item_EvasionMarble;Both;EvasionMarble;闪避石珠
+Item_EvilApeHeart;Both;EvilApeHeart;恶猿之心
+Item_EvilApeOil;Both;EvilApeOil;恶猿之油
+Item_EvilDragonBracelet;Both;EvilDragonBracelet;邪龙手镯
+Item_EvilDragonBracelet1;Both;EvilDragonBracelet1;邪龙手镯1
+Item_EvilDragonBracelet2;Both;EvilDragonBracelet2;邪龙手镯2
+Item_EvilDragonBracelet3;Both;EvilDragonBracelet3;邪龙手镯3
+Item_EvilDragonBracelet4;Both;EvilDragonBracelet4;邪龙手镯4
+Item_EvilDragonBracelet5;Both;EvilDragonBracelet5;邪龙手镯5
+Item_EvilDragonRing;Both;EvilDragonRing;邪龙戒指
+Item_EvilDragonRing1;Both;EvilDragonRing1;邪龙戒指
+Item_EvilDragonRing2;Both;EvilDragonRing2;邪龙戒指
+Item_EvilDragonRing3;Both;EvilDragonRing3;邪龙戒指
+Item_EvilDragonRing4;Both;EvilDragonRing4;邪龙戒指
+Item_EvilDragonRing5;Both;EvilDragonRing5;邪龙戒指
+Item_EvilExpelRing;Both;EvilExpelRing;邪祟驱散戒指
+Item_EvilSlayerGem;Both;EvilSlayerGem;屠魔宝石
+Item_EvilSlayerGlyph0;Both;EvilSlayerGlyph0;屠魔雕文
+Item_EvilSlayerGlyph1;Both;EvilSlayerGlyph1;屠魔雕文
+Item_EvilSlayerGlyph2;Both;EvilSlayerGlyph2;屠魔雕文
+Item_EvilSlayerGlyph3;Both;EvilSlayerGlyph3;屠魔雕文
+Item_EvilSlayerOrb;Both;EvilSlayerOrb;屠魔灵珠
+Item_EvilSlayerRing;Both;EvilSlayerRing;屠魔戒指
+Item_EvilTriangle;Both;EvilTriangle;邪恶三角坠
+Item_EvilWhispAmulet;Both;EvilWhispAmulet;邪灵手镯
+Item_ExorcistRing;Both;ExorcistRing;驱魔者戒指
+Item_EXP20%[1d];Both;EXP20%[1d];20%经验药水（1天）
+Item_EXP30%1;Both;EXP30%1;30%经验药水1
+Item_EXP30%24;Both;EXP30%24;30%经验药水24
+Item_EXP30%3;Both;EXP30%3;30%经验药水3
+Item_EXP30%5;Both;EXP30%5;30%经验药水5
+Item_EXP50%1;Both;EXP50%1;50%经验药水1
+Item_EXP50%24;Both;EXP50%24;50%经验药水24
+Item_EXP50%3;Both;EXP50%3;50%经验药水3
+Item_EXP50%5;Both;EXP50%5;50%经验药水5
+Item_ExpelRing;Both;ExpelRing;驱魔戒指
+Item_ExplosiveTrap;Both;ExplosiveTrap;爆裂陷阱
+Item_ExtraDrop20%;Both;ExtraDrop20%;掉率提升20%卷
+Item_EyeofGoldenSnake;Both;EyeofGoldenSnake;金蛇之眼戒指
+Item_FairyMoss;Both;FairyMoss;精灵苔
+Item_FanOfCrane;Both;FanOfCrane;仙鹤折扇
+Item_FastMove;Both;FastMove;疾行
+Item_FatalSword;Both;FatalSword;致命剑法
+Item_Feather;Both;Feather;羽毛
+Item_Fencing;Both;Fencing;基本剑术
+Item_FiendBow;Both;FiendBow;魔弓
+Item_FineIronArmourF;Both;FineIronArmour(F);精铁铠甲（女）
+Item_FineIronArmourM;Both;FineIronArmour(M);精铁铠甲（男）
+Item_FireBall;Both;FireBall;火球术
+Item_FireBang;Both;FireBang;爆裂火焰
+Item_FireBloodSword;Both;FireBloodSword;火血剑
+Item_FireBurst;Both;FireBurst;火焰爆裂
+Item_FireConvexLens;Both;FireConvexLens;火焰凸透镜坠
+Item_FireMagicRobeF;Both;FireMagicRobe(F);火焰法袍（女）
+Item_FireMagicRobeM;Both;FireMagicRobe(M);火焰法袍（男）
+Item_FireRobeF;Both;FireRobe(F);火焰长袍（女）
+Item_FireRobeM;Both;FireRobe(M);火焰长袍（男）
+Item_FireWall;Both;FireWall;火墙
+Item_FishBait;Both;FishBait;鱼饵
+Item_FishDetector;Both;FishDetector;鱼群探测器
+Item_FishingFloat;Both;FishingFloat;浮漂
+Item_FishingHook;Both;FishingHook;鱼钩
+Item_FishingPackage;Both;FishingPackage;钓鱼礼包
+Item_FishingReel;Both;FishingReel;渔线轮
+Item_FiveElementAmulet;Both;FiveElementAmulet;五行手镯
+Item_FiveElementRing;Both;FiveElementRing;五行戒指
+Item_FiveStringBracelet;Both;FiveStringBracelet;五弦手镯
+Item_FiveStringNecklace;Both;FiveStringNecklace;五弦项链
+Item_FiveStringRing;Both;FiveStringRing;五弦戒指
+Item_FlameDisruptor;Both;FlameDisruptor;焰火分身
+Item_FlameField;Both;FlameField;火焰领域
+Item_FlameRing;Both;FlameRing;火焰戒指
+Item_FlamingGrasp;Both;FlamingGrasp;烈焰之握腰带
+Item_FlamingMutant;Both;FlamingMutant;炎魔变身
+Item_FlamingRedArmourF;Both;FlamingRedArmour(F);烈焰红铠（女）
+Item_FlamingRedArmourM;Both;FlamingRedArmour(M);烈焰红铠（男）
+Item_FlamingSword;Both;FlamingSword;烈火剑法
+Item_FlashDash;Both;FlashDash;闪影冲刺
+Item_Focus;Both;Focus;专注
+Item_FocusMarble;Both;FocusMarble;专注石珠
+Item_Footballer;Both;Footballer;足球服装扮
+Item_Footballer1;Both;Footballer1;足球服装扮1
+Item_Footballer2;Both;Footballer2;足球服装扮2
+Item_Footballer3;Both;Footballer3;足球服装扮3
+Item_Footballer4;Both;Footballer4;足球服装扮4
+Item_Footballer5;Both;Footballer5;足球服装扮5
+Item_Formal1F;Both;Formal1(F);礼服一式（女）
+Item_Formal1M;Both;Formal1(M);礼服一式（男）
+Item_Formal2F;Both;Formal2(F);礼服二式（女）
+Item_Formal2M;Both;Formal2(M);礼服二式（男）
+Item_FormalF;Both;Formal(F);礼服装扮（女）
+Item_FormalM;Both;Formal(M);礼服装扮（男）
+Item_FreezingBlades;Both;FreezingBlades;冰冻双刃
+Item_FreezingGem;Both;FreezingGem;冰冻宝石
+Item_FreezingOrb;Both;FreezingOrb;冰冻灵珠
+Item_FreshwaterClam;Both;FreshwaterClam;淡水蛤蜊
+Item_FrogEgg;Both;FrogEgg;青蛙蛋
+Item_FrostCrunch;Both;FrostCrunch;冰霜嚎叫
+Item_FrozenSabre;Both;FrozenSabre;寒冰军刀
+Item_FrozenStone;Both;FrozenStone;冰封石
+Item_Fury;Both;Fury;狂暴
+Item_GaleNecklace;Both;GaleNecklace;疾风项链
+Item_GalePotion;Both;GalePotion;疾风药水
+Item_GalePotion1;Both;GalePotion1;疾风药水1
+Item_GalePotion2;Both;GalePotion2;疾风药水2
+Item_GalePotion3;Both;GalePotion3;疾风药水3
+Item_GaleRing;Both;GaleRing;疾风戒指
+Item_GambleChip;Both;GambleChip;赌博筹码
+Item_GatheringGlove;Both;GatheringGlove;采集手套
+Item_GatheringTool;Both;GatheringTool;采集工具
+Item_GingerTea;Both;GingerTea;姜茶
+Item_Ginseng;Both;Ginseng;人参
+Item_GlassRing;Both;GlassRing;玻璃戒指
+Item_Gobby;Both;Gobby;哥比鱼
+Item_GoldBar;Both;GoldBar;金条
+Item_GoldBarBundle;Both;GoldBarBundle;金条捆
+Item_GoldBell;Both;GoldBell;黄金铃
+Item_GoldBelt;Both;GoldBelt;黄金腰带
+Item_GoldBracelet;Both;GoldBracelet;黄金手镯
+Item_GoldBridle;Both;GoldBridle;黄金缰绳
+Item_GoldChest;Both;GoldChest;黄金宝箱
+Item_GoldChestnut;Both;GoldChestnut;黄金栗子
+Item_GoldDarkArmourF;Both;GoldDarkArmour(F);金暗铠甲（女）
+Item_GoldDarkArmourM;Both;GoldDarkArmour(M);金暗铠甲（男）
+Item_GoldDragonRing;Both;GoldDragonRing;金龙戒指
+Item_GoldenDragonBrace;Both;GoldenDragonBrace;金龙手镯
+Item_GoldenDragonBrace1;Both;GoldenDragonBrace1;金龙手镯1
+Item_GoldenDragonBrace2;Both;GoldenDragonBrace2;金龙手镯2
+Item_GoldenDragonBrace3;Both;GoldenDragonBrace3;金龙手镯3
+Item_GoldenDragonBrace4;Both;GoldenDragonBrace4;金龙手镯4
+Item_GoldenDragonBrace5;Both;GoldenDragonBrace5;金龙手镯5
+Item_GoldenPendant;Both;GoldenPendant;黄金坠饰
+Item_GoldenTiara;Both;GoldenTiara;黄金头饰
+Item_GoldNecklace;Both;GoldNecklace;黄金项链
+Item_GoldOre;Both;GoldOre;金矿石
+Item_GoldPatternBoots;Both;GoldPatternBoots;金纹战靴
+Item_GoldRing;Both;GoldRing;黄金戒指
+Item_GonryunDoubleFlower寶;Both;GonryunDoubleFlower(寶);昆仑双花戒指·宝
+Item_GonryunDoubleFlower寶1;Both;GonryunDoubleFlower(寶)1;昆仑双花戒指·宝1
+Item_GonryunDoubleFlower寶2;Both;GonryunDoubleFlower(寶)2;昆仑双花戒指·宝2
+Item_GonryunDoubleFlower寶4;Both;GonryunDoubleFlower(寶)4;昆仑双花戒指·宝4
+Item_GonryunDoubleFlower寶5;Both;GonryunDoubleFlower(寶)5;昆仑双花戒指·宝5
+Item_GonryunDoubleFlower寶物3;Both;GonryunDoubleFlower(寶物)3;昆仑双花戒指·宝物3
+Item_GonryunEunhyung寶;Both;GonryunEunhyung(寶);昆仑银衡腰带·宝
+Item_GonryunEunhyung寶1;Both;GonryunEunhyung(寶)1;昆仑银衡腰带·宝1
+Item_GonryunEunhyung寶2;Both;GonryunEunhyung(寶)2;昆仑银衡腰带·宝2
+Item_GonryunEunhyung寶3;Both;GonryunEunhyung(寶)3;昆仑银衡腰带·宝3
+Item_GonryunEunhyung寶4;Both;GonryunEunhyung(寶)4;昆仑银衡腰带·宝4
+Item_GonryunEunhyung寶5;Both;GonryunEunhyung(寶)5;昆仑银衡腰带·宝5
+Item_GonryunEunhyung神;Both;GonryunEunhyung(神);昆仑银衡腰带·神
+Item_GonryunEunhyung神1;Both;GonryunEunhyung(神)1;昆仑银衡腰带·神1
+Item_GonryunEunhyung神2;Both;GonryunEunhyung(神)2;昆仑银衡腰带·神2
+Item_GonryunEunhyung神3;Both;GonryunEunhyung(神)3;昆仑银衡腰带·神3
+Item_GonryunEunhyung神4;Both;GonryunEunhyung(神)4;昆仑银衡腰带·神4
+Item_GonryunEunhyung神5;Both;GonryunEunhyung(神)5;昆仑银衡腰带·神5
+Item_GonryunEunhyung聖;Both;GonryunEunhyung(聖);昆仑银衡腰带·圣
+Item_GonryunEunhyung聖1;Both;GonryunEunhyung(聖)1;昆仑银衡腰带·圣1
+Item_GonryunEunhyung聖2;Both;GonryunEunhyung(聖)2;昆仑银衡腰带·圣2
+Item_GonryunEunhyung聖3;Both;GonryunEunhyung(聖)3;昆仑银衡腰带·圣3
+Item_GonryunEunhyung聖4;Both;GonryunEunhyung(聖)4;昆仑银衡腰带·圣4
+Item_GonryunEunhyung聖5;Both;GonryunEunhyung(聖)5;昆仑银衡腰带·圣5
+Item_GonryunHePublication寶;Both;GonryunHePublication(寶);昆仑鹤步战靴·宝
+Item_GonryunHePublication寶物1;Both;GonryunHePublication(寶物)1;昆仑鹤步战靴·宝物1
+Item_GonryunHePublication寶物2;Both;GonryunHePublication(寶物)2;昆仑鹤步战靴·宝物2
+Item_GonryunHePublication寶物3;Both;GonryunHePublication(寶物)3;昆仑鹤步战靴·宝物3
+Item_GonryunHePublication寶物4;Both;GonryunHePublication(寶物)4;昆仑鹤步战靴·宝物4
+Item_GonryunHePublication寶物5;Both;GonryunHePublication(寶物)5;昆仑鹤步战靴·宝物5
+Item_GonryunHePublication神;Both;GonryunHePublication(神);昆仑鹤步战靴·神
+Item_GonryunHePublication神物1;Both;GonryunHePublication(神物)1;昆仑鹤步战靴·神物1
+Item_GonryunHePublication神物2;Both;GonryunHePublication(神物)2;昆仑鹤步战靴·神物2
+Item_GonryunHePublication神物3;Both;GonryunHePublication(神物)3;昆仑鹤步战靴·神物3
+Item_GonryunHePublication神物4;Both;GonryunHePublication(神物)4;昆仑鹤步战靴·神物4
+Item_GonryunHePublication神物5;Both;GonryunHePublication(神物)5;昆仑鹤步战靴·神物5
+Item_GonryunHePublication聖;Both;GonryunHePublication(聖);昆仑鹤步战靴·圣
+Item_GonryunHePublication聖物1;Both;GonryunHePublication(聖物)1;昆仑鹤步战靴·圣物1
+Item_GonryunHePublication聖物2;Both;GonryunHePublication(聖物)2;昆仑鹤步战靴·圣物2
+Item_GonryunHePublication聖物3;Both;GonryunHePublication(聖物)3;昆仑鹤步战靴·圣物3
+Item_GonryunHePublication聖物4;Both;GonryunHePublication(聖物)4;昆仑鹤步战靴·圣物4
+Item_GonryunHePublication聖物5;Both;GonryunHePublication(聖物)5;昆仑鹤步战靴·圣物5
+Item_GonRyunHolyLightBlades寶;Both;GonRyunHolyLightBlades(寶);昆仑圣光双刃·宝
+Item_GonRyunHolyLightBlades神;Both;GonRyunHolyLightBlades(神);昆仑圣光双刃·神
+Item_GonRyunHolyLightBlades聖;Both;GonRyunHolyLightBlades(聖);昆仑圣光双刃·圣
+Item_GonRyunHolyLightBow寶;Both;GonRyunHolyLightBow(寶);昆仑圣光之弓·宝
+Item_GonRyunHolyLightBow神;Both;GonRyunHolyLightBow(神);昆仑圣光之弓·神
+Item_GonRyunHolyLightBow聖;Both;GonRyunHolyLightBow(聖);昆仑圣光之弓·圣
+Item_GonRyunHolyLightSword寶;Both;GonRyunHolyLightSword(寶);昆仑圣光之剑·宝
+Item_GonRyunHolyLightSword寶1;Both;GonRyunHolyLightSword(寶)1;昆仑圣光之剑·宝1
+Item_GonRyunHolyLightSword寶2;Both;GonRyunHolyLightSword(寶)2;昆仑圣光之剑·宝2
+Item_GonRyunHolyLightSword寶3;Both;GonRyunHolyLightSword(寶)3;昆仑圣光之剑·宝3
+Item_GonRyunHolyLightSword神;Both;GonRyunHolyLightSword(神);昆仑圣光之剑·神
+Item_GonRyunHolyLightSword神1;Both;GonRyunHolyLightSword(神)1;昆仑圣光之剑·神1
+Item_GonRyunHolyLightSword神2;Both;GonRyunHolyLightSword(神)2;昆仑圣光之剑·神2
+Item_GonRyunHolyLightSword神3;Both;GonRyunHolyLightSword(神)3;昆仑圣光之剑·神3
+Item_GonRyunHolyLightSword聖;Both;GonRyunHolyLightSword(聖);昆仑圣光之剑·圣
+Item_GonRyunHolyLightSword聖1;Both;GonRyunHolyLightSword(聖)1;昆仑圣光之剑·圣1
+Item_GonRyunHolyLightSword聖2;Both;GonRyunHolyLightSword(聖)2;昆仑圣光之剑·圣2
+Item_GonRyunHolyLightSword聖3;Both;GonRyunHolyLightSword(聖)3;昆仑圣光之剑·圣3
+Item_Gonryunpasackle寶;Both;Gonryunpasackle(寶);昆仑破邪手镯·宝
+Item_Gonryunpasackle寶1;Both;Gonryunpasackle(寶)1;昆仑破邪手镯·宝1
+Item_Gonryunpasackle寶2;Both;Gonryunpasackle(寶)2;昆仑破邪手镯·宝2
+Item_Gonryunpasackle寶3;Both;Gonryunpasackle(寶)3;昆仑破邪手镯·宝3
+Item_Gonryunpasackle寶4;Both;Gonryunpasackle(寶)4;昆仑破邪手镯·宝4
+Item_Gonryunpasackle寶5;Both;Gonryunpasackle(寶)5;昆仑破邪手镯·宝5
+Item_Gonryunpasackle神;Both;Gonryunpasackle(神);昆仑破邪手镯·神
+Item_Gonryunpasackle神1;Both;Gonryunpasackle(神)1;昆仑破邪手镯·神1
+Item_Gonryunpasackle神2;Both;Gonryunpasackle(神)2;昆仑破邪手镯·神2
+Item_Gonryunpasackle神3;Both;Gonryunpasackle(神)3;昆仑破邪手镯·神3
+Item_Gonryunpasackle神4;Both;Gonryunpasackle(神)4;昆仑破邪手镯·神4
+Item_Gonryunpasackle神5;Both;Gonryunpasackle(神)5;昆仑破邪手镯·神5
+Item_Gonryunpasackle聖;Both;Gonryunpasackle(聖);昆仑破邪手镯·圣
+Item_Gonryunpasackle聖1;Both;Gonryunpasackle(聖)1;昆仑破邪手镯·圣1
+Item_Gonryunpasackle聖2;Both;Gonryunpasackle(聖)2;昆仑破邪手镯·圣2
+Item_Gonryunpasackle聖3;Both;Gonryunpasackle(聖)3;昆仑破邪手镯·圣3
+Item_Gonryunpasackle聖4;Both;Gonryunpasackle(聖)4;昆仑破邪手镯·圣4
+Item_Gonryunpasackle聖5;Both;Gonryunpasackle(聖)5;昆仑破邪手镯·圣5
+Item_GonryunSanggwan寶;Both;GonryunSanggwan(寶);昆仑头冠·宝
+Item_GonryunSanggwan寶1;Both;GonryunSanggwan(寶)1;昆仑头冠·宝1
+Item_GonryunSanggwan寶2;Both;GonryunSanggwan(寶)2;昆仑头冠·宝2
+Item_GonryunSanggwan寶3;Both;GonryunSanggwan(寶)3;昆仑头冠·宝3
+Item_GonryunSanggwan寶4;Both;GonryunSanggwan(寶)4;昆仑头冠·宝4
+Item_GonryunSanggwan寶5;Both;GonryunSanggwan(寶)5;昆仑头冠·宝5
+Item_GonryunSanggwan神;Both;GonryunSanggwan(神);昆仑头冠·神
+Item_GonryunSanggwan神1;Both;GonryunSanggwan(神)1;昆仑头冠·神1
+Item_GonryunSanggwan神2;Both;GonryunSanggwan(神)2;昆仑头冠·神2
+Item_GonryunSanggwan神3;Both;GonryunSanggwan(神)3;昆仑头冠·神3
+Item_GonryunSanggwan神4;Both;GonryunSanggwan(神)4;昆仑头冠·神4
+Item_GonryunSanggwan神5;Both;GonryunSanggwan(神)5;昆仑头冠·神5
+Item_GonryunSanggwan聖;Both;GonryunSanggwan(聖);昆仑头冠·圣
+Item_GonryunSanggwan聖1;Both;GonryunSanggwan(聖)1;昆仑头冠·圣1
+Item_GonryunSanggwan聖2;Both;GonryunSanggwan(聖)2;昆仑头冠·圣2
+Item_GonryunSanggwan聖3;Both;GonryunSanggwan(聖)3;昆仑头冠·圣3
+Item_GonryunSanggwan聖4;Both;GonryunSanggwan(聖)4;昆仑头冠·圣4
+Item_GonryunSanggwan聖5;Both;GonryunSanggwan(聖)5;昆仑头冠·圣5
+Item_GonryunYeongokhwan神;Both;GonryunYeongokhwan(神);昆仑灵玉丸戒指·神
+Item_GonryunYeongokhwan神1;Both;GonryunYeongokhwan(神)1;昆仑灵玉丸戒指·神1
+Item_GonryunYeongokhwan神2;Both;GonryunYeongokhwan(神)2;昆仑灵玉丸戒指·神2
+Item_GonryunYeongokhwan神3;Both;GonryunYeongokhwan(神)3;昆仑灵玉丸戒指·神3
+Item_GonryunYeongokhwan神4;Both;GonryunYeongokhwan(神)4;昆仑灵玉丸戒指·神4
+Item_GonryunYeongokhwan神5;Both;GonryunYeongokhwan(神)5;昆仑灵玉丸戒指·神5
+Item_GonryunYeongokhwan聖;Both;GonryunYeongokhwan(聖);昆仑灵玉丸戒指·圣
+Item_GonryunYeongokhwan聖1;Both;GonryunYeongokhwan(聖)1;昆仑灵玉丸戒指·圣1
+Item_GonryunYeongokhwan聖2;Both;GonryunYeongokhwan(聖)2;昆仑灵玉丸戒指·圣2
+Item_GonryunYeongokhwan聖3;Both;GonryunYeongokhwan(聖)3;昆仑灵玉丸戒指·圣3
+Item_GonryunYeongokhwan聖4;Both;GonryunYeongokhwan(聖)4;昆仑灵玉丸戒指·圣4
+Item_GonryunYeongokhwan聖5;Both;GonryunYeongokhwan(聖)5;昆仑灵玉丸戒指·圣5
+Item_GonryunYeoseonru寶;Both;GonryunYeoseonru(寶);昆仑灵露项链·宝
+Item_GonryunYeoseonru寶1;Both;GonryunYeoseonru(寶)1;昆仑灵露项链·宝1
+Item_GonryunYeoseonru寶2;Both;GonryunYeoseonru(寶)2;昆仑灵露项链·宝2
+Item_GonryunYeoseonru寶3;Both;GonryunYeoseonru(寶)3;昆仑灵露项链·宝3
+Item_GonryunYeoseonru寶4;Both;GonryunYeoseonru(寶)4;昆仑灵露项链·宝4
+Item_GonryunYeoseonru寶5;Both;GonryunYeoseonru(寶)5;昆仑灵露项链·宝5
+Item_GonryunYeoseonru神;Both;GonryunYeoseonru(神);昆仑灵露项链·神
+Item_GonryunYeoseonru神1;Both;GonryunYeoseonru(神)1;昆仑灵露项链·神1
+Item_GonryunYeoseonru神2;Both;GonryunYeoseonru(神)2;昆仑灵露项链·神2
+Item_GonryunYeoseonru神3;Both;GonryunYeoseonru(神)3;昆仑灵露项链·神3
+Item_GonryunYeoseonru神4;Both;GonryunYeoseonru(神)4;昆仑灵露项链·神4
+Item_GonryunYeoseonru神5;Both;GonryunYeoseonru(神)5;昆仑灵露项链·神5
+Item_GonryunYeoseonru聖;Both;GonryunYeoseonru(聖);昆仑灵露项链·圣
+Item_GonryunYeoseonru聖1;Both;GonryunYeoseonru(聖)1;昆仑灵露项链·圣1
+Item_GonryunYeoseonru聖2;Both;GonryunYeoseonru(聖)2;昆仑灵露项链·圣2
+Item_GonryunYeoseonru聖3;Both;GonryunYeoseonru(聖)3;昆仑灵露项链·圣3
+Item_GonryunYeoseonru聖4;Both;GonryunYeoseonru(聖)4;昆仑灵露项链·圣4
+Item_GonryunYeoseonru聖5;Both;GonryunYeoseonru(聖)5;昆仑灵露项链·圣5
+Item_Gonryunyongdrama寶F;Both;Gonryunyongdrama(寶)(F);昆仑龙铠·宝（女）
+Item_Gonryunyongdrama寶F1;Both;Gonryunyongdrama(寶)(F)1;昆仑龙铠·宝（女）1
+Item_Gonryunyongdrama寶F2;Both;Gonryunyongdrama(寶)(F)2;昆仑龙铠·宝（女）2
+Item_Gonryunyongdrama寶F3;Both;Gonryunyongdrama(寶)(F)3;昆仑龙铠·宝（女）3
+Item_Gonryunyongdrama寶F4;Both;Gonryunyongdrama(寶)(F)4;昆仑龙铠·宝（女）4
+Item_Gonryunyongdrama寶F5;Both;Gonryunyongdrama(寶)(F)5;昆仑龙铠·宝（女）5
+Item_Gonryunyongdrama寶M;Both;Gonryunyongdrama(寶)(M);昆仑龙铠·宝（男）
+Item_Gonryunyongdrama寶M1;Both;Gonryunyongdrama(寶)(M)1;昆仑龙铠·宝（男）1
+Item_Gonryunyongdrama寶M2;Both;Gonryunyongdrama(寶)(M)2;昆仑龙铠·宝（男）2
+Item_Gonryunyongdrama寶M3;Both;Gonryunyongdrama(寶)(M)3;昆仑龙铠·宝（男）3
+Item_Gonryunyongdrama寶M4;Both;Gonryunyongdrama(寶)(M)4;昆仑龙铠·宝（男）4
+Item_Gonryunyongdrama寶M5;Both;Gonryunyongdrama(寶)(M)5;昆仑龙铠·宝（男）5
+Item_Gonryunyongdrama聖F;Both;Gonryunyongdrama(聖)(F);昆仑龙铠·圣（女）
+Item_Gonryunyongdrama聖F1;Both;Gonryunyongdrama(聖)(F)1;昆仑龙铠·圣（女）1
+Item_Gonryunyongdrama聖F2;Both;Gonryunyongdrama(聖)(F)2;昆仑龙铠·圣（女）2
+Item_Gonryunyongdrama聖F3;Both;Gonryunyongdrama(聖)(F)3;昆仑龙铠·圣（女）3
+Item_Gonryunyongdrama聖F4;Both;Gonryunyongdrama(聖)(F)4;昆仑龙铠·圣（女）4
+Item_Gonryunyongdrama聖F5;Both;Gonryunyongdrama(聖)(F)5;昆仑龙铠·圣（女）5
+Item_Gonryunyongdrama聖M;Both;Gonryunyongdrama(聖)(M);昆仑龙铠·圣（男）
+Item_Gonryunyongdrama聖M1;Both;Gonryunyongdrama(聖)(M)1;昆仑龙铠·圣（男）1
+Item_Gonryunyongdrama聖M2;Both;Gonryunyongdrama(聖)(M)2;昆仑龙铠·圣（男）2
+Item_Gonryunyongdrama聖M3;Both;Gonryunyongdrama(聖)(M)3;昆仑龙铠·圣（男）3
+Item_Gonryunyongdrama聖M4;Both;Gonryunyongdrama(聖)(M)4;昆仑龙铠·圣（男）4
+Item_Gonryunyongdrama聖M5;Both;Gonryunyongdrama(聖)(M)5;昆仑龙铠·圣（男）5
+Item_GreatAxe;Both;GreatAxe;巨斧
+Item_GreatBlueFoxBrace;Both;GreatBlueFoxBrace;大蓝狐手镯
+Item_GreatBlueFoxCollar;Both;GreatBlueFoxCollar;大蓝狐项圈
+Item_GreatBlueFoxRing;Both;GreatBlueFoxRing;大蓝狐戒指
+Item_GreaterBoneHammer;Both;GreaterBoneHammer;强化骨锤
+Item_GreaterSewingGoods;Both;GreaterSewingGoods;高级缝纫用品
+Item_GreatFireBall;Both;GreatFireBall;大火球
+Item_GreatHelmet;Both;GreatHelmet;巨型头盔
+Item_GreatPurpleFoxBrace;Both;GreatPurpleFoxBrace;大紫狐手镯
+Item_GreatPurpleFoxCollar;Both;GreatPurpleFoxCollar;大紫狐项圈
+Item_GreatPurpleFoxRing;Both;GreatPurpleFoxRing;大紫狐戒指
+Item_GreatRedFoxBrace;Both;GreatRedFoxBrace;大赤狐手镯
+Item_GreatRedFoxCollar;Both;GreatRedFoxCollar;大赤狐项圈
+Item_GreatRedFoxRing;Both;GreatRedFoxRing;大赤狐戒指
+Item_GreenBead;Both;GreenBead;翠玉念珠
+Item_GreenBell;Both;GreenBell;绿色铃
+Item_GreenDarkArmourF;Both;GreenDarkArmour(F);碧暗铠甲（女）
+Item_GreenDarkArmourM;Both;GreenDarkArmour(M);碧暗铠甲（男）
+Item_GreenHerb;Both;GreenHerb;绿色草药
+Item_GreenOctagonalBox;Both;GreenOctagonalBox;绿色八角宝箱
+Item_GreenPoison;Both;GreenPoison;绿毒药
+Item_GrimBow;Both;GrimBow;冷峻之弓
+Item_GtInvite;Both;GtInvite;领地邀请函
+Item_GTTeleport;Both;GTTeleport;领地传送卷
+Item_GuardianOrb;Both;GuardianOrb;守护宝珠
+Item_GuardRental[7d];Both;GuardRental[7d];守卫租赁（7天）
+Item_GymnasticsQueen;Both;GymnasticsQueen;体操女王装扮
+Item_HalfMoon;Both;HalfMoon;半月弯刀
+Item_Hallucination;Both;Hallucination;幻觉术
+Item_HangMaWheel;Both;HangMaWheel;抗魔轮
+Item_HardenedRing;Both;HardenedRing;强化戒指
+Item_HardGlove;Both;HardGlove;坚硬护腕
+Item_HardSteelSword;Both;HardSteelSword;坚钢长剑
+Item_HardTemperedArmourF;Both;HardTemperedArmour(F);强化淬火铠甲（女）
+Item_HardTemperedArmourM;Both;HardTemperedArmour(M);强化淬火铠甲（男）
+Item_HardTorchL;Both;HardTorch(L);坚固火把（大）
+Item_HardTorchM;Both;HardTorch(M);坚固火把（中）
+Item_HardTorchS;Both;HardTorch(S);坚固火把（小）
+Item_Haste;Both;Haste;疾速
+Item_HavocCrystal;Both;HavocCrystal;混沌水晶
+Item_Healing;Both;Healing;治愈术
+Item_HealingCircle;Both;HealingCircle;治愈光环
+Item_HealingLetter;Both;HealingLetter;治愈信件
+Item_HealthStone;Both;HealthStone;生命石
+Item_HealthStoneL;Both;HealthStone(L);生命石（大）
+Item_HealthStoneM;Both;HealthStone(M);生命石（中）
+Item_HealthStoneS;Both;HealthStone(S);生命石（小）
+Item_HealthStoneXL;Both;HealthStone(XL);生命石（特大）
+Item_HealthWine;Both;HealthWine;强身酒
+Item_HealthWine1;Both;HealthWine1;强身酒1
+Item_HealthWine3;Both;HealthWine3;强身酒3
+Item_HealthWine5;Both;HealthWine5;强身酒5
+Item_HeartOfDead;Both;HeartOfDead;亡者之心
+Item_HeavenArmourF;Both;HeavenArmour(F);天堂铠甲（女）
+Item_HeavenArmourF1;Both;HeavenArmour(F)1;天堂铠甲（女）1
+Item_HeavenArmourF2;Both;HeavenArmour(F)2;天堂铠甲（女）2
+Item_HeavenArmourF3;Both;HeavenArmour(F)3;天堂铠甲（女）3
+Item_HeavenArmourM;Both;HeavenArmour(M);天堂铠甲（男）
+Item_HeavenArmourM1;Both;HeavenArmour(M)1;天堂铠甲（男）1
+Item_HeavenArmourM2;Both;HeavenArmour(M)2;天堂铠甲（男）2
+Item_HeavenArmourM3;Both;HeavenArmour(M)3;天堂铠甲（男）3
+Item_HeavenlySword;Both;HeavenlySword;天剑术
+Item_HeavenSword;Both;HeavenSword;天剑
+Item_HeavenWarrior;Both;HeavenWarrior;天界战士装扮
+Item_HeavyArmourF;Both;HeavyArmour(F);重甲（女）
+Item_HeavyArmourM;Both;HeavyArmour(M);重甲（男）
+Item_HellFire;Both;HellFire;地狱火
+Item_HellWarrior;Both;HellWarrior;地狱战士装扮
+Item_HellYamaBlade;Both;HellYamaBlade;地狱阎罗刀
+Item_HellYamaBlade1;Both;HellYamaBlade1;地狱阎罗刀1
+Item_HellYamaBlade2;Both;HellYamaBlade2;地狱阎罗刀2
+Item_HellYamaBlade3;Both;HellYamaBlade3;地狱阎罗刀3
+Item_HellYamaBlade4;Both;HellYamaBlade4;地狱阎罗刀4
+Item_HellYamaBlade5;Both;HellYamaBlade5;地狱阎罗刀5
+Item_HelmetOfDarkness;Both;HelmetOfDarkness;黑暗头盔
+Item_HelmetOfHero;Both;HelmetOfHero;英雄头盔
+Item_HelmetOfKings;Both;HelmetOfKings;王者头盔
+Item_HelmetOfSorcery;Both;HelmetOfSorcery;巫术头盔
+Item_Hemorrhage;Both;Hemorrhage;流血打击
+Item_HerbalTea;Both;HerbalTea;草药茶
+Item_HeroNecklace;Both;HeroNecklace;英雄项链
+Item_HeroRing;Both;HeroRing;英雄戒指
+Item_HexagonalRing;Both;HexagonalRing;六角戒指
+Item_HiddenScroll;Both;HiddenScroll;隐藏卷轴
+Item_Hiding;Both;Hiding;隐身术
+Item_HoaSword;Both;HoaSword;花之剑
+Item_HolyBloodSpear;Both;HolyBloodSpear;圣血长枪
+Item_HolyTaoWheel;Both;HolyTaoWheel;圣道之轮
+Item_HookedSpear;Both;HookedSpear;钩镰枪
+Item_HookedSword;Both;HookedSword;钩刃剑
+Item_HornRing;Both;HornRing;兽角戒指
+Item_HPDrugLarge;Both;(HP)DrugLarge;大型生命药剂
+Item_HPDrugMedium;Both;(HP)DrugMedium;中型生命药剂
+Item_HPDrugSmall;Both;(HP)DrugSmall;小型生命药剂
+Item_HPDrugXL;Both;(HP)DrugXL;特大生命药剂
+Item_HPPotionMedium;Both;(HP)PotionMedium;中型生命药水
+Item_HPPotionSmall;Both;(HP)PotionSmall;小型生命药水
+Item_HwanDevilBracelet;Both;HwanDevilBracelet;幻魔手镯
+Item_HwanDevilNecklace;Both;HwanDevilNecklace;幻魔项链
+Item_HwanDevilRing;Both;HwanDevilRing;幻魔戒指
+Item_HwayoungOkhwan;Both;HwayoungOkhwan;花映玉环戒指
+Item_HwayoungOkhwan1;Both;HwayoungOkhwan1;花映玉环戒指
+Item_HwayoungOkhwan2;Both;HwayoungOkhwan2;花映玉环戒指
+Item_HwayoungOkhwan3;Both;HwayoungOkhwan3;花映玉环戒指
+Item_HwayoungOkhwan4;Both;HwayoungOkhwan4;花映玉环戒指
+Item_HwayoungOkhwan5;Both;HwayoungOkhwan5;花映玉环戒指
+Item_HyeoncheonMaseok;Both;Hyeoncheon Maseok;玄天魔石
+Item_HyeoncheonSuhoSteel寶;Both;HyeoncheonSuhoSteel(寶);玄天守护钢·宝
+Item_HyeoncheonSuhoSteel神;Both;HyeoncheonSuhoSteel(神);玄天守护钢·神
+Item_HyeoncheonSuhoSteel聖;Both;HyeoncheonSuhoSteel(聖);玄天守护钢·圣
+Item_IceDragonSkyBayonet;Both;IceDragonSkyBayonet;冰龙天枪
+Item_IceDragonSkyBow;Both;IceDragonSkyBow;冰龙天弓
+Item_IceDragonSkyKnife;Both;IceDragonSkyKnife;冰龙天刃
+Item_IceDragonSkyRod;Both;IceDragonSkyRod;冰龙天杖
+Item_IceDragonSkySword;Both;IceDragonSkySword;冰龙天剑
+Item_IceLeopard;Both;IceLeopard;冰豹
+Item_IceMarble;Both;IceMarble;冰冻石珠
+Item_IceStorm;Both;IceStorm;冰咆哮
+Item_IceThrust;Both;IceThrust;冰刺术
+Item_ImmortalSkin;Both;ImmortalSkin;金刚不坏
+Item_ImpactDrugL;Both;ImpactDrug(L);冲击药剂（大）
+Item_ImpactDrugM;Both;ImpactDrug(M);冲击药剂（中）
+Item_ImpactDrugS;Both;ImpactDrug(S);冲击药剂（小）
+Item_InstantRun;Client;Instant Run;瞬间奔跑
+Item_Invitation;Both;Invitation;邀请函
+Item_IronArmourF;Both;IronArmour(F);铁甲（女）
+Item_IronArmourM;Both;IronArmour(M);铁甲（男）
+Item_IronBlades;Both;IronBlades;铁质双刃
+Item_IronBracelet;Both;IronBracelet;铁质手镯
+Item_IronOre;Both;IronOre;铁矿石
+Item_IronRing;Both;IronRing;铁戒指
+Item_IronSword;Both;IronSword;铁剑
+Item_IronThornBow;Both;IronThornBow;钢刺长弓
+Item_JadeCrystal;Both;JadeCrystal;玉髓水晶
+Item_JadeNecklace;Both;JadeNecklace;玉石项链
+Item_JadeRing;Both;JadeRing;玉戒指
+Item_JadeSnowRing;Both;JadeSnowRing;玉雪戒指
+Item_JudgementMace;Both;JudgementMace;审判锤
+Item_KeenKrissSword;Both;KeenKrissSword;锐利波刃剑
+Item_KittenEgg;Both;KittenEgg;小猫蛋
+Item_KnapsackL;Both;Knapsack(L);大号背袋
+Item_KnapsackM;Both;Knapsack(M);中号背袋
+Item_KnapsackS;Both;Knapsack(S);小号背袋
+Item_KnightBracelet;Both;KnightBracelet;骑士手镯
+Item_KnowledgeTorchL;Both;KnowledgeTorch(L);知识火把（大）
+Item_KnowledgeTorchM;Both;KnowledgeTorch(M);知识火把（中）
+Item_KnowledgeTorchS;Both;KnowledgeTorch(S);知识火把（小）
+Item_KrissSword;Both;KrissSword;波刃剑
+Item_KunroonTear;Both;KunroonTear;昆仑之泪
+Item_Lantern;Both;Lantern;灯笼
+Item_LanternNecklace;Both;LanternNecklace;灯笼项链
+Item_LargeBone;Both;LargeBone;大块骨头
+Item_LargeBracelet;Both;LargeBracelet;大型手镯
+Item_LeanMeat;Both;LeanMeat;精瘦肉
+Item_LeatherArmourF;Both;LeatherArmour(F);皮甲（女）
+Item_LeatherArmourM;Both;LeatherArmour(M);皮甲（男）
+Item_LeatherBelt;Both;LeatherBelt;皮质腰带
+Item_LeatherBoots;Both;LeatherBoots;皮靴
+Item_LeatherBridle;Both;LeatherBridle;皮缰绳
+Item_LeatherGlove;Both;LeatherGlove;皮质护腕
+Item_LeatherMask;Both;LeatherMask;皮面具
+Item_LeopardTattooSuitF;Both;LeopardTattooSuit(F);豹纹套装（女）
+Item_LeopardTattooSuitM;Both;LeopardTattooSuit(M);豹纹套装（男）
+Item_LethalBow;Both;LethalBow;致命之弓
+Item_LifeNecklace;Both;LifeNecklace;生命项链
+Item_LightArmourF;Both;LightArmour(F);轻甲（女）
+Item_LightArmourM;Both;LightArmour(M);轻甲（男）
+Item_LightBody;Both;LightBody;轻身术
+Item_LightLeather;Both;LightLeather;轻皮革
+Item_LightLeatherArmourF;Both;LightLeatherArmour(F);轻皮甲（女）
+Item_LightLeatherArmourM;Both;LightLeatherArmour(M);轻皮甲（男）
+Item_Lightning;Both;Lightning;疾光电影
+Item_LightTemperedArmourF;Both;LightTemperedArmour(F);轻淬铠甲（女）
+Item_LightTemperedArmourM;Both;LightTemperedArmour(M);轻淬铠甲（男）
+Item_LionRoar;Both;LionRoar;狮吼功
+Item_LitheBow;Both;LitheBow;灵巧之弓
+Item_LocationAt;Client;{0} at {1};{0} 位于 {1}
+Item_LongBow;Both;LongBow;长弓
+Item_LotusArmourF;Both;LotusArmour(F);莲花铠甲（女）
+Item_LotusArmourM;Both;LotusArmour(M);莲花铠甲（男）
+Item_LowShoes;Both;LowShoes;粗布鞋
+Item_LunarBracelet;Both;LunarBracelet;月华手镯
+Item_Mackeral;Both;Mackeral;鲭鱼
+Item_Mackerel;Both;Mackerel;鲭鱼
+Item_MadDragonBlades;Both;MadDragonBlades;狂龙双刃
+Item_MageStaff;Both;MageStaff;法师法杖
+Item_MaggotPill;Both;MaggotPill;腐虫药丸
+Item_MagicAidL;Both;MagicAid(L);魔力辅助剂（大）
+Item_MagicAidM;Both;MagicAid(M);魔力辅助剂（中）
+Item_MagicAidS;Both;MagicAid(S);魔力辅助剂（小）
+Item_MagicalLiquor;Both;MagicalLiquor;魔力之酒
+Item_MagicalLiquor1;Both;MagicalLiquor1;魔力之酒1
+Item_MagicalLiquor3;Both;MagicalLiquor3;魔力之酒3
+Item_MagicalLiquor5;Both;MagicalLiquor5;魔力之酒5
+Item_MagicalWater3;Both;MagicalWater3;魔力之水3
+Item_MagicalWater7;Both;MagicalWater7;魔力之水7
+Item_MagicBangle;Both;MagicBangle;魔力镯
+Item_MagicBooster;Both;MagicBooster;魔力增幅
+Item_MagicBracelet;Both;MagicBracelet;魔力手镯
+Item_MagicDrugL;Both;MagicDrug(L);魔力药剂（大）
+Item_MagicDrugM;Both;MagicDrug(M);魔力药剂（中）
+Item_MagicDrugS;Both;MagicDrug(S);魔力药剂（小）
+Item_MagicGem;Both;MagicGem;魔力宝石
+Item_MagicGlyph0;Both;MagicGlyph0;魔力雕文
+Item_MagicGlyph1;Both;MagicGlyph1;魔力雕文
+Item_MagicGlyph2;Both;MagicGlyph2;魔力雕文
+Item_MagicGlyph3;Both;MagicGlyph3;魔力雕文
+Item_MagicHelmet;Both;MagicHelmet;魔法头盔
+Item_MagicOrb;Both;MagicOrb;魔力灵珠
+Item_MagicRobeF;Both;MagicRobe(F);魔法长袍（女）
+Item_MagicRobeM;Both;MagicRobe(M);魔法长袍（男）
+Item_MagicScythe;Both;MagicScythe;魔力镰刀
+Item_MagicShield;Both;MagicShield;魔法盾
+Item_MagicStone;Both;MagicStone;魔法石
+Item_MagicStoneL;Both;MagicStone(L);魔法石（大）
+Item_MagicStoneM;Both;MagicStone(M);魔法石（中）
+Item_MagicStoneS;Both;MagicStone(S);魔法石（小）
+Item_MagicStoneXL;Both;MagicStone(XL);魔法石（特大）
+Item_MagicWine1;Both;MagicWine1;法力酒1
+Item_MagicWine3;Both;MagicWine3;法力酒3
+Item_MagicWine5;Both;MagicWine5;法力酒5
+Item_MaleficBow;Both;MaleficBow;恶意之弓
+Item_MammothLeather;Both;MammothLeather;猛犸皮革
+Item_Mandible;Both;Mandible;下颚骨
+Item_ManectricClub;Both;ManectricClub;雷兽战棍装扮
+Item_ManectricHammer;Both;ManectricHammer;雷兽战锤装扮
+Item_MartialSabre;Both;MartialSabre;武士军刀
+Item_MartialSword;Both;MartialSword;武士剑
+Item_MassHealing;Both;MassHealing;群体治疗术
+Item_MassHiding;Both;MassHiding;集体隐身术
+Item_MCStone;Both;MCStone;魔攻石
+Item_MCStoneL;Both;MCStone(L);魔攻石（大）
+Item_MCStoneM;Both;MCStone(M);魔攻石（中）
+Item_MCStoneS;Both;MCStone(S);魔攻石（小）
+Item_MCStoneXL;Both;MCStone(XL);魔攻石（特大）
+Item_MCTorch3;Both;MCTorch3;魔攻火把3
+Item_MCTorch[2h];Both;MCTorch[2h];魔攻火把[2小时]
+Item_MCTorch[3h];Both;MCTorch[3h];魔攻火把[3小时]
+Item_Meat;Both;Meat;肉块
+Item_MeatSoup;Both;MeatSoup;肉汤
+Item_Medicine;Both;Medicine;药剂
+Item_Meditation;Both;Meditation;冥想
+Item_MediumArmourF;Both;MediumArmour(F);中甲（女）
+Item_MediumArmourM;Both;MediumArmour(M);中甲（男）
+Item_MentalState;Both;MentalState;心灵专注
+Item_MeteorShower;Both;MeteorShower;流星雨
+Item_MeteorStrike;Both;MeteorStrike;流星坠落
+Item_MirArmourF;Both;MirArmour(F);米尔战甲（女）
+Item_MirArmourF1;Both;MirArmour(F)1;米尔战甲（女）1
+Item_MirArmourF2;Both;MirArmour(F)2;米尔战甲（女）2
+Item_MirArmourF3;Both;MirArmour(F)3;米尔战甲（女）3
+Item_MirArmourF4;Both;MirArmour(F)4;米尔战甲（女）4
+Item_MirArmourF5;Both;MirArmour(F)5;米尔战甲（女）5
+Item_MirArmourM;Both;MirArmour(M);米尔战甲（男）
+Item_MirArmourM1;Both;MirArmour(M)1;米尔战甲（男）1
+Item_MirArmourM2;Both;MirArmour(M)2;米尔战甲（男）2
+Item_MirArmourM3;Both;MirArmour(M)3;米尔战甲（男）3
+Item_MirArmourM4;Both;MirArmour(M)4;米尔战甲（男）4
+Item_MirArmourM5;Both;MirArmour(M)5;米尔战甲（男）5
+Item_MirBelt;Both;MirBelt;米尔腰带
+Item_MirBoots;Both;MirBoots;米尔战靴
+Item_MirHelmet;Both;MirHelmet;米尔头盔
+Item_MirHelmet1;Both;MirHelmet1;米尔头盔1
+Item_MirHelmet2;Both;MirHelmet2;米尔头盔2
+Item_MirHelmet3;Both;MirHelmet3;米尔头盔3
+Item_MirHelmet4;Both;MirHelmet4;米尔头盔4
+Item_MirHelmet5;Both;MirHelmet5;米尔头盔5
+Item_MirNecklace;Both;MirNecklace;米尔项链
+Item_MirNecklace1;Both;MirNecklace1;米尔项链1
+Item_MirNecklace2;Both;MirNecklace2;米尔项链2
+Item_MirNecklace3;Both;MirNecklace3;米尔项链3
+Item_MirNecklace4;Both;MirNecklace4;米尔项链4
+Item_MirNecklace5;Both;MirNecklace5;米尔项链5
+Item_MirRing;Both;MirRing;米尔戒指
+Item_MirRing1;Both;MirRing1;米尔戒指
+Item_MirRing2;Both;MirRing2;米尔戒指
+Item_MirRing3;Both;MirRing3;米尔戒指
+Item_MirRing4;Both;MirRing4;米尔戒指
+Item_MirRing5;Both;MirRing5;米尔戒指
+Item_Mirroring;Both;Mirroring;镜像术
+Item_MirSword;Both;MirSword;米尔之剑
+Item_MirSword1;Both;MirSword1;米尔之剑1
+Item_MirSword2;Both;MirSword2;米尔之剑2
+Item_MirSword3;Both;MirSword3;米尔之剑3
+Item_MirSword4;Both;MirSword4;米尔之剑4
+Item_MirSword5;Both;MirSword5;米尔之剑5
+Item_MirWheel;Both;MirWheel;米尔法轮
+Item_MirWheel1;Both;MirWheel1;米尔法轮1
+Item_MirWheel2;Both;MirWheel2;米尔法轮2
+Item_MirWheel3;Both;MirWheel3;米尔法轮3
+Item_MirWheel4;Both;MirWheel4;米尔法轮4
+Item_MirWheel5;Both;MirWheel5;米尔法轮5
+Item_MobBlood;Both;MobBlood;魔物之血
+Item_MongchonWine;Both;MongchonWine;盟重酒
+Item_MonkBangle;Both;MonkBangle;僧侣镯
+Item_MonkBracelet;Both;MonkBracelet;僧侣手镯
+Item_MoonLight;Both;MoonLight;月光斩
+Item_MoonMist;Both;MoonMist;月影迷雾
+Item_MoralRing;Both;MoralRing;美德戒指
+Item_MossyBox;Both;MossyBox;覆苔宝箱
+Item_MPDrugLarge;Both;(MP)DrugLarge;大型魔法药剂
+Item_MPDrugMedium;Both;(MP)DrugMedium;中型魔法药剂
+Item_MPDrugSmall;Both;(MP)DrugSmall;小型魔法药剂
+Item_MPDrugXL;Both;(MP)DrugXL;特大魔法药剂
+Item_MPEater;Both;MPEater;法力汲取
+Item_MPPotionMedium;Both;(MP)PotionMedium;中型魔法药水
+Item_MPPotionSmall;Both;(MP)PotionSmall;小型魔法药水
+Item_MundaneGlove;Both;MundaneGlove;粗布护腕
+Item_MundaneRing;Both;MundaneRing;粗制戒指
+Item_MuscleRing;Both;MuscleRing;筋力戒指
+Item_Mushroom;Both;Mushroom;蘑菇
+Item_Mutton;Both;Mutton;羊肉
+Item_MysteriousScroll1;Both;MysteriousScroll1;神秘卷轴1
+Item_MysteriousScroll2;Both;MysteriousScroll2;神秘卷轴2
+Item_MysteriousStone[3d];Both;MysteriousStone[3d];神秘之石（3天）
+Item_MysteryCircle;Both;MysteryCircle;神秘指环
+Item_MysteryHelmet;Both;MysteryHelmet;神秘头盔
+Item_MysteryWater;Both;MysteryWater;神秘之水
+Item_MysteryWheel;Both;MysteryWheel;神秘法轮
+Item_NagaNecklace;Both;NagaNecklace;娜迦项链
+Item_NapalmShot;Both;NapalmShot;燃烧弹
+Item_NecklaceOfAgony;Both;NecklaceOfAgony;苦痛项链
+Item_NecklaceOfAgony1;Both;NecklaceOfAgony1;苦痛项链1
+Item_NecklaceOfAgony2;Both;NecklaceOfAgony2;苦痛项链2
+Item_NecklaceOfAgony3;Both;NecklaceOfAgony3;苦痛项链3
+Item_NecklaceOfAgony4;Both;NecklaceOfAgony4;苦痛项链4
+Item_NecklaceOfAgony5;Both;NecklaceOfAgony5;苦痛项链5
+Item_Nephrite;Both;Nephrite;碧玉原石
+Item_NephriteBelt;Both;NephriteBelt;碧玉腰带
+Item_NephriteBeltH;Both;NephriteBelt(H);碧玉腰带（加强）
+Item_NephriteBracelet;Both;NephriteBracelet;碧玉手镯
+Item_NephriteBraceletH;Both;NephriteBracelet(H);碧玉手镯（加强）
+Item_NephriteNecklace;Both;NephriteNecklace;碧玉项链
+Item_NephriteNecklaceH;Both;NephriteNecklace(H);碧玉项链（加强）
+Item_NephriteRing;Both;NephriteRing;碧玉戒指
+Item_NephriteRingH;Both;NephriteRing(H);碧玉戒指（加强）
+Item_NephriteShoes;Both;NephriteShoes;碧玉战靴
+Item_NephriteShoesH;Both;NephriteShoes(H);碧玉战靴（加强）
+Item_NinjaF;Both;Ninja(F);忍者装扮（女）
+Item_NinjaM;Both;Ninja(M);忍者装扮（男）
+Item_NobleRing;Both;NobleRing;高贵戒指
+Item_NokChiRing;Both;NokChiRing;鹿齿戒指
+Item_NokChiWheel;Both;NokChiWheel;鹿齿轮
+Item_Nokyoungokhwan;Both;Nokyoungokhwan;鹿茸玉环戒指
+Item_Nokyoungokhwan1;Both;Nokyoungokhwan1;鹿茸玉环戒指
+Item_Nokyoungokhwan2;Both;Nokyoungokhwan2;鹿茸玉环戒指
+Item_Nokyoungokhwan3;Both;Nokyoungokhwan3;鹿茸玉环戒指
+Item_Nokyoungokhwan4;Both;Nokyoungokhwan4;鹿茸玉环戒指
+Item_Nokyoungokhwan5;Both;Nokyoungokhwan5;鹿茸玉环戒指
+Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你.
+Item_OldCopperRing;Both;OldCopperRing;旧铜戒指
+Item_OldFisherman;Both;OldFisherman;老渔夫装扮
+Item_OldGinseng;Both;OldGinseng;老山参
+Item_OldLoafer;Both;OldLoafer;旧皮鞋
+Item_OldNagaNecklace;Both;OldNagaNecklace;旧娜迦项链
+Item_OldNecklace;Both;OldNecklace;破旧项链
+Item_OldRobe;Both;OldRobe;破旧长袍
+Item_OliviasRing;Both;OliviasRing;奥利维亚之戒
+Item_OlivineOre;Both;OlivineOre;橄榄石矿
+Item_OlympicEgg;Both;OlympicEgg;奥运蛋
+Item_OmaKingRobeF;Both;OmaKingRobe(F);奥玛王袍（女）
+Item_OmaKingRobeF1;Both;OmaKingRobe(F)1;奥玛王袍（女）1
+Item_OmaKingRobeF2;Both;OmaKingRobe(F)2;奥玛王袍（女）2
+Item_OmaKingRobeF3;Both;OmaKingRobe(F)3;奥玛王袍（女）3
+Item_OmaKingRobeF4;Both;OmaKingRobe(F)4;奥玛王袍（女）4
+Item_OmaKingRobeF5;Both;OmaKingRobe(F)5;奥玛王袍（女）5
+Item_OmaKingRobeM;Both;OmaKingRobe(M);奥玛王袍（男）
+Item_OmaKingRobeM1;Both;OmaKingRobe(M)1;奥玛王袍（男）1
+Item_OmaKingRobeM2;Both;OmaKingRobe(M)2;奥玛王袍（男）2
+Item_OmaKingRobeM3;Both;OmaKingRobe(M)3;奥玛王袍（男）3
+Item_OmaKingRobeM4;Both;OmaKingRobe(M)4;奥玛王袍（男）4
+Item_OmaKingRobeM5;Both;OmaKingRobe(M)5;奥玛王袍（男）5
+Item_OmaSpiritRing;Both;OmaSpiritRing;沃玛灵戒
+Item_OmaTeeth;Both;OmaTeeth;沃玛牙齿
+Item_OneWithNature;Both;OneWithNature;天人合一
+Item_PantheraTiger;Both;PantheraTiger;猛虎
+Item_ParalysisRing;Both;ParalysisRing;麻痹戒指
+Item_PearlArmourF;Both;PearlArmour(F);珍珠铠甲（女）
+Item_PearlArmourM;Both;PearlArmour(M);珍珠铠甲（男）
+Item_PearlNecklace;Both;PearlNecklace;珍珠项链
+Item_PearlRing;Both;PearlRing;珍珠戒指
+Item_PeddlerTorch;Both;PeddlerTorch;行商火把
+Item_PetEnhancer;Both;PetEnhancer;宠物强化
+Item_PhoenixBead;Both;PhoenixBead;凤凰念珠
+Item_PhoenixBow;Both;PhoenixBow;凤凰之弓
+Item_PickAxe;Both;PickAxe;镐
+Item_PickAxe0;Both;PickAxe0;镐0
+Item_Pig;Both;Pig;小猪装扮
+Item_PigEar;Both;PigEar;猪耳朵
+Item_PigHoof;Both;PigHoof;猪蹄
+Item_PinkMarshmallow;Both;PinkMarshmallow;粉色棉花糖
+Item_PinkUnderpants;Both;PinkUnderpants;粉色内裤
+Item_Pirate;Both;Pirate;海盗装扮
+Item_PKPointReduction;Both;PKPointReduction;PK值清除卷
+Item_Plague;Both;Plague;瘟疫术
+Item_Platinum;Both;Platinum;白金矿石
+Item_PlatinumNecklace;Both;PlatinumNecklace;铂金项链
+Item_PlatinumRing;Both;PlatinumRing;铂金戒指
+Item_PledgeRing;Both;PledgeRing;誓约之戒
+Item_PoisonCloud;Both;PoisonCloud;毒雾术
+Item_PoisonDemonRing;Both;PoisonDemonRing;毒魔戒指
+Item_PoisonDemonRing1;Both;PoisonDemonRing1;毒魔戒指
+Item_PoisonDemonRing2;Both;PoisonDemonRing2;毒魔戒指
+Item_PoisonDemonRing3;Both;PoisonDemonRing3;毒魔戒指
+Item_PoisonDemonRing4;Both;PoisonDemonRing4;毒魔戒指
+Item_PoisonDemonRing5;Both;PoisonDemonRing5;毒魔戒指
+Item_PoisonGem;Both;PoisonGem;毒素宝石
+Item_Poisoning;Both;Poisoning;施毒术
+Item_PoisonMarble;Both;PoisonMarble;毒素石珠
+Item_PoisonOrb;Both;PoisonOrb;毒素灵珠
+Item_PoisonRing;Both;PoisonRing;剧毒戒指
+Item_PoisonSack;Both;PoisonSack;毒囊
+Item_PoisonShot;Both;PoisonShot;剧毒箭
+Item_PoisonSword;Both;PoisonSword;毒剑术
+Item_Pork;Both;Pork;猪肉
+Item_Portal;Both;Portal;空间之门
+Item_PowerAxe;Both;PowerAxe;力量战斧
+Item_PowerRing;Both;PowerRing;力量之戒
+Item_PowerStone;Both;PowerStone;力量石
+Item_PowerStoneL;Both;PowerStone(L);力量石（大）
+Item_PowerStoneM;Both;PowerStone(M);力量石（中）
+Item_PowerStoneS;Both;PowerStone(S);力量石（小）
+Item_PowerStoneXL;Both;PowerStone(XL);力量石（特大）
+Item_PrajnaHeart;Both;PrajnaHeart;般若之心
+Item_PrajnaHistory;Both;PrajnaHistory;般若史记
+Item_PrecisionNecklace;Both;PrecisionNecklace;精准项链
+Item_PrecisionPendant;Both;PrecisionPendant;精准坠饰
+Item_PremiumBait;Both;PremiumBait;高级鱼饵
+Item_PremiumFinder;Both;PremiumFinder;高级探鱼器
+Item_PremiumFloat;Both;PremiumFloat;高级浮漂
+Item_PremiumPass[15d];Both;PremiumPass[15d];高级通行证（15天）
+Item_PremiumPass[1d];Both;PremiumPass[1d];高级通行证（1天）
+Item_PremiumPass[3d];Both;PremiumPass[3d];高级通行证（3天）
+Item_PremiumPass[7d];Both;PremiumPass[7d];高级通行证（7天）
+Item_PremiumReel;Both;PremiumReel;高级渔线轮
+Item_PrinceDagger;Both;PrinceDagger;王子匕首
+Item_ProbeNecklace;Both;ProbeNecklace;探测项链
+Item_ProtectionField;Both;ProtectionField;护体结界
+Item_ProtectionGem;Both;ProtectionGem;守护宝石
+Item_ProtectionGlyph0;Both;ProtectionGlyph0;守护雕文
+Item_ProtectionGlyph1;Both;ProtectionGlyph1;守护雕文
+Item_ProtectionGlyph2;Both;ProtectionGlyph2;守护雕文
+Item_ProtectionGlyph3;Both;ProtectionGlyph3;守护雕文
+Item_ProtectionOrb;Both;ProtectionOrb;守护灵珠
+Item_ProtectionRing;Both;ProtectionRing;守护戒指
+Item_Purification;Both;Purification;净化术
+Item_PurifiedMask;Both;PurifiedMask;净化面罩
+Item_PurifiedMirror;Both;PurifiedMirror;净化之镜
+Item_PurifierSword;Both;PurifierSword;净化之剑
+Item_PurityBracelet;Both;PurityBracelet;净化手镯
+Item_PurityNecklace;Both;PurityNecklace;净化项链
+Item_PurityRing;Both;PurityRing;净化戒指
+Item_PurpleFoxBracelet;Both;PurpleFoxBracelet;紫狐手镯
+Item_PurpleFoxCollar;Both;PurpleFoxCollar;紫狐项圈
+Item_PurpleFoxRing;Both;PurpleFoxRing;紫狐戒指
+Item_RabbitF;Both;Rabbit(F);兔女郎装扮
+Item_RabbitM;Both;Rabbit(M);兔少爷装扮
+Item_Rage;Both;Rage;狂怒
+Item_RaidersArmourF;Both;RaidersArmour(F);掠夺者铠甲（女）
+Item_RaidersArmourF1;Both;RaidersArmour(F)1;掠夺者铠甲（女）
+Item_RaidersArmourF2;Both;RaidersArmour(F)2;掠夺者铠甲（女）
+Item_RaidersArmourF3;Both;RaidersArmour(F)3;掠夺者铠甲（女）
+Item_RaidersArmourF4;Both;RaidersArmour(F)4;掠夺者铠甲（女）
+Item_RaidersArmourF5;Both;RaidersArmour(F)5;掠夺者铠甲（女）
+Item_RaidersArmourM;Both;RaidersArmour(M);掠夺者铠甲（男）
+Item_RaidersArmourM1;Both;RaidersArmour(M)1;掠夺者铠甲（男）
+Item_RaidersArmourM2;Both;RaidersArmour(M)2;掠夺者铠甲（男）
+Item_RaidersArmourM3;Both;RaidersArmour(M)3;掠夺者铠甲（男）
+Item_RaidersArmourM4;Both;RaidersArmour(M)4;掠夺者铠甲（男）
+Item_RaidersArmourM5;Both;RaidersArmour(M)5;掠夺者铠甲（男）
+Item_RaidersBoots;Both;RaidersBoots;掠夺者战靴
+Item_RaidersBoots1;Both;RaidersBoots1;掠夺者战靴1
+Item_RaidersBoots2;Both;RaidersBoots2;掠夺者战靴2
+Item_RaidersBoots3;Both;RaidersBoots3;掠夺者战靴3
+Item_RaidersBoots4;Both;RaidersBoots4;掠夺者战靴4
+Item_RaidersBoots5;Both;RaidersBoots5;掠夺者战靴5
+Item_RaidersGlove;Both;RaidersGlove;掠夺者护腕
+Item_RaidersGlove1;Both;RaidersGlove1;掠夺者护腕1
+Item_RaidersGlove2;Both;RaidersGlove2;掠夺者护腕2
+Item_RaidersGlove3;Both;RaidersGlove3;掠夺者护腕3
+Item_RaidersGlove4;Both;RaidersGlove4;掠夺者护腕4
+Item_RaidersGlove5;Both;RaidersGlove5;掠夺者护腕5
+Item_RaidersHelmet;Both;RaidersHelmet;掠夺者头盔
+Item_RaidersHelmet1;Both;RaidersHelmet1;掠夺者头盔1
+Item_RaidersHelmet2;Both;RaidersHelmet2;掠夺者头盔2
+Item_RaidersHelmet3;Both;RaidersHelmet3;掠夺者头盔3
+Item_RaidersHelmet4;Both;RaidersHelmet4;掠夺者头盔4
+Item_RaidersHelmet5;Both;RaidersHelmet5;掠夺者头盔5
+Item_Ram;Both;Ram;公羊装扮
+Item_RandomTeleport;Both;RandomTeleport;随机传送卷
+Item_RareCopperOre;Both;RareCopperOre;稀有铜矿石
+Item_RawMeat;Both;RawMeat;生肉
+Item_RawSword;Both;RawSword;粗制长剑
+Item_RDragonRing;Both;RDragonRing;赤龙戒指
+Item_RDragonRing1;Both;RDragonRing1;赤龙戒指
+Item_RDragonRing2;Both;RDragonRing2;赤龙戒指
+Item_RDragonRing3;Both;RDragonRing3;赤龙戒指
+Item_RDragonRing4;Both;RDragonRing4;赤龙戒指
+Item_RDragonRing5;Both;RDragonRing5;赤龙戒指
+Item_RecallBracelet;Both;RecallBracelet;回城手镯
+Item_RecallHelmet;Both;RecallHelmet;回城头盔
+Item_RecallNecklace;Both;RecallNecklace;回城项链
+Item_RecallRing;Both;RecallRing;回城戒指
+Item_RecoveryRing;Both;RecoveryRing;恢复戒指
+Item_RedDagger;Both;RedDagger;红匕首
+Item_RedDarkArmourF;Both;RedDarkArmour(F);赤暗铠甲（女）
+Item_RedDarkArmourM;Both;RedDarkArmour(M);赤暗铠甲（男）
+Item_RedDemonRing;Both;RedDemonRing;赤魔戒指
+Item_RedEyeSkull;Both;RedEyeSkull;红眼骷髅
+Item_RedFishingRod[6M];Both;RedFishingRod[6M];红色鱼竿[6M]
+Item_RedFlowerBracelet;Both;RedFlowerBracelet;红花手镯
+Item_RedFlowerNecklace;Both;RedFlowerNecklace;红花项链
+Item_RedFlowerRing;Both;RedFlowerRing;红花戒指
+Item_RedFoxBracelet;Both;RedFoxBracelet;赤狐手镯
+Item_RedFoxCollar;Both;RedFoxCollar;赤狐项圈
+Item_RedFoxRing;Both;RedFoxRing;赤狐戒指
+Item_RedJadeBelt;Both;RedJadeBelt;赤玉腰带
+Item_RedJadeBeltH;Both;RedJadeBelt(H);赤玉腰带（加强）
+Item_RedJadeBracelet;Both;RedJadeBracelet;赤玉手镯
+Item_RedJadeBraceletH;Both;RedJadeBracelet(H);赤玉手镯（加强）
+Item_RedJadeNecklace;Both;RedJadeNecklace;赤玉项链
+Item_RedJadeNecklaceH;Both;RedJadeNecklace(H);赤玉项链（加强）
+Item_RedJadeRing;Both;RedJadeRing;赤玉戒指
+Item_RedJadeRingH;Both;RedJadeRing(H);赤玉戒指（加强）
+Item_RedJadeShoes;Both;RedJadeShoes;赤玉战靴
+Item_RedJadeShoesH;Both;RedJadeShoes(H);赤玉战靴（加强）
+Item_RedMoonBlades;Both;RedMoonBlades;赤月双刃
+Item_RedMoonBow;Both;RedMoonBow;赤月长弓
+Item_RedMoonChip;Both;RedMoonChip;赤月晶片
+Item_RedMoonSword;Both;RedMoonSword;赤月之剑
+Item_RedOctagonalBox;Both;RedOctagonalBox;红色八角宝箱
+Item_RedOrchidBracelet;Both;RedOrchidBracelet;红兰手镯
+Item_RedOrchidNecklace;Both;RedOrchidNecklace;红兰项链
+Item_RedOrchidRing;Both;RedOrchidRing;红兰戒指
+Item_RedPoison;Both;RedPoison;红毒药
+Item_Redrecoverywater;Both;Redrecoverywater;红色恢复药水
+Item_RedRibbon;Both;RedRibbon;红丝带
+Item_RedScaleBoots;Both;RedScaleBoots;赤鳞战靴
+Item_RedSnakeTeeth;Both;RedSnakeTeeth;红蛇牙齿
+Item_RedThread;Both;RedThread;红丝线
+Item_RedTiger;Both;RedTiger;赤虎
+Item_RedWine;Both;RedWine;红葡萄酒
+Item_Reincarnation;Both;Reincarnation;复活术
+Item_RelicArmourF;Both;RelicArmour(F);遗物铠甲（女）
+Item_RelicArmourM;Both;RelicArmour(M);遗物铠甲（男）
+Item_RelicRock;Both;RelicRock;圣物岩石
+Item_Relics;Both;Relics;遗物
+Item_RepairOil;Both;RepairOil;修复油
+Item_Repulsion;Both;Repulsion;抗拒火环
+Item_RequiemNecklace;Both;RequiemNecklace;安魂项链
+Item_ResurrectionScroll;Both;ResurrectionScroll;复活卷轴
+Item_RetsuenBow;Both;RetsuenBow;烈焰之弓
+Item_Revelation;Both;Revelation;心灵启示
+Item_RevivalRing;Both;RevivalRing;复活戒指
+Item_RhinoLeather;Both;RhinoLeather;犀牛皮革
+Item_RingOfAgony;Both;RingOfAgony;苦痛戒指
+Item_RingOfAgony1;Both;RingOfAgony1;苦痛戒指
+Item_RingOfAgony2;Both;RingOfAgony2;苦痛戒指
+Item_RingOfAgony3;Both;RingOfAgony3;苦痛戒指
+Item_RingOfAgony4;Both;RingOfAgony4;苦痛戒指
+Item_RingOfAgony5;Both;RingOfAgony5;苦痛戒指
+Item_RingOfMoral;Both;RingOfMoral;美德之戒
+Item_RockBass;Both;RockBass;岩鲈
+Item_RottenShoes;Both;RottenShoes;腐烂皮鞋
+Item_RoyalArmourF;Both;RoyalArmour(F);皇家铠甲（女）
+Item_RoyalArmourM;Both;RoyalArmour(M);皇家铠甲（男）
+Item_RoyalBlades;Both;RoyalBlades;皇家双刃
+Item_RoyalHelmet;Both;RoyalHelmet;皇家头盔
+Item_Ruby;Both;Ruby;红宝石
+Item_RubyRing;Both;RubyRing;红宝石戒指
+Item_Rudolph;Both;Rudolph;鲁道夫装扮
+Item_RustyArmour;Both;RustyArmour;生锈铠甲
+Item_SacredAngelAmulet;Both;SacredAngelAmulet;圣天使手镯
+Item_Saddle;Both;Saddle;马鞍
+Item_Santa;Both;Santa;圣诞老人装扮
+Item_ScaledArmourF;Both;ScaledArmour(F);鳞甲（女）
+Item_ScaledArmourM;Both;ScaledArmour(M);鳞甲（男）
+Item_Scimitar;Both;Scimitar;弯刀
+Item_ScorpionTail;Both;ScorpionTail;蝎尾
+Item_ScrollOfSeal;Both;ScrollOfSeal;封印卷轴
+Item_SCStone;Both;SCStone;道攻石
+Item_SCStoneL;Both;SCStone(L);道攻石（大）
+Item_SCStoneM;Both;SCStone(M);道攻石（中）
+Item_SCStoneS;Both;SCStone(S);道攻石（小）
+Item_SCStoneXL;Both;SCStone(XL);道攻石（特大）
+Item_SCTorch3;Both;SCTorch3;道攻火把3
+Item_SCTorch[2h];Both;SCTorch[2h];道攻火把[2小时]
+Item_SCTorch[3h];Both;SCTorch[3h];道攻火把[3小时]
+Item_SealedHero;Both;SealedHero;封印英雄
+Item_SealRing;Both;SealRing;封印戒指
+Item_SecretRecipe;Both;SecretRecipe;秘方
+Item_SellingPrice;Client;Selling Price : {0} Gold;出售价格: {0} 金币
+Item_SerpentEyeRing;Both;SerpentEyeRing;蛇眼戒指
+Item_SerpentSword;Both;SerpentSword;蛇形剑
+Item_SewingGoods;Both;SewingGoods;缝纫用品
+Item_SexChange;Both;SexChange;性别转换卷
+Item_ShamanHelmet;Both;ShamanHelmet;萨满头盔
+Item_SharpBracelet;Both;SharpBracelet;锋利手镯
+Item_SharpDagger;Both;SharpDagger;锋利匕首
+Item_SharpHoaSword;Both;SharpHoaSword;锋利花剑
+Item_SharpSabre;Both;SharpSabre;锋利军刀
+Item_SharpScimitar;Both;SharpScimitar;锋利弯刀
+Item_SharpSword;Both;SharpSword;锐利长剑
+Item_SharpTrident;Both;SharpTrident;锋利三叉戟
+Item_ShortBow;Both;ShortBow;短弓
+Item_ShortSword;Both;ShortSword;短剑
+Item_ShoulderDash;Both;ShoulderDash;野蛮冲撞
+Item_SilkBoots;Both;SilkBoots;丝绸靴
+Item_SilkShoes;Both;SilkShoes;丝绸皮鞋
+Item_SilverBell;Both;SilverBell;白银铃
+Item_SilverBow;Both;SilverBow;白银弓
+Item_SilverBracelet;Both;SilverBracelet;白银手镯
+Item_SilverChestnut;Both;SilverChestnut;白银栗子
+Item_SilverMask;Both;SilverMask;白银面具
+Item_SilverOre;Both;SilverOre;银矿石
+Item_SkeletonBone;Both;SkeletonBone;骷髅骨
+Item_SkeletonEgg;Both;SkeletonEgg;骷髅蛋
+Item_SkeletonHead;Both;SkeletonHead;骷髅头
+Item_SkeletonHelmet;Both;SkeletonHelmet;骷髅头盔
+Item_SkeletonRing;Both;SkeletonRing;骷髅戒指
+Item_SkiKid;Both;SkiKid;滑雪少年装扮
+Item_SkillNecklace;Both;SkillNecklace;技能项链
+Item_Skull;Both;Skull;头骨
+Item_SkyHeroRing;Both;SkyHeroRing;苍穹英雄戒指
+Item_SkysLetter;Both;SkysLetter;斯凯的信
+Item_SkyStingerEgg;Both;SkyStingerEgg;天刺卵
+Item_SlashingBurst;Both;SlashingBurst;破空斩
+Item_Slaying;Both;Slaying;攻杀剑术
+Item_SmallGobby;Both;SmallGobby;小哥比鱼
+Item_SmashPendulum;Both;SmashPendulum;碎魔坠
+Item_SmashRing;Both;SmashRing;碎魔戒指
+Item_SmashWheel;Both;SmashWheel;碎魔轮
+Item_SnakeBody;Both;SnakeBody;蛇身
+Item_SnakeWine;Both;SnakeWine;蛇酒
+Item_SnowManEgg;Both;SnowManEgg;雪人蛋
+Item_SnowUnderpants;Both;SnowUnderpants;雪地内裤
+Item_Socket;Client;Socket : {0};插槽: {0}
+Item_SocketEmpty;Client;Empty;空
+Item_SocketOpenHint;Client;Ctrl + Right Click To Open Sockets;按住 Ctrl + 鼠标右键 打开插槽
+Item_SolidArmourF;Both;SolidArmour(F);坚固铠甲（女）
+Item_SolidArmourM;Both;SolidArmour(M);坚固铠甲（男）
+Item_SolidBlackBoots;Both;SolidBlackBoots;纯黑战靴
+Item_SolidBronzeAxe;Both;SolidBronzeAxe;坚固青铜斧
+Item_SolidBronzeStaff;Both;SolidBronzeStaff;坚固青铜杖
+Item_SolidGreatAxe;Both;SolidGreatAxe;坚固巨斧
+Item_SolidSerpentSword;Both;SolidSerpentSword;坚固蛇剑
+Item_SolidSilverBow;Both;SolidSilverBow;坚固白银弓
+Item_SolidTwinBlades;Both;SolidTwinBlades;坚固双刃
+Item_SorceryAnchor;Both;SorceryAnchor;巫术坠饰
+Item_SoulArmourF;Both;SoulArmour(F);灵魂铠甲（女）
+Item_SoulArmourM;Both;SoulArmour(M);灵魂铠甲（男）
+Item_SoulFireBall;Both;SoulFireBall;灵魂火符
+Item_SoulGem;Both;SoulGem;灵魂宝石
+Item_SoulGlyph0;Both;SoulGlyph0;灵魂雕文
+Item_SoulGlyph1;Both;SoulGlyph1;灵魂雕文
+Item_SoulGlyph2;Both;SoulGlyph2;灵魂雕文
+Item_SoulGlyph3;Both;SoulGlyph3;灵魂雕文
+Item_SoulLiquor;Both;SoulLiquor;灵魂之酒
+Item_SoulLiquor1;Both;SoulLiquor1;灵魂之酒1
+Item_SoulLiquor3;Both;SoulLiquor3;灵魂之酒3
+Item_SoulLiquor5;Both;SoulLiquor5;灵魂之酒5
+Item_SoulNecklace;Both;SoulNecklace;灵魂项链
+Item_SoulOrb;Both;SoulOrb;灵魂灵珠
+Item_SoulRing;Both;SoulRing;灵魂之戒
+Item_SoulSabre;Both;SoulSabre;灵魂军刀
+Item_SoulShield;Both;SoulShield;幽灵盾
+Item_SoulSpringBracelet;Both;SoulSpringBracelet;灵泉手镯
+Item_SoulSpringWand;Both;SoulSpringWand;灵泉法杖
+Item_SoulWater3;Both;SoulWater3;灵魂之水3
+Item_SoulWater7;Both;SoulWater7;灵魂之水7
+Item_SparklingBelt;Both;SparklingBelt;闪耀腰带
+Item_SparklingBoots;Both;SparklingBoots;闪耀战靴
+Item_SparklingHelmet;Both;SparklingHelmet;闪耀头盔
+Item_SpearWithHook;Both;SpearWithHook;钩刃长枪
+Item_SpellBracelet;Both;SpellBracelet;咒术手镯
+Item_SpencerDrug;Both;SpencerDrug;斯宾塞药剂
+Item_SpiderLeg;Both;SpiderLeg;蜘蛛腿
+Item_SpiderTeeth;Both;SpiderTeeth;蜘蛛獠牙
+Item_SpiderWarrior;Both;SpiderWarrior;蜘蛛战士装扮
+Item_SpiderWeb;Both;SpiderWeb;蜘蛛网
+Item_SpiderWine;Both;SpiderWine;蜘蛛酒
+Item_SpiritBlade;Both;SpiritBlade;灵魂之刃
+Item_SpiritBlade1;Both;SpiritBlade1;灵魂之刃1
+Item_SpiritBlade2;Both;SpiritBlade2;灵魂之刃2
+Item_SpiritBlade3;Both;SpiritBlade3;灵魂之刃3
+Item_SpiritBlade4;Both;SpiritBlade4;灵魂之刃4
+Item_SpiritBlade5;Both;SpiritBlade5;灵魂之刃5
+Item_SpiritBracelet;Both;SpiritBracelet;灵魂手镯
+Item_SpiritHelmet;Both;SpiritHelmet;灵魂头盔
+Item_SpiritNecklace;Both;SpiritNecklace;灵魂项链
+Item_SpiritPowerNecklace;Both;SpiritPowerNecklace;灵力项链
+Item_SpiritReformer;Both;SpiritReformer;灵魂调律手镯
+Item_SpiritRing;Both;SpiritRing;灵魂戒指
+Item_SpiritRobeF;Both;SpiritRobe(F);精神长袍（女）
+Item_SpiritRobeM;Both;SpiritRobe(M);精神长袍（男）
+Item_SpiritSword;Both;SpiritSword;精神力战法
+Item_Sportsman;Both;Sportsman;运动健将装扮
+Item_StaffOfLotus;Both;StaffOfLotus;莲华法杖
+Item_StaminaAidL;Both;StaminaAid(L);体力辅助剂（大）
+Item_StaminaAidM;Both;StaminaAid(M);体力辅助剂（中）
+Item_StaminaAidS;Both;StaminaAid(S);体力辅助剂（小）
+Item_Stamp;Both;Stamp;印章
+Item_StealthArmourF;Both;StealthArmour(F);潜行铠甲（女）
+Item_StealthArmourM;Both;StealthArmour(M);潜行铠甲（男）
+Item_SteelArmourF;Both;SteelArmour(F);钢铁铠甲（女）
+Item_SteelArmourM;Both;SteelArmour(M);钢铁铠甲（男）
+Item_SteelAxe;Both;SteelAxe;钢斧
+Item_SteelBangle;Both;SteelBangle;钢铁镯
+Item_SteelBelt;Both;SteelBelt;钢铁腰带
+Item_SteelBracelet;Both;SteelBracelet;钢铁手镯
+Item_SteelBuckle;Both;SteelBuckle;钢扣腰带
+Item_SteelGauntlet;Both;SteelGauntlet;钢铁护手
+Item_SteelGlove;Both;SteelGlove;钢铁护腕
+Item_SteelHelmet;Both;SteelHelmet;钢铁头盔
+Item_SteelSword;Both;SteelSword;钢剑
+Item_StiffWoodenBow;Both;StiffWoodenBow;坚硬木弓
+Item_Stiletto;Both;Stiletto;细刺
+Item_StolenGold;Both;StolenGold;失窃黄金
+Item_StoneBambooFan;Both;StoneBambooFan;石骨竹扇
+Item_StoneHeart;Both;StoneHeart;石之心
+Item_StoneMonster;Both;StoneMonster;石像怪手镯
+Item_StoneMonster1;Both;StoneMonster1;石像怪手镯1
+Item_StoneMonster2;Both;StoneMonster2;石像怪手镯2
+Item_StoneMonster3;Both;StoneMonster3;石像怪手镯3
+Item_StoneMonster4;Both;StoneMonster4;石像怪手镯4
+Item_StoneMonster5;Both;StoneMonster5;石像怪手镯5
+Item_StoneTrap;Both;StoneTrap;石化陷阱
+Item_StormDrugL;Both;StormDrug(L);风暴药剂（大）
+Item_StormDrugM;Both;StormDrug(M);风暴药剂（中）
+Item_StormDrugS;Both;StormDrug(S);风暴药剂（小）
+Item_StormEscape;Both;StormEscape;风暴逃脱
+Item_StormGem;Both;StormGem;风暴宝石
+Item_StormOrb;Both;StormOrb;风暴灵珠
+Item_StraightShot;Both;StraightShot;直射
+Item_StrainBracelet;Both;StrainBracelet;强韧手镯
+Item_StrengthWater3;Both;StrengthWater3;力量之水3
+Item_StrengthWater7;Both;StrengthWater7;力量之水7
+Item_String;Both;String;细绳
+Item_StrongBambooFlute;Both;StrongBambooFlute;结实竹笛
+Item_StrongHoaSword;Both;StrongHoaSword;强力花剑
+Item_StrongLeatherBelt;Both;StrongLeatherBelt;结实皮腰带
+Item_StrongLeatherShoes;Both;StrongLeatherShoes;结实皮鞋
+Item_StrongRope;Both;StrongRope;结实绳索
+Item_StrongWoodenBow;Both;StrongWoodenBow;强力木弓
+Item_StuddedArmourF;Both;StuddedArmour(F);铆钉铠甲（女）
+Item_StuddedArmourM;Both;StuddedArmour(M);铆钉铠甲（男）
+Item_SummonHolyDeva;Both;SummonHolyDeva;召唤圣灵
+Item_SummonShinsu;Both;SummonShinsu;召唤神兽
+Item_SummonSkeleton;Both;SummonSkeleton;召唤骷髅
+Item_SummonSnakes;Both;SummonSnakes;召唤毒蛇
+Item_SummonToad;Both;SummonToad;召唤毒蛤
+Item_SummonVampire;Both;SummonVampire;召唤吸血鬼
+Item_SunPotion;Both;SunPotion;太阳药水
+Item_SunPotionM;Both;SunPotion(M);高级太阳药水
+Item_SuperiorBronzeHelmet;Both;SuperiorBronzeHelmet;上等青铜头盔
+Item_SuperiorMagicHelmet;Both;SuperiorMagicHelmet;上等魔法头盔
+Item_SurvivalBracelet;Both;SurvivalBracelet;生存手镯
+Item_SurvivalNecklace;Both;SurvivalNecklace;生存项链
+Item_SurvivalRing;Both;SurvivalRing;生存戒指
+Item_SwiftFeet;Both;SwiftFeet;疾风步
+Item_SwordFish;Both;SwordFish;剑鱼
+Item_SwordOfWarGod;Both;SwordOfWarGod;战神之剑
+Item_TaeGukRing;Both;TaeGukRing;太极戒指
+Item_TajiRing;Both;TajiRing;太极戒指
+Item_TaoArmourF;Both;TaoArmour(F);道士战甲（女）
+Item_TaoArmourM;Both;TaoArmour(M);道士战甲（男）
+Item_TaoCoronet;Both;TaoCoronet;道冠冕
+Item_TaoistDrugL;Both;TaoistDrug(L);道士药剂（大）
+Item_TaoistDrugM;Both;TaoistDrug(M);道士药剂（中）
+Item_TaoistDrugS;Both;TaoistDrug(S);道士药剂（小）
+Item_TaoPowerBracelet;Both;TaoPowerBracelet;道力手镯
+Item_TaoProtectBracelet;Both;TaoProtectBracelet;护道手镯
+Item_TaoProtectRing;Both;TaoProtectRing;护道戒指
+Item_TarragonArmourF;Both;TarragonArmour(F);泰拉冈铠甲（女）
+Item_TarragonArmourF1;Both;TarragonArmour(F)1;泰拉冈铠甲（女）
+Item_TarragonArmourF2;Both;TarragonArmour(F)2;泰拉冈铠甲（女）
+Item_TarragonArmourF3;Both;TarragonArmour(F)3;泰拉冈铠甲（女）
+Item_TarragonArmourF4;Both;TarragonArmour(F)4;泰拉冈铠甲（女）
+Item_TarragonArmourF5;Both;TarragonArmour(F)5;泰拉冈铠甲（女）
+Item_TarragonArmourM;Both;TarragonArmour(M);泰拉冈铠甲（男）
+Item_TarragonArmourM1;Both;TarragonArmour(M)1;泰拉冈铠甲（男）
+Item_TarragonArmourM2;Both;TarragonArmour(M)2;泰拉冈铠甲（男）
+Item_TarragonArmourM3;Both;TarragonArmour(M)3;泰拉冈铠甲（男）
+Item_TarragonArmourM4;Both;TarragonArmour(M)4;泰拉冈铠甲（男）
+Item_TarragonArmourM5;Both;TarragonArmour(M)5;泰拉冈铠甲（男）
+Item_TarragonBelt;Both;TarragonBelt;泰拉冈腰带
+Item_TarragonBoots;Both;TarragonBoots;泰拉冈战靴
+Item_TarragonBracelet;Both;TarragonBracelet;泰拉冈手镯
+Item_TarragonHelmet;Both;TarragonHelmet;泰拉冈头盔
+Item_TarragonNecklace;Both;TarragonNecklace;泰拉冈项链
+Item_TarragonRing;Both;TarragonRing;泰拉冈戒指
+Item_Teleport;Both;Teleport;瞬息移动
+Item_TeleportHome;Both;TeleportHome;回城卷
+Item_TeleportRing;Both;TeleportRing;传送戒指
+Item_TemperedArmourF;Both;TemperedArmour(F);淬火铠甲（女）
+Item_TemperedArmourM;Both;TemperedArmour(M);淬火铠甲（男）
+Item_TheessenceofDoom;Both;The essence of Doom;末日精华手镯
+Item_TheFairyRing;Both;TheFairyRing;精灵戒指
+Item_TheRipper;Both;TheRipper;撕裂者
+Item_ThickArmourF;Both;ThickArmour(F);厚重铠甲（女）
+Item_ThickArmourM;Both;ThickArmour(M);厚重铠甲（男）
+Item_ThinBracelet;Both;ThinBracelet;细制手镯
+Item_Thrusting;Both;Thrusting;刺杀剑术
+Item_ThunderBolt;Both;ThunderBolt;雷霆术
+Item_ThunderRing;Both;ThunderRing;雷霆戒指
+Item_ThunderStorm;Both;ThunderStorm;地狱雷光
+Item_TigerNecklace;Both;TigerNecklace;虎牙项链
+Item_Timber;Both;Timber;木材
+Item_TimeStonePiece;Both;TimeStonePiece;时间之石碎片
+Item_Tinker;Both;Tinker;丁鲷
+Item_TitanArmourF;Both;TitanArmour(F);泰坦铠甲（女）
+Item_TitanArmourM;Both;TitanArmour(M);泰坦铠甲（男）
+Item_TitaniumMask;Both;TitaniumMask;钛金面具
+Item_TitanRing;Both;TitanRing;泰坦戒指
+Item_Torch;Both;Torch;火把
+Item_ToughBow;Both;ToughBow;坚固长弓
+Item_ToughGlove;Both;ToughGlove;结实护腕
+Item_ToughHoaSword;Both;ToughHoaSword;坚固花剑
+Item_ToughLongBow;Both;ToughLongBow;坚固长弓
+Item_TownTeleport;Both;TownTeleport;城镇传送卷
+Item_TraineeRing;Both;TraineeRing;见习者戒指
+Item_TraineeSuit;Both;TraineeSuit;见习者服
+Item_Translucent;Both;Translucent;透明结晶
+Item_Trap;Both;Trap;陷阱术
+Item_TrapHexagon;Both;TrapHexagon;困魔咒
+Item_Trident;Both;Trident;三叉戟
+Item_Trout;Both;Trout;鳟鱼
+Item_TurnUndead;Both;TurnUndead;圣言术
+Item_TwinDrakeBlade;Both;TwinDrakeBlade;双龙斩
+Item_TwinGoldRing;Both;TwinGoldRing;双金戒指
+Item_UltimateEnhancer;Both;UltimateEnhancer;极限强化
+Item_UndeadLeather;Both;UndeadLeather;亡灵皮革
+Item_Underpants;Both;Underpants;内裤
+Item_UnknownOrb;Both;UnknownOrb;未知宝珠
+Item_UnstablePearl+92;Both;UnstablePearl(+9)2;不稳定珍珠镯(+9)2
+Item_UnstablePearll+3;Both;UnstablePearll(+3);不稳定珍珠镯(+3)
+Item_UnstablePearll+31;Both;UnstablePearll(+3)1;不稳定珍珠镯(+3)1
+Item_UnstablePearll+32;Both;UnstablePearll(+3)2;不稳定珍珠镯(+3)2
+Item_UnstablePearll+33;Both;UnstablePearll(+3)3;不稳定珍珠镯(+3)3
+Item_UnstablePearll+34;Both;UnstablePearll(+3)4;不稳定珍珠镯(+3)4
+Item_UnstablePearll+35;Both;UnstablePearll(+3)5;不稳定珍珠镯(+3)5
+Item_UnstablePearll+6;Both;UnstablePearll(+6);不稳定珍珠镯(+6)
+Item_UnstablePearll+61;Both;UnstablePearll(+6)1;不稳定珍珠镯(+6)1
+Item_UnstablePearll+62;Both;UnstablePearll(+6)2;不稳定珍珠镯(+6)2
+Item_UnstablePearll+63;Both;UnstablePearll(+6)3;不稳定珍珠镯(+6)3
+Item_UnstablePearll+64;Both;UnstablePearll(+6)4;不稳定珍珠镯(+6)4
+Item_UnstablePearll+65;Both;UnstablePearll(+6)5;不稳定珍珠镯(+6)5
+Item_UnstablePearll+9;Both;Unstable Pearll(+9);不稳定珍珠镯(+9)
+Item_UnstablePearll+91;Both;UnstablePearll(+9)1;不稳定珍珠镯(+9)1
+Item_UnstablePearll+93;Both;UnstablePearll(+9)3;不稳定珍珠镯(+9)3
+Item_UnstablePearll+94;Both;UnstablePearll(+9)4;不稳定珍珠镯(+9)4
+Item_UnstablePearll+95;Both;UnstablePearll(+9)5;不稳定珍珠镯(+9)5
+Item_VampireShot;Both;VampireShot;吸血箭
+Item_Vampirism;Both;Vampirism;吸血术
+Item_Venison;Both;Venison;鹿肉
+Item_VioletOrb;Both;VioletOrb;紫罗灵珠坠
+Item_VioletRing;Both;VioletRing;紫罗戒指
+Item_Walleye;Both;Walleye;大眼鱼
+Item_WarGodOil;Both;WarGodOil;战神油
+Item_WarMageStaff;Both;WarMageStaff;战法杖
+Item_WarriorNecklace;Both;WarriorNecklace;战士项链
+Item_WarSpiritBlade;Both;WarSpiritBlade;战魂之刃
+Item_Web;Both;Web;蜘蛛网
+Item_WhiteGoldBelt;Both;WhiteGoldBelt;白金腰带
+Item_WhiteGoldBeltH;Both;WhiteGoldBelt(H);白金腰带（加强）
+Item_WhiteGoldBracelet;Both;WhiteGoldBracelet;白金手镯
+Item_WhiteGoldBraceletH;Both;WhiteGoldBracelet(H);白金手镯（加强）
+Item_WhiteGoldNecklace;Both;WhiteGoldNecklace;白金项链
+Item_WhiteGoldNecklaceH;Both;WhiteGoldNecklace(H);白金项链（加强）
+Item_WhiteGoldRing;Both;WhiteGoldRing;白金戒指
+Item_WhiteGoldRingH;Both;WhiteGoldRing(H);白金戒指（加强）
+Item_WhiteGoldShoes;Both;WhiteGoldShoes;白金战靴
+Item_WhiteGoldShoesH;Both;WhiteGoldShoes(H);白金战靴（加强）
+Item_WhiteJadeRing;Both;WhiteJadeRing;白玉戒指
+Item_WhiteMask;Both;WhiteMask;白面具
+Item_WhiteThread;Both;WhiteThread;白丝线
+Item_WhiteTiger;Both;WhiteTiger;白虎
+Item_WhiteWine;Both;WhiteWine;白葡萄酒
+Item_WhiteWolf;Both;WhiteWolf;白狼
+Item_WildTitanAmulet;Both;WildTitanAmulet;狂暴泰坦手镯
+Item_WillMarble;Both;WillMarble;意志石珠
+Item_WimaenEgg;Both;WimaenEgg;维玛恩蛋
+Item_WindMarble;Both;WindMarble;风之石珠
+Item_Wine;Both;Wine;葡萄酒
+Item_WisdomCoronet;Both;WisdomCoronet;智慧冠冕
+Item_WitchRobeF;Both;WitchRobe(F);女巫长袍（女）
+Item_WizardRing;Both;WizardRing;巫师戒指
+Item_WizardRobeM;Both;WizardRobe(M);巫师长袍（男）
+Item_Wolf;Both;Wolf;野狼
+Item_WonderBoxL;Both;WonderBox(L);奇迹礼盒（大）
+Item_WonderBoxM;Both;WonderBox(M);奇迹礼盒（中）
+Item_WonderBoxS;Both;WonderBox(S);奇迹礼盒（小）
+Item_WonderDrugA.SPEED;Both;WonderDrug(A.SPEED);奇迹药水（攻速）
+Item_WonderDrugAC;Both;WonderDrug(AC);奇迹药水（防御）
+Item_WonderDrugDROP;Both;WonderDrug(DROP);奇迹药水（掉率）
+Item_WonderDrugEXP;Both;WonderDrug(EXP);奇迹药水（经验）
+Item_WonderDrugHP;Both;WonderDrug(HP);奇迹药水（生命）
+Item_WonderDrugMAC;Both;WonderDrug(MAC);奇迹药水（魔防）
+Item_WonderDrugMP;Both;WonderDrug(MP);奇迹药水（魔法）
+Item_WonderPill;Both;WonderPill;奇迹丹药
+Item_WoodenBow;Both;WoodenBow;木弓
+Item_WoodenSword;Both;WoodenSword;木剑
+Item_WoomaHeart;Both;WoomaHeart;沃玛之心
+Item_WoomaHorn;Both;WoomaHorn;祖玛之角
+Item_WoomasHorn;Both;WoomasHorn;沃玛之角
+Item_WornAxe;Both;WornAxe;破旧战斧
+Item_WornBeadofPhoenix;Both;WornBeadofPhoenix;破损凤凰念珠
+Item_WornIronBracelet;Both;WornIronBracelet;破旧铁手镯
+Item_YellowCrystalPendant;Both;YellowCrystalPendant;黄晶坠饰
+Item_YellowNecklace;Both;YellowNecklace;黄色项链
+Item_YellowUnderpants;Both;YellowUnderpants;黄色内裤
+Item_YingYangRobeF;Both;YingYangRobe(F);阴阳长袍（女）
+Item_YingYangRobeM;Both;YingYangRobe(M);阴阳长袍（男）
+Item_Yizhili;Both;Yizhili;伊之莉装扮
+Item_ZerkSoup;Both;ZerkSoup;狂暴汤
+Item_ZincBlades;Both;ZincBlades;锌铁双刃
+Item_ZombieEye;Both;ZombieEye;僵尸之眼
+Item_ZombiesHeart;Both;ZombiesHeart;僵尸之心
+Item_ZumaBlades;Both;ZumaBlades;祖玛双刃
+Item_ZumaFiendBow;Both;ZumaFiendBow;祖玛魔弓
+Item_ZumaHeart;Both;ZumaHeart;祖玛之心
+Item_ZumaJudgementMace;Both;ZumaJudgementMace;祖玛审判锤
+Item_ZumaRelic;Both;ZumaRelic;祖玛圣物
+Item_ZumaSoulSpringWand;Both;ZumaSoulSpringWand;祖玛灵泉杖
+Item_ZumaWarMageStaff;Both;ZumaWarMageStaff;祖玛战法杖
+Item_[H]WarGodOil;Both;[H]WarGodOil;战神油（H）
+Item_幻影當籤IceDragonSkyBayonet;Both;(幻影當籤)IceDragonSkyBayonet;（幻影当签）冰龙天枪
+Item_幻影當籤IceDragonSkyBow;Both;(幻影當籤)IceDragonSkyBow;（幻影当签）冰龙天弓
+Item_幻影當籤IceDragonSkyKnife;Both;(幻影當籤)IceDragonSkyKnife;（幻影当签）冰龙天刃
+Item_幻影當籤IceDragonSkyRod;Both;(幻影當籤)IceDragonSkyRod;（幻影当签）冰龙天杖
+Item_幻影當籤IceDragonSkySword;Both;(幻影當籤)IceDragonSkySword;（幻影当签）冰龙天剑
+Item_慶TheFairyRing;Both;(慶)TheFairyRing;（庆）精灵戒指
+Item_新BlessCarnation;Both;(新)BlessCarnation;（新）祝福康乃馨
+Item_新Carnation;Both;(新)Carnation;（新）康乃馨
+Item_金龍DragonSlayer;Both;(金龍)DragonSlayer;（金龙）屠龙刀
+Item_金龍DragonSword;Both;(金龍)DragonSword;（金龙）龙纹剑
+Item_金龍InfernalBloodBlades;Both;(金龍)InfernalBloodBlades;（金龙）地狱血刃
+Item_金龍SoulEaterStaff;Both;(金龍)SoulEaterStaff;（金龙）噬魂法杖
+Item_金龍YellowDragonBow;Both;(金龍)YellowDragonBow;（金龙）黄龙弓
+Item_진TheessenceofDoom;Both;(진)The essence of Doom;（真）末日精华手镯
+Keybinds;Client;Keybinds;按键设置
+Keyboard_EnforceRelaxed;Client;Assign Rule: Relaxed;分配规则：宽松
+Keyboard_EnforceStrict;Client;Assign Rule: Strict;分配规则：严格
+Keyboard_Layout;Client;Keyboard ({0});键位设置 ({0})
+LastOnline;Client;Last Online;最后在线
+LevelUp;Both;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
+Login_Disabled;Client;Logging in is currently disabled.;当前禁止登录游戏.
+Login_PasswordChangeRequired;Client;The account's password must be changed before logging in.;该账号必须先修改密码才能登录.
+LogOut;Client;Log Out ({0});返回登录 ({0})
+LogOutTip;Client;Do you want to log out of Legend of Mir?;您确定要返回登录界面吗？
+LowDC;Both;You do not have enough DC.;你的攻击力不足。
+LowGold;Both;Not enough gold.;你的金币不足。
+LowLevel;Both;You are not a high enough level.;你的等级不足。
+LowMana;Client;Not Enough Mana to cast.;魔法值不足，无法施放。
+LowMC;Both;You do not have enough MC.;你的魔法力不足。
+LowSC;Both;You do not have enough SC.;你的道术力不足。
+Luck;Client;Luck + {0};幸运 + {0}
+MAC;Client;MAC + {0}~{1} (+{2});魔御 + {0}~{1} (+{2})
+MAC2;Client;MAC + {0}~{1};魔御 + {0}~{1}
+Magic_BackStep;Both;BackStep;后跳
+Magic_BattleCry;Both;BattleCry;战吼
+Magic_BindingShot;Both;BindingShot;束缚箭
+Magic_BladeAvalanche;Both;BladeAvalanche;旋风斩
+Magic_BlessedArmour;Both;BlessedArmour;神圣战甲术
+Magic_Blink;Both;Blink;闪烁
+Magic_Blizzard;Both;Blizzard;暴风雪
+Magic_CatTongue;Both;CatTongue;猫之舌
+Magic_Concentration;Both;Concentration;集中射击
+Magic_CounterAttack;Both;CounterAttack;反击
+Magic_CresentSlash;Both;CresentSlash;新月斩
+Magic_CrippleShot;Both;CrippleShot;致残箭
+Magic_CrossHalfMoon;Both;CrossHalfMoon;交叉半月
+Magic_Curse;Both;Curse;诅咒术
+Magic_DarkBody;Both;DarkBody;暗影之躯
+Magic_DelayedExplosion;Both;DelayedExplosion;延时爆裂
+Magic_DoubleShot;Both;DoubleShot;二连射
+Magic_DoubleSlash;Both;DoubleSlash;双重斩
+Magic_ElectricShock;Both;ElectricShock;雷电术
+Magic_ElementalBarrier;Both;ElementalBarrier;元素屏障
+Magic_ElementalShot;Both;ElementalShot;元素射击
+Magic_EnergyRepulsor;Both;EnergyRepulsor;能量反震
+Magic_EnergyShield;Both;EnergyShield;能量护盾
+Magic_Entrapment;Both;Entrapment;缠绕
+Magic_ExplosiveTrap;Both;ExplosiveTrap;爆裂陷阱
+Magic_FatalSword;Both;FatalSword;致命剑法
+Magic_Fencing;Both;Fencing;基本剑术
+Magic_FireBall;Both;FireBall;火球术
+Magic_FireBang;Both;FireBang;爆裂火焰
+Magic_FireBounce;Both;FireBounce;火焰飞弹
+Magic_FireBurst;Both;FireBurst;火焰爆裂
+Magic_FireWall;Both;FireWall;火墙
+Magic_FlameDisruptor;Both;FlameDisruptor;焰火分身
+Magic_FlameField;Both;FlameField;火焰领域
+Magic_FlamingSword;Both;FlamingSword;烈火剑法
+Magic_FlashDash;Both;FlashDash;闪影冲刺
+Magic_Focus;Both;Focus;专注
+Magic_FrostCrunch;Both;FrostCrunch;冰霜嚎叫
+Magic_Fury;Both;Fury;狂暴
+Magic_GreatFireBall;Both;GreatFireBall;大火球
+Magic_HalfMoon;Both;HalfMoon;半月弯刀
+Magic_Hallucination;Both;Hallucination;幻觉术
+Magic_Haste;Both;Haste;疾速
+Magic_Healing;Both;Healing;治愈术
+Magic_HealingCircle;Both;HealingCircle;治愈光环
+Magic_HeavenlySword;Both;HeavenlySword;天剑术
+Magic_HellFire;Both;HellFire;地狱火
+Magic_Hemorrhage;Both;Hemorrhage;流血打击
+Magic_Hiding;Both;Hiding;隐身术
+Magic_IceStorm;Both;IceStorm;冰咆哮
+Magic_IceThrust;Both;IceThrust;冰刺术
+Magic_ImmortalSkin;Both;ImmortalSkin;金刚不坏
+Magic_LightBody;Both;LightBody;轻身术
+Magic_Lightning;Both;Lightning;疾光电影
+Magic_LionRoar;Both;LionRoar;狮吼功
+Magic_MagicBooster;Both;MagicBooster;魔力增幅
+Magic_MagicShield;Both;MagicShield;魔法盾
+Magic_MassHealing;Both;MassHealing;群体治疗术
+Magic_MassHiding;Both;MassHiding;集体隐身术
+Magic_Meditation;Both;Meditation;冥想
+Magic_MentalState;Both;MentalState;心灵专注
+Magic_MeteorShower;Both;MeteorShower;流星雨
+Magic_MeteorStrike;Both;MeteorStrike;流星坠落
+Magic_Mirroring;Both;Mirroring;镜像术
+Magic_MoonLight;Both;MoonLight;月光斩
+Magic_MoonMist;Both;MoonMist;月影迷雾
+Magic_MPEater;Both;MPEater;法力汲取
+Magic_NapalmShot;Both;NapalmShot;燃烧弹
+Magic_OneWithNature;Both;OneWithNature;天人合一
+Magic_PetEnhancer;Both;PetEnhancer;宠物强化
+Magic_Plague;Both;Plague;瘟疫术
+Magic_PoisonCloud;Both;PoisonCloud;毒雾术
+Magic_Poisoning;Both;Poisoning;施毒术
+Magic_PoisonShot;Both;PoisonShot;剧毒箭
+Magic_PoisonSword;Both;PoisonSword;毒剑术
+Magic_Portal;Both;Portal;空间之门
+Magic_ProtectionField;Both;ProtectionField;护体结界
+Magic_Purification;Both;Purification;净化术
+Magic_Rage;Both;Rage;狂怒
+Magic_Reincarnation;Both;Reincarnation;复活术
+Magic_Repulsion;Both;Repulsion;抗拒火环
+Magic_Revelation;Both;Revelation;心灵启示
+Magic_ShoulderDash;Both;ShoulderDash;野蛮冲撞
+Magic_SlashingBurst;Both;SlashingBurst;破空斩
+Magic_Slaying;Both;Slaying;攻杀剑术
+Magic_SoulFireBall;Both;SoulFireBall;灵魂火符
+Magic_SoulShield;Both;SoulShield;幽灵盾
+Magic_SpiritSword;Both;SpiritSword;精神力战法
+Magic_StoneTrap;Both;StoneTrap;石化陷阱
+Magic_StormEscape;Both;StormEscape;风暴逃脱
+Magic_StraightShot;Both;StraightShot;直射
+Magic_SummonHolyDeva;Both;SummonHolyDeva;召唤圣灵
+Magic_SummonShinsu;Both;SummonShinsu;召唤神兽
+Magic_SummonSkeleton;Both;SummonSkeleton;召唤骷髅
+Magic_SummonSnakes;Both;SummonSnakes;召唤毒蛇
+Magic_SummonToad;Both;SummonToad;召唤毒蛤
+Magic_SummonVampire;Both;SummonVampire;召唤吸血鬼
+Magic_SwiftFeet;Both;SwiftFeet;疾风步
+Magic_Teleport;Both;Teleport;瞬息移动
+Magic_Thrusting;Both;Thrusting;刺杀剑术
+Magic_ThunderBolt;Both;ThunderBolt;雷霆术
+Magic_ThunderStorm;Both;ThunderStorm;地狱雷光
+Magic_Trap;Both;Trap;陷阱术
+Magic_TrapHexagon;Both;TrapHexagon;困魔咒
+Magic_TurnUndead;Both;TurnUndead;圣言术
+Magic_TwinDrakeBlade;Both;TwinDrakeBlade;双龙斩
+Magic_UltimateEnchancer;Both;UltimateEnchancer;极限强化
+Magic_VampireShot;Both;VampireShot;吸血箭
+Magic_Vampirism;Both;Vampirism;吸血术
+Mail;Client;Mail;邮件
+MailLover;Client;Mail Lover;给爱人发送邮件
 MainDialog_HP;Client;HP {0}/{1};HP {0}/{1}
 MainDialog_MP;Client;MP {0}/{1} ;MP {0}/{1} 
-
+MaxCombine;Client;Max Combine Count : {0}{1}Shift + Left click to split the stack;最大堆叠数量: {0}{1}按住 Shift + 左键 可以分开堆叠
+MC;Client;MC + {0}~{1} (+{2});魔法 + {0}~{1} (+{2})
+MC2;Client;MC + {0}~{1};魔法 + {0}~{1}
+Mentor;Client;Mentor ({0});师徒 ({0})
+MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字.
+MentorRequest;Client;Mentor Request;师徒请求
+MentorRequestAccept;Client;Accept Mentor Request;接受师徒请求
+MentorRequestDecline;Client;Decline Mentor Request;拒绝师徒请求
+MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
+Mentor_AlreadyHasMentor;Client;You already have a Mentor.;你已经拥有一位师父.
+Mentor_CancelWarning;Client;Cancelling a Mentorship early will cause a cooldown. Are you sure?;提前解除师徒关系将会产生冷却时间，确定要继续吗？
+Mentor_LevelPrefix;Client;Lv ;Lv 
+Mentor_MenteeExp;Client;MENTEE EXP: {0};徒弟经验: {0}
+Mentor_MenteeLabel;Client;MENTEE;徒弟
+Mentor_MentorLabel;Client;MENTOR;师父
+Mentor_Online;Client;ONLINE;在线
+Menu;Client;Menu;菜单
+Monster_00;Both;00;未知怪物
+Monster_AncBringer;Both;AncBringer;远古使者
+Monster_Ancient_AxeSkeleton;Both;Ancient_AxeSkeleton;远古掷斧骷髅
+Monster_Ancient_AxeSkeleton0;Both;Ancient_AxeSkeleton0;远古掷斧骷髅0
+Monster_Ancient_BlackBoar;Both;Ancient_BlackBoar;远古黑野猪
+Monster_Ancient_BlackBoar0;Both;Ancient_BlackBoar0;远古黑野猪0
+Monster_Ancient_BlackMaggot;Both;Ancient_BlackMaggot;远古黑蠕虫
+Monster_Ancient_BlackMaggot0;Both;Ancient_BlackMaggot0;远古黑蠕虫0
+Monster_Ancient_BoneArcher;Both;Ancient_BoneArcher;远古骷髅弓手
+Monster_Ancient_BoneBlademan;Both;Ancient_BoneBlademan;远古骷髅剑士
+Monster_Ancient_BoneCaptain;Both;Ancient_BoneCaptain;远古骷髅队长
+Monster_Ancient_BoneElite;Both;Ancient_BoneElite;远古精英骷髅
+Monster_Ancient_BoneFighter;Both;Ancient_BoneFighter;远古骷髅战士
+Monster_Ancient_BoneFighter0;Both;Ancient_BoneFighter0;远古骷髅战士0
+Monster_Ancient_BoneLord;Both;Ancient_BoneLord;远古骷髅王
+Monster_Ancient_BoneSpearman;Both;Ancient_BoneSpearman;远古骷髅枪兵
+Monster_Ancient_BoneWarrior;Both;Ancient_BoneWarrior;远古骷髅勇士
+Monster_Ancient_BoneWarrior0;Both;Ancient_BoneWarrior0;远古骷髅勇士0
+Monster_Ancient_FlamingWooma;Both;Ancient_FlamingWooma;远古火焰沃玛
+Monster_Ancient_GiantRat;Both;Ancient_GiantRat;远古巨型老鼠
+Monster_Ancient_GiantRat0;Both;Ancient_GiantRat0;远古巨型老鼠0
+Monster_Ancient_KingHog;Both;Ancient_KingHog;远古野猪王
+Monster_Ancient_RedBoar;Both;Ancient_RedBoar;远古红野猪
+Monster_Ancient_RedBoar0;Both;Ancient_RedBoar0;远古红野猪0
+Monster_Ancient_RedThunderZuma;Both;Ancient_RedThunderZuma;远古雷电祖玛
+Monster_Ancient_RoninGhoul;Both;Ancient_RoninGhoul;远古浪人尸鬼
+Monster_Ancient_Skeleton;Both;Ancient_Skeleton;远古骷髅
+Monster_Ancient_Skeleton0;Both;Ancient_Skeleton0;远古骷髅0
+Monster_Ancient_SnakeScorpion;Both;Ancient_SnakeScorpion;远古蛇蝎
+Monster_Ancient_SnakeScorpion0;Both;Ancient_SnakeScorpion0;远古蛇蝎0
+Monster_Ancient_ToxicGhoul;Both;Ancient_ToxicGhoul;远古毒尸鬼
+Monster_Ancient_WhiteBoar;Both;Ancient_WhiteBoar;远古白野猪
+Monster_Ancient_WoomaFighter;Both;Ancient_WoomaFighter;远古沃玛战士
+Monster_Ancient_WoomaGuardian;Both;Ancient_WoomaGuardian;远古沃玛护卫
+Monster_Ancient_WoomaSoldier;Both;Ancient_WoomaSoldier;远古沃玛勇士
+Monster_Ancient_WoomaTaurus;Both;Ancient_WoomaTaurus;远古沃玛教主
+Monster_Ancient_WoomaWarrior;Both;Ancient_WoomaWarrior;远古沃玛战将
+Monster_Ancient_ZumaArcher;Both;Ancient_ZumaArcher;远古祖玛弓箭手
+Monster_Ancient_ZumaArcher0;Both;Ancient_ZumaArcher0;远古祖玛弓箭手0
+Monster_Ancient_ZumaGuardian;Both;Ancient_ZumaGuardian;远古祖玛守卫
+Monster_Ancient_ZumaGuardian0;Both;Ancient_ZumaGuardian0;远古祖玛守卫0
+Monster_Ancient_ZumaStatue;Both;Ancient_ZumaStatue;远古祖玛石像
+Monster_Ancient_ZumaStatue0;Both;Ancient_ZumaStatue0;远古祖玛石像0
+Monster_Ancient_ZumaTaurus;Both;Ancient_ZumaTaurus;远古祖玛教主
+Monster_ArcherGuard;Both;ArcherGuard;弓箭守卫
+Monster_ArcherGuard1;Both;ArcherGuard1;弓箭守卫1
+Monster_ArcherGuard3;Both;ArcherGuard3;弓箭守卫3
+Monster_Armadillo;Both;Armadillo;犰狳
+Monster_ArmadilloElder;Both;ArmadilloElder;犰狳长老
+Monster_ArmingWeaver;Both;ArmingWeaver;武装织网蛛
+Monster_AssassinClone;Both;AssassinClone;刺客幻影
+Monster_AssassinScroll;Both;AssassinScroll;刺客卷轴
+Monster_AxeOma;Both;AxeOma;斧斩半兽人
+Monster_AxeOma0;Both;AxeOma0;斧斩半兽人0
+Monster_AxeSkeleton;Both;AxeSkeleton;掷斧骷髅
+Monster_AxeSkeleton0;Both;AxeSkeleton0;掷斧骷髅0
+Monster_AxeSkeleton9;Both;AxeSkeleton9;掷斧骷髅9
+Monster_BabyDragon;Both;BabyDragon;幼龙
+Monster_BabyPig;Both;BabyPig;小猪
+Monster_BabySkeleton;Both;BabySkeleton;小骷髅
+Monster_BabySnowMan;Both;BabySnowMan;雪人宝宝
+Monster_Baekdon;Both;Baekdon;白顿
+Monster_Bear;Both;Bear;棕熊
+Monster_BeastKing;Both;BeastKing;兽王
+Monster_BigApe;Both;BigApe;巨猿
+Monster_BigApe0;Both;BigApe0;巨猿0
+Monster_BigApe3;Both;BigApe3;巨猿3
+Monster_BigHedgeKekTal;Both;BigHedgeKekTal;巨型荆棘凯克塔尔
+Monster_BlackBoar;Both;BlackBoar;黑野猪
+Monster_BlackBoar0;Both;BlackBoar0;黑野猪0
+Monster_BlackBoar3;Both;BlackBoar3;黑野猪3
+Monster_BlackFoxMan;Both;BlackFoxMan;黑狐人
+Monster_BlackHammerCat;Both;BlackHammerCat;黑锤猫
+Monster_BlackKitten;Both;BlackKitten;黑猫
+Monster_BlackMaggot;Both;BlackMaggot;黑蠕虫
+Monster_BlackMaggot0;Both;BlackMaggot0;黑蠕虫0
+Monster_BloodBaboon;Both;BloodBaboon;血猿
+Monster_BloodPriest;Both;BloodPriest;血祭司
+Monster_BloodPriest0;Both;BloodPriest0;血祭司0
+Monster_BloodyLureSpider;Both;BloodyLureSpider;血腥诱惑蛛
+Monster_BlueHoroBlaster;Both;BlueHoroBlaster;蓝色气旋怪
+Monster_BlueHoroBlaster0;Both;BlueHoroBlaster0;蓝色气旋怪0
+Monster_BlueTurtle;Both;BlueTurtle;蓝龟
+Monster_BlueViper;Both;BlueViper;蓝蝮蛇
+Monster_BlueViper0;Both;BlueViper0;蓝蝮蛇0
+Monster_BombSpider;Both;BombSpider;自爆蜘蛛
+Monster_BoneArcher;Both;BoneArcher;骷髅弓手
+Monster_BoneArcher0;Both;BoneArcher0;骷髅弓手0
+Monster_BoneArcher22;Both;BoneArcher22;骨弓手22
+Monster_BoneBlademan;Both;BoneBlademan;骷髅剑士
+Monster_BoneBlademan0;Both;BoneBlademan0;骷髅剑士0
+Monster_BoneBlademan22;Both;BoneBlademan22;骨剑士22
+Monster_BoneCaptain;Both;BoneCaptain;骷髅队长
+Monster_BoneCaptain0;Both;BoneCaptain0;骷髅队长0
+Monster_BoneCaptain22;Both;BoneCaptain22;骨统领22
+Monster_BoneElite;Both;BoneElite;精英骷髅
+Monster_BoneElite1;Both;BoneElite1;精英骷髅1
+Monster_BoneElite2;Both;BoneElite2;精英骷髅2
+Monster_BoneElite9;Both;BoneElite9;精英骷髅9
+Monster_BoneFamiliar;Both;BoneFamiliar;白骨随从
+Monster_BoneFighter;Both;BoneFighter;骷髅战士
+Monster_BoneFighter0;Both;BoneFighter0;骷髅战士0
+Monster_BoneLord;Both;BoneLord;骷髅王
+Monster_BoneSpearman;Both;BoneSpearman;骷髅枪兵
+Monster_BoneSpearman0;Both;BoneSpearman0;骷髅枪兵0
+Monster_BoneSpearman22;Both;BoneSpearman22;骨枪兵22
+Monster_BoneWarrior;Both;BoneWarrior;骷髅勇士
+Monster_BoneWarrior0;Both;BoneWarrior0;骷髅勇士0
+Monster_BoneWhoo;Both;BoneWhoo;咆哮骷髅
+Monster_BoulderSpirit;Both;BoulderSpirit;磐石之灵
+Monster_BrownFrogSpider;Both;BrownFrogSpider;棕蛙蜘蛛
+Monster_BugBat;Both;BugBat;蝙蝠
+Monster_BugBatMaggot;Both;BugBatMaggot;蝙蝠幼虫
+Monster_Bull;Both;Bull;公牛
+Monster_BurningZombie;Both;BurningZombie;燃烧僵尸
+Monster_CannibalPlant;Both;CannibalPlant;食人花
+Monster_CannibalTentacles;Both;CannibalTentacles;食人触手
+Monster_CatShaman;Both;CatShaman;猫萨满
+Monster_CatWidow;Both;CatWidow;寡妇猫
+Monster_CaveBat;Both;CaveBat;山洞蝙蝠
+Monster_CaveBat0;Both;CaveBat0;山洞蝙蝠0
+Monster_CaveMaggot;Both;CaveMaggot;洞蛆
+Monster_CaveWitch;Both;CaveWitch;山洞女巫
+Monster_Centipede;Both;Centipede;蜈蚣
+Monster_Centipede0;Both;Centipede0;蜈蚣0
+Monster_ChainGhoul;Both;ChainGhoul;锁链尸鬼
+Monster_CharmedSnake;Both;CharmedSnake;魅惑毒蛇
+Monster_CherryTree;Both;CherryTree;樱花树
+Monster_ChestnutTree;Both;ChestnutTree;栗子树
+Monster_ChestnutTree1;Both;ChestnutTree1;栗子树1
+Monster_ChestnutTree2;Both;ChestnutTree2;栗子树2
+Monster_Chick;Both;Chick;小鸡
+Monster_Chieftain_Archer;Both;Chieftain_Archer;首领弓箭手
+Monster_Chieftain_Priest;Both;Chieftain_Priest;首领祭司
+Monster_Chieftain_Rouge;Both;Chieftain_Rouge;首领盗贼
+Monster_Chieftain_Warlock;Both;Chieftain_Warlock;首领术士
+Monster_Chieftain_Warrior;Both;Chieftain_Warrior;首领战士
+Monster_Clone;Both;Clone;幻影分身
+Monster_CloudElement;Both;CloudElement;云元素
+Monster_ClZombie;Both;ClZombie;布衣僵尸
+Monster_ClZombie0;Both;ClZombie0;布衣僵尸0
+Monster_CrackingWeaver;Both;CrackingWeaver;裂纹织网蛛
+Monster_CrawlerZombie;Both;CrawlerZombie;爬行僵尸
+Monster_CrawlerZombie0;Both;CrawlerZombie0;爬行僵尸0
+Monster_CrazyManworm;Both;CrazyManworm;狂暴人蛆
+Monster_CrossbowOma;Both;CrossbowOma;弩手半兽人
+Monster_CrossbowOma0;Both;CrossbowOma0;弩手半兽人0
+Monster_CrystalSpider;Both;CrystalSpider;水晶蜘蛛
+Monster_CrystalWeaver;Both;CrystalWeaver;水晶织网蛛
+Monster_Currish;Both;Currish;野狗
+Monster_CursedPriest;Both;CursedPriest;被诅咒的祭司
+Monster_CursedPriest0;Both;CursedPriest0;被诅咒的祭司0
+Monster_CursedShaman;Both;CursedShaman;被诅咒的萨满
+Monster_CursedShaman0;Both;CursedShaman0;被诅咒的萨满0
+Monster_CursedZombie;Both;CursedZombie;被诅咒的僵尸
+Monster_CursedZombie0;Both;CursedZombie0;被诅咒的僵尸0
+Monster_CyanoGhast;Both;CyanoGhast;青幽怨灵
+Monster_Dark;Both;Dark;暗黑战士
+Monster_Dark0;Both;Dark0;暗黑战士0
+Monster_DarkBeast;Both;DarkBeast;暗黑兽
+Monster_DarkDevil;Both;DarkDevil;暗黑魔王
+Monster_DarkDevourer;Both;DarkDevourer;黑暗吞噬者
+Monster_DarkPriestZombie;Both;DarkPriestZombie;暗黑祭司僵尸
+Monster_DarkSpirit;Both;DarkSpirit;黑暗之灵
+Monster_DarkWraith;Both;DarkWraith;黑暗怨灵
+Monster_DeathCrawler;Both;DeathCrawler;死亡爬行者
+Monster_Deer;Both;Deer;鹿
+Monster_Deer1;Both;Deer1;鹿1
+Monster_Demon1;Both;Demon1;恶魔1
+Monster_Demon2;Both;Demon2;恶魔2
+Monster_DemonWolf;Both;DemonWolf;恶魔狼
+Monster_Donatello;Both;Donatello;多纳泰罗
+Monster_DreamDevourer;Both;DreamDevourer;噬梦者
+Monster_Dung;Both;Dung;粪虫
+Monster_Dung0;Both;Dung0;粪虫0
+Monster_EbonyTree;Both;EbonyTree;乌木树
+Monster_ElectricElement;Both;ElectricElement;电元素
+Monster_ElectricMinotaur;Both;ElectricMinotaur;雷电牛头怪
+Monster_ElectricMinotaur0;Both;ElectricMinotaur0;雷电牛头怪0
+Monster_EliteArcher;Both;EliteArcher;精英弓箭手
+Monster_EliteGuardian;Both;EliteGuardian;精英守卫
+Monster_EliteStatue;Both;EliteStatue;精英石像
+Monster_EvilApe;Both;EvilApe;邪恶猿
+Monster_EvilApe0;Both;EvilApe0;邪恶猿0
+Monster_EvilApeSobo;Both;EvilApeSobo;索波邪猿
+Monster_EvilBigApe;Both;EvilBigApe;邪恶巨猿
+Monster_EvilCentipede;Both;EvilCentipede;邪恶蜈蚣
+Monster_EvilHog;Both;EvilHog;邪恶野猪
+Monster_EvilMir;Both;EvilMir;邪恶神龙
+Monster_EvilSnake;Both;EvilSnake;邪恶毒蛇
+Monster_EvilSnake1;Both;EvilSnake1;邪恶毒蛇1
+Monster_EvilSnake20;Both;EvilSnake20;邪恶毒蛇20
+Monster_EvilSnake21;Both;EvilSnake21;邪恶毒蛇21
+Monster_EvilSpider;Both;EvilSpider;邪恶蜘蛛
+Monster_EvilTongs;Both;EvilTongs;邪恶钳虫
+Monster_EvilTongs1;Both;EvilTongs1;邪恶钳虫1
+Monster_EvilTongs2;Both;EvilTongs2;邪恶钳虫2
+Monster_EvilTongs20;Both;EvilTongs20;邪恶钳虫20
+Monster_EvilTongs21;Both;EvilTongs21;邪恶钳虫21
+Monster_EvilTongs9;Both;EvilTongs9;邪恶钳虫9
+Monster_FightingCat;Both;FightingCat;斗士猫
+Monster_FineSoul;Both;FineSoul;纯净之魂
+Monster_FinialTurtle;Both;FinialTurtle;终极玄龟
+Monster_FireCat;Both;FireCat;火焰猫
+Monster_FireMinotaur;Both;FireMinotaur;火焰牛头怪
+Monster_FireMinotaur0;Both;FireMinotaur0;火焰牛头怪0
+Monster_FlailOma;Both;FlailOma;连枷半兽人
+Monster_FlailOma0;Both;FlailOma0;连枷半兽人0
+Monster_FlamingWooma;Both;FlamingWooma;火焰沃玛
+Monster_FlamingWooma0;Both;FlamingWooma0;火焰沃玛0
+Monster_FlamingWooma2;Both;FlamingWooma2;火焰沃玛2
+Monster_FlyingStatue;Both;FlyingStatue;飞天石像
+Monster_Football;Both;Football;足球
+Monster_ForestYeti;Both;ForestYeti;森林雪人
+Monster_ForestYeti0;Both;ForestYeti0;森林雪人0
+Monster_Frog;Both;Frog;青蛙
+Monster_FrostTiger;Both;FrostTiger;霜虎
+Monster_FrozenArcher;Both;FrozenArcher;冰封弓箭手
+Monster_FrozenAxeman;Both;FrozenAxeman;冰封斧兵
+Monster_FrozenDoor;Both;FrozenDoor;冰封之门
+Monster_FrozenFighter;Both;FrozenFighter;冰封斗士
+Monster_FrozenGolem;Both;FrozenGolem;冰封石魔
+Monster_FrozenKnight;Both;FrozenKnight;冰封骑士
+Monster_FrozenMagician;Both;FrozenMagician;冰封法师
+Monster_FrozenMiner;Both;FrozenMiner;冰封矿工
+Monster_FrozenSolider;Both;FrozenSolider;冰封士兵
+Monster_FrozenWarewolf;Both;FrozenWarewolf;冰封狼人
+Monster_FrozenZombie;Both;FrozenZombie;冰冻僵尸
+Monster_Frozen_RedZuma;Both;Frozen_RedZuma;冰封红雷祖玛
+Monster_Frozen_ZumaGuardian;Both;Frozen_ZumaGuardian;冰封祖玛守护者
+Monster_Frozen_ZumaStatue;Both;Frozen_ZumaStatue;冰封祖玛石像
+Monster_GameShop_Guard;Both;GameShop_Guard;商城守卫
+Monster_GangSpider;Both;GangSpider;群居蜘蛛
+Monster_GangSpider0;Both;GangSpider0;群居蜘蛛0
+Monster_GangSpider3;Both;GangSpider3;群居蜘蛛3
+Monster_GeneralMeowMeow;Both;GeneralMeowMeow;喵喵将军
+Monster_GhastlyLeecher;Both;GhastlyLeecher;噬魂水蛭
+Monster_GhostZombie;Both;GhostZombie;幽灵僵尸
+Monster_Ghoul;Both;Ghoul;尸鬼
+Monster_Ghoul1;Both;Ghoul1;尸鬼1
+Monster_Ghoul10;Both;Ghoul10;尸鬼10
+Monster_Ghoul2;Both;Ghoul2;尸鬼2
+Monster_Ghoul20;Both;Ghoul20;尸鬼20
+Monster_Ghoul21;Both;Ghoul21;尸鬼21
+Monster_Ghoul4;Both;Ghoul4;尸鬼4
+Monster_GiantKeratoid;Both;GiantKeratoid;巨型多角虫
+Monster_GiantKeratoid1;Both;GiantKeratoid1;巨型多角虫1
+Monster_GiantKeratoid2;Both;GiantKeratoid2;巨型多角虫2
+Monster_GiantRat;Both;GiantRat;巨型老鼠
+Monster_GiantRat0;Both;GiantRat0;巨型老鼠0
+Monster_GiantWorm;Both;GiantWorm;巨型洞蛆
+Monster_GiantWorm0;Both;GiantWorm0;巨型洞蛆0
+Monster_GreaterWeaver;Both;GreaterWeaver;强化织网蛛
+Monster_GreatFoxSpirit;Both;GreatFoxSpirit;大狐仙
+Monster_GreatGhoul;Both;GreatGhoul;高等尸鬼
+Monster_GreatSpider;Both;GreatSpider;巨型蜘蛛
+Monster_GreatSpider0;Both;GreatSpider0;巨型蜘蛛0
+Monster_GreatSpider3;Both;GreatSpider3;巨型蜘蛛3
+Monster_GreenTurtle;Both;GreenTurtle;绿龟
+Monster_GreyEvilApe;Both;GreyEvilApe;灰色邪猿
+Monster_Guard;Both;Guard;守卫
+Monster_Guard1;Both;Guard1;守卫1
+Monster_Guard2;Both;Guard2;守卫2
+Monster_Guard3;Both;Guard3;守卫3
+Monster_GuardianRock;Both;GuardianRock;守护岩石
+Monster_GuardianViper;Both;GuardianViper;守护蝮蛇
+Monster_HardenRhino;Both;HardenRhino;钢角犀牛
+Monster_HedgeKekTal;Both;HedgeKekTal;荆棘凯克塔尔
+Monster_HellBolt;Both;HellBolt;地狱闪电
+Monster_HellBomb1;Both;HellBomb1;地狱炸弹1
+Monster_HellBomb2;Both;HellBomb2;地狱炸弹2
+Monster_HellBomb3;Both;HellBomb3;地狱炸弹3
+Monster_HellCannibal;Both;HellCannibal;地狱食人魔
+Monster_HellKeeper;Both;HellKeeper;地狱守护者
+Monster_HellKnight1;Both;HellKnight1;地狱骑士1
+Monster_HellKnight2;Both;HellKnight2;地狱骑士2
+Monster_HellKnight3;Both;HellKnight3;地狱骑士3
+Monster_HellKnight4;Both;HellKnight4;地狱骑士4
+Monster_HellLord;Both;HellLord;地狱之王
+Monster_HellPirate;Both;HellPirate;地狱海盗
+Monster_HellSlasher;Both;HellSlasher;地狱屠戮者
+Monster_Hen;Both;Hen;鸡
+Monster_HiGreatGhoul;Both;HiGreatGhoul;高级尸鬼
+Monster_HolyDeva;Both;HolyDeva;圣灵
+Monster_HookingCat;Both;HookingCat;钉耙猫
+Monster_HookingCat0;Both;HookingCat0;钉耙猫0
+Monster_HornedArcher;Both;HornedArcher;角魔弓手
+Monster_HornedCommander;Both;HornedCommander;角魔指挥官
+Monster_HornedMage;Both;HornedMage;角魔法师
+Monster_HornedSorceror;Both;HornedSorceror;角魔术士
+Monster_HornedWarrior;Both;HornedWarrior;角魔战士
+Monster_HoroBlaster;Both;HoroBlaster;气旋怪
+Monster_HoroBlaster0;Both;HoroBlaster0;气旋怪0
+Monster_Hugger;Both;Hugger;抱握怪
+Monster_HungryZombie;Both;HungryZombie;饥饿僵尸
+Monster_HungryZombie0;Both;HungryZombie0;饥饿僵尸0
+Monster_Hydra;Both;Hydra;九头蛇
+Monster_Hydrax;Both;Hydrax;海卓克斯
+Monster_IceCrystalSolider;Both;IceCrystalSolider;冰晶战士
+Monster_IceMinotaur;Both;IceMinotaur;冰霜牛头怪
+Monster_IceMinotaur0;Both;IceMinotaur0;冰霜牛头怪0
+Monster_IcePhantom;Both;IcePhantom;冰之幻影
+Monster_IcePilar;Both;IcePilar;冰柱
+Monster_IncarnatedWT;Both;IncarnatedWT;沃玛化身
+Monster_IncarnatedZT;Both;IncarnatedZT;祖玛化身
+Monster_Jar1;Both;Jar1;罐子1
+Monster_Jar2;Both;Jar2;罐子2
+Monster_KeelArcher;Both;KeelArcher;龙骨弓手
+Monster_KeelWarrior;Both;KeelWarrior;龙骨战士
+Monster_KekTal;Both;KekTal;凯克塔尔
+Monster_KekTal0;Both;KekTal0;凯克塔尔0
+Monster_Keratoid;Both;Keratoid;多角虫
+Monster_Keratoid0;Both;Keratoid0;多角虫0
+Monster_Khazard;Both;Khazard;哈扎德
+Monster_KingHog;Both;KingHog;野猪王
+Monster_KingScorpion;Both;KingScorpion;蝎子王
+Monster_Kitten;Both;Kitten;小猫
+Monster_Lamia;Both;Lamia;拉米亚
+Monster_LargeMushroom;Both;LargeMushroom;巨型蘑菇
+Monster_LeftGuard;Both;LeftGuard;左护卫
+Monster_LeftGuard0;Both;LeftGuard0;左护卫0
+Monster_Leopard;Both;Leopard;猎豹
+Monster_LightBeast;Both;LightBeast;光明兽
+Monster_LureSpider;Both;LureSpider;诱惑蛛
+Monster_LureSpider0;Both;LureSpider0;诱惑蛛0
+Monster_LureSpider3;Both;LureSpider3;诱惑蛛3
+Monster_ManectricBlest;Both;ManectricBlest;强化雷电兽
+Monster_ManectricClaw;Both;ManectricClaw;雷电爪兽
+Monster_ManectricClub;Both;ManectricClub;雷电棍兽
+Monster_ManectricHammer;Both;ManectricHammer;雷电锤兽
+Monster_ManectricKing;Both;ManectricKing;雷电之王
+Monster_ManectricSlave;Both;ManectricSlave;雷电奴兽
+Monster_ManectricStaff;Both;ManectricStaff;雷电杖兽
+Monster_Manticore;Both;Manticore;蝎尾狮
+Monster_Master_DragonYang;Both;Master_DragonYang;龙阳大师
+Monster_Michelangelo;Both;Michelangelo;米开朗基罗
+Monster_Minion_Priest;Both;Minion_Priest;侍从·祭司
+Monster_Minion_Rouge;Both;Minion_Rouge;侍从·盗贼
+Monster_Minion_Warlock;Both;Minion_Warlock;侍从·术士
+Monster_Minion_Warrior;Both;Minion_Warrior;侍从·战士
+Monster_Minotaur;Both;Minotaur;牛头怪
+Monster_Minotaur0;Both;Minotaur0;牛头怪0
+Monster_MinotaurKing;Both;MinotaurKing;牛魔王
+Monster_MirStatue;Both;MirStatue;神龙石像
+Monster_MubZombie;Both;MubZombie;木乃伊僵尸
+Monster_MudZombie;Both;MudZombie;泥沼僵尸
+Monster_MutatedHugger;Both;MutatedHugger;变异抱握怪
+Monster_MutatedManworm;Both;MutatedManworm;变异人蛆
+Monster_NdZombie;Both;NdZombie;普通僵尸
+Monster_NdZombie0;Both;NdZombie0;普通僵尸0
+Monster_OlympicFlame;Both;OlympicFlame;奥运圣火
+Monster_Oma;Both;Oma;半兽人
+Monster_Oma0;Both;Oma0;半兽人0
+Monster_OmaFighter;Both;OmaFighter;半兽战士
+Monster_OmaFighter0;Both;OmaFighter0;半兽战士0
+Monster_OmaGuard;Both;OmaGuard;半兽护卫
+Monster_OmaGuard0;Both;OmaGuard0;半兽护卫0
+Monster_OmaKing;Both;OmaKing;半兽之王
+Monster_OmaKingSpirit;Both;OmaKingSpirit;半兽之王·灵魂
+Monster_OmaWarrior;Both;OmaWarrior;半兽勇士
+Monster_OmaWarrior1;Both;OmaWarrior1;半兽勇士1
+Monster_OmaWarrior2;Both;OmaWarrior2;半兽勇士2
+Monster_PalaceWall1;Both;PalaceWall1;皇宫城墙1
+Monster_PalaceWall2;Both;PalaceWall2;皇宫城墙2
+Monster_PalaceWallLeft;Both;PalaceWallLeft;皇宫左侧城墙
+Monster_Pig;Both;Pig;猪
+Monster_PKSpirit;Both;PKSpirit;PK之魂
+Monster_PoisonHugger;Both;PoisonHugger;剧毒抱握怪
+Monster_PriestZombie;Both;PriestZombie;祭司僵尸
+Monster_PriestZombie0;Both;PriestZombie0;祭司僵尸0
+Monster_RakingCat;Both;RakingCat;多钩猫
+Monster_RakingCat0;Both;RakingCat0;多钩猫0
+Monster_Raphael;Both;Raphael;拉斐尔
+Monster_RedBoar;Both;RedBoar;红野猪
+Monster_RedBoar0;Both;RedBoar0;红野猪0
+Monster_RedBoar3;Both;RedBoar3;红野猪3
+Monster_RedEvilApe;Both;RedEvilApe;红色邪猿
+Monster_RedFoxMan;Both;RedFoxMan;红狐人
+Monster_RedFrogSpider;Both;RedFrogSpider;红蛙蜘蛛
+Monster_RedMoonEvil;Both;RedMoonEvil;赤月恶魔
+Monster_RedMoonEvil1;Both;RedMoonEvil1;赤月恶魔1
+Monster_RedSnake;Both;RedSnake;红蛇
+Monster_RedSnake0;Both;RedSnake0;红蛇0
+Monster_RedThunderZuma;Both;RedThunderZuma;雷电祖玛
+Monster_RedTurtle;Both;RedTurtle;红龟
+Monster_RedViper;Both;RedViper;红蝮蛇
+Monster_RestlessJar;Both;RestlessJar;不安之罐
+Monster_RightGuard;Both;RightGuard;右护卫
+Monster_RightGuard0;Both;RightGuard0;右护卫0
+Monster_RoninGhoul;Both;RoninGhoul;浪人尸鬼
+Monster_RoninGhoul0;Both;RoninGhoul0;浪人尸鬼0
+Monster_RootSpider;Both;RootSpider;根须蜘蛛
+Monster_RotNdZombie;Both;RotNdZombie;腐烂僵尸
+Monster_RotShamanZombie;Both;RotShamanZombie;腐烂萨满僵尸
+Monster_Royal_Archer;Both;Royal_Archer;皇家弓箭手
+Monster_Royal_Guard;Both;Royal_Guard;皇家护卫
+Monster_Royal_Lieutenant;Both;Royal_Lieutenant;皇家副官
+Monster_SabukGate;Both;SabukGate;沙巴克城门
+Monster_SandSnail;Both;SandSnail;沙漠蜗牛
+Monster_SandStorm;Both;SandStorm;沙暴
+Monster_SandWorm;Both;SandWorm;沙虫
+Monster_Scarecrow;Both;Scarecrow;稻草人
+Monster_Scarecrow0;Both;Scarecrow0;稻草人0
+Monster_Scarecrow1;Both;Scarecrow1;稻草人1
+Monster_Scorpion;Both;Scorpion;蝎子
+Monster_SeaTurtle;Both;SeaTurtle;海龟
+Monster_SeedingsGeneral;Both;SeedingsGeneral;种子将军
+Monster_Sentry;Both;Sentry;哨兵
+Monster_ShamanZombie;Both;ShamanZombie;萨满僵尸
+Monster_ShamanZombie0;Both;ShamanZombie0;萨满僵尸0
+Monster_Sheep;Both;Sheep;羊
+Monster_ShellNipper;Both;ShellNipper;甲壳蟹
+Monster_ShellNipper0;Both;ShellNipper0;甲壳蟹0
+Monster_Shinsu;Both;Shinsu;神兽
+Monster_Shinsu1;Both;Shinsu1;神兽1
+Monster_ShiZombie;Both;ShiZombie;尸僵
+Monster_ShiZombie0;Both;ShiZombie0;尸僵0
+Monster_SinseokMiner;Both;SinseokMiner;辛石矿工
+Monster_Skeleton;Both;Skeleton;骷髅
+Monster_Skeleton0;Both;Skeleton0;骷髅0
+Monster_SkyStinger;Both;SkyStinger;天刺蜂
+Monster_SkyStinger0;Both;SkyStinger0;天刺蜂0
+Monster_Slave2;Both;Slave2;奴隶2
+Monster_SmallDrake;Both;SmallDrake;幼龙兽
+Monster_SnakeScorpion;Both;SnakeScorpion;蛇蝎
+Monster_SnakeScorpion0;Both;SnakeScorpion0;蛇蝎0
+Monster_SnakeScorpion3;Both;SnakeScorpion3;蛇蝎3
+Monster_SnakeTotem;Both;SnakeTotem;蛇图腾
+Monster_SnowWolf;Both;SnowWolf;雪狼
+Monster_SnowYeti;Both;SnowYeti;雪人
+Monster_SpiderBarbarian;Both;SpiderBarbarian;蛮族蜘蛛
+Monster_SpiderBat;Both;SpiderBat;蝙蝠蜘蛛
+Monster_SpiderFrog;Both;SpiderFrog;蜘蛛蛙
+Monster_SpiderFrog0;Both;SpiderFrog0;蜘蛛蛙0
+Monster_SpiderWarrior;Both;SpiderWarrior;战士蜘蛛
+Monster_SpittingSpider;Both;SpittingSpider;喷毒蜘蛛
+Monster_SpittingToad;Both;SpittingToad;喷毒蛤蟆
+Monster_StainHammerCat;Both;StainHammerCat;污锤猫
+Monster_StoneTrap;Both;StoneTrap;石化陷阱
+Monster_StoningStatue;Both;StoningStatue;石化石像
+Monster_StrayCat;Both;StrayCat;流浪猫
+Monster_SwordOma;Both;SwordOma;剑士半兽人
+Monster_SwordOma0;Both;SwordOma0;剑士半兽人0
+Monster_TaoistScroll;Both;TaoistScroll;道士卷轴
+Monster_TigerSnake;Both;TigerSnake;虎蛇
+Monster_TigerSnake0;Both;TigerSnake0;虎蛇0
+Monster_TigerViper;Both;TigerViper;虎蝮蛇
+Monster_Tongs;Both;Tongs;钳虫
+Monster_Tongs0;Both;Tongs0;钳虫0
+Monster_TowerTurtle;Both;TowerTurtle;塔龟
+Monster_ToxicGhoul;Both;ToxicGhoul;毒尸鬼
+Monster_ToxicGhoul0;Both;ToxicGhoul0;毒尸鬼0
+Monster_ToxicZombie;Both;ToxicZombie;毒僵尸
+Monster_ToxicZombie0;Both;ToxicZombie0;毒僵尸0
+Monster_Trainer;Both;Trainer;训练师
+Monster_TrainingMob;Both;TrainingMob;训练木人
+Monster_TrapRock;Both;TrapRock;陷阱岩石
+Monster_TrapRock1;Both;TrapRock1;陷阱岩石1
+Monster_TreasureBox;Both;TreasureBox;宝箱
+Monster_TreeQueen;Both;TreeQueen;树妖王
+Monster_Tucson;Both;Tucson;图森怪
+Monster_TucsonEgg;Both;TucsonEgg;图桑之卵
+Monster_TucsonFighter;Both;TucsonFighter;图森战士
+Monster_TucsonGeneral;Both;TucsonGeneral;图森统领
+Monster_TucsonMage;Both;TucsonMage;图森法师
+Monster_TucsonWarrior;Both;TucsonWarrior;图森勇士
+Monster_TurtleGrass;Both;TurtleGrass;乌龟草怪
+Monster_UndeadWolf;Both;UndeadWolf;不死狼
+Monster_ValeBat;Both;ValeBat;山谷蝙蝠
+Monster_ValeBat2;Both;ValeBat2;山谷蝙蝠2
+Monster_VampireSpider;Both;VampireSpider;吸血蜘蛛
+Monster_VenomSpider;Both;VenomSpider;毒蜘蛛
+Monster_VenomSpider0;Both;VenomSpider0;毒蜘蛛0
+Monster_VenomSpider3;Both;VenomSpider3;毒蜘蛛3
+Monster_VenomWeaver;Both;VenomWeaver;剧毒织网蛛
+Monster_VioletKekTal;Both;VioletKekTal;紫色凯克塔尔
+Monster_VioletKekTal0;Both;VioletKekTal0;紫色凯克塔尔0
+Monster_VisceralWorm;Both;VisceralWorm;洞蛆
+Monster_VisceralWorm2;Both;VisceralWorm2;腐肠虫2
+Monster_WarriorScroll;Both;WarriorScroll;战士卷轴
+Monster_Weaver;Both;Weaver;织网蛛
+Monster_WedgeMoth;Both;WedgeMoth;楔形飞蛾
+Monster_WedgeMoth22;Both;WedgeMoth22;楔形飞蛾22
+Monster_WhimperingBee;Both;WhimperingBee;哀鸣蜂
+Monster_WhimperingBee0;Both;WhimperingBee0;哀鸣蜂0
+Monster_WhiteBoar;Both;WhiteBoar;白野猪
+Monster_WhiteBoar0;Both;WhiteBoar0;白野猪0
+Monster_WhiteBoar1;Both;WhiteBoar1;白野猪1
+Monster_WhiteBoar20;Both;WhiteBoar20;白野猪20
+Monster_WhiteBoar21;Both;WhiteBoar21;白野猪21
+Monster_WhiteFoxMan;Both;WhiteFoxMan;白狐人
+Monster_WhiteMammoth;Both;WhiteMammoth;白猛犸
+Monster_WhiteSerpent;Both;WhiteSerpent;白蛇
+Monster_Wimaen;Both;Wimaen;维玛恩
+Monster_WindMinotaur;Both;WindMinotaur;疾风牛头怪
+Monster_WindMinotaur0;Both;WindMinotaur0;疾风牛头怪0
+Monster_WingedOma;Both;WingedOma;有翼半兽人
+Monster_WingedOma0;Both;WingedOma0;有翼半兽人0
+Monster_WitchDoctor;Both;WitchDoctor;巫医
+Monster_WizardScroll;Both;WizardScroll;法师卷轴
+Monster_Wolf;Both;Wolf;狼
+Monster_WoomaFighter;Both;WoomaFighter;沃玛战士
+Monster_WoomaFighter0;Both;WoomaFighter0;沃玛战士0
+Monster_WoomaGuardian;Both;WoomaGuardian;沃玛护卫
+Monster_WoomaGuardian1;Both;WoomaGuardian1;沃玛护卫1
+Monster_WoomaGuardian2;Both;WoomaGuardian2;沃玛护卫2
+Monster_WoomaGuardian5;Both;WoomaGuardian5;沃玛护卫5
+Monster_WoomaGuardian6;Both;WoomaGuardian6;沃玛护卫6
+Monster_WoomaSoldier;Both;WoomaSoldier;沃玛勇士
+Monster_WoomaSoldier0;Both;WoomaSoldier0;沃玛勇士0
+Monster_WoomaTaurus;Both;WoomaTaurus;沃玛教主
+Monster_WoomaTaurus1;Both;WoomaTaurus1;沃玛教主1
+Monster_WoomaTaurus9;Both;WoomaTaurus9;沃玛教主9
+Monster_WoomaWarrior;Both;WoomaWarrior;沃玛战将
+Monster_WoomaWarrior0;Both;WoomaWarrior0;沃玛战将0
+Monster_YangDevilNode;Both;YangDevilNode;阳魔节点
+Monster_YellowViper;Both;YellowViper;黄蝮蛇
+Monster_YellowViper0;Both;YellowViper0;黄蝮蛇0
+Monster_Yimoogi;Both;Yimoogi;伊摩基
+Monster_YinDevilNode;Both;YinDevilNode;阴魔节点
+Monster_Yob;Both;Yob;山羊
+Monster_Yob0;Both;Yob0;山羊0
+Monster_YoungTucson;Both;YoungTucson;幼年图桑
+Monster_Zombie1;Both;Zombie1;僵尸1
+Monster_Zombie10;Both;Zombie10;僵尸10
+Monster_Zombie2;Both;Zombie2;僵尸2
+Monster_Zombie20;Both;Zombie20;僵尸20
+Monster_Zombie3;Both;Zombie3;僵尸3
+Monster_Zombie30;Both;Zombie30;僵尸30
+Monster_Zombie4;Both;Zombie4;僵尸4
+Monster_Zombie40;Both;Zombie40;僵尸40
+Monster_Zombie5;Both;Zombie5;僵尸5
+Monster_Zombie50;Both;Zombie50;僵尸50
+Monster_Zombie51;Both;Zombie51;僵尸51
+Monster_ZumaArcher;Both;ZumaArcher;祖玛弓箭手
+Monster_ZumaArcher0;Both;ZumaArcher0;祖玛弓箭手0
+Monster_ZumaArcher20;Both;ZumaArcher20;祖玛弓箭手20
+Monster_ZumaArcher21;Both;ZumaArcher21;祖玛弓箭手21
+Monster_ZumaArcher22;Both;ZumaArcher22;祖玛弓箭手22
+Monster_ZumaArcher3;Both;ZumaArcher3;祖玛弓箭手3
+Monster_ZumaGuardian;Both;ZumaGuardian;祖玛守卫
+Monster_ZumaGuardian0;Both;ZumaGuardian0;祖玛守卫0
+Monster_ZumaGuardian00;Both;ZumaGuardian00;祖玛守卫00
+Monster_ZumaGuardian20;Both;ZumaGuardian20;祖玛守卫20
+Monster_ZumaGuardian21;Both;ZumaGuardian21;祖玛守卫21
+Monster_ZumaGuardian22;Both;ZumaGuardian22;祖玛守护者22
+Monster_ZumaGuardian3;Both;ZumaGuardian3;祖玛守卫3
+Monster_ZumaStatue;Both;ZumaStatue;祖玛石像
+Monster_ZumaStatue0;Both;ZumaStatue0;祖玛石像0
+Monster_ZumaStatue20;Both;ZumaStatue20;祖玛石像20
+Monster_ZumaStatue21;Both;ZumaStatue21;祖玛石像21
+Monster_ZumaStatue22;Both;ZumaStatue22;祖玛石像22
+Monster_ZumaStatue3;Both;ZumaStatue3;祖玛石像3
+Monster_ZumaTaurus;Both;ZumaTaurus;祖玛教主
+Monster_ZumaTaurus9;Both;ZumaTaurus9;祖玛教主9
+Mount;Client;Mount ({0});坐骑 ({0})
+Never;Client;Never;从不
+NewMail;Server;New mail has arrived.;你收到了一封新邮件。
+NoAccountID;Client;The AccountID does not exist.;该账号不存在。
+NoBagSpace;Both;You do not have enough space.;你的背包空间不足。
+NoClass;Client;The class you selected does not exist. Contact a GM for assistance.;你选择的职业不存在，如有疑问请联系管理员.
+NoCreatures;Client;You do not own any creatures.;你尚未拥有任何宠物。
+NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿.
+NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系.
+NoMount;Client;You do not own a mount.;你尚未拥有坐骑.
+NotFemale;Both;You are not Female.;你不是女性角色。
+NotInGuild;Both;You are not in a guild.;你尚未加入行会.
+NotMale;Both;You are not Male.;你不是男性角色。
+NoTownTeleport;Server;You cannot use Town Teleports here;你不能在这里使用回城卷轴。
+NPC_Accessory_Abbigale;Both;Accessory_Abbigale;饰品商 阿比盖尔
+NPC_Administrator_Edward;Both;Administrator_Edward;管理员 爱德华
+NPC_Administrator_SabukOfficer;Both;Administrator_SabukOfficer;沙巴克军务官
+NPC_Alchemist_Larry;Both;Alchemist_Larry;炼金师 拉里
+NPC_Alchemist_Samuel;Both;Alchemist_Samuel;炼金师 塞缪尔
+NPC_Apprentice;Both;Apprentice;学徒
+NPC_Ashes;Both;Ashes;灰烬
+NPC_Assistant_Jane;Both;Assistant_Jane;助手 简
+NPC_Assistant_Julie;Both;Assistant_Julie;助手 朱莉
+NPC_BichonInspector_Anthony;Both;BichonInspector_Anthony;比奇巡查官 安东尼
+NPC_BichonSoldier_Frank;Both;BichonSoldier_Frank;比奇士兵 弗兰克
+NPC_BichonWall_Board;Both;BichonWall_Board;比奇城 告示牌
+NPC_BigTaoist;Both;BigTaoist;大道士
+NPC_Blacksmith_Bill;Both;Blacksmith_Bill;铁匠 比尔
+NPC_Blacksmith_Carlos;Both;Blacksmith_Carlos;铁匠 卡洛斯
+NPC_Blacksmith_Dean;Both;Blacksmith_Dean;铁匠 迪恩
+NPC_Blacksmith_Kieron;Both;Blacksmith_Kieron;铁匠 基伦
+NPC_Blacksmith_Smith;Both;Blacksmith_Smith;铁匠 史密斯
+NPC_Blacksmith_Wayne;Both;Blacksmith_Wayne;铁匠 韦恩
+NPC_Bones;Both;Bones;白骨
+NPC_Book_Vivian;Both;Book_Vivian;书商 维薇安
+NPC_BorderVillage_Board;Both;BorderVillage_Board;边境村 告示牌
+NPC_BrokenCarriage;Both;BrokenCarriage;损坏马车
+NPC_Captain_Andrew;Both;Captain_Andrew;队长 安德鲁
+NPC_Captain_Jerald;Both;Captain_Jerald;队长 杰拉德
+NPC_CaveGuide_Paddy;Both;CaveGuide_Paddy;洞穴向导 帕迪
+NPC_Challange_OldMan;Both;Challange_OldMan;试炼老人
+NPC_ChaosNode;Both;ChaosNode;混沌节点
+NPC_Commander_Luke;Both;Commander_Luke;指挥官 卢克
+NPC_CraftingVillage_Portal;Both;CraftingVillage_Portal;工匠村 传送门
+NPC_CraftsLady_Alice;Both;CraftsLady_Alice;工艺师 爱丽丝
+NPC_CraftsLady_Christine;Both;CraftsLady_Christine;工艺师 克里斯汀
+NPC_CraftsLady_Jane;Both;CraftsLady_Jane;工艺师 简
+NPC_CraftsLady_Jude;Both;CraftsLady_Jude;工艺师 朱德
+NPC_CraftsLady_Kimberly;Both;CraftsLady_Kimberly;工艺师 金伯莉
+NPC_CraftsLady_Louise;Both;CraftsLady_Louise;工艺师 露易丝
+NPC_CraftsLady_Victoria;Both;CraftsLady_Victoria;工艺师 维多利亚
+NPC_CrushedBones;Both;CrushedBones;碎骨堆
+NPC_Drapery_Amanda;Both;Drapery_Amanda;布商 阿曼达
+NPC_Drapery_Maximus;Both;Drapery_Maximus;布商 马克西穆斯
+NPC_Emperor_Far;Both;Emperor_Far;皇帝 法尔
+NPC_Examiner_Tony;Both;Examiner_Tony;考官 托尼
+NPC_Excavenger_Stuart;Both;Excavenger_Stuart;挖掘者 斯图尔特
+NPC_FishMonger_Laura;Both;FishMonger_Laura;鱼贩 劳拉
+NPC_General_Grimchamp;Both;General_Grimchamp;将军 格林昌普
+NPC_General_Jane;Both;General_Jane;将军 简
+NPC_General_Martyn;Both;General_Martyn;将军 马丁
+NPC_General_Paula;Both;General_Paula;将军 宝拉
+NPC_General_Sir.Kevin;Both;General_Sir.Kevin;将军 凯文爵士
+NPC_GM_Armour;Both;GM_Armour;GM 铠甲管理员
+NPC_GM_Awakening;Both;GM_Awakening;GM 觉醒管理员
+NPC_GM_Belt;Both;GM_Belt;GM 腰带管理员
+NPC_GM_Book;Both;GM_Book;GM 书籍管理员
+NPC_GM_Boot;Both;GM_Boot;GM 靴子管理员
+NPC_GM_Bracelet;Both;GM_Bracelet;GM 手镯管理员
+NPC_GM_CraftingMaterial;Both;GM_CraftingMaterial;GM 制作材料管理员
+NPC_GM_Fishing;Both;GM_Fishing;GM 钓鱼管理员
+NPC_GM_Gem;Both;GM_Gem;GM 宝石管理员
+NPC_GM_Grocery;Both;GM_Grocery;GM 杂货管理员
+NPC_GM_Helmet;Both;GM_Helmet;GM 头盔管理员
+NPC_GM_Manager;Both;GM_Manager;GM 管理员
+NPC_GM_Meat;Both;GM_Meat;GM 肉类管理员
+NPC_GM_Mount;Both;GM_Mount;GM 坐骑管理员
+NPC_GM_Necklace;Both;GM_Necklace;GM 项链管理员
+NPC_GM_Nothing;Both;GM_Nothing;GM 空白管理员
+NPC_GM_Ore;Both;GM_Ore;GM 矿石管理员
+NPC_GM_Potion;Both;GM_Potion;GM 药水管理员
+NPC_GM_Quest;Both;GM_Quest;GM 任务管理员
+NPC_GM_Ring;Both;GM_Ring;GM 戒指管理员
+NPC_GM_Script;Both;GM_Script;GM 脚本管理员
+NPC_GM_Stone;Both;GM_Stone;GM 石头管理员
+NPC_GM_Teleporter;Both;GM_Teleporter;GM 传送管理员
+NPC_GM_Weapon;Both;GM_Weapon;GM 武器管理员
+NPC_Grocery_Bull;Both;Grocery_Bull;杂货商 布尔
+NPC_GTMerchant_Graeme;Both;GTMerchant_Graeme;领地 商人 格雷姆
+NPC_GTMerchant_Jamie;Both;GTMerchant_Jamie;领地 商人 杰米
+NPC_GTMerchant_Robert;Both;GTMerchant_Robert;领地 商人 罗伯特
+NPC_GTMerchant_Roger;Both;GTMerchant_Roger;领地 商人 罗杰
+NPC_GTStore_Mira;Both;GTStore_Mira;领地 仓库 米拉
+NPC_GTTransporter;Both;GTTransporter;领地 传送员
+NPC_Gt_BulletinBoard;Both;Gt_BulletinBoard;领地 公告牌
+NPC_GT_Peddler;Both;GT_Peddler;领地 小贩
+NPC_GT_Steward;Both;GT_Steward;领地 管事
+NPC_GuardianRock;Both;GuardianRock;守护之石
+NPC_Hairdresser_Chris;Both;Hairdresser_Chris;理发师 克里斯
+NPC_HighAssassin_Cloud;Both;HighAssassin_Cloud;高阶刺客 克劳德
+NPC_HighPriest_Jude;Both;HighPriest_Jude;大祭司 朱德
+NPC_InnKeeper_Anthony;Both;InnKeeper_Anthony;旅店老板 安东尼
+NPC_InnKeeper_Brittney;Both;InnKeeper_Brittney;旅店老板 布里特妮
+NPC_InnKeeper_Helen;Both;InnKeeper_Helen;旅店老板 海伦
+NPC_InnKeeper_Jessica;Both;InnKeeper_Jessica;旅店老板 杰西卡
+NPC_InnKeeper_Mary;Both;InnKeeper_Mary;旅店老板 玛丽
+NPC_InnKeeper_Nicole;Both;InnKeeper_Nicole;旅店老板 妮可
+NPC_InnKeeper_Robin;Both;InnKeeper_Robin;旅店老板 罗宾
+NPC_InnKeeper_Ruben;Both;InnKeeper_Ruben;旅店老板 鲁本
+NPC_InnKeeper_Vicky;Both;InnKeeper_Vicky;旅店老板 维琪
+NPC_Inspector_Peter;Both;Inspector_Peter;巡查官 彼得
+NPC_Investigator_David;Both;Investigator_David;调查员 大卫
+NPC_John_Schwartz;Both;John_Schwartz;约翰·施瓦茨雕像
+NPC_LeadTrainer_Harry;Both;LeadTrainer_Harry;首席教官 哈利
+NPC_LeftEscort_Carl;Both;LeftEscort_Carl;左护卫 卡尔
+NPC_Librarian_Brian;Both;Librarian_Brian;图书管理员 布赖恩
+NPC_Librarian_Huxley;Both;Librarian_Huxley;图书管理员 赫胥黎
+NPC_Librarian_Steven;Both;Librarian_Steven;图书管理员 史蒂文
+NPC_LostSoul;Both;LostSoul;迷失灵魂
+NPC_Lottery_Charley;Both;Lottery_Charley;彩票商 查理
+NPC_Lottery_Eddie;Both;Lottery_Eddie;彩票商 埃迪
+NPC_Luke_Thompson;Both;Luke_Thompson;卢克·汤普森雕像
+NPC_MasterMage_Don;Both;MasterMage_Don;法师导师 唐
+NPC_MasterMK_Deric;Both;MasterMK_Deric;气功导师 德里克
+NPC_Master_Joffrey;Both;Master_Joffrey;师父 乔佛里
+NPC_Master_Perry;Both;Master_Perry;师父 佩里
+NPC_Master_Shok;Both;Master_Shok;师父 朔克
+NPC_Master_Wa;Both;Master_Wa;师父 瓦
+NPC_MaterialDealer_Alex;Both;MaterialDealer_Alex;材料商 亚历克斯
+NPC_MaterialDealer_Jeffery;Both;MaterialDealer_Jeffery;材料商 杰弗里
+NPC_MaterialDealer_Reece;Both;MaterialDealer_Reece;材料商 里斯
+NPC_Merchant_Alice;Both;Merchant_Alice;商人 爱丽丝
+NPC_Merchant_Anne;Both;Merchant_Anne;商人 安妮
+NPC_Merchant_Bart;Both;Merchant_Bart;商人 巴特
+NPC_Merchant_Belina;Both;Merchant_Belina;商人 贝丽娜
+NPC_Merchant_Betty;Both;Merchant_Betty;商人 贝蒂
+NPC_Merchant_Bill;Both;Merchant_Bill;商人 比尔
+NPC_Merchant_Bradley;Both;Merchant_Bradley;商人 布拉德利
+NPC_Merchant_Bruce;Both;Merchant_Bruce;商人 布鲁斯
+NPC_Merchant_Bull;Both;Merchant_Bull;商人 布尔
+NPC_Merchant_Carratt;Both;Merchant_Carratt;商人 卡拉特
+NPC_Merchant_Cindy;Both;Merchant_Cindy;商人 辛迪
+NPC_Merchant_Clara;Both;Merchant_Clara;商人 克拉拉
+NPC_Merchant_Cook;Both;Merchant_Cook;商人 库克
+NPC_Merchant_Daniel;Both;Merchant_Daniel;商人 丹尼尔
+NPC_Merchant_Debora;Both;Merchant_Debora;商人 黛博拉
+NPC_Merchant_Derby;Both;Merchant_Derby;商人 德比
+NPC_Merchant_Diana;Both;Merchant_Diana;商人 黛安娜
+NPC_Merchant_Dr.Hwa;Both;Merchant_Dr.Hwa;药剂师 华医生
+NPC_Merchant_Dr.Kim;Both;Merchant_Dr.Kim;药剂师 金医生
+NPC_Merchant_Dustin;Both;Merchant_Dustin;商人 达斯汀
+NPC_Merchant_Emily;Both;Merchant_Emily;商人 艾米丽
+NPC_Merchant_Gerald;Both;Merchant_Gerald;商人 杰拉德
+NPC_Merchant_Glenn;Both;Merchant_Glenn;商人 格伦
+NPC_Merchant_Gordon;Both;Merchant_Gordon;商人 戈登
+NPC_Merchant_Grace;Both;Merchant_Grace;商人 格蕾丝
+NPC_Merchant_Hans;Both;Merchant_Hans;商人 汉斯
+NPC_Merchant_Harry;Both;Merchant_Harry;商人 哈利
+NPC_Merchant_Harvey;Both;Merchant_Harvey;商人 哈维
+NPC_Merchant_Helen;Both;Merchant_Helen;商人 海伦
+NPC_Merchant_Jack;Both;Merchant_Jack;商人 杰克
+NPC_Merchant_James;Both;Merchant_James;商人 詹姆斯
+NPC_Merchant_Janey;Both;Merchant_Janey;商人 珍妮
+NPC_Merchant_Jang;Both;Merchant_Jang;商人 张
+NPC_Merchant_Jene;Both;Merchant_Jene;商人 珍妮
+NPC_Merchant_Jennifer;Both;Merchant_Jennifer;商人 珍妮弗
+NPC_Merchant_Jerald;Both;Merchant_Jerald;商人 杰拉德
+NPC_Merchant_Jerry;Both;Merchant_Jerry;商人 杰瑞
+NPC_Merchant_Jim;Both;Merchant_Jim;商人 吉姆
+NPC_Merchant_John;Both;Merchant_John;商人 约翰
+NPC_Merchant_Julia;Both;Merchant_Julia;商人 朱莉娅
+NPC_Merchant_June;Both;Merchant_June;商人 琼
+NPC_Merchant_Keith;Both;Merchant_Keith;商人 基思
+NPC_Merchant_Kelly;Both;Merchant_Kelly;商人 凯莉
+NPC_Merchant_Ken;Both;Merchant_Ken;商人 肯
+NPC_Merchant_Kevin;Both;Merchant_Kevin;商人 凯文
+NPC_Merchant_Kim;Both;Merchant_Kim;商人 金
+NPC_Merchant_Kristin;Both;Merchant_Kristin;商人 克里斯汀
+NPC_Merchant_Laura;Both;Merchant_Laura;商人 劳拉
+NPC_Merchant_Melissa;Both;Merchant_Melissa;商人 梅丽莎
+NPC_Merchant_Michelle;Both;Merchant_Michelle;商人 米歇尔
+NPC_Merchant_Milton;Both;Merchant_Milton;商人 米尔顿
+NPC_Merchant_Monica;Both;Merchant_Monica;商人 莫妮卡
+NPC_Merchant_Mr.Wang;Both;Merchant_Mr.Wang;商人 王先生
+NPC_Merchant_Murray;Both;Merchant_Murray;商人 墨里
+NPC_Merchant_Olivia;Both;Merchant_Olivia;商人 奥利维亚
+NPC_Merchant_Paddy;Both;Merchant_Paddy;商人 帕迪
+NPC_Merchant_Peggy;Both;Merchant_Peggy;商人 佩吉
+NPC_Merchant_Rachel;Both;Merchant_Rachel;商人 瑞秋
+NPC_Merchant_Raymond;Both;Merchant_Raymond;商人 雷蒙德
+NPC_Merchant_Robert;Both;Merchant_Robert;商人 罗伯特
+NPC_Merchant_Ruben;Both;Merchant_Ruben;商人 鲁本
+NPC_Merchant_Rupert;Both;Merchant_Rupert;商人 鲁伯特
+NPC_Merchant_Sam;Both;Merchant_Sam;商人 山姆
+NPC_Merchant_Sandford;Both;Merchant_Sandford;商人 桑福德
+NPC_Merchant_Sandra;Both;Merchant_Sandra;商人 桑德拉
+NPC_Merchant_Sarah;Both;Merchant_Sarah;商人 萨拉
+NPC_Merchant_Satin;Both;Merchant_Satin;商人 萨廷
+NPC_Merchant_Scott;Both;Merchant_Scott;商人 斯科特
+NPC_Merchant_Susan;Both;Merchant_Susan;商人 苏珊
+NPC_Merchant_Tiffany;Both;Merchant_Tiffany;商人 蒂芙尼
+NPC_Merchant_Vincent;Both;Merchant_Vincent;商人 文森特
+NPC_Merchant_Walter;Both;Merchant_Walter;商人 沃尔特
+NPC_Merchant_Whitney;Both;Merchant_Whitney;商人 惠特尼
+NPC_Merchant_Yang;Both;Merchant_Yang;商人 杨
+NPC_MirGuide_Edward;Both;MirGuide_Edward;向导 爱德华
+NPC_MirGuide_James;Both;MirGuide_James;向导 詹姆斯
+NPC_MirGuide_Peter;Both;MirGuide_Peter;向导 彼得
+NPC_MirGuide_Stephen;Both;MirGuide_Stephen;向导 史蒂芬
+NPC_MissDo;Both;MissDo;多小姐
+NPC_MissMi;Both;MissMi;米小姐
+NPC_MissRe;Both;MissRe;瑞小姐
+NPC_MongchonDelegate_Michael;Both;MongchonDelegate_Michael;盟重使者 迈克尔
+NPC_MongchonScout_Brian;Both;MongchonScout_Brian;盟重斥候 布赖恩
+NPC_Monument;Both;Monument;纪念碑
+NPC_MudWall_Board;Both;MudWall_Board;盟重土城 告示牌
+NPC_MysteriousPillar;Both;MysteriousPillar;神秘石柱
+NPC_MysteriousStone;Both;MysteriousStone;神秘石像
+NPC_Mysterious_Grim;Both;Mysterious_Grim;神秘 格里姆
+NPC_Mysterious_Yu;Both;Mysterious_Yu;神秘 禹
+NPC_OddOldMan;Both;OddOldMan;古怪老人
+NPC_OldFisherman_Frank;Both;OldFisherman_Frank;老渔夫 弗兰克
+NPC_OldSkeleton;Both;OldSkeleton;老骷髅
+NPC_OldSkull;Both;OldSkull;老骷髅头
+NPC_PetMaster_Andy;Both;PetMaster_Andy;宠物管理员 安迪
+NPC_Pillar;Both;Pillar;石柱
+NPC_PotionShop_Samuel;Both;PotionShop_Samuel;药剂店 塞缪尔
+NPC_Premium_Elijah;Both;Premium_Elijah;特权商人 以利亚
+NPC_Prison_Guard;Both;Prison_Guard;监狱守卫
+NPC_Proceeder;Both;Proceeder;活动引导员
+NPC_Protector_James;Both;Protector_James;守护者 詹姆斯
+NPC_RightEscort_Martin;Both;RightEscort_Martin;右护卫 马丁
+NPC_Sailor_Alfred;Both;Sailor_Alfred;水手 阿尔弗雷德
+NPC_Sailor_Raymond;Both;Sailor_Raymond;水手 雷蒙德
+NPC_Sailor_Rupert;Both;Sailor_Rupert;水手 鲁伯特
+NPC_Signpost;Both;Signpost;路牌
+NPC_Sir_Mogu;Both;Sir_Mogu;莫古爵士
+NPC_SkeletonPile;Both;SkeletonPile;骷髅堆
+NPC_SkullPile;Both;SkullPile;头骨堆
+NPC_Solider_Richard;Both;Solider_Richard;士兵 理查德
+NPC_Specialist_Eugene;Both;Specialist_Eugene;专家 尤金
+NPC_Specialist_Kimberly;Both;Specialist_Kimberly;专家 金伯莉
+NPC_Specialist_Kurtis;Both;Specialist_Kurtis;专家 柯蒂斯
+NPC_Specialist_Milton;Both;Specialist_Milton;专家 米尔顿
+NPC_Specialist_Travis;Both;Specialist_Travis;专家 特拉维斯
+NPC_SquadLeader_Dolby;Both;SquadLeader_Dolby;小队长 多尔比
+NPC_StableGirl_Mary;Both;StableGirl_Mary;马厩女孩 玛丽
+NPC_Stairs;Both;Stairs;楼梯
+NPC_Storage_Jake;Both;Storage_Jake;仓库管理员 杰克
+NPC_Storage_Jon;Both;Storage_Jon;仓库管理员 乔恩
+NPC_StrangeMan;Both;StrangeMan;神秘人
+NPC_StrangePillar;Both;StrangePillar;奇怪石柱
+NPC_SubjagationManager_James;Both;SubjagationManager_James;剿灭任务管理员 詹姆斯
+NPC_SubjugationLead_Eric;Both;SubjugationLead_Eric;剿灭队长 埃里克
+NPC_Teleport_Denzel;Both;Teleport_Denzel;传送员 登泽尔
+NPC_Teleport_Gilbert;Both;Teleport_Gilbert;传送员 吉尔伯特
+NPC_Teleport_Harrison;Both;Teleport_Harrison;传送员 哈里森
+NPC_Teleport_Jason;Both;Teleport_Jason;传送员 杰森
+NPC_Teleport_Kyle;Both;Teleport_Kyle;传送员 凯尔
+NPC_Teleport_Sigmund;Both;Teleport_Sigmund;传送员 西格蒙德
+NPC_TheWatcher_Jacob;Both;TheWatcher_Jacob;守望者 雅各布
+NPC_TimeStone;Both;TimeStone;时间之石
+NPC_TrainerTaoist;Both;TrainerTaoist;道士导师
+NPC_Transport_Chandler;Both;Transport_Chandler;传送员 钱德勒
+NPC_Transport_Edwin;Both;Transport_Edwin;传送员 爱德温
+NPC_Traveller_Soho;Both;Traveller_Soho;旅行者 索霍
+NPC_TravellingMerchant_Damian;Both;TravellingMerchant_Damian;流浪商人 达米安
+NPC_TrustMerchant_Jake;Both;TrustMerchant_Jake;信誉商人 杰克
+NPC_TrustMerchant_James;Both;TrustMerchant_James;信誉商人 詹姆斯
+NPC_TrustMerchant_Joseph;Both;TrustMerchant_Joseph;信誉商人 约瑟夫
+NPC_TrustMerchant_Michael;Both;TrustMerchant_Michael;信誉商人 迈克尔
+NPC_TrustMerchant_Patrick;Both;TrustMerchant_Patrick;信誉商人 帕特里克
+NPC_TrustMerchant_Terry;Both;TrustMerchant_Terry;信誉商人 特里
+NPC_VillageChief_Andrew;Both;VillageChief_Andrew;村长 安德鲁
+NPC_VulnerableSon_Alfie;Both;VulnerableSon_Alfie;孱弱的儿子 阿尔菲
+NPC_Wanderer_Charlotte;Both;Wanderer_Charlotte;流浪者 夏洛特
+NPC_Warehouse_Clair;Both;Warehouse_Clair;仓库管理员 克莱尔
+NPC_Warehouse_Heather;Both;Warehouse_Heather;仓库管理员 希瑟
+NPC_Warehouse_Hubert;Both;Warehouse_Hubert;仓库管理员 休伯特
+NPC_Warehouse_Stanislav;Both;Warehouse_Stanislav;仓库管理员 斯坦尼斯拉夫
+NPC_WickedTrader_James;Both;WickedTrader_James;黑心商人 詹姆斯
+NPC_WierdPillar;Both;WierdPillar;古怪石柱
+NPC_WiseFisherman_Albert;Both;WiseFisherman_Albert;智者渔夫 阿尔伯特
+NPC__Shinsu(Jude);Both;_Shinsu(Jude);神兽 朱德
+OnlinePlayers;Server;Online Players: {0};当前在线玩家: {0}
+Options;Client;Options ({0});设置 ({0})
 Option_HPMPMode1;Client;[HP/MP Mode 1];[HP/MP 模式 1]
 Option_HPMPMode2;Client;[HP/MP Mode 2];[HP/MP 模式 2]
 Option_NewMove;Client;[New Movement Style];[新移动方式]
 Option_OldMove;Client;[Old Movement Style];[旧移动方式]
-
-Keyboard_Layout;Client;Keyboard ({0});键位设置 ({0})
-
-Chat_Report;Client;Report;举报
-
-Ranking_OnlineOnly;Client;Online Only;只显示在线
-Keyboard_EnforceStrict;Client;Assign Rule: Strict;分配规则：严格
-Keyboard_EnforceRelaxed;Client;Assign Rule: Relaxed;分配规则：宽松
-InputKey_Esc;Client;Esc;Esc
-InputKey_Delete;Client;Delete;删除
-InputKey_Enter;Client;Enter;回车
-InputKey_Random;Client;Random;随机
-
-ItemTypeWeapon;Client;Weapon;武器
-ItemTypeArmour;Client;Armour;盔甲
-ItemTypeHelmet;Client;Helmet;头盔
-ItemTypeNecklace;Client;Necklace;项链
-ItemTypeBracelet;Client;Bracelet;手镯
-ItemTypeRing;Client;Ring;戒指
-ItemTypeAmulet;Client;Amulet;护符
-ItemTypeBelt;Client;Belt;腰带
-ItemTypeBoots;Client;Boots;靴子
-ItemTypeStone;Client;Stone;宝石
-ItemTypeTorch;Client;Torch;火把
-ItemTypePotion;Client;Potion;药水
-ItemTypeOre;Client;Ore;矿石
-ItemTypeMeat;Client;Meat;肉类
-ItemTypeCraftingMaterial;Client;CraftingMaterial;材料
-ItemTypeScroll;Client;Scroll;卷轴
-ItemTypeGem;Client;Gem;宝玉
-ItemTypeMount;Client;Mount;坐骑
-ItemTypeBook;Client;Book;书籍
-ItemTypeScript;Client;Script;脚本
-ItemTypeReins;Client;Reins;缰绳
-ItemTypeBells;Client;Bells;铃铛
-ItemTypeSaddle;Client;Saddle;马鞍
-ItemTypeRibbon;Client;Ribbon;缎带
-ItemTypeMask;Client;Mask;面具
-ItemTypeFood;Client;Food;食物
-ItemTypeHook;Client;Hook;鱼钩
-ItemTypeFloat;Client;Float;浮漂
-ItemTypeBait;Client;Bait;鱼饵
-ItemTypeFinder;Client;Finder;探鱼器
-ItemTypeReel;Client;Reel;鱼线轮
-ItemTypeFish;Client;Fish;鱼类
-ItemTypeQuest;Client;Quest;任务物品
-ItemTypeAwakening;Client;Awakening;觉醒材料
-ItemTypePets;Client;Pets;宠物道具
-ItemTypeTransform;Client;Transform;变身道具
-ItemTypeDeco;Client;Deco;装饰品
-ItemTypeMonsterSpawn;Client;SpawnEgg;召唤蛋
-ItemTypeSealedHero;Client;SealedHero;封印英雄
-
-ItemGradeCommon;Client;Common;普通
-ItemGradeRare;Client;Rare;稀有
-ItemGradeLegendary;Client;Legendary;传说
-ItemGradeMythical;Client;Mythical;神话
-ItemGradeHeroic;Client;Heroic;英雄
-
-ItemDescription;Client;Item Description;物品说明
-RequiredLevel;Client;Required Level : {0};需要等级: {0}
-RequiredDC;Client;Required DC : {0};需要 攻击: {0}
-RequiredMC;Client;Required MC : {0};需要 魔法: {0}
-RequiredSC;Client;Required SC : {0};需要 道术: {0}
-ClassRequired;Client;Class Required : {0};需要职业: {0}
-
-Holy;Client;Holy: + {0} (+{1});神圣: + {0} (+{1})
-Holy2;Client;Holy: + {0};神圣: + {0}
-Accuracy;Client;Accuracy: + {0} (+{1});准确: + {0} (+{1})
-Accuracy2;Client;Accuracy: + {0};准确: + {0}
-Agility;Client;Agility: + {0} (+{1});敏捷: + {0} (+{1})
-Agility2;Client;Agility: + {0};敏捷: + {0}
-
-DC;Client;DC + {0}~{1} (+{2});攻击 + {0}~{1} (+{2})
-DC2;Client;DC + {0}~{1};攻击 + {0}~{1}
-MC;Client;MC + {0}~{1} (+{2});魔法 + {0}~{1} (+{2})
-MC2;Client;MC + {0}~{1};魔法 + {0}~{1}
-SC;Client;SC + {0}~{1} (+{2});道术 + {0}~{1} (+{2})
-SC2;Client;SC + {0}~{1};道术 + {0}~{1}
-AC;Client;AC + {0}~{1} (+{2});防御 + {0}~{1} (+{2})
-AC2;Client;AC + {0}~{1};防御 + {0}~{1}
-MAC;Client;MAC + {0}~{1} (+{2});魔御 + {0}~{1} (+{2})
-MAC2;Client;MAC + {0}~{1};魔御 + {0}~{1}
-
-Durability;Client;Durability;耐久度
-Weight;Client;W:;重量:
-Luck;Client;Luck + {0};幸运 + {0}
-
-Item_AddsDurability;Client;Adds +{0} Durability;增加 +{0} 耐久
-Item_AddsAccuracy;Client;Adds +{0} Accuracy;增加 +{0} 命中
-Item_AddsASpeed;Client;Adds +{0} A.Speed;增加 +{0} 攻击速度
-Item_AddsFreezing;Client;Adds +{0} Freezing;增加 +{0} 冰冻
-Item_AddsPoison;Client;Adds +{0} Poison;增加 +{0} 中毒
-Item_AddsAgility;Client;Adds +{0} Agility;增加 +{0} 敏捷
-Item_AddsPoisonResist;Client;Adds +{0} Poison Resist;增加 +{0} 毒性抗性
-Item_AddsMagicResist;Client;Adds +{0} Magic Resist;增加 +{0} 魔法抗性
-Item_InstantRun;Client;Instant Run;瞬间奔跑
-Item_Socket;Client;Socket : {0};插槽: {0}
-Item_SocketEmpty;Client;Empty;空
-Item_SocketOpenHint;Client;Ctrl + Right Click To Open Sockets;按住 Ctrl + 鼠标右键 打开插槽
-Item_SellingPrice;Client;Selling Price : {0} Gold;出售价格: {0} 金币
-Item_CantDropOnDeath;Client;Can't drop on death;死亡时不会掉落
-Item_CantDrop;Client;Can't drop;无法丢弃
-Item_CantUpgrade;Client;Can't upgrade;无法升级
-Item_CantSell;Client;Can't sell;无法出售
-Item_CantTrade;Client;Can't trade;无法交易
-Item_CantStore;Client;Can't store;无法存仓
-Item_CantRepair;Client;Can't repair;无法修理
-
-YouGained;Client;You gained {0}.;你获得了 {0}。
-YouGained2;Client;You gained {0:###,###,###} {1};你获得了 {0:###,###,###} {1}
-ExperienceGained;Client;Experience Gained {0};获得经验 {0}
-HeroInventory;Client;Hero Inventory ({0});英雄背包 ({0})
-HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
-HeroSkills;Client;Hero Skills ({0});英雄技能 ({0})
-HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
-LevelUp;Both;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
-DeleteCharacter;Client;Are you sure you want to Delete the character {0};你确定要删除角色 {0} 吗？
-CharacterDeleted;Client;Your character was deleted successfully.;你的角色已成功删除。
-CharacterCreated;Client;Your character was created successfully.;你的角色已创建成功。
-
-Skill_NoSuitableWeapon;Client;You must be wearing a suitable weapon to perform this skill;你必须装备合适的武器才能使用该技能
-Skill_CannotCast;Client;You cannot cast {0} for another {1} seconds.;你还需要等待 {1} 秒才能再次施放 {0}。
-Skill_UseThrusting;Client;Use Thrusting.;使用 刺杀剑法。
-Skill_DoNotUseThrusting;Client;Do not use Thrusting.;不使用 刺杀剑法。
-Skill_UseHalfMoon;Client;Use Half Moon.;使用 半月弯刀。
-Skill_DoNotUseHalfMoon;Client;Do not use Half Moon.;不使用 半月弯刀。
-Skill_UseCrossHalfMoon;Client;Use Cross Half Moon.;使用 交叉半月。
-Skill_DoNotUseCrossHalfMoon;Client;Do not use Cross Half Moon.;不使用 交叉半月。
-Skill_UseDoubleSlash;Client;Use Double Slash.;使用 裂地斩。
-Skill_DoNotUseDoubleSlash;Client;Do not use Double Slash.;不使用 裂地斩。
-
-System_NothingFound;Client;Nothing Found.;未发现任何东西。
-System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
-System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
-System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
-
-LowLevel;Both;You are not a high enough level.;你的等级不足。
-LowGold;Both;Not enough gold.;你的金币不足。
-LowDC;Both;You do not have enough DC.;你的攻击力不足。
-LowMC;Both;You do not have enough MC.;你的魔法力不足。
-LowSC;Both;You do not have enough SC.;你的道术力不足。
-
-Group_YouLeft;Client;You have left the group.;你已离开队伍。
-Group_PlayerLeft;Client;{0} has left the group.;{0} 已离开队伍。
-Group_PlayerJoined;Client;{0} has joined the group.;{0} 已加入队伍。
-Group_InviteQuestion;Client;Do you want to group with {0}?;你要与 {0} 组队吗？
-
-GroupSwitch;Client;Allow/Disallow Group Requests;允许/禁止 组队请求
-GroupAdd;Client;Add;添加
-GroupRemove;Client;Remove;移除
-GroupAddEnterName;Client;Please enter the name of the person you wish to add.;请输入你想要邀请组队的玩家名字.
-GroupRemoveEnterName;Client;Please enter the name of the person you wish to remove.;请输入你想要移出队伍的玩家名字.
-Group_MaxMembers;Client;Your group already has the maximum number of members.;你的队伍人数已达到上限.
-Group_NotLeader;Client;You are not the leader of your group.;你不是队长，无法执行此操作.
-TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
-
+Password;Client;Password;密码
+PasswordChange_CurrentNotAcceptable;Client;The current Password is not acceptable.;当前密码不符合要求.
+PasswordChange_Disabled;Client;Password Changing is currently disabled.;当前禁止修改密码.
+PasswordChange_NewNotAcceptable;Client;Your new Password is not acceptable.;你的新密码不符合要求.
+PasswordChange_Success;Client;Your password was changed successfully.;你的密码已成功修改.
+PatchErr;Client;Could not get Patch Information;无法获取补丁信息
+PetMode_AttackOnly;Client;[Pet: Do Not Move];[宠物: 仅攻击]
+PetMode_Both;Client;[Pet: Attack and Move];[宠物: 攻击并移动]
+PetMode_FocusMasterTarget;Client;[Pet: Focus Master Target];[宠物: 集火主人目标]
+PetMode_MoveOnly;Client;[Pet: Do Not Attack];[宠物: 仅移动]
+PetMode_None;Client;[Pet: Do Not Attack or Move];[宠物: 不攻击且不移动]
+Quests;Client;Quests ({0});任务 ({0})
+Quest_!AttackOma;Both;!Attack Oma;！进攻半兽人
+Quest_AbnormalCreatures;Both;Abnormal Creatures;异常生物
+Quest_AncientMobs;Both;Ancient Mobs;远古怪物
+Quest_AncientOmaCavern;Both;AncientOmaCavern;远古半兽人洞穴
+Quest_AntiqueBook;Both;Antique Book;古旧书籍
+Quest_Assistant'sRequest;Both;Assistant's Request;助手的请求
+Quest_BadNews;Both;Bad News;坏消息
+Quest_BatWings;Both;Bat Wings;蝙蝠翅膀
+Quest_BloodySword;Both;Bloody Sword;血腥之剑
+Quest_BoarTooth;Both;Boar Tooth;野猪獠牙
+Quest_BossMobHunt;Both;Boss Mob Hunt;首领怪物狩猎
+Quest_BossMobofWoomyon;Both;Boss Mob of Woomyon;雾隐森林首领怪
+Quest_CallfromtheDead;Both;Call from the Dead;亡者的呼唤
+Quest_CheckSupplyPath;Both;Check Supply Path;检查补给路线
+Quest_ChestnutRequest;Both;Chestnut Request;栗子委托
+Quest_CleanUp;Both;Clean Up;清理怪物
+Quest_CollectInformation;Both;Collect Information;收集情报
+Quest_CookBookDelivery;Both;Cook Book Delivery;菜谱送达
+Quest_CookingBeefRibStew;Both;Cooking Beef Rib Stew;烹饪牛肋排炖汤
+Quest_CorpsFlower;Both;CorpsFlower;尸花
+Quest_CraftLady'sCanniTea;Both;CraftLady's CanniTea;手工匠人的仙人茶
+Quest_CuretheInsomnia;Both;Cure the Insomnia;治疗失眠
+Quest_Danger(WoomyonWoods);Both;Danger (WoomyonWoods);危险（雾隐森林）
+Quest_DangerintheCave;Both;Danger in the Cave;洞穴危机
+Quest_Dangerousasever;Both;Dangerous as ever;一如既往的危险
+Quest_DangerousSkeleton;Both;Dangerous Skeleton;危险的骷髅
+Quest_DarknessfromtheMines;Both;Darkness from the Mines;矿洞之暗
+Quest_DarkShadow;Both;Dark Shadow;黑暗阴影
+Quest_DeadlyAttack;Both;Deadly Attack;致命袭击
+Quest_DeepintotheWoods;Both;Deep into the Woods;深入密林
+Quest_DeliverCanniTea;Both;Deliver CanniTea;递送仙人茶
+Quest_DeliverRepairOil;Both;Deliver Repair Oil;递送修理油
+Quest_DeliverSuppliestotheBorder;Both;Deliver Supplies to the Border;向边境运送补给
+Quest_DelivertheRing;Both;Deliver the Ring;归还戒指
+Quest_EliminateWhiteBoar;Both;Eliminate WhiteBoar;消灭白野猪
+Quest_EmperorsProblem;Both;Emperors Problem;皇帝的烦恼
+Quest_Errands;Both;Errands;跑腿差事
+Quest_Exterminate;Both;Exterminate;歼灭任务
+Quest_FindEbonyFruit;Both;Find Ebony Fruit;寻找乌木果实
+Quest_FindingaFriend'sRemains;Both;Finding a Friend's Remains;寻找好友遗骸
+Quest_FindingaLostItem;Both;Finding a Lost Item;寻找失物
+Quest_FindMoreAntiqueBooks;Both;Find More Antique Books;寻找更多古书
+Quest_FindmyFriend;Both;Find my Friend;寻找我的朋友
+Quest_FindPassagetoRuins;Both;Find Passage to Ruins;寻找通往遗迹的通道
+Quest_FindtheWeb;Both;Find the Web;寻找蛛网
+Quest_ForceRecruit;Both;Force Recruit;强制征兵
+Quest_ForestYeti'sThreat;Both;Forest Yeti's Threat;森林雪人的威胁
+Quest_FreetheSoulsfromZombies;Both;Free the Souls from Zombies;解放僵尸的灵魂
+Quest_GatheringMaterial;Both;Gathering Material;收集材料
+Quest_GatheringofBones;Both;Gathering of Bones;骨头收集
+Quest_GrandadsRequest;Both;Grandads Request;爷爷的请求
+Quest_GreetingstotheOldMan;Both;Greetings to the Old Man;问候老人
+Quest_GuardsfromPrajna;Both;Guards from Prajna;般若岛守卫
+Quest_HelpBlacksmithJang;Both;Help Blacksmith Jang;帮助铁匠张
+Quest_HelpNeeded;Both;Help Needed;紧急求助
+Quest_HelpSandford;Both;Help Sandford;帮助桑福德
+Quest_HelptheFarmers;Both;Help the Farmers;帮助农夫
+Quest_HelptheLumberer;Both;Help the Lumberer;帮助伐木工
+Quest_HiddenBox;Both;Hidden Box;隐藏的箱子
+Quest_HolySwordQuest;Both;Holy Sword Quest;圣剑任务
+Quest_HuntCannibalPlants;Both;Hunt CannibalPlants;猎杀食人花
+Quest_HuntfortheButcher;Both;Hunt for the Butcher;猎杀屠夫
+Quest_IngredientfromPrajna;Both;Ingredient from Prajna;般若岛材料
+Quest_IngredientsforCanniTea;Both;Ingredients for CanniTea;仙人茶材料
+Quest_IngredientsforSnakeWine;Both;Ingredients for Snake Wine;蛇酒材料
+Quest_IngredientsfortheAntidote;Both;Ingredients for the Antidote;解毒剂材料
+Quest_Insomnia;Both;Insomnia;失眠症
+Quest_LastWords;Both;Last Words;临终遗言
+Quest_LetterstoParents;Both;Letters to Parents;写信给父母
+Quest_LocatetheCarriage;Both;Locate the Carriage;寻找马车
+Quest_LostItem;Both;Lost Item;丢失的物品
+Quest_LostRing;Both;Lost Ring;丢失的戒指
+Quest_LostSoul;Both;Lost Soul;迷失的灵魂
+Quest_LostSoul'sRemains;Both;Lost Soul's Remains;迷失灵魂的遗骸
+Quest_LostSword;Both;Lost Sword;丢失的长剑
+Quest_MaterialforClothing;Both;Material for Clothing;服装材料
+Quest_MedicineResearch;Both;Medicine Research;药剂研究
+Quest_MeettheArcherInstructor;Both;Meet the Archer Instructor;拜访弓手导师
+Quest_MeettheAssassinInstructor;Both;Meet the Assassin Instructor;拜访刺客导师
+Quest_MeettheMageInstructor;Both;Meet the Mage Instructor;拜访法师导师
+Quest_MeettheTaoistInstructor;Both;Meet the Taoist Instructor;拜访道士导师
+Quest_MeettheWarriorInstructor;Both;Meet the Warrior Instructor;拜访战士导师
+Quest_MeetwithMr.Wang;Both;Meet with Mr.Wang;会见王先生
+Quest_MessagetoBichonExaminer;Both;Message to BichonExaminer;给比奇考官的信
+Quest_Messenger;Both;Messenger;传话人
+Quest_MissingMaterials;Both;Missing Materials;丢失的材料
+Quest_MobsfromPrajna;Both;Mobs from Prajna;来自般若岛的怪物
+Quest_MonsterHuntinWooma;Both;Monster Hunt in Wooma;沃玛怪物狩猎
+Quest_NewPoison;Both;New Poison;新型毒药
+Quest_NewsfromaFriend;Both;News from a Friend;来自朋友的消息
+Quest_PartTimeJob;Both;Part Time Job;兼职工作
+Quest_PoisonedFriend;Both;Poisoned Friend;中毒的朋友
+Quest_RareMedicine;Both;Rare Medicine;稀有药剂
+Quest_RareOre;Both;Rare Ore;稀有矿石
+Quest_RedSnake'sTeeth;Both;Red Snake's Teeth;红蛇毒牙
+Quest_ReporttotheManager;Both;Report to the Manager;向管理员报告
+Quest_ResearchReport;Both;Research Report;研究报告
+Quest_RestockingSupplies;Both;Restocking Supplies;补给再采购
+Quest_ReturningaBook;Both;Returning a Book;归还书籍
+Quest_ReturntheNecklace;Both;Return the Necklace;归还项链
+Quest_RevengeonZombies;Both;Revenge on Zombies;僵尸复仇
+Quest_RunawayStudent;Both;Runaway Student;逃跑的学徒
+Quest_SafteyofSecretPath;Both;Saftey of Secret Path;秘路安全
+Quest_SavePrajna;Both;Save Prajna;拯救般若岛
+Quest_SavetheCursedSouls;Both;Save the Cursed Souls;拯救被诅咒的灵魂
+Quest_SecretoftheSkull;Both;Secret of the Skull;头骨之谜
+Quest_SecretPath;Both;Secret Path;秘密小路
+Quest_SecretRecipeDelivery;Both;Secret Recipe Delivery;秘方送达
+Quest_SerpentValley;Both;SerpentValley;蛇谷之行
 Quest_ShareQuestion;Client;{0} would like to share a quest with you. Do you accept?;{0} 想与你共享一个任务，是否接受？
-
-Damage_Miss;Client;Miss;未命中
-Damage_Crit;Client;Crit;暴击
-
-SwitchMarriage;Client;Allow/Block Marriage;允许/禁止 结婚请求
-RequestMarriage;Client;Request Marriage;请求结婚
-RequestDivorce;Client;Request Divorce;请求离婚
-MailLover;Client;Mail Lover;给爱人发送邮件
-WhisperLover;Client;Whisper Lover;给爱人密语
-
-Relationship_LoverLabel;Client;Lover:  {0};爱人:  {0}
+Quest_ShippingRelics;Both;Shipping Relics;运送遗物
+Quest_Sister'sRing;Both;Sister's Ring;姐姐的戒指
+Quest_SkeletonBones;Both;Skeleton Bones;骷髅骨头
+Quest_SkeletonHunt1;Both;Skeleton Hunt 1;骷髅狩猎一
+Quest_SkeletonHunt2;Both;Skeleton Hunt 2;骷髅狩猎二
+Quest_SkullCollector;Both;Skull Collector;头骨收集者
+Quest_Smith's2ndTest;Both;Smith's 2nd Test;铁匠的第二次考验
+Quest_StolenBook;Both;Stolen Book;被盗的书
+Quest_TalkwiththeButcher;Both;Talk with the Butcher;与屠夫对话
+Quest_TestforFatalSwordSkill;Both;Test for FatalSword Skill;致命剑术考验
+Quest_TestforFocusSkill;Both;Test for Focus Skill;专注术考验
+Quest_TestfortheFencingSkill;Both;Test for the Fencing Skill;基本剑术考验
+Quest_TestfortheFireballSkill;Both;Test for the Fireball Skill;火球术考验
+Quest_TestfortheHealingSkill;Both;Test for the Healing Skill;治愈术考验
+Quest_TheBestHealthyFood;Both;The Best Healthy Food;最佳健康食品
+Quest_TheCraftLady'sRequest;Both;The CraftLady's Request;手工匠人的请求
+Quest_TheSmith's1stTest;Both;The Smith's 1st Test;铁匠的第一次考验
+Quest_TheVillageChief'sRequest;Both;The VillageChief's Request;村长的请求
+Quest_ThreatstoMongchon;Both;Threats to Mongchon;盟重之威胁
+Quest_ToBichon;Both;To Bichon;前往比奇
+Quest_TriptoMongchon;Both;Trip to Mongchon;前往盟重
+Quest_UniformOrderStatus;Both;Uniform Order Status;制服订单进度
+Quest_VisittheVillageChief;Both;Visit the VillageChief;拜访村长
+Quest_Wanted!;Both;Wanted!;通缉令！
+Quest_WaytoMongchon;Both;Way to Mongchon;通往盟重之路
+Quest_WhiteSerpent;Both;White Serpent;白蛇
+Quest_WineDelivery;Both;Wine Delivery;蛇酒送达
+Quest_WipeOut;Both;Wipe Out;彻底剿灭
+Quest_ZombiesAttackonCarriage;Both;Zombies Attack on Carriage;僵尸袭击马车
+Quest_ZombiesHunt;Both;Zombies Hunt;僵尸狩猎
+Quest_ZombiesinMineralMine;Both;Zombies in MineralMine;矿区中的僵尸
+Quest_ZombiesintheMines;Both;Zombies in the Mines;矿洞中的僵尸
+Ranking;Client;Ranking ({0});排行 ({0})
+Ranking_OnlineOnly;Client;Online Only;只显示在线
+Read;Client;Read;读取
+Relationship;Client;Relationship ({0});关系 ({0})
+RelationshipRequest;Client;Relationship Request;关系请求
+RelationshipRequestAccept;Client;Accept Relationship Request;接受关系请求
+RelationshipRequestDecline;Client;Decline Relationship Request;拒绝关系请求
+Relationship_AllowBlockRecall;Client;Allow/Block Recall;允许/禁止 召回
+Relationship_AlreadyMarried;Client;You're already married.;你已经结婚了。
+Relationship_Date;Client;Date: ;日期: 
+Relationship_DivorcedDate;Client;Divorced Date:  {0};离婚日期:  {0}
+Relationship_Length;Client;Length: ;相伴时长: 
+Relationship_LengthDays;Client;Length: {0} Days;相伴时长: {0} 天
 Relationship_Location;Client;Location:  {0};所在位置:  {0}
 Relationship_LocationOffline;Client;Location:  Offline;所在位置:  离线
-Relationship_Date;Client;Date: ;日期: 
-Relationship_Length;Client;Length: ;相伴时长: 
-Relationship_DivorcedDate;Client;Divorced Date:  {0};离婚日期:  {0}
-Relationship_TimeSinceDays;Client;Time Since: {0} Days;已分开: {0} 天
-Relationship_MarriageDate;Client;Marriage Date:  {0};结婚日期:  {0}
-Relationship_LengthDays;Client;Length: {0} Days;相伴时长: {0} 天
-Relationship_AlreadyMarried;Client;You're already married.;你已经结婚了。
-Relationship_NotMarried;Client;You're not married.;你还没有结婚。
+Relationship_LoverLabel;Client;Lover:  {0};爱人:  {0}
 Relationship_LoverNotOnline;Client;Lover is not online;你的爱人当前不在线。
-Relationship_AllowBlockRecall;Client;Allow/Block Recall;允许/禁止 召回
-
-NoAccountID;Client;The AccountID does not exist.;该账号不存在。
-IncorrectPasswordAccountID;Client;Incorrect Password and AccountID combination.;账号或密码错误。
-Item_LocationAt;Client;{0} at {1};{0} 位于 {1}
-Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你.
-Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已降为 0.
-Error_CouldNotGetDisplayResolutions;Client;Could not get display resolutions;无法获取显示器分辨率
-Error_GetDisplayResolutionIssue;Client;Get Display Resolution Issue;获取显示器分辨率时发生错误
-Error_InvalidClientResolution;Client;Invalid Client Resolution;无效的客户端分辨率
-
-OnlinePlayers;Server;Online Players: {0};当前在线玩家: {0}
-WeaponLuck;Server;Luck dwells within your weapon.;武器中蕴含着幸运之力。
+Relationship_MarriageDate;Client;Marriage Date:  {0};结婚日期:  {0}
+Relationship_NotMarried;Client;You're not married.;你还没有结婚。
+Relationship_TimeSinceDays;Client;Time Since: {0} Days;已分开: {0} 天
+RemoveFriend;Client;Remove;删除好友
+RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
+Reply;Client;Reply;回复
+RequestDivorce;Client;Request Divorce;请求离婚
+RequestMarriage;Client;Request Marriage;请求结婚
+RequiredDC;Client;Required DC : {0};需要 攻击: {0}
+RequiredLevel;Client;Required Level : {0};需要等级: {0}
+RequiredMC;Client;Required MC : {0};需要 魔法: {0}
+RequiredSC;Client;Required SC : {0};需要 道术: {0}
+Resolution;Client;Resolution;分辨率
+RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
+Rotate;Client;Rotate;旋转
+SC;Client;SC + {0}~{1} (+{2});道术 + {0}~{1} (+{2})
+SC2;Client;SC + {0}~{1};道术 + {0}~{1}
+SelectKey;Client;Select the Key for: {0};为 {0} 选择按键
+Send;Client;Send;发送
+ShuttingDown;Client;Disconnected: Server is shutting down.;已断开连接：服务器正在关闭。
+Size;Client;Size;大小
+SkillMode_Ctrl;Client;[Skill Mode: Ctrl];[技能模式: Ctrl]
+SkillMode_Tilde;Client;[Skill Mode: ~];[技能模式: ~]
+Skills;Client;Skills ({0});技能 ({0})
+Skill_CannotCast;Client;You cannot cast {0} for another {1} seconds.;你还需要等待 {1} 秒才能再次施放 {0}。
+Skill_DoNotUseCrossHalfMoon;Client;Do not use Cross Half Moon.;不使用 交叉半月。
+Skill_DoNotUseDoubleSlash;Client;Do not use Double Slash.;不使用 裂地斩。
+Skill_DoNotUseHalfMoon;Client;Do not use Half Moon.;不使用 半月弯刀。
+Skill_DoNotUseThrusting;Client;Do not use Thrusting.;不使用 刺杀剑法。
+Skill_NoSuitableWeapon;Client;You must be wearing a suitable weapon to perform this skill;你必须装备合适的武器才能使用该技能
+Skill_UseCrossHalfMoon;Client;Use Cross Half Moon.;使用 交叉半月。
+Skill_UseDoubleSlash;Client;Use Double Slash.;使用 裂地斩。
+Skill_UseHalfMoon;Client;Use Half Moon.;使用 半月弯刀。
+Skill_UseThrusting;Client;Use Thrusting.;使用 刺杀剑法。
+SpiritsFireDisappeared;Client;The spirits of fire disappeared.;火之精灵已消散。
+StartGame_CharacterNotFound;Client;Your character could not be found.;找不到你的角色.
+StartGame_Disabled;Client;Starting the game is currently disabled.;当前禁止进入游戏.
+StartGame_NotLoggedIn;Client;You are not logged in.;你尚未登录.
+SwitchMarriage;Client;Allow/Block Marriage;允许/禁止 结婚请求
+SystemMessage;Client;System Message;系统消息
+SystemMessageInfo;Client;System Message Info;系统消息信息
+System_NothingFound;Client;Nothing Found.;未发现任何东西。
+System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
+System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
+System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
+System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
+TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
+ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
+TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
+Trade;Client;Trade ({0});交易 ({0})
+Usrname;Client;Username;账号
+WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱.
 WeaponCurse;Server;Curse dwells within your weapon.;武器中蕴含着诅咒之力。
+WeaponLuck;Server;Luck dwells within your weapon.;武器中蕴含着幸运之力。
 WeaponNoEffect;Server;No effect.;没有效果。
-InventoryIncreased;Server;Inventory size increased.;背包容量已增加。
-FaceToTrade;Server;You must face someone to trade.;你必须面对目标玩家才能交易。
-NoTownTeleport;Server;You cannot use Town Teleports here;你不能在这里使用回城卷轴。
-CanNotRandom;Server;You cannot use Random Teleports here;你不能在这里使用随机传送卷轴。
-CanNotDungeon;Server;You cannot use Dungeon Escapes here;你不能在这里使用地牢逃脱卷轴。
-CannotResurrection;Server;You cannot use Resurrection Scrolls whilst alive;你在存活时不能使用复活卷轴。
-CanNotDrop;Server;You cannot drop items on this map;你不能在这个地图丢弃物品。
-NewMail;Server;New mail has arrived.;你收到了一封新邮件。
-CouldNotFindPlayer;Server;Could not find player {0};找不到玩家 {0}。
-AllowingMentorRequests;Server;You're now allowing mentor requests.;你现在允许师徒请求。
-BlockingMentorRequests;Server;You're now blocking mentor requests.;你现在禁止师徒请求。
+WeaponSpiritFire;Client;Your weapon is glowed by spirit of fire.;你的武器被火之精灵附体。
+WeddingRing;Client;WeddingRing;结婚戒指
+Weight;Client;W:;重量:
 Welcome;Server;Welcome to the {0} Server.;欢迎来到 {0} 服务器。
+WhisperLover;Client;Whisper Lover;给爱人密语
+WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出.
+YouGained;Client;You gained {0}.;你获得了 {0}。
+YouGained2;Client;You gained {0:###,###,###} {1};你获得了 {0:###,###,###} {1}
