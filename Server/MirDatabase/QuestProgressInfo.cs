@@ -435,7 +435,8 @@ namespace Server.MirDatabase
             {
                 if (string.IsNullOrEmpty(Info.ItemTasks[i].Message))
                 {
-                    TaskList.Add(string.Format("Collect {0}: {1}/{2} {3}", Info.ItemTasks[i].Item.FriendlyName, ItemTaskCount[i].Count,
+                    string itemName = GameLanguage.GetItemName(Info.ItemTasks[i].Item.FriendlyName);
+                    TaskList.Add(string.Format("Collect {0}: {1}/{2} {3}", itemName, ItemTaskCount[i].Count,
                         Info.ItemTasks[i].Count, ItemTaskCount[i].Complete ? "(Completed)" : ""));
                 }
                 else

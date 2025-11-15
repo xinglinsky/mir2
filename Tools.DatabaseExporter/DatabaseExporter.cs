@@ -75,6 +75,7 @@ try
     }
 
     Console.WriteLine();
+    Console.WriteLine($"地图数量:   {envir.MapInfoList.Count}");
     Console.WriteLine($"物品数量:   {envir.ItemInfoList.Count}");
     Console.WriteLine($"怪物数量:   {envir.MonsterInfoList.Count}");
     Console.WriteLine($"NPC 数量:   {envir.NPCInfoList.Count}");
@@ -107,11 +108,15 @@ try
         .Select(n => (Index: n.Index, Name: n.Name, FileName: n.FileName))
         .ToList();
 
+    var mapTuples = envir.MapInfoList
+        .Select(m => (Index: m.Index, FileName: m.FileName, Title: m.Title))
+        .ToList();
+
     // 先导出任务详情（描述文本等）
     ExportQuestDetails(outputDir, envir.QuestInfoList);
 
     // 再导出名称列表
-    ExportToCsv(outputDir, itemTuples, monsterTuples, questTuples, magicTuples, npcTuples);
+    ExportToCsv(outputDir, itemTuples, monsterTuples, questTuples, magicTuples, npcTuples, mapTuples);
 
     Console.WriteLine();
     Console.WriteLine("导出完成！");
@@ -134,7 +139,8 @@ static void ExportToCsv(
     List<(int Index, string Name, int Level)> monsters,
     List<(int Index, string Name, string Group)> quests,
     List<(string Name, string Spell)> magics,
-    List<(int Index, string Name, string FileName)> npcs)
+    List<(int Index, string Name, string FileName)> npcs,
+    List<(int Index, string FileName, string Title)> maps)
 {
     // 导出物品
     var itemsCsv = Path.Combine(outputDir, "items_translation.csv");
@@ -200,6 +206,23 @@ static void ExportToCsv(
         }
     }
     Console.WriteLine($"✓ 导出 {npcs.Count} 个 NPC 到: {npcsCsv}");
+
+    // 导出地图
+    var mapsCsv = Path.Combine(outputDir, "maps_translation.csv");
+    using (var writer = new StreamWriter(mapsCsv, false, Encoding.UTF8))
+    {
+        writer.WriteLine("ID;Index;FileName;EnglishName;ChineseName;Notes");
+        foreach (var map in maps
+                     .Where(m => !string.IsNullOrWhiteSpace(m.Title))
+                     .OrderBy(m => m.Index))
+        {
+            // 与 GameLanguage.GetMapName 保持一致：基于 Title 去掉空格和减号生成 ID
+            var idBase = map.Title;
+            var id = idBase.Replace(" ", "").Replace("-", "");
+            writer.WriteLine($"Map_{id};{map.Index};{map.FileName};{map.Title};;");
+        }
+    }
+    Console.WriteLine($"✓ 导出 {maps.Count(m => !string.IsNullOrWhiteSpace(m.Title))} 个地图到: {mapsCsv}");
 }
 
 static void ExportQuestDetails(string outputDir, IList<QuestInfo> quests)

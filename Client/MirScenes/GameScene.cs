@@ -3152,7 +3152,8 @@ namespace Client.MirScenes
             AddItem(p.Item);
             User.RefreshStats();
 
-            OutputMessage(string.Format(GameLanguage.YouGained, p.Item.FriendlyName));
+            string itemName = GameLanguage.GetItemName(p.Item.Info.FriendlyName);
+            OutputMessage(string.Format(GameLanguage.YouGained, itemName));
         }
         private void GainedQuestItem(S.GainedQuestItem p)
         {
@@ -3441,13 +3442,14 @@ namespace Client.MirScenes
             if (item.CurrentDura == 0)
             {
                 User.RefreshStats();
+                string itemName = GameLanguage.GetItemName(item.Info.FriendlyName);
                 switch (item.Info.Type)
                 {
                     case ItemType.Mount:
-                        ChatDialog.ReceiveChat(string.Format(GameLanguage.Item_NoLongerLoyal, item.Info.FriendlyName), ChatType.System);
+                        ChatDialog.ReceiveChat(string.Format(GameLanguage.Item_NoLongerLoyal, itemName), ChatType.System);
                         break;
                     default:
-                        ChatDialog.ReceiveChat(string.Format(GameLanguage.Item_DuraDroppedToZero, item.Info.FriendlyName), ChatType.System);
+                        ChatDialog.ReceiveChat(string.Format(GameLanguage.Item_DuraDroppedToZero, itemName), ChatType.System);
                         break;
                 }
                 
@@ -11159,14 +11161,16 @@ namespace Client.MirScenes
                 MirItemCell cell = GameScene.SelectedCell;
                 if (cell.Item.Info.Bind.HasFlag(BindMode.DontDrop))
                 {
-                    MirMessageBox messageBox = new MirMessageBox(string.Format("You cannot drop {0}", cell.Item.FriendlyName), MirMessageBoxButtons.OK);
+                    string itemName = GameLanguage.GetItemName(cell.Item.Info.FriendlyName);
+                    MirMessageBox messageBox = new MirMessageBox(string.Format("You cannot drop {0}", itemName), MirMessageBoxButtons.OK);
                     messageBox.Show();
                     GameScene.SelectedCell = null;
                     return;
                 }
                 if (cell.Item.Count == 1)
                 {
-                    MirMessageBox messageBox = new MirMessageBox(string.Format(GameLanguage.DropTip, cell.Item.FriendlyName), MirMessageBoxButtons.YesNo);
+                    string itemName = GameLanguage.GetItemName(cell.Item.Info.FriendlyName);
+                    MirMessageBox messageBox = new MirMessageBox(string.Format(GameLanguage.DropTip, itemName), MirMessageBoxButtons.YesNo);
 
                     messageBox.YesButton.Click += (o, a) =>
                     {

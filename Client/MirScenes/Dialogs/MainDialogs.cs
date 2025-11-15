@@ -2059,7 +2059,7 @@ namespace Client.MirScenes.Dialogs
             MapControl map = GameScene.Scene.MapControl;
             if (map == null) return;
 
-            MapNameLabel.Text = map.Title;
+            MapNameLabel.Text = GameLanguage.GetMapName(map.Title);
             LocationLabel.Text = Functions.PointToString(MapObject.User.CurrentLocation);
 
             GameScene.Scene.MainDialog.SModeLabel.Location = new Point((GameScene.Scene.MiniMapDialog.Location.X - 3) - GameScene.Scene.MainDialog.Location.X,
@@ -3732,7 +3732,10 @@ namespace Client.MirScenes.Dialogs
 
                     break;
             }
-            
+
+            string hint = GameLanguage.GetMagicDescription(magic.Spell, Magic);
+            if (hint != string.Empty)
+                SkillButton.Hint = hint;
 
             SkillButton.Index = Magic.Icon * 2;
             SkillButton.PressedIndex = Magic.Icon * 2 + 1;

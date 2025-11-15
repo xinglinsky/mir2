@@ -84,7 +84,7 @@ namespace Client.MirScenes.Dialogs
                 if (currentRecord == value) return;
                 SetButtonsVisibility(false);
                 currentRecord = value;
-                TitleLabel.Text = currentRecord != null ? currentRecord.MapInfo.Title : string.Empty;
+                TitleLabel.Text = currentRecord != null ? GameLanguage.GetMapName(currentRecord.MapInfo.Title) : string.Empty;
                 ViewPort.UserRadarDot.Visible = currentRecord != null && currentRecord.Index == GameScene.Scene.MapControl.Index;
                 SetButtonsVisibility(true);
             }
@@ -528,7 +528,7 @@ namespace Client.MirScenes.Dialogs
                 };
                 button.MouseEnter += (o, e) =>
                 {
-                    TitleLabel.Text = icon.Title;
+                    TitleLabel.Text = GameLanguage.GetMapName(icon.Title);
                     TitleLabel.Location = new Point(Size.Width / 2 - TitleLabel.Size.Width / 2, 10);
                 };
                 button.MouseLeave += (o, e) =>
@@ -794,17 +794,38 @@ namespace Client.MirScenes.Dialogs
             Visible = false;
             Sound = SoundList.ButtonA;
 
-            string name = string.Empty;
-            if (Info.Name.Contains("_"))
-            {
-                string[] splitName = Info.Name.Split('_');
+            // 优先使用本地化 NPC 名称；若未翻译，则退回到旧的下划线分段格式
+            string rawName = Info.Name;
+            string localizedName = GameLanguage.GetNPCName(rawName);
 
-                for (int s = 0; s < splitName.Count(); s++)
+            string name;
+
+            if (!string.IsNullOrEmpty(localizedName) && localizedName != rawName)
+            {
+                // 已有翻译：直接使用翻译结果（通常为中文名）
+                name = localizedName;
+            }
+            else
+            {
+                // 未翻译：沿用旧逻辑，对带下划线的英文名进行分段处理
+                name = string.Empty;
+
+                if (!string.IsNullOrEmpty(rawName) && rawName.Contains("_"))
                 {
-                    if (splitName[s] == string.Empty) continue;
-                    if (s == splitName.Count() - 1)
-                        name += splitName[s];
-                    else name += $"({splitName[s]})";
+                    string[] splitName = rawName.Split('_');
+
+                    for (int s = 0; s < splitName.Length; s++)
+                    {
+                        if (string.IsNullOrEmpty(splitName[s])) continue;
+                        if (s == splitName.Length - 1)
+                            name += splitName[s];
+                        else
+                            name += $"({splitName[s]})";
+                    }
+                }
+                else
+                {
+                    name = rawName ?? string.Empty;
                 }
             }
 

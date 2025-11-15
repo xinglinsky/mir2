@@ -1271,6 +1271,7 @@
     private static readonly Dictionary<string, string> NpcNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> MagicNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> QuestNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> MapNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public static string GetItemName(string englishName)
     {
@@ -1347,6 +1348,247 @@
         return englishName;
     }
 
+    public static string GetMapName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("-", string.Empty);
+        string key = "Map_" + id;
+
+        string value;
+        if (MapNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetMagicDescription(Spell spell, ClientMagic magic)
+    {
+        if (magic == null)
+            return string.Empty;
+
+        int nextLevelValue = magic.Level == 0 ? magic.Level1 : magic.Level == 1 ? magic.Level2 : magic.Level == 2 ? magic.Level3 : 0;
+
+        switch (spell)
+        {  //Warrior
+            case Spell.Fencing:
+                return string.Format("基本剑术\n\n被动技能\n\n提升基础剑术的命中率，命中会随着熟练度提高。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Slaying:
+                return string.Format("攻杀剑术\n\n被动技能\n\n提高命中率与攻击力，效果会随着熟练度提升。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Thrusting:
+                return string.Format("刺杀剑术\n\n切换技能\n\n延长武器攻击距离，伤害会随着熟练度提高。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Rage:
+                return string.Format("狂怒\n\n增益技能\n消耗魔法：{2}\n\n激发内力，在一段时间内提升攻击力。攻击加成与持续时间随技能等级提升，施放后需要等待冷却。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ProtectionField:
+                return string.Format("护体结界\n\n增益技能\n消耗魔法：{2}\n\n凝聚内力覆盖全身，提升对敌防御。防御力与持续时间随技能等级提升，施放后需要等待冷却。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.HalfMoon:
+                return string.Format("半月弯刀\n\n切换技能\n每次攻击消耗魔法：{2}\n\n挥动武器产生半月形剑气，对角色周围扇形范围内的敌人造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FlamingSword:
+                return string.Format("烈火剑法\n\n主动技能\n消耗魔法：{2}\n\n将火焰之力注入下一次攻击，对目标造成强力打击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ShoulderDash:
+                return string.Format("野蛮冲撞\n\n主动技能\n消耗魔法：{2}\n\n向前猛冲撞击目标，将其击退；若目标撞上障碍物会受到额外伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.CrossHalfMoon:
+                return string.Format("交叉半月\n\n切换技能\n每次攻击消耗魔法：{2}\n\n挥出两道强力半月剑气，对身旁所有敌人造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.TwinDrakeBlade:
+                return string.Format("双龙斩\n\n主动技能\n消耗魔法：{2}\n\n施展连环强力斩击，有几率短暂眩晕目标；被眩晕的怪物会额外承受 50% 伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Entrapment:
+                return string.Format("缠绕\n\n主动技能\n消耗魔法：{2}\n\n束缚并拉扯范围内的怪物靠近自身，使其行动受限。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.LionRoar:
+                return string.Format("狮吼功\n\n主动技能\n消耗魔法：{2}\n\n发出强力怒吼，使周围敌人短时间麻痹；麻痹时间随技能等级增加。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.CounterAttack:
+                return string.Format("反击\n\n增益技能\n消耗魔法：{2}\n\n在短时间内提升物理与魔法防御，并有几率格挡攻击并进行反击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ImmortalSkin:
+                return string.Format("金刚不坏\n\n增益技能\n消耗魔法：{2}\n\n大幅提升防御力，减少所受伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Fury:
+                return string.Format("狂暴\n\n增益技能\n消耗魔法：{2}\n\n在一段时间内提升命中率，并略微提高攻击能力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SlashingBurst:
+                return string.Format("破空斩\n\n主动技能\n消耗魔法：{2}\n\n瞬间向前突进一格，对路径上的敌人造成伤害，可越过障碍或怪物。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.BladeAvalanche:
+                return string.Format("旋风斩\n\n主动技能\n消耗魔法：{2}\n\n向前方三个方向挥舞利刃，形成致命的金属风暴攻击敌人。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+
+            //Wizard
+            case Spell.FireBall:
+                return string.Format("火球术\n\n瞬发技能\n消耗魔法：{2}\n\n凝聚火焰之力形成火球，投向目标造成火焰伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ThunderBolt:
+                return string.Format("雷霆术\n\n瞬发技能\n消耗魔法：{2}\n\n召唤雷电击中单个目标，造成高额雷电伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.GreatFireBall:
+                return string.Format("大火球\n\n瞬发技能\n消耗魔法：{2}\n\n强化版火球术，对目标造成更高的火焰伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Repulsion:
+                return string.Format("抗拒火环\n\n瞬发技能\n消耗魔法：{2}\n\n以火焰之力震开周围的敌人，将其推离自身。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.HellFire:
+                return string.Format("地狱火\n\n瞬发技能\n消耗魔法：{2}\n\n释放地狱火焰冲向前方，对路径上的敌人造成持续灼烧伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Lightning:
+                return string.Format("疾光电影\n\n瞬发技能\n消耗魔法：{2}\n\n向前方释放一道高速雷光，对直线上的敌人造成电击伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ElectricShock:
+                return string.Format("雷电术\n\n瞬发技能\n消耗魔法：{2}\n\n以强力雷电冲击目标，使其短时间无法行动，或混乱为你而战。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Teleport:
+                return string.Format("瞬息移动\n\n瞬发技能\n消耗魔法：{2}\n\n瞬间将自身传送至附近随机位置，用于躲避危机或快速位移。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FireWall:
+                return string.Format("火墙\n\n瞬发技能\n消耗魔法：{2}\n\n在指定位置召唤一堵火焰之墙，经过的敌人将持续受到火焰伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FireBang:
+                return string.Format("爆裂火焰\n\n瞬发技能\n消耗魔法：{2}\n\n在指定地点引发火焰爆炸，灼烧范围内的所有敌人。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ThunderStorm:
+                return string.Format("地狱雷光\n\n瞬发技能\n消耗魔法：{2}\n\n在自身周围降下雷暴，对范围内的亡灵或敌人造成大量雷电伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MagicShield:
+                return string.Format("魔法盾\n\n瞬发技能\n消耗魔法：{2}\n\n在自身周围形成魔法护盾，吸收一定量的伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.TurnUndead:
+                return string.Format("圣言术\n\n瞬发技能\n消耗魔法：{2}\n\n对亡灵生物施展神圣之力，有几率立即将其消灭。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.IceStorm:
+                return string.Format("冰咆哮\n\n瞬发技能\n消耗魔法：{2}\n\n在指定区域召唤冰风暴，对范围内的敌人造成大范围冰属性伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FlameDisruptor:
+                return string.Format("焰火分身\n\n瞬发技能\n消耗魔法：{2}\n\n从地底爆发火焰冲击波，对直线上敌人造成强烈火焰伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FrostCrunch:
+                return string.Format("冰霜嚎叫\n\n瞬发技能\n消耗魔法：{2}\n\n冻结周围空气，减缓敌人移动与攻击速度，并造成冰属性伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Mirroring:
+                return string.Format("镜像术\n\n瞬发技能\n消耗魔法：{2}\n\n创造自身的镜像分身，与本体一同攻击敌人分散仇恨。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FlameField:
+                return string.Format("火焰领域\n\n瞬发技能\n消耗魔法：{2}\n\n在自身周围释放强力火焰，对附近敌人造成范围伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Vampirism:
+                return string.Format("吸血术\n\n瞬发技能\n消耗魔法：{2}\n\n以魔力抽取目标生命，将部分伤害转化为自身生命值。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Blizzard:
+                return string.Format("暴风雪\n\n引导技能\n消耗魔法：{2}\n\n持续召唤冰雪风暴覆盖大范围区域，对其中的敌人造成多次冰属性伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MeteorStrike:
+                return string.Format("流星坠落\n\n引导技能\n消耗魔法：{2}\n\n从天空召唤炽热流星坠落，在 5×5 范围内对敌人造成毁灭性打击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.IceThrust:
+                return string.Format("冰刺术\n\n瞬发技能\n消耗魔法：{2}\n\n在指定方向凝结冰刺突袭目标，对其造成冰属性伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MagicBooster:
+                return string.Format("魔力增幅\n\n持续效果\n消耗魔法：{2}\n\n在一定时间内提升法术伤害，但同时增加每次施法的魔法消耗。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FastMove:
+                return string.Format("疾行\n\n引导技能\n消耗魔法：{2}\n\n大幅提升移动速度，使角色在短时间内迅速移动于战场之中。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.StormEscape:
+                return string.Format("风暴逃脱\n\n引导技能\n消耗魔法：{2}\n\n释放风暴之力麻痹周围敌人，并瞬间传送到指定位置。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Blink:
+                return string.Format("闪烁\n\n瞬发技能\n消耗魔法：{2}\n\n瞬间传送到附近随机位置，用于灵活走位与躲避攻击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+
+            //Taoist
+            case Spell.SpiritSword:
+                return string.Format("精神力战法\n\n被动技能\n\n提高近身攻击的命中率。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Healing:
+                return string.Format("治愈术\n\n瞬发技能\n消耗魔法：{2}\n\n对单个友方目标进行治疗，在一段时间内缓慢恢复生命值。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Poisoning:
+                return string.Format("施毒术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：毒粉\n\n向怪物投掷毒素，绿色毒素持续削减生命，红色毒素降低防御力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SoulFireBall:
+                return string.Format("灵魂火符\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n将法力注入符纸并投向敌人，符咒爆炸造成火焰伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SoulShield:
+                return string.Format("幽灵盾\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n为自己和队友施加魔法防御护盾，提高对法术伤害的抵抗力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.BlessedArmour:
+                return string.Format("神圣战甲术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n为自己和队友附上神圣庇护，提升物理防御力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.TrapHexagon:
+                return string.Format("困魔咒\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n以六芒封印困住目标，使其无法移动；受到外界伤害时封印将被打破。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonSkeleton:
+                return string.Format("召唤骷髅\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n召唤强力的骷髅战士，为你战斗并对周围敌人造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Hiding:
+                return string.Format("隐身术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n在短时间内隐藏自身身形，使怪物无法发现你；移动或攻击会解除隐身。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MassHiding:
+                return string.Format("集体隐身术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n使自己与队伍成员在短时间内同时隐身；移动或攻击会解除隐身效果。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Revelation:
+                return string.Format("心灵启示\n\n瞬发技能\n消耗魔法：{2}\n\n读取目标的心灵气息，可查看其生命值等关键信息。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MassHealing:
+                return string.Format("群体治疗术\n\n瞬发技能\n消耗魔法：{2}\n\n释放治疗之力，恢复指定范围内所有友方目标的生命值。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonShinsu:
+                return string.Format("召唤神兽\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n召唤忠诚的神兽，与自己并肩作战，持续追击敌人。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.UltimateEnhancer:
+                return string.Format("极限强化\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n吸收周围能量，大幅提升自身各项属性，在持续时间内显著增强战斗能力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.EnergyRepulsor:
+                return string.Format("能量反震\n\n瞬发技能\n消耗魔法：{2}\n\n集中能量释放冲击波，将周围怪物击退并造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Purification:
+                return string.Format("净化术\n\n瞬发技能\n消耗魔法：{2}\n\n驱散目标身上的中毒、麻痹等负面状态，恢复其正常行动能力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonHolyDeva:
+                return string.Format("召唤圣灵\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n召唤强大的圣灵，以雷电之力打击敌人，协助你战斗。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Curse:
+                return string.Format("诅咒术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符 + 毒药\n\n对目标施放诅咒，降低其攻击速度以及物理、魔法与道术攻击力。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Hallucination:
+                return string.Format("幻觉术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n使怪物陷入幻觉，误以为敌人无处不在，可能攻击周围的一切目标。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Reincarnation:
+                return string.Format("复活术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n对死亡的玩家施放复活之力，使其获得重生的机会。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.PoisonCloud:
+                return string.Format("毒雾术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：绿毒\n\n投掷附带毒素的护身符，在地面制造大范围毒雾，对其中的敌人持续造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.EnergyShield:
+                return string.Format("能量护盾\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符\n\n可对自己或友方目标施放，为其附加能量护盾，反弹部分所受伤害给攻击者。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Plague:
+                return string.Format("瘟疫术\n\n瞬发技能\n消耗魔法：{2}\n\n需要物品：护身符 + 毒药\n\n使目标持续流失魔法值，并附加眩晕、诅咒、中毒、减速等随机负面状态。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.HealingCircle:
+                return string.Format("治愈光环\n\n瞬发技能\n消耗魔法：{2}\n\n在自身周围展开治疗结界，为范围内友方回复生命，同时对敌人造成法术伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+
+            //Assassin
+            case Spell.FatalSword:
+                return string.Format("致命剑法\n\n被动技能\n\n提高对怪物的攻击力，并略微提升命中率。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.DoubleSlash:
+                return string.Format("双重斩\n\n切换技能\n每次攻击消耗魔法：{2}\n\n以极快的速度连续斩击两次，对目标造成连击伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Haste:
+                return string.Format("疾速\n\n增益技能\n消耗魔法：{2}\n\n在一段时间内提升攻击速度，使出手更加迅捷。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FlashDash:
+                return string.Format("闪影冲刺\n\n主动技能\n消耗魔法：{2}\n\n快速突进并斩击目标，有几率使其短时间麻痹。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.HeavenlySword:
+                return string.Format("天剑术\n\n主动技能\n消耗魔法：{2}\n\n释放剑气攻击自身两格范围内的敌人，对周围目标造成群体伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.FireBurst:
+                return string.Format("火焰爆裂\n\n主动技能\n消耗魔法：{2}\n\n爆发周身气劲，将周围怪物击退并造成伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Trap:
+                return string.Format("陷阱术\n\n瞬发技能\n冷却时间：60 秒\n消耗魔法：{2}\n\n在脚下布置陷阱，使踏入的敌人短时间无法行动。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MoonLight:
+                return string.Format("月光斩\n\n增益技能\n消耗魔法：{2}\n\n隐匿身形接近敌人，发动攻击时造成比平时更高的伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MPEater:
+                return string.Format("法力汲取\n\n被动技能\n\n从被攻击的怪物身上吸取法力，用于回复自身魔法值。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SwiftFeet:
+                return string.Format("疾风步\n\n增益技能\n消耗魔法：{2}\n\n在一段时间内提升移动速度，更加灵活地穿梭战场。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.LightBody:
+                return string.Format("轻身术\n\n增益技能\n消耗魔法：{2}\n\n减轻自身重量，提高移动与闪避能力，更易躲避攻击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.PoisonSword:
+                return string.Format("毒剑术\n\n主动技能\n消耗魔法：{2}\n\n将剧毒附着在武器上，攻击时令敌人中毒并持续失去生命。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.DarkBody:
+                return string.Format("暗影之躯\n\n主动技能\n消耗魔法：{2}\n\n制造自身幻象迷惑敌人，本体隐入黑暗伺机出手。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.CrescentSlash:
+                return string.Format("新月斩\n\n主动技能\n消耗魔法：{2}\n\n释放新月形剑气，对自身周围的敌人造成范围伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Hemorrhage:
+                return string.Format("流血打击\n\n被动技能\n\n攻击时有几率造成致命一击，并使目标进入流血状态持续失血。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.MoonMist:
+                return string.Format("月影迷雾\n\n增益技能\n消耗魔法：{2}\n\n隐藏于月影迷雾之中，更容易接近敌人，并让第一击造成更强伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+
+            //Archer
+            case Spell.Focus:
+                return string.Format("专注\n\n被动技能\n\n提高使用物理攻击时的命中率，使远程攻击更加稳定。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.StraightShot:
+                return string.Format("直射\n\n主动技能\n消耗魔法：{2}\n\n以法力强化箭矢，对单个目标造成额外伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.DoubleShot:
+                return string.Format("二连射\n\n主动技能\n消耗魔法：{2}\n\n快速连射两支箭矢，对目标造成连续打击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ExplosiveTrap:
+                return string.Format("爆裂陷阱\n\n陷阱技能\n消耗魔法：{2}\n\n在地面布置一排爆裂陷阱，敌人触发时产生爆炸伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.DelayedExplosion:
+                return string.Format("延时爆裂\n\n主动技能\n消耗魔法：{2}\n\n射出一支会在短暂延迟后爆炸的箭矢，可利用元素之力造成额外伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Meditation:
+                return string.Format("冥想\n\n被动技能\n\n攻击怪物时有几率获得元素能量，最多可累积 4 个元素。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.BackStep:
+                return string.Format("后跳\n\n主动技能\n消耗魔法：{2}\n\n迅速向后跃退，与敌人拉开距离以躲避攻击。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ElementalShot:
+                return string.Format("元素射击\n\n主动技能\n消耗魔法：{2}\n\n发射高伤害的元素箭矢，根据持有元素数量提高伤害，若无元素则生成 2 个元素。等级较高时可将目标击退。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Concentration:
+                return string.Format("集中射击\n\n增益技能\n消耗魔法：{2}\n\n在技能持续时间内，提高攻击时获得元素能量的概率。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.Stonetrap:
+                return string.Format("石化陷阱\n\n陷阱技能\n消耗魔法：{2}\n\n在地面放置石化陷阱，使触发的敌人短时间无法行动。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.ElementalBarrier:
+                return string.Format("元素屏障\n\n增益技能\n消耗魔法：{2}\n\n以元素之力形成防护屏障，持有元素越多，减伤效果越强。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonVampire:
+                return string.Format("召唤吸血鬼\n\n召唤技能\n消耗魔法：{2}\n\n召唤吸血蜘蛛协助战斗，其攻击会吸取敌人生命来治疗主人。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.VampireShot:
+                return string.Format("吸血箭\n\n主动技能\n消耗魔法：{2}\n\n射出带有吸血效果的箭矢，将造成伤害的一部分转化为自身生命。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonToad:
+                return string.Format("召唤毒蛤\n\n召唤技能\n消耗魔法：{2}\n\n召唤一只毒蛤协助战斗，它无法移动，当主人离开其视野范围时会发生爆炸。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.PoisonShot:
+                return string.Format("剧毒箭\n\n主动技能\n消耗魔法：{2}\n\n射出附带剧毒的箭矢，使目标中毒并持续流失生命。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.CrippleShot:
+                return string.Format("致残箭\n\n主动技能\n消耗魔法：{2}\n\n射出致残箭减缓敌人移动。若拥有剧毒箭或吸血箭的增益效果，将产生范围中毒或额外吸血效果。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.SummonSnakes:
+                return string.Format("召唤毒蛇\n\n召唤技能\n消耗魔法：{2}\n\n召唤毒蛇图腾，不断召唤毒蛇群挑衅附近怪物，并有几率令其麻痹。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.NapalmShot:
+                return string.Format("燃烧弹\n\n主动技能\n消耗魔法：{2}\n\n向目标射出燃烧爆裂箭，在 5×5 范围内造成火焰爆炸伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+            case Spell.OneWithNature:
+                return string.Format("天人合一\n\n增益技能\n消耗魔法：{2}\n\n召唤元素之环环绕自身，对 5×5 范围内的所有敌人造成持续伤害。\n\n当前技能等级：{0}\n下一级所需熟练度：{1}", magic.Level, nextLevelValue, magic.BaseCost);
+        }
+
+        return string.Empty;
+    }
+
     private static void LoadDatabaseTranslations(string languageIniPath)
     {
         ItemNameById.Clear();
@@ -1354,6 +1596,7 @@
         NpcNameById.Clear();
         MagicNameById.Clear();
         QuestNameById.Clear();
+        MapNameById.Clear();
 
         if (!File.Exists(languageIniPath))
             return;
@@ -1410,6 +1653,10 @@
             else if (key.StartsWith("Quest_", StringComparison.OrdinalIgnoreCase))
             {
                 QuestNameById[key] = value;
+            }
+            else if (key.StartsWith("Map_", StringComparison.OrdinalIgnoreCase))
+            {
+                MapNameById[key] = value;
             }
         }
     }

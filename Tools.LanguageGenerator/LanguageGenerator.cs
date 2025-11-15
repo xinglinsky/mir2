@@ -207,6 +207,7 @@ static void MergeTranslations(string csvPath, string translationsDir)
     Apply("npcs_translation.csv", 0, 2, 3);
     Apply("magics_translation.csv", 0, 1, 2);
     Apply("quests_translation.csv", 0, 2, 3);
+    Apply("maps_translation.csv", 0, 3, 4);
 
     // 写回 Languages.csv（简单按 Key 排序，保证稳定输出）
     var sb = new StringBuilder();
