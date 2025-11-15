@@ -204,8 +204,8 @@ namespace Client.MirScenes.Dialogs
 
             EnforceButtonChecked.Visible = Enforce;
 
-            if (Enforce) EnforceButtonLabel.Text = "Assign Rule: Strict";
-            else EnforceButtonLabel.Text = "Assign Rule: Relaxed";
+            if (Enforce) EnforceButtonLabel.Text = GameLanguage.Keyboard_EnforceStrict;
+            else EnforceButtonLabel.Text = GameLanguage.Keyboard_EnforceRelaxed;
         }
 
         public void UpdateText()

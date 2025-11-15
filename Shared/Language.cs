@@ -58,6 +58,12 @@
 
                          Gold = "Gold",
                          Credit = "Credit",
+                         GameShop_BuyWithGold = "Buy with Gold",
+                         GameShop_BuyWithCredits = "Buy with Credits",
+                         GameShop_BuyWithGoldHint = "Buy item(s) with Gold.",
+                         GameShop_BuyWithCreditsHint = "Buy item(s) with Credits.",
+                         GameShop_ShowAll = "Show All",
+                         GameShop_PageText = "{0} / {1}",
 
                          YouGained = "You gained {0}.",
 
@@ -143,6 +149,40 @@
                          NoClass = "The class you selected does not exist. Contact a GM for assistance.",
                          ToManyCharacters = "You cannot make anymore then {0} Characters.",
                          CharacterNameExists = "A Character with this name already exists.",
+
+                         Client_WrongVersion = "Wrong version, please update your game.\nGame will now Close",
+
+                         Account_CreationDisabled = "Account creation is currently disabled.",
+                         Account_IDNotAcceptable = "Your AccountID is not acceptable.",
+                         Account_PasswordNotAcceptable = "Your Password is not acceptable.",
+                         Account_EmailNotAcceptable = "Your E-Mail Address is not acceptable.",
+                         Account_UserNameNotAcceptable = "Your User Name is not acceptable.",
+                         Account_SecretQuestionNotAcceptable = "Your Secret Question is not acceptable.",
+                         Account_SecretAnswerNotAcceptable = "Your Secret Answer is not acceptable.",
+                         Account_IDAlreadyExists = "An Account with this ID already exists.",
+                         Account_Created = "Your account was created successfully.",
+
+                         PasswordChange_Disabled = "Password Changing is currently disabled.",
+                         PasswordChange_CurrentNotAcceptable = "The current Password is not acceptable.",
+                         PasswordChange_NewNotAcceptable = "Your new Password is not acceptable.",
+                         PasswordChange_Success = "Your password was changed successfully.",
+
+                         Login_Disabled = "Logging in is currently disabled.",
+                         Login_PasswordChangeRequired = "The account's password must be changed before logging in.",
+
+                         Account_Banned = "This account is banned.\n\nReason: {0}\nExpiryDate: {1}\nDuration: {2:#,##0} Hours, {3} Minutes, {4} Seconds",
+
+                         Character_GenderNotExist = "The gender you selected does not exist.\n Contact a GM for assistance.",
+                         Character_EnterName = "Please enter the characters name.",
+                         Character_IncorrectEntry = "Incorrect Entry.",
+                         DeleteCharactersDisabled = "Deleting characters is currently disabled.",
+                         Character_NotExist = "The character you selected does not exist.\n Contact a GM for assistance.",
+                         Character_LoginDelay = "You cannot log onto this character for another {0} seconds.",
+
+                         StartGame_Disabled = "Starting the game is currently disabled.",
+                         StartGame_NotLoggedIn = "You are not logged in.",
+                         StartGame_CharacterNotFound = "Your character could not be found.",
+                         StartGame_NoMapOrStartPoint = "No active map and/or start point found.",
                          WarriorsDes = "Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use" +
                                         " a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged" +
                                         " attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.",
@@ -177,6 +217,30 @@
                          MentorRequests = "Allow/Disallow Mentor Requests",
                          MentorEnterName = "Please enter the name of the person you would like to be your Mentor.",
                          RestedBuff = "Rested{0}Increases Exp Rate by {1}%{2}",
+
+                         SkillMode_Tilde = "[Skill Mode: ~]",
+                         SkillMode_Ctrl = "[Skill Mode: Ctrl]",
+                         MainDialog_HP = "HP {0}/{1}",
+                         MainDialog_MP = "MP {0}/{1} ",
+
+                         Option_HPMPMode1 = "[HP/MP Mode 1]",
+                         Option_HPMPMode2 = "[HP/MP Mode 2]",
+                         Option_NewMove = "[New Movement Style]",
+                         Option_OldMove = "[Old Movement Style]",
+
+                         Keyboard_Layout = "Keyboard ({0})",
+
+                         Chat_Report = "Report",
+
+                         Ranking_OnlineOnly = "Online Only",
+
+                         Keyboard_EnforceStrict = "Assign Rule: Strict",
+                         Keyboard_EnforceRelaxed = "Assign Rule: Relaxed",
+
+                         InputKey_Esc = "Esc",
+                         InputKey_Delete = "Delete",
+                         InputKey_Enter = "Enter",
+                         InputKey_Random = "Random",
 
                          ItemTypeWeapon = "Weapon",
                          ItemTypeArmour = "Armour",
@@ -407,6 +471,13 @@
         GameLanguage.Gold = reader.ReadString("Language", "Gold", GameLanguage.Gold);
         GameLanguage.Credit = reader.ReadString("Language", "Credit", GameLanguage.Credit);
 
+        GameLanguage.GameShop_BuyWithGold = reader.ReadString("Language", "GameShop_BuyWithGold", GameLanguage.GameShop_BuyWithGold);
+        GameLanguage.GameShop_BuyWithCredits = reader.ReadString("Language", "GameShop_BuyWithCredits", GameLanguage.GameShop_BuyWithCredits);
+        GameLanguage.GameShop_BuyWithGoldHint = reader.ReadString("Language", "GameShop_BuyWithGoldHint", GameLanguage.GameShop_BuyWithGoldHint);
+        GameLanguage.GameShop_BuyWithCreditsHint = reader.ReadString("Language", "GameShop_BuyWithCreditsHint", GameLanguage.GameShop_BuyWithCreditsHint);
+        GameLanguage.GameShop_ShowAll = reader.ReadString("Language", "GameShop_ShowAll", GameLanguage.GameShop_ShowAll);
+        GameLanguage.GameShop_PageText = reader.ReadString("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
+
         GameLanguage.YouGained = reader.ReadString("Language", "YouGained", GameLanguage.YouGained);
         GameLanguage.YouGained2 = reader.ReadString("Language", "YouGained2", GameLanguage.YouGained2);
         GameLanguage.ExperienceGained = reader.ReadString("Language", "ExperienceGained", GameLanguage.ExperienceGained);        
@@ -495,6 +566,40 @@
         GameLanguage.ToManyCharacters = reader.ReadString("Language", "ToManyCharacters", GameLanguage.ToManyCharacters);
         GameLanguage.CharacterNameExists = reader.ReadString("Language", "CharacterNameExists", GameLanguage.CharacterNameExists);
 
+        GameLanguage.Client_WrongVersion = reader.ReadString("Language", "Client_WrongVersion", GameLanguage.Client_WrongVersion);
+
+        GameLanguage.Account_CreationDisabled = reader.ReadString("Language", "Account_CreationDisabled", GameLanguage.Account_CreationDisabled);
+        GameLanguage.Account_IDNotAcceptable = reader.ReadString("Language", "Account_IDNotAcceptable", GameLanguage.Account_IDNotAcceptable);
+        GameLanguage.Account_PasswordNotAcceptable = reader.ReadString("Language", "Account_PasswordNotAcceptable", GameLanguage.Account_PasswordNotAcceptable);
+        GameLanguage.Account_EmailNotAcceptable = reader.ReadString("Language", "Account_EmailNotAcceptable", GameLanguage.Account_EmailNotAcceptable);
+        GameLanguage.Account_UserNameNotAcceptable = reader.ReadString("Language", "Account_UserNameNotAcceptable", GameLanguage.Account_UserNameNotAcceptable);
+        GameLanguage.Account_SecretQuestionNotAcceptable = reader.ReadString("Language", "Account_SecretQuestionNotAcceptable", GameLanguage.Account_SecretQuestionNotAcceptable);
+        GameLanguage.Account_SecretAnswerNotAcceptable = reader.ReadString("Language", "Account_SecretAnswerNotAcceptable", GameLanguage.Account_SecretAnswerNotAcceptable);
+        GameLanguage.Account_IDAlreadyExists = reader.ReadString("Language", "Account_IDAlreadyExists", GameLanguage.Account_IDAlreadyExists);
+        GameLanguage.Account_Created = reader.ReadString("Language", "Account_Created", GameLanguage.Account_Created);
+
+        GameLanguage.PasswordChange_Disabled = reader.ReadString("Language", "PasswordChange_Disabled", GameLanguage.PasswordChange_Disabled);
+        GameLanguage.PasswordChange_CurrentNotAcceptable = reader.ReadString("Language", "PasswordChange_CurrentNotAcceptable", GameLanguage.PasswordChange_CurrentNotAcceptable);
+        GameLanguage.PasswordChange_NewNotAcceptable = reader.ReadString("Language", "PasswordChange_NewNotAcceptable", GameLanguage.PasswordChange_NewNotAcceptable);
+        GameLanguage.PasswordChange_Success = reader.ReadString("Language", "PasswordChange_Success", GameLanguage.PasswordChange_Success);
+
+        GameLanguage.Login_Disabled = reader.ReadString("Language", "Login_Disabled", GameLanguage.Login_Disabled);
+        GameLanguage.Login_PasswordChangeRequired = reader.ReadString("Language", "Login_PasswordChangeRequired", GameLanguage.Login_PasswordChangeRequired);
+
+        GameLanguage.Account_Banned = reader.ReadString("Language", "Account_Banned", GameLanguage.Account_Banned);
+
+        GameLanguage.Character_GenderNotExist = reader.ReadString("Language", "Character_GenderNotExist", GameLanguage.Character_GenderNotExist);
+        GameLanguage.Character_EnterName = reader.ReadString("Language", "Character_EnterName", GameLanguage.Character_EnterName);
+        GameLanguage.Character_IncorrectEntry = reader.ReadString("Language", "Character_IncorrectEntry", GameLanguage.Character_IncorrectEntry);
+        GameLanguage.DeleteCharactersDisabled = reader.ReadString("Language", "DeleteCharactersDisabled", GameLanguage.DeleteCharactersDisabled);
+        GameLanguage.Character_NotExist = reader.ReadString("Language", "Character_NotExist", GameLanguage.Character_NotExist);
+        GameLanguage.Character_LoginDelay = reader.ReadString("Language", "Character_LoginDelay", GameLanguage.Character_LoginDelay);
+
+        GameLanguage.StartGame_Disabled = reader.ReadString("Language", "StartGame_Disabled", GameLanguage.StartGame_Disabled);
+        GameLanguage.StartGame_NotLoggedIn = reader.ReadString("Language", "StartGame_NotLoggedIn", GameLanguage.StartGame_NotLoggedIn);
+        GameLanguage.StartGame_CharacterNotFound = reader.ReadString("Language", "StartGame_CharacterNotFound", GameLanguage.StartGame_CharacterNotFound);
+        GameLanguage.StartGame_NoMapOrStartPoint = reader.ReadString("Language", "StartGame_NoMapOrStartPoint", GameLanguage.StartGame_NoMapOrStartPoint);
+
         GameLanguage.WarriorsDes = reader.ReadString("Language", "WarriorsDes", GameLanguage.WarriorsDes);
         GameLanguage.WizardDes = reader.ReadString("Language", "WizardDes", GameLanguage.WizardDes);
         GameLanguage.TaoistDes = reader.ReadString("Language", "TaoistDes", GameLanguage.TaoistDes);
@@ -522,6 +627,30 @@
         GameLanguage.MentorEnterName = reader.ReadString("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         GameLanguage.NoMentorship = reader.ReadString("Language", "NoMentorship", GameLanguage.NoMentorship);
         GameLanguage.RestedBuff = reader.ReadString("Language", "RestedBuff", GameLanguage.RestedBuff);
+
+        GameLanguage.SkillMode_Tilde = reader.ReadString("Language", "SkillMode_Tilde", GameLanguage.SkillMode_Tilde);
+        GameLanguage.SkillMode_Ctrl = reader.ReadString("Language", "SkillMode_Ctrl", GameLanguage.SkillMode_Ctrl);
+        GameLanguage.MainDialog_HP = reader.ReadString("Language", "MainDialog_HP", GameLanguage.MainDialog_HP);
+        GameLanguage.MainDialog_MP = reader.ReadString("Language", "MainDialog_MP", GameLanguage.MainDialog_MP);
+
+        GameLanguage.Option_HPMPMode1 = reader.ReadString("Language", "Option_HPMPMode1", GameLanguage.Option_HPMPMode1);
+        GameLanguage.Option_HPMPMode2 = reader.ReadString("Language", "Option_HPMPMode2", GameLanguage.Option_HPMPMode2);
+        GameLanguage.Option_NewMove = reader.ReadString("Language", "Option_NewMove", GameLanguage.Option_NewMove);
+        GameLanguage.Option_OldMove = reader.ReadString("Language", "Option_OldMove", GameLanguage.Option_OldMove);
+
+        GameLanguage.Keyboard_Layout = reader.ReadString("Language", "Keyboard_Layout", GameLanguage.Keyboard_Layout);
+
+        GameLanguage.Chat_Report = reader.ReadString("Language", "Chat_Report", GameLanguage.Chat_Report);
+
+        GameLanguage.Ranking_OnlineOnly = reader.ReadString("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
+
+        GameLanguage.Keyboard_EnforceStrict = reader.ReadString("Language", "Keyboard_EnforceStrict", GameLanguage.Keyboard_EnforceStrict);
+        GameLanguage.Keyboard_EnforceRelaxed = reader.ReadString("Language", "Keyboard_EnforceRelaxed", GameLanguage.Keyboard_EnforceRelaxed);
+
+        GameLanguage.InputKey_Esc = reader.ReadString("Language", "InputKey_Esc", GameLanguage.InputKey_Esc);
+        GameLanguage.InputKey_Delete = reader.ReadString("Language", "InputKey_Delete", GameLanguage.InputKey_Delete);
+        GameLanguage.InputKey_Enter = reader.ReadString("Language", "InputKey_Enter", GameLanguage.InputKey_Enter);
+        GameLanguage.InputKey_Random = reader.ReadString("Language", "InputKey_Random", GameLanguage.InputKey_Random);
 
         GameLanguage.ItemTypeWeapon = reader.ReadString("Language", "ItemTypeWeapon", GameLanguage.ItemTypeWeapon);
         GameLanguage.ItemTypeArmour = reader.ReadString("Language", "ItemTypeArmour", GameLanguage.ItemTypeArmour);
@@ -713,6 +842,13 @@
         reader.Write("Language", "Gold", GameLanguage.Gold);
         reader.Write("Language", "Credit", GameLanguage.Credit);
 
+        reader.Write("Language", "GameShop_BuyWithGold", GameLanguage.GameShop_BuyWithGold);
+        reader.Write("Language", "GameShop_BuyWithCredits", GameLanguage.GameShop_BuyWithCredits);
+        reader.Write("Language", "GameShop_BuyWithGoldHint", GameLanguage.GameShop_BuyWithGoldHint);
+        reader.Write("Language", "GameShop_BuyWithCreditsHint", GameLanguage.GameShop_BuyWithCreditsHint);
+        reader.Write("Language", "GameShop_ShowAll", GameLanguage.GameShop_ShowAll);
+        reader.Write("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
+
         reader.Write("Language", "YouGained", GameLanguage.YouGained);
         reader.Write("Language", "YouGained2", GameLanguage.YouGained2);
         reader.Write("Language", "ExperienceGained", GameLanguage.ExperienceGained);        
@@ -793,6 +929,40 @@
         reader.Write("Language", "ToManyCharacters", GameLanguage.ToManyCharacters);
         reader.Write("Language", "CharacterNameExists", GameLanguage.CharacterNameExists);
 
+        reader.Write("Language", "Client_WrongVersion", GameLanguage.Client_WrongVersion);
+
+        reader.Write("Language", "Account_CreationDisabled", GameLanguage.Account_CreationDisabled);
+        reader.Write("Language", "Account_IDNotAcceptable", GameLanguage.Account_IDNotAcceptable);
+        reader.Write("Language", "Account_PasswordNotAcceptable", GameLanguage.Account_PasswordNotAcceptable);
+        reader.Write("Language", "Account_EmailNotAcceptable", GameLanguage.Account_EmailNotAcceptable);
+        reader.Write("Language", "Account_UserNameNotAcceptable", GameLanguage.Account_UserNameNotAcceptable);
+        reader.Write("Language", "Account_SecretQuestionNotAcceptable", GameLanguage.Account_SecretQuestionNotAcceptable);
+        reader.Write("Language", "Account_SecretAnswerNotAcceptable", GameLanguage.Account_SecretAnswerNotAcceptable);
+        reader.Write("Language", "Account_IDAlreadyExists", GameLanguage.Account_IDAlreadyExists);
+        reader.Write("Language", "Account_Created", GameLanguage.Account_Created);
+
+        reader.Write("Language", "PasswordChange_Disabled", GameLanguage.PasswordChange_Disabled);
+        reader.Write("Language", "PasswordChange_CurrentNotAcceptable", GameLanguage.PasswordChange_CurrentNotAcceptable);
+        reader.Write("Language", "PasswordChange_NewNotAcceptable", GameLanguage.PasswordChange_NewNotAcceptable);
+        reader.Write("Language", "PasswordChange_Success", GameLanguage.PasswordChange_Success);
+
+        reader.Write("Language", "Login_Disabled", GameLanguage.Login_Disabled);
+        reader.Write("Language", "Login_PasswordChangeRequired", GameLanguage.Login_PasswordChangeRequired);
+
+        reader.Write("Language", "Account_Banned", GameLanguage.Account_Banned);
+
+        reader.Write("Language", "Character_GenderNotExist", GameLanguage.Character_GenderNotExist);
+        reader.Write("Language", "Character_EnterName", GameLanguage.Character_EnterName);
+        reader.Write("Language", "Character_IncorrectEntry", GameLanguage.Character_IncorrectEntry);
+        reader.Write("Language", "DeleteCharactersDisabled", GameLanguage.DeleteCharactersDisabled);
+        reader.Write("Language", "Character_NotExist", GameLanguage.Character_NotExist);
+        reader.Write("Language", "Character_LoginDelay", GameLanguage.Character_LoginDelay);
+
+        reader.Write("Language", "StartGame_Disabled", GameLanguage.StartGame_Disabled);
+        reader.Write("Language", "StartGame_NotLoggedIn", GameLanguage.StartGame_NotLoggedIn);
+        reader.Write("Language", "StartGame_CharacterNotFound", GameLanguage.StartGame_CharacterNotFound);
+        reader.Write("Language", "StartGame_NoMapOrStartPoint", GameLanguage.StartGame_NoMapOrStartPoint);
+
         reader.Write("Language", "WarriorsDes", GameLanguage.WarriorsDes);
         reader.Write("Language", "WizardDes", GameLanguage.WizardDes);
         reader.Write("Language", "TaoistDes", GameLanguage.TaoistDes);
@@ -820,6 +990,30 @@
         reader.Write("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         reader.Write("Language", "NoMentorship", GameLanguage.NoMentorship);
         reader.Write("Language", "RestedBuff", GameLanguage.RestedBuff);
+
+        reader.Write("Language", "SkillMode_Tilde", GameLanguage.SkillMode_Tilde);
+        reader.Write("Language", "SkillMode_Ctrl", GameLanguage.SkillMode_Ctrl);
+        reader.Write("Language", "MainDialog_HP", GameLanguage.MainDialog_HP);
+        reader.Write("Language", "MainDialog_MP", GameLanguage.MainDialog_MP);
+
+        reader.Write("Language", "Option_HPMPMode1", GameLanguage.Option_HPMPMode1);
+        reader.Write("Language", "Option_HPMPMode2", GameLanguage.Option_HPMPMode2);
+        reader.Write("Language", "Option_NewMove", GameLanguage.Option_NewMove);
+        reader.Write("Language", "Option_OldMove", GameLanguage.Option_OldMove);
+
+        reader.Write("Language", "Keyboard_Layout", GameLanguage.Keyboard_Layout);
+
+        reader.Write("Language", "Chat_Report", GameLanguage.Chat_Report);
+
+        reader.Write("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
+
+        reader.Write("Language", "Keyboard_EnforceStrict", GameLanguage.Keyboard_EnforceStrict);
+        reader.Write("Language", "Keyboard_EnforceRelaxed", GameLanguage.Keyboard_EnforceRelaxed);
+
+        reader.Write("Language", "InputKey_Esc", GameLanguage.InputKey_Esc);
+        reader.Write("Language", "InputKey_Delete", GameLanguage.InputKey_Delete);
+        reader.Write("Language", "InputKey_Enter", GameLanguage.InputKey_Enter);
+        reader.Write("Language", "InputKey_Random", GameLanguage.InputKey_Random);
 
         reader.Write("Language", "ItemTypeWeapon", GameLanguage.ItemTypeWeapon);
         reader.Write("Language", "ItemTypeArmour", GameLanguage.ItemTypeArmour);

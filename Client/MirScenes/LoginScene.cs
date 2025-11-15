@@ -155,7 +155,7 @@ namespace Client.MirScenes
             switch (p.Result)
             {
                 case 0:
-                    MirMessageBox.Show("Wrong version, please update your game.\nGame will now Close", true);
+                    MirMessageBox.Show(GameLanguage.Client_WrongVersion, true);
 
                     Network.Disconnect();
                     break;
@@ -181,40 +181,40 @@ namespace Client.MirScenes
             switch (p.Result)
             {
                 case 0:
-                    MirMessageBox.Show("Account creation is currently disabled.");
+                    MirMessageBox.Show(GameLanguage.Account_CreationDisabled);
                     _account.Dispose();
                     break;
                 case 1:
-                    MirMessageBox.Show("Your AccountID is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_IDNotAcceptable);
                     _account.AccountIDTextBox.SetFocus();
                     break;
                 case 2:
-                    MirMessageBox.Show("Your Password is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_PasswordNotAcceptable);
                     _account.Password1TextBox.SetFocus();
                     break;
                 case 3:
-                    MirMessageBox.Show("Your E-Mail Address is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_EmailNotAcceptable);
                     _account.EMailTextBox.SetFocus();
                     break;
                 case 4:
-                    MirMessageBox.Show("Your User Name is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_UserNameNotAcceptable);
                     _account.UserNameTextBox.SetFocus();
                     break;
                 case 5:
-                    MirMessageBox.Show("Your Secret Question is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_SecretQuestionNotAcceptable);
                     _account.QuestionTextBox.SetFocus();
                     break;
                 case 6:
-                    MirMessageBox.Show("Your Secret Answer is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_SecretAnswerNotAcceptable);
                     _account.AnswerTextBox.SetFocus();
                     break;
                 case 7:
-                    MirMessageBox.Show("An Account with this ID already exists.");
+                    MirMessageBox.Show(GameLanguage.Account_IDAlreadyExists);
                     _account.AccountIDTextBox.Text = string.Empty;
                     _account.AccountIDTextBox.SetFocus();
                     break;
                 case 8:
-                    MirMessageBox.Show("Your account was created successfully.");
+                    MirMessageBox.Show(GameLanguage.Account_Created);
                     _account.Dispose();
                     break;
             }
@@ -226,19 +226,19 @@ namespace Client.MirScenes
             switch (p.Result)
             {
                 case 0:
-                    MirMessageBox.Show("Password Changing is currently disabled.");
+                    MirMessageBox.Show(GameLanguage.PasswordChange_Disabled);
                     _password.Dispose();
                     break;
                 case 1:
-                    MirMessageBox.Show("Your AccountID is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_IDNotAcceptable);
                     _password.AccountIDTextBox.SetFocus();
                     break;
                 case 2:
-                    MirMessageBox.Show("The current Password is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.PasswordChange_CurrentNotAcceptable);
                     _password.CurrentPasswordTextBox.SetFocus();
                     break;
                 case 3:
-                    MirMessageBox.Show("Your new Password is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.PasswordChange_NewNotAcceptable);
                     _password.NewPassword1TextBox.SetFocus();
                     break;
                 case 4:
@@ -251,7 +251,7 @@ namespace Client.MirScenes
                     _password.CurrentPasswordTextBox.Text = string.Empty;
                     break;
                 case 6:
-                    MirMessageBox.Show("Your password was changed successfully.");
+                    MirMessageBox.Show(GameLanguage.PasswordChange_Success);
                     _password.Dispose();
                     break;
             }
@@ -261,8 +261,8 @@ namespace Client.MirScenes
             _password.Dispose();
 
             TimeSpan d = p.ExpiryDate - CMain.Now;
-            MirMessageBox.Show(string.Format("This account is banned.\n\nReason: {0}\nExpiryDate: {1}\nDuration: {2:#,##0} Hours, {3} Minutes, {4} Seconds", p.Reason,
-                                             p.ExpiryDate, Math.Floor(d.TotalHours), d.Minutes, d.Seconds ));
+            MirMessageBox.Show(string.Format(GameLanguage.Account_Banned, p.Reason,
+                                             p.ExpiryDate, Math.Floor(d.TotalHours), d.Minutes, d.Seconds));
         }
         private void Login(S.Login p)
         {
@@ -270,15 +270,15 @@ namespace Client.MirScenes
             switch (p.Result)
             {
                 case 0:
-                    MirMessageBox.Show("Logging in is currently disabled.");
+                    MirMessageBox.Show(GameLanguage.Login_Disabled);
                     _login.Clear();
                     break;
                 case 1:
-                    MirMessageBox.Show("Your AccountID is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_IDNotAcceptable);
                     _login.AccountIDTextBox.SetFocus();
                     break;
                 case 2:
-                    MirMessageBox.Show("Your Password is not acceptable.");
+                    MirMessageBox.Show(GameLanguage.Account_PasswordNotAcceptable);
                     _login.PasswordTextBox.SetFocus();
                     break;
                 case 3:
@@ -291,7 +291,7 @@ namespace Client.MirScenes
                     _login.PasswordTextBox.SetFocus();
                     break;
                 case 5:
-                    MirMessageBox.Show("The account's password must be changed before logging in.");                    
+                    MirMessageBox.Show(GameLanguage.Login_PasswordChangeRequired);                    
                     OpenPasswordChangeDialog(_login.AccountIDTextBox.Text, _login.PasswordTextBox.Text);
                     _login.PasswordTextBox.Text = string.Empty;
                     break;
@@ -302,7 +302,7 @@ namespace Client.MirScenes
             _login.OKButton.Enabled = true;
 
             TimeSpan d = p.ExpiryDate - CMain.Now;
-            MirMessageBox.Show(string.Format("This account is banned.\n\nReason: {0}\nExpiryDate: {1}\nDuration: {2:#,##0} Hours, {3} Minutes, {4} Seconds", p.Reason,
+            MirMessageBox.Show(string.Format(GameLanguage.Account_Banned, p.Reason,
                                              p.ExpiryDate, Math.Floor(d.TotalHours), d.Minutes, d.Seconds));
         }
         private void Login(S.LoginSuccess p)
@@ -563,21 +563,6 @@ namespace Client.MirScenes
 
             public InputKeyDialog(LoginDialog loginDialog)
             {
-                _loginDialog = loginDialog;
-
-                Index = 1080;
-                Library = Libraries.Prguse;
-                Location = new Point((Client.Settings.ScreenWidth - Size.Width) / 2 + 285, (Client.Settings.ScreenHeight - Size.Height) / 2 + 150);
-                Visible = true;
-
-                KeyEscButton = new MirButton
-                {
-                    Text = "Esc",
-                    HoverIndex = 301,
-                    Index = 300,
-                    Library = Libraries.Title,
-                    Location = new Point(12, 12),
-                    Parent = this,
                     PressedIndex = 302,
                     CenterText = true
                 };
@@ -585,7 +570,7 @@ namespace Client.MirScenes
 
                 KeyDelButton = new MirButton
                 {
-                    Text = "Delete",
+                    Text = GameLanguage.InputKey_Delete,
                     HoverIndex = 304,
                     Index = 303,
                     Library = Libraries.Title,
@@ -598,7 +583,7 @@ namespace Client.MirScenes
 
                 KeyEnterButton = new MirButton
                 {
-                    Text = "Enter",
+                    Text = GameLanguage.InputKey_Enter,
                     HoverIndex = 307,
                     Index = 306,
                     Library = Libraries.Title,
@@ -617,7 +602,7 @@ namespace Client.MirScenes
 
                 KeyRandButton = new MirButton
                 {
-                    Text = "Random",
+                    Text = GameLanguage.InputKey_Random,
                     HoverIndex = 310,
                     Index = 309,
                     Library = Libraries.Title,

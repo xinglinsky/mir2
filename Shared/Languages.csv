@@ -58,6 +58,12 @@ LastOnline;Client;Last Online;最后在线
 
 Gold;Client;Gold;金币
 Credit;Client;Credit;积分
+GameShop_BuyWithGold;Client;Buy with Gold;使用金币购买
+GameShop_BuyWithCredits;Client;Buy with Credits;使用积分购买
+GameShop_BuyWithGoldHint;Client;Buy item(s) with Gold.;使用金币购买物品。
+GameShop_BuyWithCreditsHint;Client;Buy item(s) with Credits.;使用积分购买物品。
+GameShop_ShowAll;Client;Show All;全部
+GameShop_PageText;Client;{0} / {1};第 {0} / {1} 页
 
 Resolution;Client;Resolution;分辨率
 Autostart;Client;Auto start;自动启动
@@ -96,22 +102,50 @@ LowMana;Client;Not Enough Mana to cast.;魔法值不足，无法施放。
 NotFemale;Both;You are not Female.;你不是女性角色。
 NotMale;Both;You are not Male.;你不是男性角色。
 NoCreatures;Client;You do not own any creatures.;你尚未拥有任何宠物。
-NoMount;Client;You do not own a mount.;你尚未拥有坐骑。
-NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿。
-NotInGuild;Both;You are not in a guild.;你尚未加入行会。
+NoMount;Client;You do not own a mount.;你尚未拥有坐骑.
+NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿.
+NotInGuild;Both;You are not in a guild.;你尚未加入行会.
 AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
 NoBagSpace;Both;You do not have enough space.;你的背包空间不足。
 
-CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色。
-InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求。
-NoClass;Client;The class you selected does not exist. Contact a GM for assistance.;你选择的职业不存在，如有疑问请联系管理员。
-ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个。
-CharacterNameExists;Client;A Character with this name already exists.;该角色名已被占用。
+CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色.
+InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求.
+NoClass;Client;The class you selected does not exist. Contact a GM for assistance.;你选择的职业不存在，如有疑问请联系管理员.
+ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
+CharacterNameExists;Client;A Character with this name already exists.;该角色名已被占用.
 
-WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱。
-WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出。
-TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡。
-AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人。
+Client_WrongVersion;Client;Wrong version, please update your game. Game will now Close;客户端版本不匹配，请更新游戏。游戏即将关闭.
+Account_CreationDisabled;Client;Account creation is currently disabled.;当前禁止注册新账号.
+Account_IDNotAcceptable;Client;Your AccountID is not acceptable.;你的账号 ID 不符合要求.
+Account_PasswordNotAcceptable;Client;Your Password is not acceptable.;你的密码不符合要求.
+Account_EmailNotAcceptable;Client;Your E-Mail Address is not acceptable.;你的邮箱地址不符合要求.
+Account_UserNameNotAcceptable;Client;Your User Name is not acceptable.;你的用户名不符合要求.
+Account_SecretQuestionNotAcceptable;Client;Your Secret Question is not acceptable.;你的密保问题不符合要求.
+Account_SecretAnswerNotAcceptable;Client;Your Secret Answer is not acceptable.;你的密保答案不符合要求.
+Account_IDAlreadyExists;Client;An Account with this ID already exists.;该账号 ID 已被注册.
+Account_Created;Client;Your account was created successfully.;你的账号已创建成功.
+PasswordChange_Disabled;Client;Password Changing is currently disabled.;当前禁止修改密码.
+PasswordChange_CurrentNotAcceptable;Client;The current Password is not acceptable.;当前密码不符合要求.
+PasswordChange_NewNotAcceptable;Client;Your new Password is not acceptable.;你的新密码不符合要求.
+PasswordChange_Success;Client;Your password was changed successfully.;你的密码已成功修改.
+Login_Disabled;Client;Logging in is currently disabled.;当前禁止登录游戏.
+Login_PasswordChangeRequired;Client;The account's password must be changed before logging in.;该账号必须先修改密码才能登录.
+Account_Banned;Client;This account is banned. Reason: {0} ExpiryDate: {1} Duration: {2:#,##0} Hours, {3} Minutes, {4} Seconds;该账号已被封禁。原因: {0} 解封时间: {1} 剩余时长: {2:#,##0} 小时 {3} 分 {4} 秒
+Character_GenderNotExist;Client;The gender you selected does not exist. Contact a GM for assistance.;你选择的性别不存在。如有疑问请联系管理员.
+Character_EnterName;Client;Please enter the characters name.;请输入角色名.
+Character_IncorrectEntry;Client;Incorrect Entry.;输入不正确.
+DeleteCharactersDisabled;Client;Deleting characters is currently disabled.;当前禁止删除角色.
+Character_NotExist;Client;The character you selected does not exist. Contact a GM for assistance.;你选择的角色不存在。如有疑问请联系管理员.
+Character_LoginDelay;Client;You cannot log onto this character for another {0} seconds.;你需要等待 {0} 秒后才能登录该角色.
+StartGame_Disabled;Client;Starting the game is currently disabled.;当前禁止进入游戏.
+StartGame_NotLoggedIn;Client;You are not logged in.;你尚未登录.
+StartGame_CharacterNotFound;Client;Your character could not be found.;找不到你的角色.
+
+WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱.
+WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出.
+TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
+AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人.
+ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧.
 ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧。
 
 DateSent;Client;Date Sent : {0};发送时间: {0}
@@ -128,13 +162,34 @@ FriendMemo;Client;Memo;备注
 FriendMail;Client;Mail;邮件
 FriendWhisper;Client;Whisper;密语
 FriendEnterAddName;Client;Please enter the name of the person you would like to Add.;请输入你想添加为好友的玩家名字。
-FriendEnterBlockName;Client;Please enter the name of the person you would like to Block.;请输入你想拉黑的玩家名字。
+FriendEnterBlockName;Client;Please enter the name of the person you would like to Block.;请输入你想拉黑的玩家名字.
 AddMentor;Client;Add Mentor;添加师父/徒弟
 RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
 MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
-MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字。
-NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系。
+MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字.
+NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系.
 RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
+SkillMode_Tilde;Client;[Skill Mode: ~];[技能模式: ~]
+SkillMode_Ctrl;Client;[Skill Mode: Ctrl];[技能模式: Ctrl]
+MainDialog_HP;Client;HP {0}/{1};HP {0}/{1}
+MainDialog_MP;Client;MP {0}/{1} ;MP {0}/{1} 
+
+Option_HPMPMode1;Client;[HP/MP Mode 1];[HP/MP 模式 1]
+Option_HPMPMode2;Client;[HP/MP Mode 2];[HP/MP 模式 2]
+Option_NewMove;Client;[New Movement Style];[新移动方式]
+Option_OldMove;Client;[Old Movement Style];[旧移动方式]
+
+Keyboard_Layout;Client;Keyboard ({0});键位设置 ({0})
+
+Chat_Report;Client;Report;举报
+
+Ranking_OnlineOnly;Client;Online Only;只显示在线
+Keyboard_EnforceStrict;Client;Assign Rule: Strict;分配规则：严格
+Keyboard_EnforceRelaxed;Client;Assign Rule: Relaxed;分配规则：宽松
+InputKey_Esc;Client;Esc;Esc
+InputKey_Delete;Client;Delete;删除
+InputKey_Enter;Client;Enter;回车
+InputKey_Random;Client;Random;随机
 
 ItemTypeWeapon;Client;Weapon;武器
 ItemTypeArmour;Client;Armour;盔甲

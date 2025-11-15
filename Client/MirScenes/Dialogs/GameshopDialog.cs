@@ -184,10 +184,10 @@ namespace Client.MirScenes.Dialogs
 
             PaymentTypeGold = new MirCheckBox
             {
-                LabelText = "Buy with Gold",
+                LabelText = GameLanguage.GameShop_BuyWithGold,
                 Location = new Point(250, 449),
                 Parent = this,
-                Hint = "Buy item(s) with Gold.",
+                Hint = GameLanguage.GameShop_BuyWithGoldHint,
                 Index = 2086,
                 UnTickedIndex = 2086,
                 TickedIndex = 2087,
@@ -198,10 +198,10 @@ namespace Client.MirScenes.Dialogs
 
             PaymentTypeCredit = new MirCheckBox
             {
-                LabelText = "Buy with Credits",
+                LabelText = GameLanguage.GameShop_BuyWithCredits,
                 Location = new Point(340, 449),
                 Parent = this,
-                Hint = "Buy item(s) with Credits.",
+                Hint = GameLanguage.GameShop_BuyWithCreditsHint,
                 Index = 2086,
                 UnTickedIndex = 2086,
                 TickedIndex = 2087,
@@ -430,21 +430,29 @@ namespace Client.MirScenes.Dialogs
                     Parent = this,
                     Size = new Size(90, 20),
                     Location = new Point(15, 103 + (15 * i)),
-                    Text = "Testing - " + i.ToString(),
+                    Text = string.Empty,
                     ForeColour = Color.Gray,
                     Font = new Font(Settings.FontName, 7F),
                 };
                 Filters[i].Click += (o, e) =>
                 {
                     MirLabel lab = (MirLabel)o;
-                    TypeFilter = lab.Text;
+                    int index = Array.IndexOf(Filters, lab);
+                    if (index < 0) return;
+
+                    if (index + CStartIndex >= 0 && index + CStartIndex < CategoryList.Count)
+                    {
+                        string category = CategoryList[index + CStartIndex];
+                        TypeFilter = category;
+                    }
+
                     Page = 0;
                     StartIndex = 0;
                     UpdateShop();
+
                     for (int p = 0; p < Filters.Length; p++)
                     {
-                        if (Filters[p].Text == lab.Text) Filters[p].ForeColour = Color.FromArgb(230, 200, 160);
-                        else Filters[p].ForeColour = Color.Gray;
+                        Filters[p].ForeColour = (Filters[p] == lab) ? Color.FromArgb(230, 200, 160) : Color.Gray;
                     }
 
                 };
@@ -453,7 +461,7 @@ namespace Client.MirScenes.Dialogs
                     MirLabel lab = (MirLabel)o;
                     for (int p = 0; p < Filters.Length; p++)
                     {
-                        if (Filters[p].Text == lab.Text && Filters[p].ForeColour != Color.FromArgb(230, 200, 160)) Filters[p].ForeColour = Color.FromArgb(160, 140, 110);
+                        if (Filters[p] == lab && Filters[p].ForeColour != Color.FromArgb(230, 200, 160)) Filters[p].ForeColour = Color.FromArgb(160, 140, 110);
                     }
                 };
                 Filters[i].MouseLeave += (o, e) =>
@@ -461,7 +469,7 @@ namespace Client.MirScenes.Dialogs
                     MirLabel lab = (MirLabel)o;
                     for (int p = 0; p < Filters.Length; p++)
                     {
-                        if (Filters[p].Text == lab.Text && Filters[p].ForeColour != Color.FromArgb(230, 200, 160)) Filters[p].ForeColour = Color.Gray;
+                        if (Filters[p] == lab && Filters[p].ForeColour != Color.FromArgb(230, 200, 160)) Filters[p].ForeColour = Color.Gray;
                     }
                 };
                 Filters[i].MouseWheel += FilterScrolling;
@@ -685,8 +693,19 @@ namespace Client.MirScenes.Dialogs
             {
                 if (i < CategoryList.Count)
                 {
-                    Filters[i].Text = CategoryList[i + CStartIndex];
-                    Filters[i].ForeColour = Filters[i].Text == TypeFilter ? Color.FromArgb(230, 200, 160) : Color.Gray;
+                    string category = CategoryList[i + CStartIndex];
+
+                    if (i + CStartIndex == 0 && category == "Show All")
+                    {
+                        Filters[i].Text = GameLanguage.GameShop_ShowAll;
+                    }
+                    else
+                    {
+                        Filters[i].Text = category;
+                    }
+
+                    bool isSelected = category == TypeFilter;
+                    Filters[i].ForeColour = isSelected ? Color.FromArgb(230, 200, 160) : Color.Gray;
                     Filters[i].NotControl = false;
                 }
                 else
@@ -730,7 +749,7 @@ namespace Client.MirScenes.Dialogs
             maxPage = Math.Ceiling(maxPage);
             if (maxPage < 1) maxPage = 1;
 
-            PageNumberLabel.Text = (Page + 1) + " / " + maxPage;
+            PageNumberLabel.Text = string.Format(GameLanguage.GameShop_PageText, Page + 1, (int)maxPage);
 
             int maxIndex = filteredShop.Count - 1;
 

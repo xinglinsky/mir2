@@ -181,7 +181,7 @@ namespace Client.MirScenes.Dialogs
             };
 
             OnlineOnlyButton = new MirCheckBox { Index = 2086, UnTickedIndex = 2086, TickedIndex = 2087, Parent = this, Location = new Point(190, Size.Height - 20), Library = Libraries.Prguse };
-            OnlineOnlyButton.LabelText = "Online Only";
+            OnlineOnlyButton.LabelText = GameLanguage.Ranking_OnlineOnly;
             OnlineOnlyButton.Click += (o, e) =>
             {
                 OnlineOnly = OnlineOnlyButton.Checked;
