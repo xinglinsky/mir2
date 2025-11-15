@@ -9,7 +9,7 @@ AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平]
 AttackMode_Group;Client;[Mode: Group];[模式: 组队]
 AttackMode_Guild;Client;[Mode: Guild];[模式: 行会]
 AttackMode_EnemyGuild;Client;[Mode: Enemy Guild];[模式: 敌对行会]
-AttackMode_RedBrown;Client;[Mode: Red/Brown];[模式: 红/棕]
+AttackMode_RedBrown;Client;[Mode: Red/Brown];[模式: 善恶决斗]
 AttackMode_All;Client;[Mode: Attack All];[模式: 全体攻击]
 
 LogOutTip;Client;Do you want to log out of Legend of Mir?;您确定要返回登录界面吗？

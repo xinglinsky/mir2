@@ -1,0 +1,857 @@
+﻿QuestIndex;QuestName;Group;Type;LineIndex;EnglishText;ChineseText
+1;Assistant's Request;BichonProvince;Description;0;Welcome to {Border Village/Yellow} Young traveller.;欢迎来到 {Border Village/Yellow}，年轻的旅行者。
+1;Assistant's Request;BichonProvince;Description;1;Before you get started with your journey;在你正式踏上旅程之前，
+1;Assistant's Request;BichonProvince;Description;2;would you please do me a quick favour? ;能先帮我一个小忙吗？
+1;Assistant's Request;BichonProvince;TaskDescription;0;Transport {CannibalLeaves/LightSteelBlue} to {CraftLady/LimeGreen};把 {CannibalLeaves/LightSteelBlue} 交给 {CraftLady/LimeGreen}。
+1;Assistant's Request;BichonProvince;GotoMessage;0;Deliver Leaves to CraftsLady;把树叶送到 CraftsLady 那里。
+2;The CraftLady's Request;BichonProvince;Description;0;Could you do a favour for me as well? I want to;你也能帮我一个忙吗？我想要
+2;The CraftLady's Request;BichonProvince;Description;1;give a present to {Jane/LimeGreen} to show my gratitude.;送一份礼物给 {Jane/LimeGreen}，表达我的感激之情。
+2;The CraftLady's Request;BichonProvince;Description;2;But i cannot leave here at the moment. ;但是我现在没办法离开这里。
+2;The CraftLady's Request;BichonProvince;TaskDescription;0;Find {GingerTea/LightSteelBlue} from {Scarecrows/Crimson} and Deliver;从 {Scarecrows/Crimson} 身上取得 {GingerTea/LightSteelBlue}，并把它
+2;The CraftLady's Request;BichonProvince;TaskDescription;1;to {Assistant Jane/LimeGreen} in {BorderVillage/Yellow}.;交给 {Border Village/Yellow} 的 {Assistant Jane/LimeGreen}。
+2;The CraftLady's Request;BichonProvince;GotoMessage;0;Deliver GingerTea to Assistant Jane;把 GingerTea 交给 Assistant Jane。
+3;Talk with the Butcher;BichonProvince;Description;0;Hello traveller..;你好，旅行者……
+3;Talk with the Butcher;BichonProvince;Description;1;{Butcher John/LimeGreen} is loooking for some help.;{Butcher John/LimeGreen} 正在寻找帮手。
+3;Talk with the Butcher;BichonProvince;Description;2;I think its an urgent matter.;看起来是件很紧急的事情。
+3;Talk with the Butcher;BichonProvince;TaskDescription;0;Speak to {Butcher John/LimeGreen} at Coordinates 293:603;去坐标 293:603 与 {Butcher John/LimeGreen} 交谈。
+3;Talk with the Butcher;BichonProvince;GotoMessage;0;Speak to Butcher John at 293:603;前往 293:603 找 Butcher John 谈话。
+4;Hunt for the Butcher;BichonProvince;Description;0;You are the traveller {Jane/LimeGreen} recommended.;你就是 {Jane/LimeGreen} 推荐的那位旅行者吧。
+4;Hunt for the Butcher;BichonProvince;Description;1;Please can you hunt {Deer/Crimson} and bring me some ;能帮我猎杀一些 {Deer/Crimson}，
+4;Hunt for the Butcher;BichonProvince;Description;2;{Deer Meat/LightSteelBlue}. If you want to know more about ;并带回一些 {Deer Meat/LightSteelBlue} 吗？如果你想了解更多
+4;Hunt for the Butcher;BichonProvince;Description;3;butchering please press "H".;关于屠宰的内容，请按 "H" 键查看帮助。
+4;Hunt for the Butcher;BichonProvince;TaskDescription;0;Collect {Deer Meat/LightSteelBlue} by Hunting {Deer's/Crimson};猎杀 {Deer's/Crimson} 来收集 {Deer Meat/LightSteelBlue}。
+4;Hunt for the Butcher;BichonProvince;GotoMessage;0;Return to Butcher John at 293:603;回到坐标 293:603 找 Butcher John 复命。
+5;The Smith's 1st Test;BichonProvince;Description;0;Young traveller my name is {Smith/LimeGreen}.;年轻的旅行者，我叫 {Smith/LimeGreen}。
+5;The Smith's 1st Test;BichonProvince;Description;1;There are so my monsters outside the village;村外的怪物实在太多了，
+5;The Smith's 1st Test;BichonProvince;Description;2;I don't know how I'll make it to {BichonWall/Yellow};我都不知道自己还能不能安全到达 {BichonWall/Yellow}。
+5;The Smith's 1st Test;BichonProvince;Description;3;Can you help me?;你能帮帮我吗？
+5;The Smith's 1st Test;BichonProvince;TaskDescription;0;Eliminate 10 {Deer/Crimson} and {Scarecrow's/Crimson}.;消灭 10 只 {Deer/Crimson} 和 {Scarecrow's/Crimson}。
+5;The Smith's 1st Test;BichonProvince;GotoMessage;0;Return to Blacksmith Smith at 297:612;回到坐标 297:612 找铁匠 Smith 报告。
+6;Smith's 2nd Test;BichonProvince;Description;0;Traveller.. I still think its to dangerous outside.;旅行者……我还是觉得村外太危险了。
+6;Smith's 2nd Test;BichonProvince;Description;1;Can you do a another favour for me?;你能再帮我一个忙吗？
+6;Smith's 2nd Test;BichonProvince;TaskDescription;0;Eliminate 10 {HookingCat's/Crimson};消灭 10 只 {HookingCat's/Crimson}。
+6;Smith's 2nd Test;BichonProvince;GotoMessage;0;Return to Blacksmith Smith at 297:612;回到坐标 297:612 找铁匠 Smith 报告。
+7;Meet the Warrior Instructor;BichonProvince;Description;0;Hello young traveller. Have you heard;你好，年轻的旅行者。你听说过
+7;Meet the Warrior Instructor;BichonProvince;Description;1;of the Warrior Instructor in this region?;这片地区的战士导师吗？
+7;Meet the Warrior Instructor;BichonProvince;Description;2;He is the master of all Warriors. I hear;他是所有战士的师父，据说
+7;Meet the Warrior Instructor;BichonProvince;Description;3;hes been looking for a new disciple lately.;最近一直在寻找新的弟子。
+7;Meet the Warrior Instructor;BichonProvince;Description;4;It could be a rumor.;也许只是个传闻。
+7;Meet the Warrior Instructor;BichonProvince;TaskDescription;0;Speak with {Master_Wa/LimeGreen} at Coordinates 110:317;在坐标 110:317 处与 {Master_Wa/LimeGreen} 交谈。
+7;Meet the Warrior Instructor;BichonProvince;GotoMessage;0;Speak to Master_Wa at 110:317;前往 110:317 找 Master_Wa 谈话。
+8;Test for the Fencing Skill;BichonProvince;Description;0;{Assistant Jane/LimeGreen} sent you? ;是 {Assistant Jane/LimeGreen} 把你介绍来的？
+8;Test for the Fencing Skill;BichonProvince;Description;1;I can't reject anyone that she has recommended, ;她推荐的人我不能拒绝，
+8;Test for the Fencing Skill;BichonProvince;Description;2;but I cant accept just anyone as my disciple. ;但也不能随便收任何人为弟子。
+8;Test for the Fencing Skill;BichonProvince;Description;3;You will have to pass my test.;你得先通过我的试炼。
+8;Test for the Fencing Skill;BichonProvince;TaskDescription;0;Eliminate 10 {Oma's/Crimson} and {RakingCat's/Crimson};消灭 10 只 {Oma's/Crimson} 和 {RakingCat's/Crimson}。
+8;Test for the Fencing Skill;BichonProvince;GotoMessage;0;Return to Master_Wa at 110:317;返回 110:317 找 Master_Wa 报告。
+9;To Bichon;BichonProvince;Description;0;You seem more like a well-trained Warrior now.;你现在看起来已经像一名训练有素的战士了。
+9;To Bichon;BichonProvince;Description;1;I have asked Peter to give you some work;我已经让 Peter 给你安排一些工作，
+9;To Bichon;BichonProvince;Description;2;to do. The reward should help you in many ways,;报酬应该能在很多方面帮助到你。
+9;To Bichon;BichonProvince;TaskDescription;0;Speak to {MirGuide Peter/LimeGreen} Coordinates 328:258;前往坐标 328:258 与 {MirGuide Peter/LimeGreen} 交谈。
+9;To Bichon;BichonProvince;GotoMessage;0;Speak to Peter in BichonWall at 328:258;在 {BichonWall/Yellow} 坐标 328:258 找 Peter 谈话。
+10;Meet the Mage Instructor;BichonProvince;Description;0;Hello Traveller. Have you heard of the;你好，旅行者。你听说过
+10;Meet the Mage Instructor;BichonProvince;Description;1;Wizard Instructor in this region?;这片地区的巫师导师吗？
+10;Meet the Mage Instructor;BichonProvince;Description;2;He is the Master of all the Wizards. I hear;他是所有巫师的师父，据说
+10;Meet the Mage Instructor;BichonProvince;Description;3;hes been looking for a new disciple lately.;最近也在寻找新的弟子。
+10;Meet the Mage Instructor;BichonProvince;Description;4;It could be a rumor;也许只是个传闻。
+10;Meet the Mage Instructor;BichonProvince;TaskDescription;0;Speak with {MasterMage/LimeGreen} at Coordinates 314:474;在坐标 314:474 处与 {MasterMage/LimeGreen} 交谈。
+10;Meet the Mage Instructor;BichonProvince;GotoMessage;0;Speak with the MasterMage at 314:474;前往 314:474 找 MasterMage 谈话。
+11;Test for the Fireball Skill;BichonProvince;Description;0;{Assistant Jane/LimeGreen} sent you? ;是 {Assistant Jane/LimeGreen} 把你介绍来的？
+11;Test for the Fireball Skill;BichonProvince;Description;1;I can't reject anyone that she has;她推荐的人我不能拒绝，
+11;Test for the Fireball Skill;BichonProvince;Description;2;recommended, but I cant just accept anyone ;但也不能随便收任何人为弟子，
+11;Test for the Fireball Skill;BichonProvince;Description;3;as my disciple. You will have to pass my test.;你得先通过我的试炼。
+11;Test for the Fireball Skill;BichonProvince;TaskDescription;0;Eliminate 10 {Oma's/Crimson} and {RakingCat's/Crimson};消灭 10 只 {Oma's/Crimson} 和 {RakingCat's/Crimson}。
+11;Test for the Fireball Skill;BichonProvince;GotoMessage;0;Return to MasterMage at 314:474;返回 314:474 找 MasterMage 报告。
+12;To Bichon;BichonProvince;Description;0;You seem more like a well-trained Wizard now.;你现在看起来已经像一名训练有素的巫师了。
+12;To Bichon;BichonProvince;Description;1;I have asked Peter to give you some work;我已经让 Peter 给你安排一些工作，
+12;To Bichon;BichonProvince;Description;2;to do. The reward should help you in many ways,;报酬应该能在很多方面帮助到你。
+12;To Bichon;BichonProvince;TaskDescription;0;Speak to {MirGuide Peter/LimeGreen} Coordinates 328:258;前往坐标 328:258 与 {MirGuide Peter/LimeGreen} 交谈。
+12;To Bichon;BichonProvince;GotoMessage;0;Speak to Peter in BichonWall at 328:258;在 {BichonWall/Yellow} 坐标 328:258 找 Peter 谈话。
+13;Meet the Taoist Instructor;BichonProvince;Description;0;Hello Traveller. Have you heard of the;你好，旅行者。你听说过
+13;Meet the Taoist Instructor;BichonProvince;Description;1;Taoist Instructor in this region?;这片地区的道士导师吗？
+13;Meet the Taoist Instructor;BichonProvince;Description;2;He is the Master of all the Taoists. I hear;他是所有道士的师父，据说
+13;Meet the Taoist Instructor;BichonProvince;Description;3;hes been looking for a new disciple lately.;最近也在寻找新的弟子。
+13;Meet the Taoist Instructor;BichonProvince;Description;4;It could be a rumor;也许只是个传闻。
+13;Meet the Taoist Instructor;BichonProvince;TaskDescription;0;Speak with {HighTaoist/LimeGreen} he was last seen at;去找 {HighTaoist/LimeGreen}，他最后一次出现的位置在
+13;Meet the Taoist Instructor;BichonProvince;TaskDescription;1;Coordinates 546:559 but he was heading;坐标 546:559，之后往西北方向离开了。
+13;Meet the Taoist Instructor;BichonProvince;TaskDescription;2;North West.;
+13;Meet the Taoist Instructor;BichonProvince;GotoMessage;0;Search for the HighPriest Last seen at 429:475 ;前往坐标 429:475 寻找那位高阶道士。
+14;Test for the Healing Skill;BichonProvince;Description;0;{Assistant Jane/LimeGreen} sent you? ;是 {Assistant Jane/LimeGreen} 把你介绍来的？
+14;Test for the Healing Skill;BichonProvince;Description;1;I can't reject anyone that she has recommended, ;她推荐的人我不能拒绝，
+14;Test for the Healing Skill;BichonProvince;Description;2;but I cant accept just anyone as my disciple. ;但也不能随便收任何人为弟子。
+14;Test for the Healing Skill;BichonProvince;Description;3;You will have to pass my test.;你得先通过我的试炼。
+14;Test for the Healing Skill;BichonProvince;TaskDescription;0;Eliminate 10 {Oma's/Crimson} and {RakingCat's/Crimson};消灭 10 只 {Oma's/Crimson} 和 {RakingCat's/Crimson}。
+14;Test for the Healing Skill;BichonProvince;GotoMessage;0;Return to the HighPriest at 429:475;回到坐标 429:475 找高阶道士复命。
+15;To Bichon;BichonProvince;Description;0;You seem more like a well-trained Taoist now.;你现在看起来已经像一名训练有素的道士了。
+15;To Bichon;BichonProvince;Description;1;I have asked Peter to give you some work;我已经让 Peter 给你安排一些工作，
+15;To Bichon;BichonProvince;Description;2;to do. The reward should help you in many ways,;报酬应该能在很多方面帮助到你。
+15;To Bichon;BichonProvince;TaskDescription;0;Speak to {MirGuide Peter/LimeGreen} Coordinates 328:258;前往坐标 328:258 与 {MirGuide Peter/LimeGreen} 交谈。
+15;To Bichon;BichonProvince;GotoMessage;0;Speak to Peter in BichonWall at 328:258;在 {BichonWall/Yellow} 坐标 328:258 找 Peter 谈话。
+16;Meet the Assassin Instructor;BichonProvince;Description;0;Hello Traveller. Have you heard of the;你好，旅行者。你听说过
+16;Meet the Assassin Instructor;BichonProvince;Description;1;Assassin Instructor in this region?;这片地区的刺客导师吗？
+16;Meet the Assassin Instructor;BichonProvince;Description;2;He is the Master of all the Assassins. I hear;他是所有刺客的师父，据说
+16;Meet the Assassin Instructor;BichonProvince;Description;3;hes been looking for a new disciple lately.;最近也在寻找新的弟子。
+16;Meet the Assassin Instructor;BichonProvince;Description;4;It could be a rumor;也许只是个传闻。
+16;Meet the Assassin Instructor;BichonProvince;TaskDescription;0;Speak with {Cloud/LimeGreen} at Coordinates 101:411;在坐标 101:411 处与 {Cloud/LimeGreen} 交谈。
+16;Meet the Assassin Instructor;BichonProvince;GotoMessage;0;Speak with Assassin Cloud at 101:411;前往 101:411 找刺客 Cloud 谈话。
+17;Test for FatalSword Skill;BichonProvince;Description;0;Assistant Jane sent you? ;是 Assistant Jane 把你介绍来的？
+17;Test for FatalSword Skill;BichonProvince;Description;1;I can't reject anyone that she has recommended, ;她推荐的人我不能拒绝，
+17;Test for FatalSword Skill;BichonProvince;Description;2;but I cant accept just anyone as my disciple. ;但也不能随便收任何人为弟子。
+17;Test for FatalSword Skill;BichonProvince;Description;3;You will have to pass my test.;你得先通过我的试炼。
+17;Test for FatalSword Skill;BichonProvince;TaskDescription;0;Eliminate 10 {Oma's/Crimson} and {RakingCat's/Crimson};消灭 10 只 {Oma's/Crimson} 和 {RakingCat's/Crimson}。
+17;Test for FatalSword Skill;BichonProvince;GotoMessage;0;Return to Cloud at 101:411;返回 101:411 找 Cloud 报告。
+18;To Bichon;BichonProvince;Description;0;You seem more like a well-trained Assassin now.;你现在看起来已经像一名训练有素的刺客了。
+18;To Bichon;BichonProvince;Description;1;I have asked Peter to give you some work;我已经让 Peter 给你安排一些工作，
+18;To Bichon;BichonProvince;Description;2;to do. The reward should help you in many ways,;报酬应该能在很多方面帮助到你。
+18;To Bichon;BichonProvince;TaskDescription;0;Speak to {MirGuide Peter/LimeGreen} Coordinates 328:258;前往坐标 328:258 与 {MirGuide Peter/LimeGreen} 交谈。
+18;To Bichon;BichonProvince;GotoMessage;0;Speak to Peter in BichonWall at 328:258;在 {BichonWall/Yellow} 坐标 328:258 找 Peter 谈话。
+19;Meet the Archer Instructor;BichonProvince;Description;0;Hello Traveller. Have you heard about the;你好，旅行者。你听说过
+19;Meet the Archer Instructor;BichonProvince;Description;1;Archer Captain Currently protecting the;正在保卫这片地区的弓手队长吗？
+19;Meet the Archer Instructor;BichonProvince;Description;2;region? Rumours say they are looking for;听说他们正在寻找
+19;Meet the Archer Instructor;BichonProvince;Description;3;disciples to aid in the war;可以在战争中协助他们的弟子。
+19;Meet the Archer Instructor;BichonProvince;TaskDescription;0;Speak with {Jerald/LimeGreen} at Coordinates 320:476;在坐标 320:476 处与 {Jerald/LimeGreen} 交谈。
+19;Meet the Archer Instructor;BichonProvince;GotoMessage;0;Speak with the Captain at 320:477;前往 320:477 找那位队长谈话。
+20;Test for Focus Skill;BichonProvince;Description;0;A Recommendation.. Thats a first.;有人推荐你来……这还是第一次呢。
+20;Test for Focus Skill;BichonProvince;Description;1;We need all that is able to help with this war.;这场战争需要所有能出力的人。
+20;Test for Focus Skill;BichonProvince;Description;2;Whether they join the Guard or not.;不管他们是否正式加入守卫队。
+20;Test for Focus Skill;BichonProvince;Description;3;Please can you assist me with something.;你能帮我做一件事吗？
+20;Test for Focus Skill;BichonProvince;TaskDescription;0;Eliminate 10 {Oma's/Crimson} and {RakingCat's/Crimson};消灭 10 只 {Oma's/Crimson} 和 {RakingCat's/Crimson}。
+20;Test for Focus Skill;BichonProvince;GotoMessage;0;Return to the Captain at 320:477;完成后回到 320:477 找队长复命。
+21;To Bichon;BichonProvince;Description;0;You seem more like a well-trained Archer now.;你现在看起来已经像一名训练有素的弓手了。
+21;To Bichon;BichonProvince;Description;1;I have asked {Peter/LimeGreen} to give you some work;我已经让 {Peter/LimeGreen} 给你安排一些工作，
+21;To Bichon;BichonProvince;Description;2;to do. The reward should help you in many ways,;报酬应该能在很多方面帮助到你。
+21;To Bichon;BichonProvince;TaskDescription;0;Speak to {MirGuide Peter/LimeGreen} Coordinates 328:258;前往坐标 328:258 与 {MirGuide Peter/LimeGreen} 交谈。
+21;To Bichon;BichonProvince;GotoMessage;0;Speak to Peter in BichonWall at 328:258;在 {BichonWall/Yellow} 坐标 328:258 找 Peter 谈话。
+22;Forest Yeti's Threat;BichonProvince;Description;0;I've been getting reports that {ForestYeti's/Crimson} are;最近一直有报告称 {ForestYeti's/Crimson}
+22;Forest Yeti's Threat;BichonProvince;Description;1;attacking only the new Warrior's lately.;专门袭击新来的战士。
+22;Forest Yeti's Threat;BichonProvince;Description;2;Do you think you can help?;你觉得能帮忙解决一下吗？
+22;Forest Yeti's Threat;BichonProvince;TaskDescription;0;Eliminate 5 {ForestYeti's/Crimson}.;消灭 5 只 {ForestYeti's/Crimson}。
+22;Forest Yeti's Threat;BichonProvince;GotoMessage;0;Return to MirGuide Peter in BichonWall;然后回到 {BichonWall/Yellow} 找 MirGuide Peter 报告。
+23;!Attack Oma;BichonProvince;Description;0;There are creatures named {Oma/Crimson} outside;村外有一种叫 {Oma/Crimson} 的怪物。
+23;!Attack Oma;BichonProvince;Description;1;{BichonWall/Yellow} and other towns. ;在 {BichonWall/Yellow} 以及其他城镇附近都能看到它们。
+23;!Attack Oma;BichonProvince;Description;2;They are very strong and violent. They have ;它们非常强壮而且暴躁，
+23;!Attack Oma;BichonProvince;Description;3;been attacking the merchants. Hey, would you ;一直在袭击来往的商人。嘿，
+23;!Attack Oma;BichonProvince;Description;4;be able to help us eliminate the danager?;你能帮我们消除这份威胁吗？
+23;!Attack Oma;BichonProvince;TaskDescription;0;Please hunt {Oma's/Crimson} and bring back 10 ;请猎杀 {Oma's/Crimson}，并带回 10 个
+23;!Attack Oma;BichonProvince;TaskDescription;1;{OmaTeeth's/LightSteelBlue};{OmaTeeth's/LightSteelBlue}。
+24;Help Blacksmith Jang;BichonProvince;Description;0;{Blacksmith Jang/LimeGreen}, has requested some help.;{Blacksmith Jang/LimeGreen} 请求你的帮助。
+24;Help Blacksmith Jang;BichonProvince;Description;1;Please can you go speak to him he is located;能否去找他谈谈，他现在在
+24;Help Blacksmith Jang;BichonProvince;Description;2;in {WoomyonWoods/Yellow} If you follow the path North;{WoomyonWoods/Yellow}。沿着北边的小路走
+24;Help Blacksmith Jang;BichonProvince;Description;3;it will lead you to {WoomyonWoods/Yellow} town.;就能到达 {WoomyonWoods/Yellow} 小镇。
+24;Help Blacksmith Jang;BichonProvince;TaskDescription;0;Travel to {WoomyonWoods/Yellow} and speak to {Jang/LimeGreen}.;前往 {WoomyonWoods/Yellow}，与 {Jang/LimeGreen} 交谈。
+24;Help Blacksmith Jang;BichonProvince;GotoMessage;0;Speak to Blacksmith Jang in WoomyonWoods;去雾隐森林找铁匠 Jang 谈话。
+25;Hunt CannibalPlants;WoomyonWoods;Description;0;Hello traveller. Thankyou for coming.;你好，旅行者。谢谢你特地赶来。
+25;Hunt CannibalPlants;WoomyonWoods;Description;1;The reason I asked for you was to get some;我请你来的原因是希望你帮忙
+25;Hunt CannibalPlants;WoomyonWoods;Description;2;help keeping {WoomyonWoods/Yellow} safe. You ;守护 {WoomyonWoods/Yellow} 的安全。
+25;Hunt CannibalPlants;WoomyonWoods;Description;3;probably have seen some {CannibalPlant's/Crimson} ;你在路上应该见过一些 {CannibalPlant's/Crimson}，
+25;Hunt CannibalPlants;WoomyonWoods;Description;4;on the way here from {BichonWall/Yellow}. We need ;就是从 {BichonWall/Yellow} 来这里一路上的那些。我们需要
+25;Hunt CannibalPlants;WoomyonWoods;Description;5;to hunt them down to keep merchants safe ;把它们清理掉，
+25;Hunt CannibalPlants;WoomyonWoods;Description;6;from dangerous attacks.;才能保障商人的安全。
+25;Hunt CannibalPlants;WoomyonWoods;TaskDescription;0;Please collect 10 {CannibalStem/LightSteelBlue} and ;请收集 10 个 {CannibalStem/LightSteelBlue} 和
+25;Hunt CannibalPlants;WoomyonWoods;TaskDescription;1;{CannibalLeafs/LightSteelBlue} From {CannibalPlant's/Crimson} and deliver ;{CannibalLeafs/LightSteelBlue}，都从 {CannibalPlant's/Crimson} 身上取得，随后
+25;Hunt CannibalPlants;WoomyonWoods;TaskDescription;2;to {MirGuide/LimeGreen} in {BichonWall/Yellow};交给 {BichonWall/Yellow} 的 {MirGuide/LimeGreen}。
+25;Hunt CannibalPlants;WoomyonWoods;GotoMessage;0;Return to MirGuide Peter in BichonWall;回到比奇城墙找 MirGuide Peter 报告。
+26;Ingredients for the Antidote;BichonProvince;Description;0;There have been icreasing numbers of ;最近镇子附近的怪物数量不断增加，
+26;Ingredients for the Antidote;BichonProvince;Description;1;{SpittlingSpider's/Crimson} around the town. This monster ;尤其是 {SpittlingSpider's/Crimson}。这种怪物带有剧毒，
+26;Ingredients for the Antidote;BichonProvince;Description;2;is poisonous and the antidote can only be made ;解毒剂只能用它们掉落的
+26;Ingredients for the Antidote;BichonProvince;Description;3;from the {PoisonSack/LightSteelBlue}.;{PoisonSack/LightSteelBlue} 来炼制。
+26;Ingredients for the Antidote;BichonProvince;TaskDescription;0;Please find {PoisonSack's/LightSteelBlue} by hunting ;请通过猎杀
+26;Ingredients for the Antidote;BichonProvince;TaskDescription;1;{SpittingSpider's/Crimson}.;{SpittingSpider's/Crimson} 来收集 {PoisonSack's/LightSteelBlue}。
+26;Ingredients for the Antidote;BichonProvince;GotoMessage;0;Return to MirGuide Peter in BichonWall;然后回到比奇城墙找 MirGuide Peter 报告。
+27;Errands;BichonProvince;Description;0;You came right on time. {MongchonScout/LimeGreen} came ;你来得正好，{MongchonScout/LimeGreen} 刚刚来过，
+27;Errands;BichonProvince;Description;1;by earlier and left a message for you. Please go ;留下了一条给你的信息。请你去
+27;Errands;BichonProvince;Description;2;to the {Tavern/Yellow};{Tavern/Yellow} 一趟。
+27;Errands;BichonProvince;TaskDescription;0;Go speak to {MongchonScout/LimeGreen} in the {Tavern/Yellow};去 {Tavern/Yellow} 与 {MongchonScout/LimeGreen} 交谈。
+27;Errands;BichonProvince;GotoMessage;0;Speak with MongchonScout at the Tavern 290:293;在坐标 290:293 的酒馆内与 MongchonScout 谈话。
+28;Find the Web;BichonProvince;Description;0;Hello traveller. You are quite famous around ;你好，旅行者。你在这一带可是小有名气，
+28;Find the Web;BichonProvince;Description;1;here. Could you help me as well? ;能顺便也帮帮我吗？
+28;Find the Web;BichonProvince;Description;2;The demand for medicine has been increasing, ;最近药品的需求不断增加，
+28;Find the Web;BichonProvince;Description;3;and we are short on the ingredients for the ;而药材的存量越来越少。
+28;Find the Web;BichonProvince;Description;4;medicine. We are especially short on {Web's/LightSteelBlue} ;特别是 {Web's/LightSteelBlue} 奇缺，
+28;Find the Web;BichonProvince;Description;5;which can be found from {SpittingSpiders/Crimson} could you ;那是从 {SpittingSpiders/Crimson} 身上才能获得的。你能帮我
+28;Find the Web;BichonProvince;Description;6;please get some for me?;收集一些回来吗？
+28;Find the Web;BichonProvince;TaskDescription;0;Please collect 10 {Web's/LightSteelBlue} from {SpittingSpider's/Crimson};请从 {SpittingSpider's/Crimson} 身上收集 10 个 {Web's/LightSteelBlue}。
+28;Find the Web;BichonProvince;GotoMessage;0;Return to Samuel at 324:291;完成后回到 324:291 找 Samuel 报告。
+29;Deliver Repair Oil;BichonProvince;Description;0;Can you please do me a favour. Can you ;能请你帮我一个忙吗？你可以
+29;Deliver Repair Oil;BichonProvince;Description;1;deliver these to {Bradly/LimeGreen} in {SerpentValley/Yellow}? ;把这些东西送到 {SerpentValley/Yellow} 的 {Bradly/LimeGreen} 手上吗？
+29;Deliver Repair Oil;BichonProvince;Description;2;Hes ran out of {RepairOil's/LightSteelBlue}. But he needs them ;他的 {RepairOil's/LightSteelBlue} 已经用完了，
+29;Deliver Repair Oil;BichonProvince;Description;3;to repair weapons. Please deliver them quickly.;而修理武器又离不开它们，请尽快送去。
+29;Deliver Repair Oil;BichonProvince;TaskDescription;0;Deliver {RepairOil/LightSteelBlue} to {Bradly/LimeGreen}.;把 {RepairOil/LightSteelBlue} 交给 {Bradly/LimeGreen}。
+29;Deliver Repair Oil;BichonProvince;GotoMessage;0;Travel to SerpentValley and Deliver to Bradly at 517:492 ;前往蛇谷，在 517:492 处把物品交给 Bradly。
+30;Lost Ring;SerpentValley;Description;0;Hello traveller. I was returning to {SerpentValley/Yellow};你好，旅行者。我原本要返回 {SerpentValley/Yellow}，
+30;Lost Ring;SerpentValley;Description;1;from {MongchonProvince/Yellow}. But I was attacked by ;从 {MongchonProvince/Yellow} 回来的路上，
+30;Lost Ring;SerpentValley;Description;2;{Currish/Crimson} and dropped my bag. My priceless ;遭到 {Currish/Crimson} 袭击，把行囊都掉在了路上，
+30;Lost Ring;SerpentValley;Description;3;{JadeRing/LightSteelBlue} was in the bag.;里面有一枚珍贵的 {JadeRing/LightSteelBlue}。
+30;Lost Ring;SerpentValley;TaskDescription;0;Find the {JadeRing/LightSteelBlue} from {Currish/Crimson}.;请从 {Currish/Crimson} 身上找回那枚 {JadeRing/LightSteelBlue}。
+30;Lost Ring;SerpentValley;GotoMessage;0;Return to Blacksmith Bradly in SerpentValley;然后回到蛇谷找铁匠 Bradly。
+31;Deliver the Ring;SerpentValley;Description;0;The Ring still look's perfect.;戒指依然完好无损。
+31;Deliver the Ring;SerpentValley;Description;1;Please can you deliver the ring to my Daughter ;能否请你把这枚戒指交给我的女儿，
+31;Deliver the Ring;SerpentValley;Description;2;{Melissa/LimeGreen}. She also requires some help.;{Melissa/LimeGreen}？她那边也需要人帮忙。
+31;Deliver the Ring;SerpentValley;TaskDescription;0;Please take the {JadeRing/LightSteelBlue} to {Melissa/LimeGreen}.;请把这枚 {JadeRing/LightSteelBlue} 交给 {Melissa/LimeGreen}。
+31;Deliver the Ring;SerpentValley;GotoMessage;0;Deliver the JadeRing to Melissa in SerpentValley;在蛇谷把 JadeRing 交给 Melissa。
+32;Messenger;SerpentValley;Description;0;Thankyou, I remember this Ring it used to ;谢谢你，我记得这枚戒指，
+32;Messenger;SerpentValley;Description;1;belong to my grandmother. Please take this Gift ;它曾属于我的祖母。请把这份礼物
+32;Messenger;SerpentValley;Description;2;back to {Bradly/LimeGreen} to show my gratitude.;带回给 {Bradly/LimeGreen}，表示我的谢意。
+32;Messenger;SerpentValley;TaskDescription;0;Please take this {BluePill/LightSteelBlue} to {Bradly/LimeGreen};请把这枚 {BluePill/LightSteelBlue} 交给 {Bradly/LimeGreen}。
+32;Messenger;SerpentValley;GotoMessage;0;Deliver BluePill to Blacksmith Bradly;把 BluePill 交给铁匠 Bradly。
+33;Cure the Insomnia;SerpentValley;Description;0;Please help me. I recently moved here, and i see ;请帮帮我。我刚搬到这里，
+33;Cure the Insomnia;SerpentValley;Description;1;Snakes everywhere! I cant go to sleep knowing ;到处都是蛇！一想到它们，
+33;Cure the Insomnia;SerpentValley;Description;2;the Snakes are crawling under my bed.;我就担心它们会爬到床底下，根本睡不着。
+33;Cure the Insomnia;SerpentValley;TaskDescription;0;Please eliminate 10 {RedSnake/Crimson} and {TigerSnake's/Crimson}.;请消灭 10 只 {RedSnake/Crimson} 和 {TigerSnake's/Crimson}。
+33;Cure the Insomnia;SerpentValley;GotoMessage;0;Return to Robert at 505:479;完成后回到 505:479 找 Robert。
+34;Secret Recipe Delivery;SerpentValley;Description;0;Are you going to {Bichon/Yellow} anytime soon? If you ;你最近会去 {Bichon/Yellow} 吗？如果会的话，
+34;Secret Recipe Delivery;SerpentValley;Description;1;go there, could you deliver this {SercetRecipe/LightSteelBlue} ;能顺便把这份 {SercetRecipe/LightSteelBlue}
+34;Secret Recipe Delivery;SerpentValley;Description;2;to {CraftsLady/LimeGreen}? I hear the {CraftsLady/LimeGreen} in {Bichon/Yellow} ;交给 {Bichon/Yellow} 的 {CraftsLady/LimeGreen} 吗？听说那边的 {CraftsLady/LimeGreen}
+34;Secret Recipe Delivery;SerpentValley;Description;3;wants my {SecretRecipe/LightSteelBlue}. I'm too busy to go ;一直想要我的 {SecretRecipe/LightSteelBlue}，只是我实在太忙，
+34;Secret Recipe Delivery;SerpentValley;Description;4;there myself.;没法亲自跑一趟。
+34;Secret Recipe Delivery;SerpentValley;TaskDescription;0;Please delivery this recipe to {CraftsLady/LimeGreen} in;请把这份配方交给 {CraftsLady/LimeGreen}，
+34;Secret Recipe Delivery;SerpentValley;TaskDescription;1;{BichonWall/Yellow}.;她在 {BichonWall/Yellow}。
+34;Secret Recipe Delivery;SerpentValley;GotoMessage;0;Deliver the Recipe to CraftsLady in BichonWall;把配方送到比奇城墙的 CraftsLady 手中。
+35;SerpentValley;BichonProvince;Description;0;Have you heard of {SnakeWine/LightSteelBlue}? This Wine is made ;你听说过 {SnakeWine/LightSteelBlue} 吗？这种酒是用
+35;SerpentValley;BichonProvince;Description;1;with {Red Snake/Crimson} and {Striped Snakes/Crimson}. I had this ;{Red Snake/Crimson} 和 {Striped Snakes/Crimson} 酿制而成的。
+35;SerpentValley;BichonProvince;Description;2;once near the {SerpentValley/Yellow} and i still can't ;我曾在 {SerpentValley/Yellow} 附近喝过一次，至今
+35;SerpentValley;BichonProvince;Description;3;forget the taste of it.;都忘不了那味道。
+35;SerpentValley;BichonProvince;TaskDescription;0;Please go purchase some {SnakeWine/LightSteelBlue} from {Mary/LimeGreen};请去向 {Mary/LimeGreen} 购买一些 {SnakeWine/LightSteelBlue}。
+35;SerpentValley;BichonProvince;GotoMessage;0;Travel to SerpentValley and Speak to the InnKeeper;前往蛇谷，与旅店老板谈话。
+36;Ingredients for Snake Wine;SerpentValley;Description;0;I'm sorry but we are sold out of {SnakeWine/LightSteelBlue}.;抱歉，我们的 {SnakeWine/LightSteelBlue} 已经卖完了。
+36;Ingredients for Snake Wine;SerpentValley;Description;1;I can make you some, But you will have to bring ;我可以再酿一些，不过你得帮我准备
+36;Ingredients for Snake Wine;SerpentValley;Description;2;me the ingredients.;所需的材料。
+36;Ingredients for Snake Wine;SerpentValley;TaskDescription;0;Please collect 10 {SnakeBody's/LightSteelBlue} from Snakes.;请从各种蛇身上收集 10 份 {SnakeBody's/LightSteelBlue}。
+36;Ingredients for Snake Wine;SerpentValley;GotoMessage;0;Return to InnKeeper at 517:466;然后回到 517:466 找旅店老板。
+37;Wine Delivery;SerpentValley;Description;0;Here's the {SnakeWine/LightSteelBlue} for {MongchonScout/LimeGreen} as ;这是给 {MongchonScout/LimeGreen} 准备的 {SnakeWine/LightSteelBlue}，
+37;Wine Delivery;SerpentValley;Description;1;promised. Please enjoy.;如约酿好，请慢用。
+37;Wine Delivery;SerpentValley;TaskDescription;0;Deliver the {SnakeWine/LightSteelBlue} to {MongchonScout/LimeGreen}.;请把这份 {SnakeWine/LightSteelBlue} 交给 {MongchonScout/LimeGreen}。
+37;Wine Delivery;SerpentValley;GotoMessage;0;Return to MongchonScout with the Wine.;带着酒回到 MongchonScout 那里。
+38;Find Ebony Fruit;SerpentValley;Description;0;Hello traveller. I also need some fruit to make ;你好，旅行者。我还需要一些水果来
+38;Find Ebony Fruit;SerpentValley;Description;1;this wine. Could you get me 10 {EbonyFruit/LightSteelBlue}.;酿这酒。能帮我采集 10 个 {EbonyFruit/LightSteelBlue} 吗？
+38;Find Ebony Fruit;SerpentValley;TaskDescription;0;Please collect 10 {EbonyFruit/LightSteelBlue};请收集 10 个 {EbonyFruit/LightSteelBlue}。
+38;Find Ebony Fruit;SerpentValley;GotoMessage;0;Return to InnKeeper at 517:466;收集完后回到 517:466 找旅店老板。
+39;Greetings to the Old Man;SerpentValley;Description;0;My grandpa lives in {WoomyonWoods/Yellow}. I used ;我外公住在 {WoomyonWoods/Yellow}，以前
+39;Greetings to the Old Man;SerpentValley;Description;1;to visit him offen, but I've just been too busy. ;我经常去看他，但最近实在太忙，
+39;Greetings to the Old Man;SerpentValley;Description;2;Could you visit {MasterShok/LimeGreen} in {WoomyonWoods/Yellow};能麻烦你去 {WoomyonWoods/Yellow} 看看 {MasterShok/LimeGreen}，
+39;Greetings to the Old Man;SerpentValley;Description;3;and see how he's doing?;看看他现在过得怎样吗？
+39;Greetings to the Old Man;SerpentValley;TaskDescription;0;Visit {MasterShok/LimeGreen} Coordinates 312:73 ;前往坐标 312:73 处拜访 {MasterShok/LimeGreen}，
+39;Greetings to the Old Man;SerpentValley;TaskDescription;1;{WoomyonWood's/Yellow};那是 {WoomyonWood's/Yellow} 的位置。
+39;Greetings to the Old Man;SerpentValley;GotoMessage;0;Travel to WoomyonWoods and Visit Melissas Grandfather;前往雾隐森林探望 Melissa 的外公。
+40;Clean Up;WoomyonWoods;Description;0;Hello traveller. Please listen to my story. I moved ;你好，旅行者。请听我说说我的故事。我搬到这里
+40;Clean Up;WoomyonWoods;Description;1;to {Woomyon Woods/Yellow} 40 years ago. I was able ;来到 {Woomyon Woods/Yellow} 已经有四十年了。那时候我还能
+40;Clean Up;WoomyonWoods;Description;2;to hunt all the monsters around my home then, ;一个人猎杀家门口的所有怪物，
+40;Clean Up;WoomyonWoods;Description;3;but now that I'm old and weak, I'm afraid to go ;但如今我又老又弱，
+40;Clean Up;WoomyonWoods;Description;4;out of my house.;连出门都感到害怕。
+40;Clean Up;WoomyonWoods;TaskDescription;0;Eliminate 10 {OmaFighter/Crimson} for {MasterShok/LimeGreen};请为了 {MasterShok/LimeGreen} 消灭 10 只 {OmaFighter/Crimson}。
+40;Clean Up;WoomyonWoods;GotoMessage;0;Return back to MasterShok at 312:73;完成后回到 312:73 找 MasterShok。
+41;Grandads Request;WoomyonWoods;Description;0;You remind me of my granschild. She went to;你让我想起我的孙女。她去了
+41;Grandads Request;WoomyonWoods;Description;1;{Bichon/Yellow} to make money. I heard she was working;{Bichon/Yellow} 打工，听说现在在
+41;Grandads Request;WoomyonWoods;Description;2;at a butcher's store. Could you let her know that;一家屠夫店里做事。你能替我告诉她，
+41;Grandads Request;WoomyonWoods;Description;3;I'm doing well?;我过得很好吗？
+41;Grandads Request;WoomyonWoods;TaskDescription;0;Talk to {Sarah/LimeGreen} in {BichonWall/Yellow}.;去 {BichonWall/Yellow} 找 {Sarah/LimeGreen} 谈话。
+41;Grandads Request;WoomyonWoods;CompletionDescription;0;Thankyou traveller. I was getting worried about;谢谢你，旅行者。我一直担心着
+41;Grandads Request;WoomyonWoods;CompletionDescription;1;my grandad.;我的外公。
+41;Grandads Request;WoomyonWoods;GotoMessage;0;Travel to BichonWall and Speak with Sarah 313:271;前往比奇城墙，在 313:271 与 Sarah 交谈。
+42;Way to Mongchon;BichonProvince;Description;0;Hello young Mirian, I'm planning going to;你好，年轻的勇士。我打算经常前往
+42;Way to Mongchon;BichonProvince;Description;1;{MongchonProvince/Yellow} frequently, but i haven't left;{MongchonProvince/Yellow}，可是一直没敢出发，
+42;Way to Mongchon;BichonProvince;Description;2;this town because of the snake on the way. ;因为路上有太多毒蛇。
+42;Way to Mongchon;BichonProvince;Description;3;Do you think you can eliminate some of those ;你觉得能帮我清理掉一些
+42;Way to Mongchon;BichonProvince;Description;4;snakes?;那些蛇吗？
+42;Way to Mongchon;BichonProvince;TaskDescription;0;Eliminate 15 {RedViper/Crimson} and {TigerViper's/Crimson};请消灭 15 只 {RedViper/Crimson} 和 {TigerViper's/Crimson}。
+42;Way to Mongchon;BichonProvince;GotoMessage;0;Return to Bruce in Mongchon's Blacksmith;完成后回到盟重铁匠铺找 Bruce。
+43;Help Needed;BichonProvince;Description;0;Do you know where {SerpentValley/Yellow} is? It's a;你知道 {SerpentValley/Yellow} 在哪里吗？那是一个
+43;Help Needed;BichonProvince;Description;1;small town northwest of here. {Robert/LimeGreen} in that;位于这里西北方向的小镇。那里有个叫 {Robert/LimeGreen} 的人
+43;Help Needed;BichonProvince;Description;2;town is looking for some help. ;正在寻找帮手。
+43;Help Needed;BichonProvince;Description;3;Are you interested?;你有兴趣去帮忙吗？
+43;Help Needed;BichonProvince;TaskDescription;0;Speak to {Robert/LimeGreen} in {SerpentValley/Yellow};去 {SerpentValley/Yellow} 找 {Robert/LimeGreen} 谈一谈。
+43;Help Needed;BichonProvince;GotoMessage;0;Speak to Robert in SerpentValley;前往蛇谷与 Robert 交谈。
+44;Help Sandford;SerpentValley;Description;0;Did you come to help me? Are you really going to;你是来帮我的？你真的愿意帮忙吗？
+44;Help Sandford;SerpentValley;Description;1;help? Thank you so much. I never settle at one;太感谢你了。我从来没有在一个地方久住，
+44;Help Sandford;SerpentValley;Description;2;place, so I never have any neighbors to help me.;身边也就没有邻居能帮我。
+44;Help Sandford;SerpentValley;Description;3;My daugther got bitten by a {RedSnake/Crimson} and the ;我女儿被一条 {RedSnake/Crimson} 咬伤，
+44;Help Sandford;SerpentValley;Description;4;poison is almost killing her. I heard there is a ;毒素几乎要了她的命。我听说在 {PrajnaIsland/Yellow} 有一位
+44;Help Sandford;SerpentValley;Description;5;famous doctor, {Sandford/LimeGreen} in {PrajnaIsland/Yellow}.;名医 {Sandford/LimeGreen}，也许只有他能救她。
+44;Help Sandford;SerpentValley;TaskDescription;0;Please visit {Sandford/LimeGreen} and retrieve the cure my ;请去拜访 {Sandford/LimeGreen}，为我
+44;Help Sandford;SerpentValley;TaskDescription;1;daughter;女儿带回解药。
+44;Help Sandford;SerpentValley;GotoMessage;0;Travel to PrajnaIsland Speak to Sandford. Boat leaves fom BorderVillage;乘船从边境村前往般若岛，与 Sandford 谈话。
+45;Red Snake's Teeth;PrajnaIsland;Description;0;{RedSnake/Crimson} bite? Please tell {Robert/LimeGreen} that the Teeth;被 {RedSnake/Crimson} 咬伤了吗？请转告 {Robert/LimeGreen}，
+45;Red Snake's Teeth;PrajnaIsland;Description;1;of the {RedSnake/Crimson} is the main ingredient for the ;{RedSnake/Crimson} 的牙齿是解药的主要材料。
+45;Red Snake's Teeth;PrajnaIsland;Description;2;cure. You don't have much time. Go and kill some ;你没有多少时间了，赶紧去猎杀一些
+45;Red Snake's Teeth;PrajnaIsland;Description;3;{RedSnake's/Crimson} for the Teeth.;{RedSnake's/Crimson}，带回它们的毒牙吧。
+45;Red Snake's Teeth;PrajnaIsland;TaskDescription;0;Collect {RedSnakeTeeth/LightSteelBlue} for the Cure;收集 {RedSnakeTeeth/LightSteelBlue} 作为解药材料。
+45;Red Snake's Teeth;PrajnaIsland;GotoMessage;0;Hunt RedSnakes and Return to Robert in SerpentValley;猎杀红蛇后回到蛇谷找 Robert 复命。
+46;Skeleton Bones;BichonProvince;Description;0;{OmaCave/Yellow} are located in the west part of ;{OmaCave/Yellow} 位于 {BichonProvince/Yellow} 的西部，
+46;Skeleton Bones;BichonProvince;Description;1;{BichonProvince/Yellow}. This cave is filled with strong ;洞中遍布强大的怪物，
+46;Skeleton Bones;BichonProvince;Description;2;monsters. It's very dark and almost like a maze ;漆黑一片，内部几乎就像迷宫。
+46;Skeleton Bones;BichonProvince;Description;3;inside. Do you think you are ready to show your ;你觉得自己已经做好
+46;Skeleton Bones;BichonProvince;Description;4;courage?;展现勇气的准备了吗？
+46;Skeleton Bones;BichonProvince;TaskDescription;0;Kill {Skeleton's/Crimson} in {OmaCave/Yellow} and Collect ;在 {OmaCave/Yellow} 猎杀 {Skeleton's/Crimson}，并收集
+46;Skeleton Bones;BichonProvince;TaskDescription;1;{SkeletonBone's/LightSteelBlue};{SkeletonBone's/LightSteelBlue}。
+46;Skeleton Bones;BichonProvince;GotoMessage;0;Return to MirGuide Peter in BichonWall;然后回到比奇城墙找 MirGuide Peter 报告。
+47;Sister's Ring;BichonProvince;Description;0;Hello traveller, I have a favor tou ask you. I lost ;你好，旅行者，我想拜托你一件事。
+47;Sister's Ring;BichonProvince;Description;1;my sister's ring while hunting in {OmaCave/Yellow}. ;我在 {OmaCave/Yellow} 狩猎时弄丢了姐姐的戒指。
+47;Sister's Ring;BichonProvince;TaskDescription;0;Find {OliviasRing/LightSteelBlue} in {OmaCave/Yellow};请在 {OmaCave/Yellow} 找回 {OliviasRing/LightSteelBlue}。
+47;Sister's Ring;BichonProvince;GotoMessage;0;Return to Diana in BichonWall 306:276;找到后回到比奇城墙 306:276 交给 Diana。
+48;Deliver Supplies to the Border;BichonProvince;Description;0;The {Border village/Yellow} is in trouble! More guards are;{Border village/Yellow} 出事了！因为频繁受袭，
+48;Deliver Supplies to the Border;BichonProvince;Description;1;getting injured with frequent attacks from ;越来越多的守卫负伤，
+48;Deliver Supplies to the Border;BichonProvince;Description;2;monsters. {Ruben/LimeGreen} asked for {Relics/LightSteelBlue} for the injured.;{Ruben/LimeGreen} 请求我们收集一些 {Relics/LightSteelBlue} 用来救治伤员。
+48;Deliver Supplies to the Border;BichonProvince;TaskDescription;0;Collect 10 {Relics/LightSteelBlue} by hunting {CaveMaggots/Crimson};请通过猎杀 {CaveMaggots/Crimson} 收集 10 份 {Relics/LightSteelBlue}。
+48;Deliver Supplies to the Border;BichonProvince;GotoMessage;0;Deliver the Relics to Ruben in BorderVillage;将这些 Relics 送到边境村交给 Ruben。
+49;Dangerous Skeleton;BichonProvince;Description;0;Have you been to the dungeon near {Bichon/Yellow}?;你去过 {Bichon/Yellow} 附近的地牢吗？
+49;Dangerous Skeleton;BichonProvince;Description;1;The {Skeletons/Crimson} are there. The Guard near the;那里聚集着大量 {Skeletons/Crimson}。守卫报告说，
+49;Dangerous Skeleton;BichonProvince;Description;2;dungeon reported that the number of {Skeletons/Crimson};最近 {Skeletons/Crimson} 的数量
+49;Dangerous Skeleton;BichonProvince;Description;3;have been increasing lately. Do you think you;正在不断增加。你觉得自己
+49;Dangerous Skeleton;BichonProvince;Description;4;can go eliminate 25 {Skeletons/Crimson}? This is for the;有能力消灭 25 只 {Skeletons/Crimson} 吗？
+49;Dangerous Skeleton;BichonProvince;Description;5;safety of {Bichon/Yellow}.;这是为了 {Bichon/Yellow} 的安全。
+49;Dangerous Skeleton;BichonProvince;TaskDescription;0;Eliminate 25 {Skeleton's/Crimson};消灭 25 只 {Skeleton's/Crimson}。
+49;Dangerous Skeleton;BichonProvince;GotoMessage;0;Return to Jason in BichonWall 296:220;完成后回到比奇城墙 296:220 找 Jason 报告。
+50;Cook Book Delivery;BichonProvince;Description;0;Do you know how to get to {CastleGi-Ryoong/Yellow}? I ;你知道怎么去 {CastleGi-Ryoong/Yellow} 吗？
+50;Cook Book Delivery;BichonProvince;Description;1;need to send a CookBook to {Butcher Jim/LimeGreen} in;我要把一本菜谱送给那里的 {Butcher Jim/LimeGreen}，
+50;Cook Book Delivery;BichonProvince;Description;2;{CastleGi-Ryoong/Yellow}? ;就是 {CastleGi-Ryoong/Yellow} 的那位屠夫。
+50;Cook Book Delivery;BichonProvince;TaskDescription;0;Head North through {WoomyonWoods/Yellow} and;沿着北边穿过 {WoomyonWoods/Yellow}，
+50;Cook Book Delivery;BichonProvince;TaskDescription;1;deliver the {CookBook/LightSteelBlue} to {Jim/LimeGreen} in {CastleGi-Ryoong/Yellow};把 {CookBook/LightSteelBlue} 交给 {CastleGi-Ryoong/Yellow} 的 {Jim/LimeGreen}。
+50;Cook Book Delivery;BichonProvince;GotoMessage;0;Deliver the CookBook to Jim in CastleGi-Ryoong ;前往 CastleGi-Ryoong，将菜谱交给 Jim。
+51;CraftLady's CanniTea;BichonProvince;Description;0;Do you know of {CanniTea?/LightSteelBlue} Its the best Tea ;你听说过 {CanniTea?/LightSteelBlue} 吗？那可是最棒的茶。
+51;CraftLady's CanniTea;BichonProvince;Description;1;ever. I want to have some, but it's not easy ;我也很想喝一点，但可不容易弄到，
+51;CraftLady's CanniTea;BichonProvince;Description;2;to get. Could you ask {CraftLady/LimeGreen} to ;你能去请 {CraftLady/LimeGreen}
+51;CraftLady's CanniTea;BichonProvince;Description;3;make some {CanniTea/LightSteelBlue} for me? ;帮我做些 {CanniTea/LightSteelBlue} 吗？
+51;CraftLady's CanniTea;BichonProvince;Description;4; ; 
+51;CraftLady's CanniTea;BichonProvince;GotoMessage;0;Speak with CraftsLady in BichWall ;去比奇城墙找 CraftsLady 谈谈。
+52;Ingredients for CanniTea;BichonProvince;Description;0;Did you want me to make you {CanniTea/LightSteelBlue}? Hmm.. ;你想让我为你泡 {CanniTea/LightSteelBlue}？嗯……
+52;Ingredients for CanniTea;BichonProvince;Description;1;I ran out of Ingredients. Do you think you can ;材料已经用完了。你能帮我
+52;Ingredients for CanniTea;BichonProvince;Description;2;get me 10 {CannibalLeaf/LightSteelBlue} and 10 {CannibalSeed/LightSteelBlue}?;收集 10 个 {CannibalLeaf/LightSteelBlue} 和 10 个 {CannibalSeed/LightSteelBlue} 吗？
+52;Ingredients for CanniTea;BichonProvince;TaskDescription;0;Collect 10 {CannibalLeaf/LightSteelBlue} and {CannibalSeed's/LightSteelBlue} from ;请从 {CannibalPlant's/Crimson} 身上收集 10 个 {CannibalLeaf/LightSteelBlue} 和 10 个 {CannibalSeed's/LightSteelBlue}，
+52;Ingredients for CanniTea;BichonProvince;TaskDescription;1;{CannibalPlant's/Crimson};它们都来自 {CannibalPlant's/Crimson}。
+52;Ingredients for CanniTea;BichonProvince;GotoMessage;0;Return to the CraftsLady in BichonWall;完成后回到比奇城墙找 CraftsLady。
+53;Deliver CanniTea;BichonProvince;Description;0;Here is the Tea you asked for. Please deliver this ;这是你要的茶。请在它凉掉之前，
+53;Deliver CanniTea;BichonProvince;Description;1;before it gets cold.;尽快把它送过去。
+53;Deliver CanniTea;BichonProvince;TaskDescription;0;Deliver the {CanniTea/LightSteelBlue} to {MirGuide/LimeGreen};把 {CanniTea/LightSteelBlue} 交给 {MirGuide/LimeGreen}。
+53;Deliver CanniTea;BichonProvince;GotoMessage;0;Deliver CanniTea to MirGuide;把 CanniTea 送到 MirGuide 手中。
+54;Zombies in the Mines;BichonProvince;Description;0;The materials I need for making weapons;我打造武器所需的材料
+54;Zombies in the Mines;BichonProvince;Description;1;can be found in {DeadMineEntrance/Yellow}, but the area ;可以在 {DeadMineEntrance/Yellow} 附近找到，那里一带
+54;Zombies in the Mines;BichonProvince;Description;2;is infested with {Zombies/Crimson}. ;已经被 {Zombies/Crimson} 占满了。
+54;Zombies in the Mines;BichonProvince;TaskDescription;0;Eliminate 5 of each {Zombie/Crimson} in the {Mines/Yellow}.;请在 {Mines/Yellow} 各消灭 5 只不同种类的 {Zombie/Crimson}。
+54;Zombies in the Mines;BichonProvince;GotoMessage;0;Return to Blacksmith Bill in BichonWall;然后回到比奇城墙找铁匠 Bill。
+54;Zombies in the Mines;BichonProvince;KillMessage;0;Kill Zombies in BichonDeadMines;在比奇死亡矿区中击杀僵尸。
+55;Restocking Supplies;BichonProvince;Description;0;Could you please help me. I need to restock my ;能请你帮帮我吗？我需要重新补充一批
+55;Restocking Supplies;BichonProvince;Description;1;supplies. Could you please find the materials ;库存物资。请你帮我寻找一部分材料，
+55;Restocking Supplies;BichonProvince;Description;2;from the {Caves/Yellow} near {Bichon/Yellow}?;它们在 {Bichon/Yellow} 附近的 {Caves/Yellow} 里。
+55;Restocking Supplies;BichonProvince;TaskDescription;0;Please collect 5 {BatTeeth/LightSteelBlue} and {Skull's/LightSteelBlue} from ;请在 {OmaCave/Yellow} 收集 5 个 {BatTeeth/LightSteelBlue} 和 5 个 {Skull's/LightSteelBlue}，
+55;Restocking Supplies;BichonProvince;TaskDescription;1;{OmaCave/Yellow}, and {ZombieEye/LightSteelBlue} from {BichonDeadMine/Yellow}.;并在 {BichonDeadMine/Yellow} 收集 {ZombieEye/LightSteelBlue}。
+55;Restocking Supplies;BichonProvince;CompletionDescription;0;Thankyou very much brave traveller.;非常感谢你，勇敢的旅行者。
+55;Restocking Supplies;BichonProvince;GotoMessage;0;Return to CraftsLady in BichonWall;回到比奇城墙找 CraftsLady。
+56;Bat Wings;BichonProvince;Description;0;Have you ever tasted {Bat Wings/LightSteelBlue} before? It's a ;你吃过 {Bat Wings/LightSteelBlue} 吗？那可是道美味。
+56;Bat Wings;BichonProvince;Description;1;delicacy. I've been selling this a lot latley. Do You;最近这道菜卖得很好。你能帮我
+56;Bat Wings;BichonProvince;Description;2;think you can help me get some more wings?;再弄些蝙蝠翅膀来吗？
+56;Bat Wings;BichonProvince;TaskDescription;0;Collect 10 {BatWing's/LightSteelBlue} and return to {Sarah/LimeGreen};收集 10 个 {BatWing's/LightSteelBlue}，然后回到 {Sarah/LimeGreen} 身边。
+56;Bat Wings;BichonProvince;GotoMessage;0;Return to Butcher Sarah in BichonWall;回到比奇城墙找屠夫 Sarah。
+57;Collect Information;BichonProvince;Description;0;Template.;（占位模板）
+57;Collect Information;BichonProvince;GotoMessage;0;Take CaveReport to Kyle at the South East Gate.;把 CaveReport 送到东南门的 Kyle 那里。
+58;Danger in the Cave;BichonProvince;Description;0;Hmm.. The information seems to refer to the ;嗯……情报似乎指向了
+58;Danger in the Cave;BichonProvince;Description;1;{BoneElite/Crimson}. Can you help us and hunt ;{BoneElite/Crimson}。你能帮我们猎杀掉
+58;Danger in the Cave;BichonProvince;Description;2;this monster? We cannot leave our town since ;这个怪物吗？我们现在也遭到袭击，根本无法离开城镇，
+58;Danger in the Cave;BichonProvince;Description;3;we are under attack as well. ;所以只能拜托你出手。
+58;Danger in the Cave;BichonProvince;TaskDescription;0;Please eliminate the {BoneElite/Crimson} and bring back his ;请消灭那只 {BoneElite/Crimson}，并带回它的
+58;Danger in the Cave;BichonProvince;TaskDescription;1;{Head/LightSteelBlue}.;{Head/LightSteelBlue}。
+58;Danger in the Cave;BichonProvince;GotoMessage;0;Return BoneElites head to Kyle in BichonWall;将精英骷髅的头颅交给比奇城墙的 Kyle。
+59;Rare Ore;BichonProvince;Description;0;I'm making special armour useing {RareCopperOre/LightSteelBlue}.;我正在用 {RareCopperOre/LightSteelBlue} 打造一件特别的铠甲。
+59;Rare Ore;BichonProvince;Description;1;You can find these from the {Zombies/Crimson} in the ;这些矿石可以从 {Dead mine/Yellow} 里的 {Zombies/Crimson}
+59;Rare Ore;BichonProvince;Description;2;{Dead mine/Yellow}. ;身上找到。
+59;Rare Ore;BichonProvince;TaskDescription;0;Find 10 {RareCopperOre/LightSteelBlue} by hunting {Zombies/Crimson}.;请通过猎杀 {Zombies/Crimson} 收集 10 块 {RareCopperOre/LightSteelBlue}。
+59;Rare Ore;BichonProvince;GotoMessage;0;Return to Blacksmith Bill in BichonWall;然后回到比奇城墙找铁匠 Bill。
+60;Help the Farmers;BichonProvince;Description;0;There is a small farm near {Bichon/Yellow}. This farm is;在 {Bichon/Yellow} 附近有一片小农场，
+60;Help the Farmers;BichonProvince;Description;1;being attacked by insects. The reports are;最近不断遭到虫类攻击。报告显示，
+60;Help the Farmers;BichonProvince;Description;2;saying that these insects live in {InsectCave/Yellow}.;这些虫子都是从 {InsectCave/Yellow} 爬出来的。
+60;Help the Farmers;BichonProvince;Description;3;Could you hunt them in {InsectCave/Yellow} for me?;你能到 {InsectCave/Yellow} 帮我清理一下它们吗？
+60;Help the Farmers;BichonProvince;TaskDescription;0;Follow the Path North to {WoomyonWoods/Yellow} and;沿着北边小路前往 {WoomyonWoods/Yellow}，
+60;Help the Farmers;BichonProvince;TaskDescription;1;Eliminate 25 {SpiderFrog's/Crimson} in {InsectCave/Yellow};在 {InsectCave/Yellow} 消灭 25 只 {SpiderFrog's/Crimson}。
+60;Help the Farmers;BichonProvince;GotoMessage;0;Return to the Examiner in BichonWall;完成后回到比奇城墙找考官。
+61;Part Time Job;BichonProvince;Description;0;I got a message from {WoomyonWoods/Yellow} asking for ;我收到来自 {WoomyonWoods/Yellow} 的求助信息，
+61;Part Time Job;BichonProvince;Description;1;some help. Can you go to {WoomyonWoods/Yellow} and ;希望有人前去帮忙。你能去 {WoomyonWoods/Yellow}
+61;Part Time Job;BichonProvince;Description;2;help then with the trouble in {InsectCave/Yellow}? ;帮忙解决 {InsectCave/Yellow} 那里的麻烦吗？
+61;Part Time Job;BichonProvince;TaskDescription;0;Please go speak to {MasterShok/LimeGreen} in;请前往 {WoomyonWoods/Yellow}，与 {MasterShok/LimeGreen}
+61;Part Time Job;BichonProvince;TaskDescription;1;{WoomyonWoods/Yellow}.;好好谈一谈。
+61;Part Time Job;BichonProvince;GotoMessage;0;Travel to WoomyonWoods and speak to MasterShok;前往雾隐森林与 MasterShok 交谈。
+62;Exterminate;WoomyonWoods;Description;0;I want you to eliminate in the insects in ;我希望你去消灭洞里的那些虫子，
+62;Exterminate;WoomyonWoods;Description;1;{InsectCave/Yellow} I'm a very light sleeper and i cannot ;{InsectCave/Yellow} 的动静太大，
+62;Exterminate;WoomyonWoods;Description;2;sleep with noise from all the insects. Please can ;我睡觉很浅，根本无法入睡。
+62;Exterminate;WoomyonWoods;Description;3;you help me.;你能帮帮我吗？
+62;Exterminate;WoomyonWoods;TaskDescription;0;Eliminate 10 {KekTal/Crimson} and {VioletKekTal/Crimson};请消灭 10 只 {KekTal/Crimson} 和 {VioletKekTal/Crimson}。
+62;Exterminate;WoomyonWoods;GotoMessage;0;Return to MasterShok in WoomyonWoods;完成后回到雾隐森林找 MasterShok 报告。
+63;Finding a Friend's Remains;BichonProvince;Description;0;You have been very helpful to many people in ;你已经帮了 {Bichon/Yellow} 许多人，
+63;Finding a Friend's Remains;BichonProvince;Description;1;{Bichon/Yellow}. Do you have any spare time to help me ;能抽点时间也帮帮我吗？
+63;Finding a Friend's Remains;BichonProvince;Description;2;as well? A long time ago, I had a friend that I ;很久以前，我有一位一起狩猎的朋友，
+63;Finding a Friend's Remains;BichonProvince;Description;3;went hunting with. We went to {BichonDeadMine/Yellow} ;我们曾一起前往 {BichonDeadMine/Yellow}，
+63;Finding a Friend's Remains;BichonProvince;Description;4;one day when we where suuounded by ;那天被危险的怪物团团包围。
+63;Finding a Friend's Remains;BichonProvince;Description;5;dangerous creatures. We tried to escape, but ;我们试图突围，但怪物实在太多，
+63;Finding a Friend's Remains;BichonProvince;Description;6;there where just to many of them. My friend got ;我的朋友在战斗中受了重伤，
+63;Finding a Friend's Remains;BichonProvince;Description;7;hurt in battle, and he decided to stay behide ;最后决定留下来断后，
+63;Finding a Friend's Remains;BichonProvince;Description;8;while I escaped to get some help. I wanted ;让我一个人逃出去搬救兵。
+63;Finding a Friend's Remains;BichonProvince;Description;9;to get some help but no one was brave enough ;可我找不到愿意和我一起回去的人，
+63;Finding a Friend's Remains;BichonProvince;Description;10;to go help him with me. It's already to late ;直到现在已经太迟，
+63;Finding a Friend's Remains;BichonProvince;Description;11;but can you go find the remains of my friend? ;但你能帮我找到他的遗骸吗？
+63;Finding a Friend's Remains;BichonProvince;Description;12;He always had his necklace on him.;他身上应该带着一条项链。
+63;Finding a Friend's Remains;BichonProvince;TaskDescription;0;Try find {Vincent's/LimeGreen} friend he was last seen on;请尝试寻找 {Vincent's/LimeGreen} 的朋友，
+63;Finding a Friend's Remains;BichonProvince;TaskDescription;1;{B2 of DeadMine/Yellow}.;他最后一次出现是在 {B2 of DeadMine/Yellow}。
+63;Finding a Friend's Remains;BichonProvince;GotoMessage;0;Find Vincents Friend in BichonDeadMines;在比奇死亡矿区中寻找 Vincent 的朋友。
+64;Return the Necklace;BichonProvince;Description;0;That body seems to be one {Vincent/LimeGreen} is looking ;这具尸体看起来就是 {Vincent/LimeGreen} 要找的人，
+64;Return the Necklace;BichonProvince;Description;1;for. The necklace matches the description ;他身上的项链也和
+64;Return the Necklace;BichonProvince;Description;2;{Vincent/LimeGreen} gave.;{Vincent/LimeGreen} 的描述相符。
+64;Return the Necklace;BichonProvince;TaskDescription;0;Return the {OldNecklace/LightSteelBlue} to {Vincent/LimeGreen}.;把 {OldNecklace/LightSteelBlue} 交还给 {Vincent/LimeGreen}。
+64;Return the Necklace;BichonProvince;GotoMessage;0;Return the Necklace to Blacksmith Vincent in BichonWall;回到比奇城墙，把项链交给铁匠 Vincent。
+65;Revenge on Zombies;BichonProvince;Description;0;Hello traveller, One of the {Zombies/Crimson} killed my pet ;你好，旅行者，几天前有一只 {Zombies/Crimson} 杀了我的宠物。
+65;Revenge on Zombies;BichonProvince;Description;1;a couple days ago. Please help me with my ;请帮我向这些家伙
+65;Revenge on Zombies;BichonProvince;Description;2;revenge on the {Zombies/Crimson}!;报复一番，把那些 {Zombies/Crimson} 统统干掉！
+65;Revenge on Zombies;BichonProvince;TaskDescription;0;Eliminate 30 {Shaman Zombies/Crimson} in ;请在 {BichonDeadMines/Yellow} 消灭 30 只 {Shaman Zombies/Crimson}，
+65;Revenge on Zombies;BichonProvince;TaskDescription;1;{BichonDeadMines/Yellow}.;让它们为此付出代价。
+65;Revenge on Zombies;BichonProvince;GotoMessage;0;Return to Eddie in BichonWall at 298:317;完成后回到比奇城墙 298:317 找 Eddie。
+66;The Best Healthy Food;WoomyonWoods;Description;0;I cant really see that well. My sight is getting;我眼睛不太好了，视力随着年纪越来越差。
+66;The Best Healthy Food;WoomyonWoods;Description;1;worse as I age. I heard my sight will get better if;听说多吃虫眼睛能改善视力，
+66;The Best Healthy Food;WoomyonWoods;Description;2;I eat bug eyes. Could you get {BugEyes/LightSteelBlue} for me?;你能帮我弄些 {BugEyes/LightSteelBlue} 吗？
+66;The Best Healthy Food;WoomyonWoods;Description;3;I hear that {HoroBlaster/Crimson} and {BlueHoroBlaster/Crimson} ones;听说 {HoroBlaster/Crimson} 和 {BlueHoroBlaster/Crimson} 的眼睛
+66;The Best Healthy Food;WoomyonWoods;Description;4;are the best.;效果最好。
+66;The Best Healthy Food;WoomyonWoods;TaskDescription;0;Kill {HoroBlaster/Crimson} and {BluHoroBlaster/Crimson} and Collect ;请击杀 {HoroBlaster/Crimson} 和 {BluHoroBlaster/Crimson}，收集
+66;The Best Healthy Food;WoomyonWoods;TaskDescription;1;12 {BugEye/LightSteelBlue};12 个 {BugEye/LightSteelBlue}。
+66;The Best Healthy Food;WoomyonWoods;GotoMessage;0;Return to MasterShok in WoomyonWoods;完成后回到雾隐森林找 MasterShok。
+67;Medicine Research;WoomyonWoods;Description;0;{BlueHoroBlaster/Crimson} is in {InsectCave/Yellow}. The blood of;{BlueHoroBlaster/Crimson} 出没在 {InsectCave/Yellow}。这种虫子的血液
+67;Medicine Research;WoomyonWoods;Description;1;this bug can be purified to be used as a ;经过提炼可以用来制作药剂。
+67;Medicine Research;WoomyonWoods;Description;2;medicine. Could you bring me 12 {BugBlood/LightSteelBlue}?;你能帮我带回 12 份 {BugBlood/LightSteelBlue} 吗？
+67;Medicine Research;WoomyonWoods;TaskDescription;0;Kill {BlueHoroBlaster's/Crimson} in {InsectCave/Yellow} and collect 12 ;请在 {InsectCave/Yellow} 猎杀 {BlueHoroBlaster's/Crimson} 并收集 12 份
+67;Medicine Research;WoomyonWoods;TaskDescription;1;{BugBlood/LightSteelBlue};{BugBlood/LightSteelBlue}。
+67;Medicine Research;WoomyonWoods;GotoMessage;0;Return the Blood back to Helen in WoomyonWoods;然后把血液带回雾隐森林交给 Helen。
+68;Finding a Lost Item;WoomyonWoods;Description;0;Hello traveller, I have another task which suit's your;你好，旅行者，我还有一件很适合你的差事。
+68;Finding a Lost Item;WoomyonWoods;Description;1;talent's.. I love my necklace in {InsectCave/Yellow}.;我在 {InsectCave/Yellow} 弄丢了心爱的项链。
+68;Finding a Lost Item;WoomyonWoods;Description;2;Can you find and bring it back to me please?;你能帮我把它找回来吗？
+68;Finding a Lost Item;WoomyonWoods;TaskDescription;0;Kill {SpiderFrog's/Crimson} and collect {BluJadeNecklace/LightSteelBlue}.;请击杀 {SpiderFrog's/Crimson}，并收集 {BluJadeNecklace/LightSteelBlue}。
+68;Finding a Lost Item;WoomyonWoods;GotoMessage;0;Return the Blood back to Helen in WoomyonWoods;找到后把项链带回雾隐森林交给 Helen。
+69;Find my Friend;WoomyonWoods;Description;0;My friend went to {InsectCave/Yellow} to find herbs, but;我的朋友去 {InsectCave/Yellow} 采药，
+69;Find my Friend;WoomyonWoods;Description;1;hasn't returned yet. Do you think you can go ;到现在还没回来。你能去
+69;Find my Friend;WoomyonWoods;Description;2;find {Soho/LimeGreen} in {InsectCave/Yellow}?;在 {InsectCave/Yellow} 找找 {Soho/LimeGreen} 吗？
+69;Find my Friend;WoomyonWoods;TaskDescription;0;Search for {Soho/LimeGreen} in the Second Floor of ;请在 {InsectCave/Yellow} 二层寻找 {Soho/LimeGreen}，
+69;Find my Friend;WoomyonWoods;TaskDescription;1;{InsectCave/Yellow}.;确认他的情况。
+69;Find my Friend;WoomyonWoods;GotoMessage;0;Search for Helens friend Soho in InsectCave;到虫洞中寻找 Helen 的朋友 Soho。
+70;Poisoned Friend;InsectCave;Description;0;I got attacked a couple days ago, and I got ;几天前我遭到袭击，被毒到了，
+70;Poisoned Friend;InsectCave;Description;1;poisoned. I bought the {Antidote/LightSteelBlue} but the mobs ;虽然后来买了 {Antidote/LightSteelBlue}，
+70;Poisoned Friend;InsectCave;Description;2;took my bag. ;但途中又被怪物抢走了包裹。
+70;Poisoned Friend;InsectCave;TaskDescription;0;Kill {KekTal's/Crimson} and find {Soho's/LimeGreen} {Antidote/LightSteelBlue};请击杀 {KekTal's/Crimson}，找回 {Soho's/LimeGreen} 的 {Antidote/LightSteelBlue}。
+70;Poisoned Friend;InsectCave;GotoMessage;0;Find and return Soho Backpack;找到并归还 Soho 的背包。
+71;Lost Item;InsectCave;Description;0;I lost my bag because of the insects in the cave.;我在洞里的虫子袭击中丢了包，
+71;Lost Item;InsectCave;Description;1;They took all my belongings. Could you please;里面所有东西都被拿走了。你能帮我
+71;Lost Item;InsectCave;Description;2;get my stuff back? ;把那些东西追回来吗？
+71;Lost Item;InsectCave;TaskDescription;0;Kill {VoiletKekTal/Crimson}, {KekTal/Crimson} and {BlueHoroBlaster's/Crimson} ;请击杀 {VoiletKekTal/Crimson}、{KekTal/Crimson} 和 {BlueHoroBlaster's/Crimson}，
+71;Lost Item;InsectCave;GotoMessage;0;Return the Lost Items to Soho;把失物交还给 Soho。
+72;News from a Friend;InsectCave;GotoMessage;0;Return to Helen in WoomyonWoods;回到雾隐森林找 Helen。
+73;Research Report;WoomyonWoods;Description;0;Thankyou Traveller the assistance you have ;谢谢你，旅行者，多亏了你的相助，
+73;Research Report;WoomyonWoods;Description;1;provided. I am so happy that my Friend {Soho/LimeGreen} ;我很高兴我的朋友 {Soho/LimeGreen}
+73;Research Report;WoomyonWoods;Description;2;is alive and well. I have another task for you.;平安无事。我还有一件事想拜托你。
+73;Research Report;WoomyonWoods;TaskDescription;0;Deliver {MobBlood/LightSteelBlue} to {Dr.Kim/LimeGreen} in {SerpentValley/Yellow};请把 {MobBlood/LightSteelBlue} 送到 {SerpentValley/Yellow} 的 {Dr.Kim/LimeGreen} 手中。
+73;Research Report;WoomyonWoods;GotoMessage;0;Deliver MobBlood to Dr.Kim in SerpentValley;把 MobBlood 交给蛇谷的 Dr.Kim。
+74;Free the Souls from Zombies;SerpentValley;Description;0;Traveler. Please enter the {SerpentDeadMine/Yellow} ;旅行者，请进入 {SerpentDeadMine/Yellow}，
+74;Free the Souls from Zombies;SerpentValley;Description;1;and eliminate the threat.;消灭那里的威胁。
+74;Free the Souls from Zombies;SerpentValley;TaskDescription;0;Eliminate 10 {GhostZombie/Crimson} and {DarkPriestZombie/Crimson}.;请消灭 10 只 {GhostZombie/Crimson} 和 {DarkPriestZombie/Crimson}。
+74;Free the Souls from Zombies;SerpentValley;GotoMessage;0;Return to the VulnerableSon;完成后回到那位脆弱的少年身边。
+74;Free the Souls from Zombies;SerpentValley;KillMessage;0; At SerpentDeadMine Entrance.;在蛇谷死亡矿入口击杀僵尸。
+75;Wipe Out;SerpentValley;Description;0;Have you heard of the {SerpentDeadMine/Yellow}? I keep ;你听说过 {SerpentDeadMine/Yellow} 吗？我总能听到
+75;Wipe Out;SerpentValley;Description;1;hearing chain's. coming from the Mine its ;从矿里传来的锁链声，
+75;Wipe Out;SerpentValley;Description;2;driving me mad.;快要把我逼疯了。
+75;Wipe Out;SerpentValley;TaskDescription;0;Eliminate 15 {ChainGhoul's/Crimson}.;请消灭 15 只 {ChainGhoul's/Crimson}。
+75;Wipe Out;SerpentValley;GotoMessage;0;Return to Chandler in SerpentValley;完成后回到蛇谷找 Chandler。
+76;Bloody Sword;SerpentValley;Description;0;Rumours take it.. theres a very rare Sword in the ;听说北边矿区里藏着一把非常稀有的剑，
+76;Bloody Sword;SerpentValley;Description;1;Mines north. Can you please bring me it?;你能帮我把它带回来吗？
+76;Bloody Sword;SerpentValley;TaskDescription;0;Kill {HiGreatGhoul/Crimson} on {SerpentDeadMines 2F/Yellow};请在 {SerpentDeadMines 2F/Yellow} 击杀 {HiGreatGhoul/Crimson}，
+76;Bloody Sword;SerpentValley;TaskDescription;1;and retrieve the {BloodySword/LightSteelBlue};并取得 {BloodySword/LightSteelBlue}。
+76;Bloody Sword;SerpentValley;GotoMessage;0;Return to Blacksmith Bradly in SerpentValley;然后回到蛇谷找铁匠 Bradly。
+77;Call from the Dead;SerpentValley;Description;0;Please return to {Robin/LimeGreen} Warehouse Keeper in ;请回到 {MongchonProvince/Yellow}，找仓库管理员 {Robin/LimeGreen}，
+77;Call from the Dead;SerpentValley;Description;1;{MongchonProvince/Yellow} ;听听他怎么说。
+78;Hidden Box;MongchonProvince;Description;0;Thankyou traveler. For returning my son's {Robe/LightSteelBlue} I have a task;谢谢你把我儿子的 {Robe/LightSteelBlue} 带了回来，我还有一件事想拜托你，
+78;Hidden Box;MongchonProvince;Description;1;if your to the challenge. My Son was looking for some treasure in ;如果你有兴趣接受挑战的话。他当时在
+78;Hidden Box;MongchonProvince;Description;2;{SerpentDeadMine/Yellow} There was a letter in his Robes saying he found;{SerpentDeadMine/Yellow} 寻找宝物，衣服里留下的信说他已经找到
+78;Hidden Box;MongchonProvince;Description;3;the Gold. Please return and retrieve the {StolenGold/LightSteelBlue};黄金。请你回去帮我取回 {StolenGold/LightSteelBlue}。
+78;Hidden Box;MongchonProvince;TaskDescription;0;Kill {RotNdZombie/Crimson} located on {SerpentDeadMine 2F/Yellow};请在 {SerpentDeadMine 2F/Yellow} 击杀 {RotNdZombie/Crimson}。
+79;Darkness from the Mines;SerpentValley;Description;0;There seem's to be a Dark and Evil Aura coming ;那里似乎正涌出一股强烈的黑暗气息，
+79;Darkness from the Mines;SerpentValley;Description;1;from the {Mine/Yellow};源头就在 {Mine/Yellow}。
+79;Darkness from the Mines;SerpentValley;TaskDescription;0;Investigate the source of Evil in ;请调查邪恶气息的来源，
+79;Darkness from the Mines;SerpentValley;TaskDescription;1;{SerpentDeadMine/Yellow};前往 {SerpentDeadMine/Yellow} 深处一探究竟。
+79;Darkness from the Mines;SerpentValley;GotoMessage;0;Search for the Darkness within the SerpentDeadMines;在蛇谷死亡矿区中寻找黑暗力量的源头。
+80;Secret of the Skull;SerpentDeadMine;Description;0;A Scroll with a description. It must be important.;这是一张写满文字的卷轴，看起来相当重要。
+80;Secret of the Skull;SerpentDeadMine;TaskDescription;0;Deliver the {HiddenScroll/LightSteelBlue} to {Dr.Kim/LimeGreen}.;请把 {HiddenScroll/LightSteelBlue} 交给 {Dr.Kim/LimeGreen}。
+80;Secret of the Skull;SerpentDeadMine;GotoMessage;0;Return the HiddenScroll to Dr.Kim;把 HiddenScroll 送回给 Dr.Kim。
+81;Dark Shadow;SerpentValley;Description;0;Traveler Please return to the {SerpentDeadMines/Yellow} ;旅行者，请再次前往 {SerpentDeadMines/Yellow}，
+81;Dark Shadow;SerpentValley;Description;1;and complete the task which was on the ;完成卷轴上
+81;Dark Shadow;SerpentValley;Description;2;{HiddenScroll/LightSteelBlue}. ;{HiddenScroll/LightSteelBlue} 所记载的任务。
+81;Dark Shadow;SerpentValley;TaskDescription;0;Eliminate {RotShamanZombie's/Crimson} and retrieve ;请消灭 {RotShamanZombie's/Crimson}，并从 {HiGreatGhoul/Crimson} 身上取得
+81;Dark Shadow;SerpentValley;TaskDescription;1;{HeartOfDead/LightSteelBlue} from the {HiGreatGhoul/Crimson};{HeartOfDead/LightSteelBlue}。
+81;Dark Shadow;SerpentValley;GotoMessage;0;Return to Dr.Kim in SerpentValley;完成后回到蛇谷找 Dr.Kim。
+82;White Serpent;SerpentValley;Description;0;Traveler... Traveler. I'm in dire need of your ;旅行者……旅行者，我现在非常需要你的帮助。
+82;White Serpent;SerpentValley;Description;1;help... I've just received new's regarding a ;我刚刚得到消息，说在
+82;White Serpent;SerpentValley;Description;2;very rare creature in {SerpentDeadMines/Yellow} ;{SerpentDeadMines/Yellow} 里出现了一种非常罕见的生物，
+82;White Serpent;SerpentValley;Description;3;the {WhiteSerpent/Crimson} sound's interesting ;名叫 {WhiteSerpent/Crimson}，听起来很有意思，
+82;White Serpent;SerpentValley;Description;4;does it not? ;
+82;White Serpent;SerpentValley;TaskDescription;0;Eliminate {WhiteSerpent/Crimson} in {SerpentDeadMine/Yellow}.;
+82;White Serpent;SerpentValley;GotoMessage;0;Return the Collector in SerpentValley;完成后回到蛇谷找收藏家。
+83;Material for Clothing;SerpentValley;Description;0;Good to see you again traveler. Please can you ;又见面了，旅行者。我有件事想请你帮忙。
+83;Material for Clothing;SerpentValley;Description;1;take this order to {Sam/LimeGreen} the Drapery Merchant in ;请把这份订单交给 {TaoVillage/Yellow} 的布商 {Sam/LimeGreen}，
+83;Material for Clothing;SerpentValley;Description;2;{TaoVillage/Yellow}.;他正在等这批货。
+83;Material for Clothing;SerpentValley;TaskDescription;0;Head North through {WoomyonWoods/Yellow} and deliver ;沿着北边穿过 {WoomyonWoods/Yellow}，
+83;Material for Clothing;SerpentValley;TaskDescription;1;the {TraineeSuit/LightSteelBlue} to {Drapery Sam/LimeGreen}.;把 {TraineeSuit/LightSteelBlue} 交给 {Drapery Sam/LimeGreen}。
+83;Material for Clothing;SerpentValley;GotoMessage;0;Travel to TaoVillage and speak to Sam at 206:319;前往道观村，在 206:319 找 Sam 交货。
+84;Missing Materials;TaoVillage;Description;0;Have you ever heard of {TreePath/Yellow}? It's such a ;你听说过 {TreePath/Yellow} 吗？那里是个采集材料的好地方。
+84;Missing Materials;TaoVillage;Description;1;great place to gather resources. Please travel ;请你去那边一趟，
+84;Missing Materials;TaoVillage;Description;2;there and collect the materials I require.;帮我收集一些我需要的材料。
+84;Missing Materials;TaoVillage;TaskDescription;0;Please collect 10 {RedThread's/LightSteelBlue} and {BlackThread's/LightSteelBlue};请通过击杀 {VenomSpider's/Crimson} 和 {GreatSpider's/Crimson}，收集 10 个 {RedThread's/LightSteelBlue}
+84;Missing Materials;TaoVillage;TaskDescription;1;by killing {VenomSpider's/Crimson} and {GreatSpider's/Crimson};以及 10 个 {BlackThread's/LightSteelBlue}。
+84;Missing Materials;TaoVillage;GotoMessage;0;Return to Sam in TaoVillage with the Materials;收集完成后回到道观村找 Sam。
+85;Save the Cursed Souls;TaoVillage;Description;0;Myths and Rumours say that Collecting ;传说中，如果收集
+85;Save the Cursed Souls;TaoVillage;Description;1;{Zombie Heart's/LightSteelBlue} for a special Ridual.;并在仪式中使用 {Zombie Heart's/LightSteelBlue}，
+85;Save the Cursed Souls;TaoVillage;Description;2;repells them from the Area.;就能驱散这片区域的亡灵。
+85;Save the Cursed Souls;TaoVillage;TaskDescription;0;Collect 10 {ZombiesHeart/LightSteelBlue} from {CursedPriest's/Crimson}.;请从 {CursedPriest's/Crimson} 身上收集 10 个 {ZombiesHeart/LightSteelBlue}。
+85;Save the Cursed Souls;TaoVillage;GotoMessage;0;Return to MasterMK in TaoVillage;然后回到道观村找 MasterMK。
+86;Uniform Order Status;TaoVillage;Description;0;Traveler, Can you please assist me? I placed an ;旅行者，能请你帮我个忙吗？我之前在
+86;Uniform Order Status;TaoVillage;Description;1;order with {Ann/LimeGreen} in {BichonWall/Yellow} but this ;{BichonWall/Yellow} 的 {Ann/LimeGreen} 那里下过一批制服订单，
+86;Uniform Order Status;TaoVillage;Description;2;was ages ago.. Can you enquire about my order.;但已经过去很久了。你能去问问订单的情况吗？
+86;Uniform Order Status;TaoVillage;TaskDescription;0;Please travel to {BichonWall/Yellow} and speak to {Ann/LimeGreen};请前往 {BichonWall/Yellow}，与 {Ann/LimeGreen}
+86;Uniform Order Status;TaoVillage;TaskDescription;1;the Drapery Merchant.;这位布商聊一聊。
+86;Uniform Order Status;TaoVillage;GotoMessage;0;Travel to BichonWall Drapery Shop and speak with Ann;去比奇城墙的布店与 Ann 谈话。
+87;Locate the Carriage;BichonProvince;Description;0;The Order left day's ago.. ;货物几天前就已经发出，
+87;Locate the Carriage;BichonProvince;Description;1;He should have recieved her order by now.. ;按理说现在早就该送到了……
+87;Locate the Carriage;BichonProvince;TaskDescription;0;Locate the missing Carriage.;请查明那辆失踪马车的下落。
+87;Locate the Carriage;BichonProvince;GotoMessage;0;Search for the Missing Carriage on the way to TaoVillage;在前往道观村的路上寻找失踪的马车。
+88;Zombies Attack on Carriage;TaoVillage;Description;0;Report that the Carriage was attacked.;向上级回报马车遭到僵尸袭击的情况。
+88;Zombies Attack on Carriage;TaoVillage;TaskDescription;0;Return to the {LeadTrainer/LimeGreen}.;请回去找 {LeadTrainer/LimeGreen} 复命。
+88;Zombies Attack on Carriage;TaoVillage;GotoMessage;0;Return to LeadTrainer at 227:269 ;回到 227:269 找 LeadTrainer。
+89;Zombies Hunt;TaoVillage;Description;0;There seem's to be a lot of Zombie's presence ;最近僵尸的活动越来越频繁，
+89;Zombies Hunt;TaoVillage;Description;1;lately. Head West to the {MineralMines/Yellow}.;请前往西边的 {MineralMines/Yellow}。
+89;Zombies Hunt;TaoVillage;Description;2; ; 
+89;Zombies Hunt;TaoVillage;TaskDescription;0;Eliminate 10 {CursedPriest/Crimson}, {ShiZombie/Crimson}, ;请在 {MineralMines/Yellow} 消灭 10 只 {CursedPriest/Crimson}、{ShiZombie/Crimson}
+89;Zombies Hunt;TaoVillage;TaskDescription;1;{CursedZombie's/Crimson}.;以及若干 {CursedZombie's/Crimson}。
+89;Zombies Hunt;TaoVillage;GotoMessage;0;Return to LeadTrainer in TaoVillage 227:269;完成后在 227:269 回报给 LeadTrainer。
+90;Gathering Material;TaoVillage;Description;0;Please head back to {TreePath/Yellow} and gather more ;请再回到 {TreePath/Yellow}，
+90;Gathering Material;TaoVillage;Description;1;{Materials/LightSteelBlue}.;采集更多 {Materials/LightSteelBlue}。
+90;Gathering Material;TaoVillage;TaskDescription;0;Find 5 {AncientTree/LightSteelBlue} by killing {RootSpider's/Crimson}.;请通过击杀 {RootSpider's/Crimson} 收集 5 份 {AncientTree/LightSteelBlue}。
+90;Gathering Material;TaoVillage;GotoMessage;0;Return to Jerald to TaoVillage 234:301;收集完成后回到 234:301 找 Jerald。
+91;Help the Lumberer;TaoVillage;Description;0;Traveler.. Alittle help please. I was in {TreePath/Yellow}.;旅行者……能帮我个小忙吗？我刚才在 {TreePath/Yellow}
+91;Help the Lumberer;TaoVillage;Description;1;Chopping {Wood/LightSteelBlue} when i was starteld and dropped ;砍伐 {Wood/LightSteelBlue} 时被吓了一跳，结果把
+91;Help the Lumberer;TaoVillage;Description;2;my {Axe/LightSteelBlue};自己的 {Axe/LightSteelBlue} 掉了。
+91;Help the Lumberer;TaoVillage;TaskDescription;0;Locate and Kill {BloodyLureSpider/Crimson} and retrieve ;请找到并击杀 {BloodyLureSpider/Crimson}，取回
+91;Help the Lumberer;TaoVillage;TaskDescription;1;the {WornAxe/LightSteelBlue};{WornAxe/LightSteelBlue}。
+91;Help the Lumberer;TaoVillage;GotoMessage;0;Return the LumberAxe to Sigmund in TaoVillage 166:339;把伐木斧交还给道观村 166:339 的 Sigmund。
+92;Deep into the Woods;TaoVillage;Description;0;There's been a Monster Kill Order issued. ;已经下达了一份怪物讨伐令，
+92;Deep into the Woods;TaoVillage;Description;1;Please carry out this Order.;希望你能协助执行。
+92;Deep into the Woods;TaoVillage;TaskDescription;0;Eliminate 4 {GangSpider/Crimson}, {RootSpider/Crimson} 5 ;请消灭 4 只 {GangSpider/Crimson}、5 只 {RootSpider/Crimson}，
+92;Deep into the Woods;TaoVillage;TaskDescription;1;{LureSpider/Crimson} and {GreatSpider's/Crimson}.;以及一定数量的 {LureSpider/Crimson} 和 {GreatSpider's/Crimson}。
+92;Deep into the Woods;TaoVillage;GotoMessage;0;Return to Jerry in TaoVillage;完成后回到道观村找 Jerry。
+93;Runaway Student;TaoVillage;Description;0;Student's like to take risk's.. but there's one ;学生总喜欢冒险……然而现在有一名学生
+93;Runaway Student;TaoVillage;Description;1;missing.;失踪了。
+93;Runaway Student;TaoVillage;TaskDescription;0;Search for the Missing Student. ;请去寻找这名失踪的学生。
+93;Runaway Student;TaoVillage;GotoMessage;0;Search for the missing Student in TreePath;到 TreePath 一带寻找那名学生。
+94;Bad News;TaoVillage;Description;0;After searching the {CrushedBone's/LimeGreen} it's missing ;我们检查了 {CrushedBone's/LimeGreen} 的遗物，发现
+94;Bad News;TaoVillage;Description;1;the {TraineeRing/LightSteelBlue}.;行囊里少了 {TraineeRing/LightSteelBlue}。
+94;Bad News;TaoVillage;TaskDescription;0;Retrieve the {TraineeRing/LightSteelBlue} by killing {VenomSpider/Crimson}.;请通过击杀 {VenomSpider/Crimson} 找回那枚 {TraineeRing/LightSteelBlue}。
+94;Bad News;TaoVillage;GotoMessage;0;Return the TraineeRing to Hubert in TaoVillage 194:297;找到后在 194:297 把 TraineeRing 交给 Hubert。
+95;Letters to Parents;TaoVillage;Description;0;I miss my Parent's so much. Please can you help?;我非常想念我的父母，你能帮我一个忙吗？
+95;Letters to Parents;TaoVillage;TaskDescription;0;Delivery {SkysLetter/LightSteelBlue} to {Sir.Mogu/LimeGreen} in {BichonWall/Yellow}.;请把 {SkysLetter/LightSteelBlue} 送到 {BichonWall/Yellow}，交给 {Sir.Mogu/LimeGreen}。
+95;Letters to Parents;TaoVillage;GotoMessage;0;Deliver SkysLetter to Sir.Mogu in BichonWall Tavern;在比奇城墙的酒馆将 SkysLetter 交给 Sir.Mogu。
+96;Cooking Beef Rib Stew;BichonProvince;Description;0;The {Butcher/LimeGreen} in {WoomyonWoods/Yellow} just opened a;{WoomyonWoods/Yellow} 的 {Butcher/LimeGreen} 刚开了一家新店，
+96;Cooking Beef Rib Stew;BichonProvince;Description;1;new store. He asked me for some help. ;他希望我能帮他一把。
+96;Cooking Beef Rib Stew;BichonProvince;TaskDescription;0;Collect 10 {BeefRib/LightSteelBlue} by Killing {WoomaSoldier's/Crimson};请通过击杀 {WoomaSoldier's/Crimson} 收集 10 份 {BeefRib/LightSteelBlue}，
+96;Cooking Beef Rib Stew;BichonProvince;TaskDescription;1;and deliver to the {Butcher/LimeGreen} in {WoomyonWoods/Yellow};然后交给 {WoomyonWoods/Yellow} 的 {Butcher/LimeGreen}。
+96;Cooking Beef Rib Stew;BichonProvince;GotoMessage;0;Deliver BeefRib to Butcher Han in WoomyonWoods;把 BeefRib 交给雾隐森林的屠夫 Han。
+97;Danger (WoomyonWoods);WoomyonWoods;Description;0;Traveler. Please Warn the {SubjugationLead/LimeGreen} in ;旅行者，请去提醒 {WoomyonWoods/Yellow} 的 {SubjugationLead/LimeGreen}，
+97;Danger (WoomyonWoods);WoomyonWoods;Description;1;{WoomyonWoods/Yellow} about the pending threat.;关于即将到来的威胁。
+97;Danger (WoomyonWoods);WoomyonWoods;TaskDescription;0;Travel to {WoomyonWoods/Yellow} and warm them ;请前往 {WoomyonWoods/Yellow}，提前警告他们
+97;Danger (WoomyonWoods);WoomyonWoods;TaskDescription;1;about the pending Threat.;这场即将到来的危机。
+97;Danger (WoomyonWoods);WoomyonWoods;GotoMessage;0;Travel to WoomyonWoods and Warn SubjugationLead.;前往雾隐森林，警告 SubjugationLead。
+98;Monster Hunt in Wooma;WoomyonWoods;Description;0;We need to damage this threat quickly. Head to ;我们必须尽快削弱这股威胁。请前往
+98;Monster Hunt in Wooma;WoomyonWoods;Description;1;South-West to the {Temple/Yellow} and try weaken ;西南方向的 {Temple/Yellow}，
+98;Monster Hunt in Wooma;WoomyonWoods;Description;2;it's resolve.;尽可能打击它们的士气。
+98;Monster Hunt in Wooma;WoomyonWoods;TaskDescription;0;Eliminate 20 {Dung/Crimson} and {WoomaSoldiers/Crimson}.;请消灭 20 只 {Dung/Crimson} 和 {WoomaSoldiers/Crimson}。
+98;Monster Hunt in Wooma;WoomyonWoods;CompletionDescription;0;Your back, Let's hope your actions has weaken the threat.;你回来了，希望你的行动已经削弱了那股威胁。
+98;Monster Hunt in Wooma;WoomyonWoods;GotoMessage;0;Return to SubjugationLead in WoomyonWoods;回到雾隐森林找 SubjugationLead。
+99;Boss Mob Hunt;WoomyonWoods;Description;0;Travel, I have another task. ;旅行者，我还有另一项任务。
+99;Boss Mob Hunt;WoomyonWoods;Description;1;I'm still worried by this threat. I have decided we ;我仍然对这股威胁感到不安，我决定
+99;Boss Mob Hunt;WoomyonWoods;Description;2;should send these creatures a message.;给这些家伙一点颜色看看。
+99;Boss Mob Hunt;WoomyonWoods;TaskDescription;0;Eliminate 20 {FlamingWooma's/Crimson} and ;请在 {WoomaTemple/Yellow} 消灭 20 只 {FlamingWooma's/Crimson}
+99;Boss Mob Hunt;WoomyonWoods;TaskDescription;1;{WoomaFighter's/Crimson} in {WoomaTemple/Yellow}.;以及若干 {WoomaFighter's/Crimson}。
+99;Boss Mob Hunt;WoomyonWoods;GotoMessage;0;Return to SubjugationLead in WoomyonWoods;完成后回到雾隐森林找 SubjugationLead。
+100;Deadly Attack;WoomyonWoods;Description;0;We have been receiving new report's.;我们又收到了新的报告，
+100;Deadly Attack;WoomyonWoods;Description;1;There is a New type of creature in the {Temple/Yellow}.;在 {Temple/Yellow} 中出现了一种全新的怪物。
+100;Deadly Attack;WoomyonWoods;TaskDescription;0;Eliminate 30 {WoomaWarrior's/Crimson} and a ;请消灭 30 只 {WoomaWarrior's/Crimson}，并击败一只
+100;Deadly Attack;WoomyonWoods;TaskDescription;1;{WoomaGaurdian/Crimson} and return his {Horn/LightSteelBlue}.;{WoomaGaurdian/Crimson}，并带回它的 {Horn/LightSteelBlue}。
+100;Deadly Attack;WoomyonWoods;GotoMessage;0;Return to SubjagationManager in BichonWall with an update.;带着最新战况回到比奇城墙找 SubjagationManager。
+101;Boss Mob of Woomyon;WoomyonWoods;Description;0;The Howling oh the Howling.. Search for the ;呼啸声，一阵又一阵……去寻找声音的源头，
+101;Boss Mob of Woomyon;WoomyonWoods;Description;1;Source and Kill the creature.;并将那只怪物消灭掉。
+101;Boss Mob of Woomyon;WoomyonWoods;TaskDescription;0;Eliminate the {OmaWarrior/Crimson}.;请击杀 {OmaWarrior/Crimson}。
+101;Boss Mob of Woomyon;WoomyonWoods;GotoMessage;0;Return to MasterShok 312:73;完成后回到 312:73 找 MasterShok。
+102;Trip to Mongchon;BichonProvince;Description;0;Oh Hello Traveler. ;哦，原来是你，旅行者。
+102;Trip to Mongchon;BichonProvince;Description;1;Have you ever heard of {MongchonProvince/Yellow}? ;你听说过 {MongchonProvince/Yellow} 吗？
+102;Trip to Mongchon;BichonProvince;Description;2;They are in need of help.;那里现在急需人手帮忙。
+102;Trip to Mongchon;BichonProvince;TaskDescription;0;Talk to {Edwin/LimeGreen} in {MongchonProvince/Yellow}.;请前往 {MongchonProvince/Yellow}，与 {Edwin/LimeGreen} 交谈。
+102;Trip to Mongchon;BichonProvince;GotoMessage;0;Travel to MongchonWall via SerpentValley and Speak with Edwin;经由蛇谷前往盟重城墙，与 Edwin 谈话。
+103;Abnormal Creatures;MongchonProvince;Description;0;Did anyone tell you about {Death Valley/Yellow}? It's a;有人跟你说过 {Death Valley/Yellow} 吗？
+103;Abnormal Creatures;MongchonProvince;Description;1;place with lots of cliffs and rocks. The insects in;那是一片布满峭壁和岩石的险地，那里的虫类
+103;Abnormal Creatures;MongchonProvince;Description;2;this area are growing abnormally big. I've been;正以异常的速度长大。我已经研究它们很多年了。
+103;Abnormal Creatures;MongchonProvince;Description;3;researching them for years. I was trying to get a;几天前我想取得一份 {WhimperingBee/Crimson} 的
+103;Abnormal Creatures;MongchonProvince;Description;4;{Specimen/LightSteelBlue} of {WhimperingBee/Crimson} a few days ago, but ;{Specimen/LightSteelBlue} 样本，却被它们袭击了。
+103;Abnormal Creatures;MongchonProvince;Description;5;I was attacked by them. ;
+103;Abnormal Creatures;MongchonProvince;TaskDescription;0;Eliminate {WhimperingBee's/Crimson} to collect ;请消灭一定数量的 {WhimperingBee's/Crimson}，
+103;Abnormal Creatures;MongchonProvince;TaskDescription;1;{BugSpecimen/LightSteelBlue} which be found in {Death Valley/Yellow};并在 {Death Valley/Yellow} 收集 {BugSpecimen/LightSteelBlue}。
+103;Abnormal Creatures;MongchonProvince;GotoMessage;0;Return to Daniel in MongchonWall;完成后回到盟重城墙找 Daniel。
+104;Lost Sword;MongchonProvince;Description;0;I went to hunt in {DeathValley/Yellow}. I ran into some ;我之前去 {DeathValley/Yellow} 狩猎时，遇到了一些
+104;Lost Sword;MongchonProvince;Description;1;{Tongs/Crimson} I thought it was a Boss Monster. ;{Tongs/Crimson}，一开始我还以为是首领怪物。
+104;Lost Sword;MongchonProvince;Description;2;While retreating I dropped my beloved Sword.;撤退时不小心把心爱的长剑遗落在那里了。
+104;Lost Sword;MongchonProvince;TaskDescription;0;Travel to {Death Valley/Yellow} and retrieve {CharleySword/LightSteelBlue} ;请前往 {Death Valley/Yellow}，通过击杀 {Tongs/Crimson}
+104;Lost Sword;MongchonProvince;TaskDescription;1;by killing {Tongs/Crimson}.;找回 {CharleySword/LightSteelBlue}。
+104;Lost Sword;MongchonProvince;GotoMessage;0;Return to Charleys lost sword.;将失而复得的长剑带回给 Charley。
+105;Lost Soul;DeathValley;Description;0;You.. Sir.. You.. Help I'm trapped.;你……先生……你……帮帮我，我被困住了。
+105;Lost Soul;DeathValley;Description;1;Last thing I remember is dying further in the valley.;我最后的记忆，是在山谷深处战死，
+105;Lost Soul;DeathValley;Description;2;Then i was back here.;然后就莫名其妙回到了这里。
+105;Lost Soul;DeathValley;TaskDescription;0;Investigate why the {Soul/LimeGreen}, has returned.;请调查这名 {Soul/LimeGreen} 为何会再次回到此处。
+106;Lost Soul's Remains;DeathValley;Description;0;The Necklace is my {LifeStone/LightSteelBlue}.. This is why I have ;那条项链就是我的 {LifeStone/LightSteelBlue}……也是我
+106;Lost Soul's Remains;DeathValley;Description;1;returned. Please find my {LifeStone/LightSteelBlue}.;能回来的原因。请帮我找回 {LifeStone/LightSteelBlue}。
+106;Lost Soul's Remains;DeathValley;TaskDescription;0;Hunt {GiantWorm's/Crimson} and return the {OldNecklace/LightSteelBlue}.;请猎杀 {GiantWorm's/Crimson}，并带回 {OldNecklace/LightSteelBlue}。
+106;Lost Soul's Remains;DeathValley;GotoMessage;0;Return to the LostSoul on S_1FofDungeon 202:204;把项链带回山谷一层 202:204 处的 LostSoul 身边。
+107;Last Words;DeathValley;Description;0;Please return my {LifeStone/LightSteelBlue} to my Daughter;请把我的 {LifeStone/LightSteelBlue} 交给我的女儿，
+107;Last Words;DeathValley;Description;1;{Rachel/LimeGreen}. She will know what it will mean.;{Rachel/LimeGreen}。她会明白这代表什么。
+107;Last Words;DeathValley;Description;2;Thankyou for your assistance I'm now at peace.;感谢你的帮助，我终于可以安息了。
+107;Last Words;DeathValley;TaskDescription;0;Please take {OldNecklace/LightSteelBlue} to {Rachel/LimeGreen}.;请把 {OldNecklace/LightSteelBlue} 交给 {Rachel/LimeGreen}，
+107;Last Words;DeathValley;TaskDescription;1;in {MongchonProvince/Yellow};她住在 {MongchonProvince/Yellow}。
+107;Last Words;DeathValley;GotoMessage;0;Return Necklace to Rachel in MongchonWall;把项链带回盟重城墙交给 Rachel。
+108;Antique Book;MongchonProvince;Description;0;I'm a fool! I've lost the Oldest Book's around.;我真是个笨蛋！把最古老的那本书给弄丢了。
+108;Antique Book;MongchonProvince;Description;1;I was visiting {SabukWall/Yellow} and fell then the;我在 {SabukWall/Yellow} 观光时摔了一跤，
+108;Antique Book;MongchonProvince;Description;2;next thing i knew. I was surround by {Zombies/Crimson}.;回过神来时，已经被 {Zombies/Crimson} 围住了。
+108;Antique Book;MongchonProvince;TaskDescription;0;Find the Hidden Entrance in {SabukWall/Yellow} and find ;请在 {SabukWall/Yellow} 寻找隐藏入口，
+108;Antique Book;MongchonProvince;TaskDescription;1;the {BichonTales/LightSteelBlue}.;并找到 {BichonTales/LightSteelBlue}。
+108;Antique Book;MongchonProvince;GotoMessage;0;Return the Book back to Collector in MongchonWall;把那本书带回盟重城墙的收藏家那里。
+109;Find More Antique Books;MongchonProvince;Description;0;Hello Mirian, I'm still missing {Volume 1/LightSteelBlue} and {2/LightSteelBlue}, ;你好，冒险者，我还缺少 {Volume 1/LightSteelBlue} 和 {2/LightSteelBlue}。
+109;Find More Antique Books;MongchonProvince;TaskDescription;0;Please return to the {Hidden Entrance/Yellow} ;请再次前往 {Hidden Entrance/Yellow}，
+109;Find More Antique Books;MongchonProvince;TaskDescription;1;And retrieve {Volume 1/LightSteelBlue} and {2/LightSteelBlue}.;把 {Volume 1/LightSteelBlue} 和 {2/LightSteelBlue} 统统找回来。
+109;Find More Antique Books;MongchonProvince;GotoMessage;0;Return the Books back to Collector in MongchonWall;将书籍带回盟重城墙交给收藏家。
+110;Meet with Mr.Wang;MongchonProvince;Description;0;Please Visit {SabukWall/Yellow} and speak with {Mr.Wang/LimeGreen}.;请前往 {SabukWall/Yellow}，与 {Mr.Wang/LimeGreen} 谈一谈。
+110;Meet with Mr.Wang;MongchonProvince;GotoMessage;0;Travel East to SabukWall and Speak with Mr.Wang;向东前往 Sabuk 城墙，与 Mr.Wang 谈话。
+111;Secret Path;MongchonProvince;Description;0;There are {Hidden Entrances/Yellow} around here. ;这附近有一些 {Hidden Entrances/Yellow}。
+111;Secret Path;MongchonProvince;Description;1;They lead to some kind of Dungeon. Rumours ;据说这些入口通向某种地牢，
+111;Secret Path;MongchonProvince;Description;2;say they at Each Entrance. There are some kind ;并且在每个入口附近
+111;Secret Path;MongchonProvince;Description;3;of Pillar's.;都会出现某种石柱。
+111;Secret Path;MongchonProvince;TaskDescription;0;Find the {Hidden Entrances/Yellow} and Search for the ;请找到这些 {Hidden Entrances/Yellow}，并寻找
+111;Secret Path;MongchonProvince;TaskDescription;1;Pillar's;那些石柱。
+111;Secret Path;MongchonProvince;GotoMessage;0;Return to Mr.Wang once found all the pillars;找到所有石柱后回去找 Mr.Wang。
+112;Saftey of Secret Path;MongchonProvince;Description;0;So for once the rumours are true.;看来这一次传闻是真的。
+112;Saftey of Secret Path;MongchonProvince;Description;1;Please return to the {Hidden Entrance/Yellow}. ;请再次回到 {Hidden Entrance/Yellow}。
+112;Saftey of Secret Path;MongchonProvince;Description;2; ; 
+112;Saftey of Secret Path;MongchonProvince;TaskDescription;0;Eliminate some {CrawlerZombies/Crimson}.;请消灭一些 {CrawlerZombies/Crimson}。
+113;Insomnia;MongchonProvince;Description;0;Hello. There are to many Insects in ;你好。最近 {MongchonProvince/Yellow} 一带
+113;Insomnia;MongchonProvince;Description;1;{MongchonProvince/Yellow} these days. I can't sleep ;虫子实在太多，害得我晚上
+113;Insomnia;MongchonProvince;Description;2;because of the noises at night. Could you ;被那些声音吵得睡不着。
+113;Insomnia;MongchonProvince;Description;3;hunt these insects?;你能帮我去清理一下这些虫子吗？
+113;Insomnia;MongchonProvince;TaskDescription;0;Travel to {Stone Tomb/Yellow} and Eliminate 10 ;请前往 {Stone Tomb/Yellow}，消灭 10 只
+113;Insomnia;MongchonProvince;TaskDescription;1;{BlackMaggot/Crimson} and {WedgeMoth/Crimson}.;{BlackMaggot/Crimson} 和 {WedgeMoth/Crimson}。
+113;Insomnia;MongchonProvince;TaskDescription;2; ; 
+113;Insomnia;MongchonProvince;GotoMessage;0;Return to Jessica in MongchonWall;完成后回到盟重城墙找 Jessica。
+114;Threats to Mongchon;MongchonProvince;Description;0;Welcome to {MongchonProvince/Yellow}. ;欢迎来到 {MongchonProvince/Yellow}。
+114;Threats to Mongchon;MongchonProvince;Description;1;We have been getting attacked by Boar looking ;最近我们一直遭到野猪模样的怪物袭击，
+114;Threats to Mongchon;MongchonProvince;Description;2;monsters. We got reports that these mobs are ;有报告称这些怪物是从
+114;Threats to Mongchon;MongchonProvince;Description;3;coming from the {Underground Tomb/Yellow}. Can you ;{Underground Tomb/Yellow} 涌出来的。你能前去
+114;Threats to Mongchon;MongchonProvince;Description;4;go there and eliminate the monsters?;消灭那里的怪物吗？
+114;Threats to Mongchon;MongchonProvince;TaskDescription;0;Eliminate 15 {BlackBoar/Crimson} and {RedBoar's/Crimson} in ;请在 {StoneTomb/Yellow} 消灭 15 只 {BlackBoar/Crimson}
+114;Threats to Mongchon;MongchonProvince;TaskDescription;1;{StoneTomb/Yellow};以及若干 {RedBoar's/Crimson}。
+114;Threats to Mongchon;MongchonProvince;GotoMessage;0;Return to MongchonDelegate in MongchonWall;完成后回到盟重城墙找 MongchonDelegate。
+115;Eliminate WhiteBoar;MongchonProvince;Description;0;How Deep have you been in {Stone Temple/Yellow}?;你曾经深入 {Stone Temple/Yellow} 到多深的地方？
+115;Eliminate WhiteBoar;MongchonProvince;Description;1;The {WhiteBoar/Crimson} is located on Deep Within.;{WhiteBoar/Crimson} 就潜伏在更深处。
+115;Eliminate WhiteBoar;MongchonProvince;TaskDescription;0;Eliminate the {WhiteBoar/Crimson}.;请将那只 {WhiteBoar/Crimson} 消灭掉。
+115;Eliminate WhiteBoar;MongchonProvince;GotoMessage;0;Return to MongchonDelegate in MongchonWall;完成后回到盟重城墙找 MongchonDelegate。
+116;Report to the Manager;MongchonProvince;Description;0;Please report to my Commanding Officer in ;请回到 {BichonProvince/Yellow}，
+116;Report to the Manager;MongchonProvince;Description;1;{BichonProvince/Yellow}.;向我的上级汇报情况。
+116;Report to the Manager;MongchonProvince;TaskDescription;0;Report to {SubjugationManager/LimeGreen} ;去找 {SubjugationManager/LimeGreen} 报告。
+116;Report to the Manager;MongchonProvince;GotoMessage;0;Speak to SubjugationManager in BichonWall;在比奇城墙与 SubjugationManager 交谈。
+117;Check Supply Path;BichonProvince;Description;0;Speak to {CaveGuide/LimeGreen} in {TaoVillage/Yellow};请去 {TaoVillage/Yellow} 找 {CaveGuide/LimeGreen} 谈谈。
+117;Check Supply Path;BichonProvince;TaskDescription;0;Head West of {TaoVillage/Yellow} and Speak ;从道观村向西前进，
+117;Check Supply Path;BichonProvince;TaskDescription;1;with {CaveGuide/LimeGreen}.;与 {CaveGuide/LimeGreen} 会合。
+117;Check Supply Path;BichonProvince;GotoMessage;0;Speak with CaveGuide.;去找 CaveGuide 谈话。
+118;Zombies in MineralMine;TaoVillage;Description;0;Hello Mirian, We push these {Zombie's/Crimson} back quite ;你好，冒险者，我们一直在努力压制这些 {Zombie's/Crimson}，
+118;Zombies in MineralMine;TaoVillage;Description;1;frequently. Could you render your assistance?;但仍需要你的协助。
+118;Zombies in MineralMine;TaoVillage;Description;2; ; 
+118;Zombies in MineralMine;TaoVillage;TaskDescription;0;Eliminate {CursedZombie/Crimson}, {ShiZombie/Crimson} and ;请在 {MineralMines/Yellow} 消灭 {CursedZombie/Crimson}、{ShiZombie/Crimson}
+118;Zombies in MineralMine;TaoVillage;TaskDescription;1;{HungryZombie's/Crimson} in {MineralMines/Yellow}.;以及 {HungryZombie's/Crimson} 等僵尸。
+118;Zombies in MineralMine;TaoVillage;GotoMessage;0;Return to CaveGuide in TaoVillage once the threat has been reduced.;当威胁减弱后，回到道观村找 CaveGuide 报告。
+119;Message to BichonExaminer;TaoVillage;Description;0;Please report back to the {BichonExaminer/LimeGreen} ;
+119;Message to BichonExaminer;TaoVillage;TaskDescription;0;Talk to {BichonExaminer/LimeGreen} in {BichonProvince/Yellow};
+119;Message to BichonExaminer;TaoVillage;GotoMessage;0;Travel to BichonWall and talk to BichonExaminer 341:258;
+120;CorpsFlower;BichonProvince;Description;0;My Teacher asked me to find ingredients for ;老师让我去寻找一些炼药材料，
+120;CorpsFlower;BichonProvince;Description;1;medicine. You can only get them from ;那东西只能从
+120;CorpsFlower;BichonProvince;Description;2;{RoninGhoul/Crimson}, but I cannot get close to them. ;{RoninGhoul/Crimson} 身上获得，可我根本不敢靠近它们。
+120;CorpsFlower;BichonProvince;Description;3;Could you get some {CorpsFlower/LightSteelBlue} for me?;你能帮我采集一些 {CorpsFlower/LightSteelBlue} 吗？
+120;CorpsFlower;BichonProvince;TaskDescription;0;Travel to PrajnaIsland and Collect 10 {CorpsFlower/LightSteelBlue} by ;请前往般若岛，通过猎杀
+120;CorpsFlower;BichonProvince;TaskDescription;1;hunting {RoninGhoul's/Crimson};{RoninGhoul's/Crimson} 收集 10 份 {CorpsFlower/LightSteelBlue}。
+120;CorpsFlower;BichonProvince;GotoMessage;0;Return to Samuel in BichonWall after you retrieve all CorpsFlowers;全部收集完后回到比奇城墙找 Samuel。
+121;Save Prajna;PrajnaIsland;Description;0;We have been getting more attacks from the monsters lately. ;最近怪物的袭击越来越频繁，
+121;Save Prajna;PrajnaIsland;Description;1;Do you think you can eliminate the threat? ;你觉得能帮忙消除这股威胁吗？
+121;Save Prajna;PrajnaIsland;TaskDescription;0;Travel the Island and Eliminate 15 {ToxicGhoul's/Crimson} ;请在岛上各处消灭 15 只 {ToxicGhoul's/Crimson}
+121;Save Prajna;PrajnaIsland;TaskDescription;1;and 10 {RoninGhoul's/Crimson}.;以及 10 只 {RoninGhoul's/Crimson}。
+121;Save Prajna;PrajnaIsland;GotoMessage;0;Return to the Inspector in PrajnaIsland;完成后回到般若岛找检察官复命。
+122;Skeleton Hunt 1;PrajnaIsland;Description;0;{Prajna Cave/Yellow} is where lots of Warriors died;许多战士曾在 {Prajna Cave/Yellow} 与怪物拼死作战，
+122;Skeleton Hunt 1;PrajnaIsland;Description;1;fighting the monsters. A couple years ago, ;数年前开始，
+122;Skeleton Hunt 1;PrajnaIsland;Description;2;we have seen these dead Warriors brought back to ;我们发现那些阵亡的战士被复活，
+122;Skeleton Hunt 1;PrajnaIsland;Description;3;life, but they do not remember a thing and ;却不记得任何事情，
+122;Skeleton Hunt 1;PrajnaIsland;Description;4;attack everyone that enters the cave. ;见到进入洞里的任何人就发起攻击。
+122;Skeleton Hunt 1;PrajnaIsland;Description;5;Please help Eliminate them.;请帮忙将它们消灭。
+122;Skeleton Hunt 1;PrajnaIsland;TaskDescription;0;Head East to the {PrajnaStoneCave/Yellow} and Eliminate ;请向东前往 {PrajnaStoneCave/Yellow}，消灭
+122;Skeleton Hunt 1;PrajnaIsland;TaskDescription;1;15 {BoneArcher's/Crimson} and 15 {BoneSpearman/Crimson};15 只 {BoneArcher's/Crimson} 和 15 只 {BoneSpearman/Crimson}。
+122;Skeleton Hunt 1;PrajnaIsland;GotoMessage;0;Return to MirGuide Edward in PrajnaIsland;完成后回到般若岛找 MirGuide Edward。
+123;Skeleton Hunt 2;PrajnaIsland;Description;0;There are stonger monsters inside the tomb.;墓穴深处潜伏着更强大的怪物。
+123;Skeleton Hunt 2;PrajnaIsland;Description;1;{BoneBlademan/Crimson} are faster then the other;其中 {BoneBlademan/Crimson} 比其他骷髅更为迅捷，
+123;Skeleton Hunt 2;PrajnaIsland;Description;2;monsters. Please eliminate these monsters.;请将这些怪物一并清除。
+123;Skeleton Hunt 2;PrajnaIsland;TaskDescription;0;Please return to the cave. And Eliminate 15 ;请再次进入洞穴，消灭 15 只
+123;Skeleton Hunt 2;PrajnaIsland;TaskDescription;1;{BoneBlademan/Crimson}.;{BoneBlademan/Crimson}。
+123;Skeleton Hunt 2;PrajnaIsland;GotoMessage;0;Return to MirGuide Edward in PrajnaIsland;完成后回到般若岛找 MirGuide Edward。
+124;Skull Collector;PrajnaIsland;Description;0;I need your help. I have a Order.. A strange One. ;我需要你的帮助，我接到一份有点奇怪的委托。
+124;Skull Collector;PrajnaIsland;Description;1;Can you travel to the local Cave? and collect some ;你能去附近的洞穴，帮我收集一些
+124;Skull Collector;PrajnaIsland;Description;2;{CleanSkull's/LightSteelBlue}.;{CleanSkull's/LightSteelBlue} 吗？
+124;Skull Collector;PrajnaIsland;TaskDescription;0;Collect 20 {CleanSkull's/LightSteelBlue} by hunting {BoneArcher's/Crimson}, ;请通过猎杀 {BoneArcher's/Crimson}、{BoneBlademan/Crimson}
+124;Skull Collector;PrajnaIsland;TaskDescription;1;{BoneBlademan/Crimson} and {BoneSpearman/Crimson}.;和 {BoneSpearman/Crimson} 收集 20 个 {CleanSkull's/LightSteelBlue}。
+124;Skull Collector;PrajnaIsland;GotoMessage;0;Return to the Collector once retrieved all the Skulls;收集完所有头骨后回到收藏家那里。
+125;Visit the VillageChief;PrajnaIsland;Description;0;The {VillageChief/LimeGreen} is looking for you. ;{VillageChief/LimeGreen} 在找你。
+125;Visit the VillageChief;PrajnaIsland;TaskDescription;0;Speak to the {VillageChief/LimeGreen} in {Prajna Island/Yellow};请前往 {Prajna Island/Yellow} 与 {VillageChief/LimeGreen} 交谈。
+125;Visit the VillageChief;PrajnaIsland;GotoMessage;0;Travel up the Stairs and speak with the VillageChief;沿着台阶往上走，与村长说话。
+126;The VillageChief's Request;PrajnaIsland;Description;0;Please travel back to {TaoVillage/Yellow} and speak with ;请回到 {TaoVillage/Yellow}，
+126;The VillageChief's Request;PrajnaIsland;Description;1;the {LeadTrainer/LimeGreen}.;与 {LeadTrainer/LimeGreen} 谈一谈。
+126;The VillageChief's Request;PrajnaIsland;GotoMessage;0;Travel to TaoVillage and speak with the LeadTrainer;前往道观村，与 LeadTrainer 交谈。
+127;Stolen Book;TaoVillage;Description;0;The {Prajna Island/Yellow} {VillageChief/LimeGreen} has asked ;{Prajna Island/Yellow} 的 {VillageChief/LimeGreen} 想要取回
+127;Stolen Book;TaoVillage;Description;1;for the {PrajnaHistory/LightSteelBlue} Book back..;那本 {PrajnaHistory/LightSteelBlue} 书。
+127;Stolen Book;TaoVillage;Description;2;I'm sorry to inform you We have been ransacked ;很遗憾地告诉你，我们遭到洗劫，
+127;Stolen Book;TaoVillage;Description;3;and many precious items have been stolen. ;许多贵重物品都被偷走了。
+127;Stolen Book;TaoVillage;Description;4;The Monster what attacked was a {Blue BigApe/Crimson};袭击者是一只 {Blue BigApe/Crimson}。
+127;Stolen Book;TaoVillage;TaskDescription;0;Kill {EvilApeSobo/Crimson} and retrieve {PrajnaHistory/LightSteelBlue}.;请击杀 {EvilApeSobo/Crimson} 并夺回 {PrajnaHistory/LightSteelBlue}。
+127;Stolen Book;TaoVillage;TaskDescription;1;Travel to {RedValley/Yellow} and Search for the Attacker.;前往 {RedValley/Yellow} 寻找袭击者的踪迹。
+127;Stolen Book;TaoVillage;GotoMessage;0;Return to LeadTrainer in TaoVillage;完成后回到道观村找 LeadTrainer。
+128;Returning a Book;TaoVillage;Description;0;You found the Book.. That's fantastic news. ;你找到那本书了……真是太好了。
+128;Returning a Book;TaoVillage;Description;1;It dosent look like it's been damaged. ;看起来几乎没有受损。
+128;Returning a Book;TaoVillage;TaskDescription;0;Return the {PrajnaHistory/LightSteelBlue} Book to {VillageChief/LimeGreen};请把 {PrajnaHistory/LightSteelBlue} 一书交还给 {VillageChief/LimeGreen}，
+128;Returning a Book;TaoVillage;TaskDescription;1;in {PrajnaIsland/Yellow}.;他在 {PrajnaIsland/Yellow}。
+128;Returning a Book;TaoVillage;GotoMessage;0;Return the Book to VillageChief in PrajnaIsland;将书带回般若岛交给村长。
+129;New Poison;TaoVillage;Description;0;Please travel to the {RedValley/Yellow} and collect the;请前往 {RedValley/Yellow} 采集一些材料，
+129;New Poison;TaoVillage;Description;1;Ingredient's. ;用来试验一种新的毒药。
+129;New Poison;TaoVillage;TaskDescription;0;Kill {SpiderBat/Crimson} and collect 20 {BatPoison/LightSteelBlue}.;请击杀 {SpiderBat/Crimson}，收集 20 份 {BatPoison/LightSteelBlue}。
+129;New Poison;TaoVillage;GotoMessage;0;Return to Janey in TaoVillage 179:296;完成后回到道观村 179:296 找 Janey。
+130;Wanted!;TaoVillage;Description;0;Are you interested in a Bounty?;有兴趣接一份悬赏任务吗？
+130;Wanted!;TaoVillage;TaskDescription;0;Find and Eliminate {EvilBigApe/LightSteelBlue} in {RedValley/Yellow}.;请在 {RedValley/Yellow} 找到并击杀 {EvilBigApe/LightSteelBlue}。
+130;Wanted!;TaoVillage;GotoMessage;0;Return to the Investigator in TaoVillage;完成后回到道观村找调查员复命。
+131;Ancient Mobs;PrajnaIsland;TaskDescription;0;Travel South-East to {PrajnaTemple/Yellow} and Kill 30 ;请向东南方前往 {PrajnaTemple/Yellow}，击杀 30 只
+131;Ancient Mobs;PrajnaIsland;TaskDescription;1;{Minotaur's/Crimson}.;{Minotaur's/Crimson}。
+131;Ancient Mobs;PrajnaIsland;GotoMessage;0;Return to the Inspector in PrajnaIsland;完成后回到般若岛找检察官复命。
+132;Mobs from Prajna;PrajnaIsland;TaskDescription;0;Eliminate 20 {WindMinotaur/Crimson}, {ElecMinotaur/Crimson}, ;请消灭 20 只 {WindMinotaur/Crimson}、{ElecMinotaur/Crimson}、
+132;Mobs from Prajna;PrajnaIsland;TaskDescription;1;{FireMinotaur/Crimson} and {IceMinotaur/Crimson}.;以及 {FireMinotaur/Crimson} 和 {IceMinotaur/Crimson}。
+132;Mobs from Prajna;PrajnaIsland;GotoMessage;0;Return to the VillageChief in PrajnaIsland;完成后回到般若岛找 VillageChief。
+133;Guards from Prajna;PrajnaIsland;TaskDescription;0;Eliminate 30 {LeftGuard/Crimson} and {RightGuard's/Crimson}.;请消灭 30 名 {LeftGuard/Crimson} 和 {RightGuard's/Crimson}。
+133;Guards from Prajna;PrajnaIsland;GotoMessage;0;Return to the VillageChief in PrajnaIsland;完成后回到般若岛找 VillageChief。
+134;Ingredient from Prajna;PrajnaIsland;Description;0;Please can you take this {Algea/LightSteelBlue} to ;能否帮我把这份 {Algea/LightSteelBlue} 带到
+134;Ingredient from Prajna;PrajnaIsland;Description;1;{MongchonProvince/Yellow}.;{MongchonProvince/Yellow} 去？
+134;Ingredient from Prajna;PrajnaIsland;TaskDescription;0;Deliver the {Algea/LightSteelBlue} to {CraftsLady/LimeGreen} in ;请将 {Algea/LightSteelBlue} 交给 {MongchonProvince/Yellow} 的 {CraftsLady/LimeGreen}。
+134;Ingredient from Prajna;PrajnaIsland;TaskDescription;1;{MongchonProvince/Yellow}.;
+134;Ingredient from Prajna;PrajnaIsland;GotoMessage;0;Deliver the Algae to MongchonWall CraftsLady;把这些藻类送到盟重城墙的 CraftsLady 手中。
+135;Find Passage to Ruins;MongchonProvince;Description;0;Hello Mirian, there is a Darker Evil within ;你好，冒险者，{Stone Temple/Yellow} 内部潜藏着更强大的邪恶。
+135;Find Passage to Ruins;MongchonProvince;Description;1;{Stone Temple/Yellow} There is a stone ;在更深的地方有一块石头，
+135;Find Passage to Ruins;MongchonProvince;Description;2;within the layer's which cliams to have the capability;据说它具有开启通道的能力，
+135;Find Passage to Ruins;MongchonProvince;Description;3;to enter a passage into {Ancient Layer/Yellow};可以进入 {Ancient Layer/Yellow}。
+135;Find Passage to Ruins;MongchonProvince;TaskDescription;0;Find the Stone within {Stone Temple/Yellow};请在 {Stone Temple/Yellow} 中找到那块石头。
+135;Find Passage to Ruins;MongchonProvince;GotoMessage;0;Return to MongchonDelegate in MongchonWall;找到后回到盟重城墙找 MongchonDelegate。
+136;Shipping Relics;MongchonProvince;Description;0;From the rumours going around you have found;听说你已经在 {Stone Temple/Yellow} 中找到了
+136;Shipping Relics;MongchonProvince;Description;1;the {Ancient Layer/Yellow} in {Stone Temple/Yellow} Return and ;{Ancient Layer/Yellow}。请再回去一趟，
+136;Shipping Relics;MongchonProvince;Description;2;Collect {RelicRock's/LightSteelBlue} from the Ancient Layer of ;在古代层中收集一些 {RelicRock's/LightSteelBlue}，
+136;Shipping Relics;MongchonProvince;Description;3;{StoneTemple/Yellow};
+136;Shipping Relics;MongchonProvince;TaskDescription;0;Kill {AncientRedBoars/Crimson}, {AncientBlackBoars/Crimson} and ;通过击杀 {AncientRedBoars/Crimson}、{AncientBlackBoars/Crimson}
+136;Shipping Relics;MongchonProvince;TaskDescription;1;{AncientWhiteBoar's/Crimson} for {RelicRock's/LightSteelBlue}.;以及 {AncientWhiteBoar's/Crimson} 来获得 {RelicRock's/LightSteelBlue}。
+136;Shipping Relics;MongchonProvince;GotoMessage;0;Return to the Collector in MongchonWall;完成后回到盟重城墙找收藏家。
+137;Rare Medicine;MongchonProvince;Description;0;Is it true? Youve been to the {Ancient Layer/Yellow}? Can;真的吗？你真的去过 {Ancient Layer/Yellow}？
+137;Rare Medicine;MongchonProvince;Description;1;you return and Collect 17 {BloodPill/LightSteelBlue} by killing ;能再去一次吗？请通过击杀 {AncientSnakeScorpion's/Crimson}
+137;Rare Medicine;MongchonProvince;Description;2;{AncientSnakeScorpion's/Crimson};收集 17 份 {BloodPill/LightSteelBlue}。
+137;Rare Medicine;MongchonProvince;GotoMessage;0;Return to Kevin in MongchonWall at 346:334;完成后回到盟重城墙 346:334 找 Kevin。
+138;Force Recruit;WasteLands;Description;0;Recently we have discovered a new area called ;最近我们发现了一个叫
+138;Force Recruit;WasteLands;Description;1;{AncientRuins/Yellow}.  However,the olny way ;{AncientRuins/Yellow} 的新区域，然而唯一能到达那里的方法
+138;Force Recruit;WasteLands;Description;2;to go there is by going through EvilHeart. ;是穿过 EvilHeart。
+138;Force Recruit;WasteLands;Description;3;As you can see, I cant't go throught EvilHeart ;如你所见，我根本无法穿越 EvilHeart，
+138;Force Recruit;WasteLands;Description;4;due to all the monsters in there. Therefore, ;那里怪物太多了。所以我正在召集一支小队，
+138;Force Recruit;WasteLands;Description;5;I'm here trying to create a force that will ;准备打通那条路。
+138;Force Recruit;WasteLands;Description;6;defeat the monsters. So.. will you be able to help me ;你愿意帮忙，先替我们清理一部分怪物吗？
+138;Force Recruit;WasteLands;Description;7;out by killing the monsters inside of {RedCave/Yellow}? ;请前往 {RedCave/Yellow}，消灭其中的怪物。
+138;Force Recruit;WasteLands;Description;8;If are less monsters then the force will be able to ;那样一来，怪物减少，小队完成任务就会轻松得多。
+138;Force Recruit;WasteLands;Description;9;complete their task more easily.;
+138;Force Recruit;WasteLands;TaskDescription;0;Eliminate 12 {GhastlyLeecher/Crimson}, {CyanoGhast/Crimson}, ;请消灭 12 只 {GhastlyLeecher/Crimson}、{CyanoGhast/Crimson}、
+138;Force Recruit;WasteLands;TaskDescription;1;{MutatedManworm/Crimson} and {CrazyManworm/Crimson}.;{MutatedManworm/Crimson} 和 {CrazyManworm/Crimson}。
+138;Force Recruit;WasteLands;GotoMessage;0;Return to the Excavenger in WasteLand 265:238;完成后回到废墟之地 265:238 找 Excavenger。
+139;Dangerous as ever;WasteLands;Description;0;Thanks for the hard work!;辛苦你了！
+139;Dangerous as ever;WasteLands;Description;1;However there are still many dangerous monsters ;不过 {RedCave/Yellow} 里仍然有许多危险的怪物，
+139;Dangerous as ever;WasteLands;Description;2;in {RedCave/Yellow} The monsters {DreamDevourer/Crimson} ;像 {DreamDevourer/Crimson}
+139;Dangerous as ever;WasteLands;Description;3;and {DarkSoulDevouer/Crimson} still roam the area. ;和 {DarkSoulDevouer/Crimson} 仍在那一带游荡。
+139;Dangerous as ever;WasteLands;Description;4;These monsters have been troubing by ;这些怪物利用自己的能力，
+139;Dangerous as ever;WasteLands;Description;5;useing its abillties to stop the movement of our ;不断干扰我们队伍的行动。
+139;Dangerous as ever;WasteLands;Description;6;people. Can you go rid these monsters for us?;你能替我们彻底清除这些怪物吗？
+139;Dangerous as ever;WasteLands;TaskDescription;0;Travel to {RedCave/Yellow} and Eliminate 3 {DreamDevourer/Crimson} ;请前往 {RedCave/Yellow}，消灭 3 只 {DreamDevourer/Crimson}
+139;Dangerous as ever;WasteLands;TaskDescription;1;and {DarkSoulDevourer/Crimson}.;以及若干 {DarkSoulDevourer/Crimson}。
+139;Dangerous as ever;WasteLands;GotoMessage;0;Return to the Excavenger in WasteLand 265:238;完成后回到废墟之地 265:238 找 Excavenger。
+140;Chestnut Request;BichonProvince;Description;0;BichonWall Bounty, Has been submitted.;比奇城墙悬赏任务：栗子委托。
+140;Chestnut Request;BichonProvince;TaskDescription;0;Collect {5 GoldChestnuts/LightSteelBlue}. ;请收集 {5 GoldChestnuts/LightSteelBlue}。
+140;Chestnut Request;BichonProvince;GotoMessage;0;Return to BichonWall Board.;完成后回到比奇城墙的公告板。
+141;Gathering of Bones;BichonProvince;Description;0;BichonWall Bounty, Has been submitted.;比奇城墙悬赏任务：骨头收集。
+141;Gathering of Bones;BichonProvince;TaskDescription;0;Travel to {OmaCave/Yellow} and collect {Skeleton Bone's/LightSteelBlue}.;请前往 {OmaCave/Yellow} 收集 {Skeleton Bone's/LightSteelBlue}。
+141;Gathering of Bones;BichonProvince;GotoMessage;0;Return to BichonWall Board.;完成后回到比奇城墙的公告板。
+142;Boar Tooth;MongchonProvince;Description;0;MudWall Bounty, Has been submitted.;泥墙城悬赏任务：野猪獠牙。
+142;Boar Tooth;MongchonProvince;TaskDescription;0;Travel to {StoneTemple/Yellow} Eliminate {Boar's/Crimson} and ;请前往 {StoneTemple/Yellow}，消灭 {Boar's/Crimson}
+142;Boar Tooth;MongchonProvince;TaskDescription;1;collect {Boar Tooth's/LightSteelBlue}.;并收集 {Boar Tooth's/LightSteelBlue}。
+142;Boar Tooth;MongchonProvince;GotoMessage;0;Return to MudWall Board.;完成后回到泥墙城的公告板。
+143;Holy Sword Quest;HolySword Quest;Description;0;A long time ago, a certain villain stole our;很久以前，有个恶人偷走了我们的
+143;Holy Sword Quest;HolySword Quest;Description;1;HolySword, the best sword of our school, This ;HolySword，那是我们门派最强的圣剑。
+143;Holy Sword Quest;HolySword Quest;Description;2;sword was so Holy that there is a legend, that ;关于这把剑有一个传说，
+143;Holy Sword Quest;HolySword Quest;Description;3;when it smashes once storm blows and dragons ;说它一挥出就会风暴呼啸、神龙现世，
+143;Holy Sword Quest;HolySword Quest;Description;4;appear well... who knows it is true or not? But ;当然……是真是假没人知道。
+143;Holy Sword Quest;HolySword Quest;Description;5;if the sword exist Its power will be so huge that ;但如果这把剑仍然存在，它的力量强大到
+143;Holy Sword Quest;HolySword Quest;Description;6;we can not estimate its range.;我们根本无法估量。
+143;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to the Apprentice;回去找那名弟子继续了解详情。
+144;Holy Sword Quest;HolySword Quest;Description;0;Travel to {TreePath/Yellow} and Eliminate {RootSpider/Crimson} ;前往 {TreePath/Yellow} 消灭 {RootSpider/Crimson}，
+144;Holy Sword Quest;HolySword Quest;Description;1;then return to {Perry/LimeGreen} in {TaoVillage/Yellow};然后回到 {TaoVillage/Yellow} 找 {Perry/LimeGreen}。
+144;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Perry in TaoVillage;回到道观村找 Perry。
+145;Holy Sword Quest;HolySword Quest;Description;0;Listen to {Perry's/LimeGreen} Story..;聆听 {Perry's/LimeGreen} 的故事……
+146;Holy Sword Quest;HolySword Quest;Description;0;Travel through {TreePath/Yellow} and enter the {RedValley/Yellow};穿过 {TreePath/Yellow} 进入 {RedValley/Yellow}。
+146;Holy Sword Quest;HolySword Quest;TaskDescription;0;Retrieve the {JadeCrystal/LightSteelBlue} by killing {BigApes/Crimson}.;通过击杀 {BigApes/Crimson} 取得 {JadeCrystal/LightSteelBlue}。
+146;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist;取得水晶后回到大长老处。
+147;Holy Sword Quest;HolySword Quest;Description;0;Listen to Abel's Story.;聆听 Abel 的故事。
+147;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist;然后回到大长老处。
+148;Holy Sword Quest;HolySword Quest;Description;0;Bring me {RedMoonChip/LightSteelBlue}.;把 {RedMoonChip/LightSteelBlue} 带来给我。
+148;Holy Sword Quest;HolySword Quest;Description;1;It's a ominous demonic sword.;那是一把不祥的魔剑，
+148;Holy Sword Quest;HolySword Quest;Description;2;You should seek out the sword before someone ;你必须抢在别人之前找到它，
+148;Holy Sword Quest;HolySword Quest;Description;3;else gets it.;否则后果不堪设想。
+148;Holy Sword Quest;HolySword Quest;TaskDescription;0;Kill {RedEvilApe's/Crimson} to find the {RedMoonChip/LightSteelBlue}.;请击杀 {RedEvilApe's/Crimson} 来寻找 {RedMoonChip/LightSteelBlue}。
+148;Holy Sword Quest;HolySword Quest;TaskDescription;1;at 11:27 Walk in the corner and you will get through ;在 11:27 的角落行走，
+148;Holy Sword Quest;HolySword Quest;TaskDescription;2;the hidden door.;你就会穿过隐藏的门。
+148;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist  for further information.;之后回到大长老处获取更多情报。
+149;Holy Sword Quest;HolySword Quest;Description;0;Now, let me test you once more;现在，让我再考验你一次。
+149;Holy Sword Quest;HolySword Quest;Description;1;Pass through an ordeal I have prepared and bring me some;通过我准备的试炼，并带来一些
+149;Holy Sword Quest;HolySword Quest;Description;2;EvilApeOil. If you do this, then I'll tell you the way to;EvilApeOil。如果你能做到，
+149;Holy Sword Quest;HolySword Quest;Description;3;get the RedMoonSword;我就告诉你获得 RedMoonSword 的方法。
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;0;What is in the bottle is the foul blood of a RedMoonEvil I killed...;瓶子里的，是我杀死的一只 RedMoonEvil 的污秽之血……
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;1;If you disguised yourself as a demon of a man by;如果你把这些血抹在衣服上，手持 EvilHeart，
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;2;smearing it on your clothes and holding an EvilHeart;伪装成恶魔一样的存在，
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;3;You can get the RedMoonSword. To kill the RedMoonEvil and;就有机会得到 RedMoonSword。至于消灭 RedMoonEvil，
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;4;To get rid of the origin of the demon depends upon you.;以及根除这股魔物之源，就要看你的本事了。
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;5;It is hard for you to kill a RedMoonEvil alone,;想要独自击杀 RedMoonEvil 是很困难的，
+149;Holy Sword Quest;HolySword Quest;CompletionDescription;6;Band together with many other heroes..;你需要与更多的英雄并肩作战……
+149;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist;再回到大长老处听取最后的指示。
+150;Holy Sword Quest;HolySword Quest;Description;0;Now to get an {EvilHeart/LightSteelBlue}, You need to kill ;想要获得 {EvilHeart/LightSteelBlue}，你必须击杀
+150;Holy Sword Quest;HolySword Quest;Description;1;{GreyEvilApes/Crimson}.You can find them when you ;{GreyEvilApes/Crimson}。你可以通过一扇隐藏的门找到它们，
+150;Holy Sword Quest;HolySword Quest;Description;2;through a hidden door. You can find this door on ;这扇门在 5 楼通往 {KingsRoom(RedMoonEvil)/Yellow} 的途中，
+150;Holy Sword Quest;HolySword Quest;Description;3;the 5th floor towards {KingsRoom(RedMoonEvil)/Yellow} ;
+150;Holy Sword Quest;HolySword Quest;Description;4;at 182:179 Walk in the corner and you will get through ;在 182:179 的拐角处行走，你就会穿过
+150;Holy Sword Quest;HolySword Quest;Description;5;the hidden door.;那扇隐藏的门。
+150;Holy Sword Quest;HolySword Quest;TaskDescription;0;Kill {GreyEvilApes/Crimson} for the {EvilHeart/LightSteelBlue}.;请击杀 {GreyEvilApes/Crimson} 以取得 {EvilHeart/LightSteelBlue}。
+150;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist;取得 EvilHeart 后回到大长老处。
+151;Holy Sword Quest;HolySword Quest;Description;0;Travel deep within {RedValley/Yellow} and Slay the;深入 {RedValley/Yellow} 的最深处，
+151;Holy Sword Quest;HolySword Quest;Description;1;{RedMoonEvil/Crimson}.;将 {RedMoonEvil/Crimson} 彻底斩杀。
+151;Holy Sword Quest;HolySword Quest;TaskDescription;0;Eliminate the {RedMoonEvil/Crimson}.;请消灭 {RedMoonEvil/Crimson}。
+151;Holy Sword Quest;HolySword Quest;GotoMessage;0;Return to Big Taoist;完成后回到大长老处。
+152;AncientOmaCavern;OmaCavern;Description;0;A Mysterious Stone... with unknown ancient ;一块神秘的石碑……刻着未知的古老符号。
+152;AncientOmaCavern;OmaCavern;Description;1;symbols. There must be a way to scyther ;一定有办法解读
+152;AncientOmaCavern;OmaCavern;Description;2;these symbols.;这些符号。
+152;AncientOmaCavern;OmaCavern;TaskDescription;0;Search {OmaCavern/Yellow} for the {AncientScyther/LightSteelBlue}.;请在 {OmaCavern/Yellow} 寻找 {AncientScyther/LightSteelBlue}。
+152;AncientOmaCavern;OmaCavern;ItemMessage;0;Search for the Ancient Scyther.;寻找 Ancient Scyther。
+153;AncientOmaCavern;OmaCavern;Description;0;There seem's to be a pattern to the Scyther..;这些符号似乎有某种规律……
+153;AncientOmaCavern;OmaCavern;Description;1;Maybe someone in {CastleBichon/Yellow} can scyther the;也许 {CastleBichon/Yellow} 中有人能解读
+153;AncientOmaCavern;OmaCavern;Description;2;ancient symbols.;这些古老符号。
+153;AncientOmaCavern;OmaCavern;TaskDescription;0;Return to {CastleBichon/Yellow} ;请回到 {CastleBichon/Yellow}，
+153;AncientOmaCavern;OmaCavern;TaskDescription;1;Enquire about the symbols.;向那里的学者打听这些符号的含义。
+153;AncientOmaCavern;OmaCavern;GotoMessage;0;Return to the stone.;之后再回到石碑前。
+154;Emperors Problem;BichonProvince;FlagMessage;0;Increase the Emperors Morale.;提升皇帝士气。
