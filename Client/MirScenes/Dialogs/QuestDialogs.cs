@@ -828,7 +828,7 @@ namespace Client.MirScenes.Dialogs
             {
                 _questNameLabel = new MirLabel
                 {
-                    Text = questsToTrack[i].QuestInfo.Name,
+                    Text = GameLanguage.GetQuestName(questsToTrack[i].QuestInfo.Name),
                     AutoSize = true,
                     BackColour = Color.Transparent,
                     Font = QuestFont,
@@ -978,7 +978,7 @@ namespace Client.MirScenes.Dialogs
             IconImage.Index = 961 + (int)Quest.Icon + iconTypeOffset;
             IconImage.Visible = true;
 
-            NameLabel.Text = Quest.QuestInfo.Name;
+            NameLabel.Text = GameLanguage.GetQuestName(Quest.QuestInfo.Name);
             RequirementLabel.Text = Quest.QuestInfo.MinLevelNeeded > 0 ? "Lv " + Quest.QuestInfo.MinLevelNeeded : "";
 
             SelectedImage.Visible = Selected;
@@ -1142,7 +1142,7 @@ namespace Client.MirScenes.Dialogs
             CurrentLines.Clear();
 
             //add quest title at the beginning
-            CurrentLines.Insert(0, Quest.QuestInfo.Name);
+            CurrentLines.Insert(0, GameLanguage.GetQuestName(Quest.QuestInfo.Name));
 
             if (Quest.Taken && !Quest.QuestInfo.SameFinishNPC && Quest.QuestInfo.CompletionDescription.Count > 0 && GameScene.Scene.QuestListDialog.CurrentNPCID == Quest.QuestInfo.FinishNPCIndex)
             {
@@ -1826,7 +1826,7 @@ namespace Client.MirScenes.Dialogs
             Size = new Size(250, 15);
             TrackQuest = GameScene.Scene.QuestTrackingDialog.TrackedQuestsIds.Contains(quest.Id);
 
-            string name = Quest.QuestInfo.Name;
+            string name = GameLanguage.GetQuestName(Quest.QuestInfo.Name);
             string level = string.Format("Lv{0}", Quest.QuestInfo.MinLevelNeeded);
             string state = quest.Completed ? "(Complete)" : "(In Progress)";
 

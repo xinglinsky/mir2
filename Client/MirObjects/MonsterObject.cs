@@ -5584,6 +5584,18 @@ namespace Client.MirObjects
 
         public override void DrawName()
         {
+            string displayName = GameLanguage.GetMonsterName(Name);
+
+            // If we have a translation, draw a single localized label using the base logic.
+            if (!string.IsNullOrEmpty(displayName) && displayName != Name)
+            {
+                string originalName = Name;
+                Name = displayName;
+                base.DrawName();
+                Name = originalName;
+                return;
+            }
+
             if (!Name.Contains("_"))
             {
                 base.DrawName();

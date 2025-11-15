@@ -464,7 +464,8 @@ namespace Client.MirScenes.Dialogs
             NPCObject npc = (NPCObject)MapControl.GetObject(GameScene.NPCID);
             if (npc != null)
             {
-                string[] nameSplit = npc.Name.Split('_');
+                string displayName = GameLanguage.GetNPCName(npc.Name);
+                string[] nameSplit = displayName.Split('_');
                 NameLabel.Text = nameSplit[0];
 
                 if (npc.GetAvailableQuests().Any())
