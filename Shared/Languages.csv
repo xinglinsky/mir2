@@ -81,8 +81,8 @@ Chat_Guild;Client;Guild;行会
 ExpandedStorageLocked;Client;Expanded Storage Locked;扩展仓库已锁定
 ExtraStorage;Client;Would you like to rent extra storage for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币租用 10 天的扩展仓库？
 ExtendYourRentalPeriod;Client;Would you like to extend your rental period for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币续租 10 天扩展仓库？
-ExpandedStorageExpiresOn;Client;Expanded Storage Expires On;扩展仓库到期时间
-GameName;Client;Legend of Mir 2;传奇2
+ExpandedStorageExpiresOn;Both;Expanded Storage Expires On;扩展仓库到期时间
+GameName;Both;Legend of Mir 2;传奇2
 
 CannotLeaveGame;Client;Cannot leave game for {0} seconds;在 {0} 秒内无法离开游戏。
 SelectKey;Client;Select the Key for: {0};为 {0} 选择按键
@@ -93,14 +93,14 @@ ItemTextFormat;Client;{0}{1}{2} {3};{0}{1}{2} {3}
 DropAmount;Client;Drop Amount:;丢弃数量:
 
 LowMana;Client;Not Enough Mana to cast.;魔法值不足，无法施放。
-NotFemale;Client;You are not Female.;你不是女性角色。
-NotMale;Client;You are not Male.;你不是男性角色。
+NotFemale;Both;You are not Female.;你不是女性角色。
+NotMale;Both;You are not Male.;你不是男性角色。
 NoCreatures;Client;You do not own any creatures.;你尚未拥有任何宠物。
 NoMount;Client;You do not own a mount.;你尚未拥有坐骑。
 NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿。
-NotInGuild;Client;You are not in a guild.;你尚未加入行会。
+NotInGuild;Both;You are not in a guild.;你尚未加入行会。
 AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
-NoBagSpace;Client;You do not have enough space.;你的背包空间不足。
+NoBagSpace;Both;You do not have enough space.;你的背包空间不足。
 
 CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色。
 InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求。
@@ -133,7 +133,7 @@ AddMentor;Client;Add Mentor;添加师父/徒弟
 RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
 MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
 MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字。
-NoMentorship;Client;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系。
+NoMentorship;Both;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系。
 RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
 
 ItemTypeWeapon;Client;Weapon;武器
@@ -239,7 +239,7 @@ HeroInventory;Client;Hero Inventory ({0});英雄背包 ({0})
 HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
 HeroSkills;Client;Hero Skills ({0});英雄技能 ({0})
 HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
-LevelUp;Client;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
+LevelUp;Both;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
 DeleteCharacter;Client;Are you sure you want to Delete the character {0};你确定要删除角色 {0} 吗？
 CharacterDeleted;Client;Your character was deleted successfully.;你的角色已成功删除。
 CharacterCreated;Client;Your character was created successfully.;你的角色已创建成功。
@@ -260,11 +260,11 @@ System_PleaseEnterInfo;Client;Please enter the required information.;请输入�
 System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
 System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
 
-LowLevel;Client;You are not a high enough level.;你的等级不足。
-LowGold;Client;Not enough gold.;你的金币不足。
-LowDC;Client;You do not have enough DC.;你的攻击力不足。
-LowMC;Client;You do not have enough MC.;你的魔法力不足。
-LowSC;Client;You do not have enough SC.;你的道术力不足。
+LowLevel;Both;You are not a high enough level.;你的等级不足。
+LowGold;Both;Not enough gold.;你的金币不足。
+LowDC;Both;You do not have enough DC.;你的攻击力不足。
+LowMC;Both;You do not have enough MC.;你的魔法力不足。
+LowSC;Both;You do not have enough SC.;你的道术力不足。
 
 Group_YouLeft;Client;You have left the group.;你已离开队伍。
 Group_PlayerLeft;Client;{0} has left the group.;{0} 已离开队伍。
@@ -297,3 +297,20 @@ Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已�
 Error_CouldNotGetDisplayResolutions;Client;Could not get display resolutions;无法获取显示器分辨率
 Error_GetDisplayResolutionIssue;Client;Get Display Resolution Issue;获取显示器分辨率时发生错误
 Error_InvalidClientResolution;Client;Invalid Client Resolution;无效的客户端分辨率
+
+OnlinePlayers;Server;Online Players: {0};当前在线玩家: {0}
+WeaponLuck;Server;Luck dwells within your weapon.;武器中蕴含着幸运之力。
+WeaponCurse;Server;Curse dwells within your weapon.;武器中蕴含着诅咒之力。
+WeaponNoEffect;Server;No effect.;没有效果。
+InventoryIncreased;Server;Inventory size increased.;背包容量已增加。
+FaceToTrade;Server;You must face someone to trade.;你必须面对目标玩家才能交易。
+NoTownTeleport;Server;You cannot use Town Teleports here;你不能在这里使用回城卷轴。
+CanNotRandom;Server;You cannot use Random Teleports here;你不能在这里使用随机传送卷轴。
+CanNotDungeon;Server;You cannot use Dungeon Escapes here;你不能在这里使用地牢逃脱卷轴。
+CannotResurrection;Server;You cannot use Resurrection Scrolls whilst alive;你在存活时不能使用复活卷轴。
+CanNotDrop;Server;You cannot drop items on this map;你不能在这个地图丢弃物品。
+NewMail;Server;New mail has arrived.;你收到了一封新邮件。
+CouldNotFindPlayer;Server;Could not find player {0};找不到玩家 {0}。
+AllowingMentorRequests;Server;You're now allowing mentor requests.;你现在允许师徒请求。
+BlockingMentorRequests;Server;You're now blocking mentor requests.;你现在禁止师徒请求。
+Welcome;Server;Welcome to the {0} Server.;欢迎来到 {0} 服务器。

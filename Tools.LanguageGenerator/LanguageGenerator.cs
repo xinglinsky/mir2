@@ -18,9 +18,11 @@ var solutionRoot = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."
 
 var csvPath = Path.Combine(solutionRoot, "Shared", "Languages.csv");
 var clientIniPath = Path.Combine(solutionRoot, "Build", "Client", configuration, "Language.ini");
+var serverIniPath = Path.Combine(solutionRoot, "Build", "Server", configuration, "Configs", "Language.ini");
 
 Console.WriteLine($"CSV: {csvPath}");
 Console.WriteLine($"Client INI: {clientIniPath}");
+Console.WriteLine($"Server INI: {serverIniPath}");
 
 if (!File.Exists(csvPath))
 {
@@ -58,8 +60,12 @@ var clientEntries = entries
                 string.Equals(e.Scope, "Both", StringComparison.OrdinalIgnoreCase))
     .ToList();
 
-Directory.CreateDirectory(Path.GetDirectoryName(clientIniPath)!);
+var serverEntries = entries
+    .Where(e => string.Equals(e.Scope, "Server", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(e.Scope, "Both", StringComparison.OrdinalIgnoreCase))
+    .ToList();
 
+Directory.CreateDirectory(Path.GetDirectoryName(clientIniPath)!);
 using (var writer = new StreamWriter(clientIniPath, false, Encoding.UTF8))
 {
     writer.WriteLine("[Language]");
@@ -70,4 +76,16 @@ using (var writer = new StreamWriter(clientIniPath, false, Encoding.UTF8))
     }
 }
 
+Directory.CreateDirectory(Path.GetDirectoryName(serverIniPath)!);
+using (var writer = new StreamWriter(serverIniPath, false, Encoding.UTF8))
+{
+    writer.WriteLine("[Language]");
+    foreach (var e in serverEntries)
+    {
+        var value = !string.IsNullOrWhiteSpace(e.Zh) ? e.Zh : e.En;
+        writer.WriteLine($"{e.Key}={value}");
+    }
+}
+
 Console.WriteLine($"Generated Client Language.ini with {clientEntries.Count} entries.");
+Console.WriteLine($"Generated Server Language.ini with {serverEntries.Count} entries.");
