@@ -1,0 +1,299 @@
+Key;Scope;en;zh-CN
+PetMode_Both;Client;[Pet: Attack and Move];[宠物: 攻击并移动]
+PetMode_MoveOnly;Client;[Pet: Do Not Attack];[宠物: 仅移动]
+PetMode_AttackOnly;Client;[Pet: Do Not Move];[宠物: 仅攻击]
+PetMode_None;Client;[Pet: Do Not Attack or Move];[宠物: 不攻击且不移动]
+PetMode_FocusMasterTarget;Client;[Pet: Focus Master Target];[宠物: 集火主人目标]
+
+AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平]
+AttackMode_Group;Client;[Mode: Group];[模式: 组队]
+AttackMode_Guild;Client;[Mode: Guild];[模式: 行会]
+AttackMode_EnemyGuild;Client;[Mode: Enemy Guild];[模式: 敌对行会]
+AttackMode_RedBrown;Client;[Mode: Red/Brown];[模式: 红/棕]
+AttackMode_All;Client;[Mode: Attack All];[模式: 全体攻击]
+
+LogOutTip;Client;Do you want to log out of Legend of Mir?;您确定要返回登录界面吗？
+ExitTip;Client;Do you want to quit Legend of Mir?;您确定要退出传奇2吗？
+DiedTip;Client;You have died, Do you want to revive in town?;你已经死亡，是否回城复活？
+DropTip;Client;Are you sure you want to drop {0}?;你确定要丢弃 {0} 吗？
+
+Inventory;Client;Inventory ({0});背包 ({0})
+Character;Client;Character ({0});角色 ({0})
+Skills;Client;Skills ({0});技能 ({0})
+Quests;Client;Quests ({0});任务 ({0})
+Options;Client;Options ({0});设置 ({0})
+Menu;Client;Menu;菜单
+GameShop;Client;Game Shop ({0});商城 ({0})
+BigMap;Client;BigMap ({0});大地图 ({0})
+DuraPanel;Client;Dura Panel;耐久度面板
+Mail;Client;Mail;邮件
+Exit;Client;Exit ({0});退出 ({0})
+LogOut;Client;Log Out ({0});返回登录 ({0})
+Help;Client;Help ({0});帮助 ({0})
+Keybinds;Client;Keybinds;按键设置
+Ranking;Client;Ranking ({0});排行 ({0})
+Creatures;Client;Creatures ({0});宠物 ({0})
+Mount;Client;Mount ({0});坐骑 ({0})
+Fishing;Client;Fishing ({0});钓鱼 ({0})
+Friends;Client;Friends ({0});好友 ({0})
+Mentor;Client;Mentor ({0});师徒 ({0})
+Relationship;Client;Relationship ({0});关系 ({0})
+Groups;Client;Groups ({0});队伍 ({0})
+Guild;Client;Guild ({0});行会 ({0})
+
+Trade;Client;Trade ({0});交易 ({0})
+Size;Client;Size;大小
+ChatSettings;Client;Chat Settings;聊天设置
+Rotate;Client;Rotate;旋转
+Close;Client;Close ({0});关闭 ({0})
+GameMaster;Client;GameMaster;游戏管理员
+
+Expire;Client;Expire: {0};到期时间: {0}
+ExpireNever;Client;Expire: Never;到期时间: 永不过期
+ExpirePaused;Client;Expire: Paused;到期时间: 已暂停
+Never;Client;Never;从不
+
+PatchErr;Client;Could not get Patch Information;无法获取补丁信息
+LastOnline;Client;Last Online;最后在线
+
+Gold;Client;Gold;金币
+Credit;Client;Credit;积分
+
+Resolution;Client;Resolution;分辨率
+Autostart;Client;Auto start;自动启动
+Usrname;Client;Username;账号
+Password;Client;Password;密码
+
+ShuttingDown;Client;Disconnected: Server is shutting down.;已断开连接：服务器正在关闭。
+MaxCombine;Client;Max Combine Count : {0}{1}Shift + Left click to split the stack;最大堆叠数量: {0}{1}按住 Shift + 左键 可以分开堆叠
+Count;Client; Count {0};数量 {0}
+ExtraSlots8;Client;Are you sure you would like to buy 8 extra slots for 1,000,000 gold?Next purchase you can unlock 4 extra slots up to a maximum of 40 slots.;你确定要花费 1,000,000 金币购买 8 个额外格子吗？下一次购买可以解锁 4 个额外格子，最多 40 个格子。
+ExtraSlots4;Client;Are you sure you would like to unlock 4 extra slots? for gold: {0:###,###};你确定要解锁 4 个额外格子吗？需要金币: {0:###,###}
+
+Chat_All;Client;All;全部
+Chat_Short;Client;Shout;喊话
+Chat_Whisper;Client;Whisper;密语
+Chat_Lover;Client;Lover;情侣
+Chat_Mentor;Client;Mentor;师徒
+Chat_Group;Client;Group;队伍
+Chat_Guild;Client;Guild;行会
+
+ExpandedStorageLocked;Client;Expanded Storage Locked;扩展仓库已锁定
+ExtraStorage;Client;Would you like to rent extra storage for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币租用 10 天的扩展仓库？
+ExtendYourRentalPeriod;Client;Would you like to extend your rental period for 10 days at a cost of 1,000,000 gold?;是否花费 1,000,000 金币续租 10 天扩展仓库？
+ExpandedStorageExpiresOn;Client;Expanded Storage Expires On;扩展仓库到期时间
+GameName;Client;Legend of Mir 2;传奇2
+
+CannotLeaveGame;Client;Cannot leave game for {0} seconds;在 {0} 秒内无法离开游戏。
+SelectKey;Client;Select the Key for: {0};为 {0} 选择按键
+WeaponSpiritFire;Client;Your weapon is glowed by spirit of fire.;你的武器被火之精灵附体。
+SpiritsFireDisappeared;Client;The spirits of fire disappeared.;火之精灵已消散。
+WeddingRing;Client;WeddingRing;结婚戒指
+ItemTextFormat;Client;{0}{1}{2} {3};{0}{1}{2} {3}
+DropAmount;Client;Drop Amount:;丢弃数量:
+
+LowMana;Client;Not Enough Mana to cast.;魔法值不足，无法施放。
+NotFemale;Client;You are not Female.;你不是女性角色。
+NotMale;Client;You are not Male.;你不是男性角色。
+NoCreatures;Client;You do not own any creatures.;你尚未拥有任何宠物。
+NoMount;Client;You do not own a mount.;你尚未拥有坐骑。
+NoFishingRod;Client;You are not holding a fishing rod.;你没有装备鱼竿。
+NotInGuild;Client;You are not in a guild.;你尚未加入行会。
+AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
+NoBagSpace;Client;You do not have enough space.;你的背包空间不足。
+
+CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色。
+InvalidCharacterName;Client;Your Character Name is not acceptable.;角色名不符合要求。
+NoClass;Client;The class you selected does not exist. Contact a GM for assistance.;你选择的职业不存在，如有疑问请联系管理员。
+ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个。
+CharacterNameExists;Client;A Character with this name already exists.;该角色名已被占用。
+
+WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱。
+WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出。
+TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡。
+AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人。
+ArcherDes;Client;Archers are a class of great accuracy and strength, using their powerful skills with bows to deal extraordinary damage from range. Much like wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their physical prowess and deadly aim allows them to instil fear into anyone they hit.;弓手拥有极高的命中和力量，擅长使用弓箭在远处造成巨大伤害，需要依靠走位躲避攻击，精准的远程打击令敌人心生恐惧。
+
+DateSent;Client;Date Sent : {0};发送时间: {0}
+Send;Client;Send;发送
+Reply;Client;Reply;回复
+Read;Client;Read;读取
+Delete;Client;Delete;删除
+BlockList;Client;Block List;黑名单
+EnterMailToName;Client;Please enter the name of the person you would like to mail.;请输入你想要发送邮件的玩家名字。
+BeenPoisoned;Client;You have been poisoned;你中毒了。
+AddFriend;Client;Add;添加好友
+RemoveFriend;Client;Remove;删除好友
+FriendMemo;Client;Memo;备注
+FriendMail;Client;Mail;邮件
+FriendWhisper;Client;Whisper;密语
+FriendEnterAddName;Client;Please enter the name of the person you would like to Add.;请输入你想添加为好友的玩家名字。
+FriendEnterBlockName;Client;Please enter the name of the person you would like to Block.;请输入你想拉黑的玩家名字。
+AddMentor;Client;Add Mentor;添加师父/徒弟
+RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
+MentorRequests;Client;Allow/Disallow Mentor Requests;允许/禁止 师徒请求
+MentorEnterName;Client;Please enter the name of the person you would like to be your Mentor.;请输入你想要拜师/收徒的玩家名字。
+NoMentorship;Client;You don't currently have a Mentorship to cancel.;你当前没有可以解除的师徒关系。
+RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
+
+ItemTypeWeapon;Client;Weapon;武器
+ItemTypeArmour;Client;Armour;盔甲
+ItemTypeHelmet;Client;Helmet;头盔
+ItemTypeNecklace;Client;Necklace;项链
+ItemTypeBracelet;Client;Bracelet;手镯
+ItemTypeRing;Client;Ring;戒指
+ItemTypeAmulet;Client;Amulet;护符
+ItemTypeBelt;Client;Belt;腰带
+ItemTypeBoots;Client;Boots;靴子
+ItemTypeStone;Client;Stone;宝石
+ItemTypeTorch;Client;Torch;火把
+ItemTypePotion;Client;Potion;药水
+ItemTypeOre;Client;Ore;矿石
+ItemTypeMeat;Client;Meat;肉类
+ItemTypeCraftingMaterial;Client;CraftingMaterial;材料
+ItemTypeScroll;Client;Scroll;卷轴
+ItemTypeGem;Client;Gem;宝玉
+ItemTypeMount;Client;Mount;坐骑
+ItemTypeBook;Client;Book;书籍
+ItemTypeScript;Client;Script;脚本
+ItemTypeReins;Client;Reins;缰绳
+ItemTypeBells;Client;Bells;铃铛
+ItemTypeSaddle;Client;Saddle;马鞍
+ItemTypeRibbon;Client;Ribbon;缎带
+ItemTypeMask;Client;Mask;面具
+ItemTypeFood;Client;Food;食物
+ItemTypeHook;Client;Hook;鱼钩
+ItemTypeFloat;Client;Float;浮漂
+ItemTypeBait;Client;Bait;鱼饵
+ItemTypeFinder;Client;Finder;探鱼器
+ItemTypeReel;Client;Reel;鱼线轮
+ItemTypeFish;Client;Fish;鱼类
+ItemTypeQuest;Client;Quest;任务物品
+ItemTypeAwakening;Client;Awakening;觉醒材料
+ItemTypePets;Client;Pets;宠物道具
+ItemTypeTransform;Client;Transform;变身道具
+ItemTypeDeco;Client;Deco;装饰品
+ItemTypeMonsterSpawn;Client;SpawnEgg;召唤蛋
+ItemTypeSealedHero;Client;SealedHero;封印英雄
+
+ItemGradeCommon;Client;Common;普通
+ItemGradeRare;Client;Rare;稀有
+ItemGradeLegendary;Client;Legendary;传说
+ItemGradeMythical;Client;Mythical;神话
+ItemGradeHeroic;Client;Heroic;英雄
+
+ItemDescription;Client;Item Description;物品说明
+RequiredLevel;Client;Required Level : {0};需要等级: {0}
+RequiredDC;Client;Required DC : {0};需要 攻击: {0}
+RequiredMC;Client;Required MC : {0};需要 魔法: {0}
+RequiredSC;Client;Required SC : {0};需要 道术: {0}
+ClassRequired;Client;Class Required : {0};需要职业: {0}
+
+Holy;Client;Holy: + {0} (+{1});神圣: + {0} (+{1})
+Holy2;Client;Holy: + {0};神圣: + {0}
+Accuracy;Client;Accuracy: + {0} (+{1});准确: + {0} (+{1})
+Accuracy2;Client;Accuracy: + {0};准确: + {0}
+Agility;Client;Agility: + {0} (+{1});敏捷: + {0} (+{1})
+Agility2;Client;Agility: + {0};敏捷: + {0}
+
+DC;Client;DC + {0}~{1} (+{2});攻击 + {0}~{1} (+{2})
+DC2;Client;DC + {0}~{1};攻击 + {0}~{1}
+MC;Client;MC + {0}~{1} (+{2});魔法 + {0}~{1} (+{2})
+MC2;Client;MC + {0}~{1};魔法 + {0}~{1}
+SC;Client;SC + {0}~{1} (+{2});道术 + {0}~{1} (+{2})
+SC2;Client;SC + {0}~{1};道术 + {0}~{1}
+AC;Client;AC + {0}~{1} (+{2});防御 + {0}~{1} (+{2})
+AC2;Client;AC + {0}~{1};防御 + {0}~{1}
+MAC;Client;MAC + {0}~{1} (+{2});魔御 + {0}~{1} (+{2})
+MAC2;Client;MAC + {0}~{1};魔御 + {0}~{1}
+
+Durability;Client;Durability;耐久度
+Weight;Client;W:;重量:
+Luck;Client;Luck + {0};幸运 + {0}
+
+Item_AddsDurability;Client;Adds +{0} Durability;增加 +{0} 耐久
+Item_AddsAccuracy;Client;Adds +{0} Accuracy;增加 +{0} 命中
+Item_AddsASpeed;Client;Adds +{0} A.Speed;增加 +{0} 攻击速度
+Item_AddsFreezing;Client;Adds +{0} Freezing;增加 +{0} 冰冻
+Item_AddsPoison;Client;Adds +{0} Poison;增加 +{0} 中毒
+Item_AddsAgility;Client;Adds +{0} Agility;增加 +{0} 敏捷
+Item_AddsPoisonResist;Client;Adds +{0} Poison Resist;增加 +{0} 毒性抗性
+Item_AddsMagicResist;Client;Adds +{0} Magic Resist;增加 +{0} 魔法抗性
+Item_InstantRun;Client;Instant Run;瞬间奔跑
+Item_Socket;Client;Socket : {0};插槽: {0}
+Item_SocketEmpty;Client;Empty;空
+Item_SocketOpenHint;Client;Ctrl + Right Click To Open Sockets;按住 Ctrl + 鼠标右键 打开插槽
+Item_SellingPrice;Client;Selling Price : {0} Gold;出售价格: {0} 金币
+Item_CantDropOnDeath;Client;Can't drop on death;死亡时不会掉落
+Item_CantDrop;Client;Can't drop;无法丢弃
+Item_CantUpgrade;Client;Can't upgrade;无法升级
+Item_CantSell;Client;Can't sell;无法出售
+Item_CantTrade;Client;Can't trade;无法交易
+Item_CantStore;Client;Can't store;无法存仓
+Item_CantRepair;Client;Can't repair;无法修理
+
+YouGained;Client;You gained {0}.;你获得了 {0}。
+YouGained2;Client;You gained {0:###,###,###} {1};你获得了 {0:###,###,###} {1}
+ExperienceGained;Client;Experience Gained {0};获得经验 {0}
+HeroInventory;Client;Hero Inventory ({0});英雄背包 ({0})
+HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
+HeroSkills;Client;Hero Skills ({0});英雄技能 ({0})
+HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
+LevelUp;Client;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
+DeleteCharacter;Client;Are you sure you want to Delete the character {0};你确定要删除角色 {0} 吗？
+CharacterDeleted;Client;Your character was deleted successfully.;你的角色已成功删除。
+CharacterCreated;Client;Your character was created successfully.;你的角色已创建成功。
+
+Skill_NoSuitableWeapon;Client;You must be wearing a suitable weapon to perform this skill;你必须装备合适的武器才能使用该技能
+Skill_CannotCast;Client;You cannot cast {0} for another {1} seconds.;你还需要等待 {1} 秒才能再次施放 {0}。
+Skill_UseThrusting;Client;Use Thrusting.;使用 刺杀剑法。
+Skill_DoNotUseThrusting;Client;Do not use Thrusting.;不使用 刺杀剑法。
+Skill_UseHalfMoon;Client;Use Half Moon.;使用 半月弯刀。
+Skill_DoNotUseHalfMoon;Client;Do not use Half Moon.;不使用 半月弯刀。
+Skill_UseCrossHalfMoon;Client;Use Cross Half Moon.;使用 交叉半月。
+Skill_DoNotUseCrossHalfMoon;Client;Do not use Cross Half Moon.;不使用 交叉半月。
+Skill_UseDoubleSlash;Client;Use Double Slash.;使用 裂地斩。
+Skill_DoNotUseDoubleSlash;Client;Do not use Double Slash.;不使用 裂地斩。
+
+System_NothingFound;Client;Nothing Found.;未发现任何东西。
+System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
+System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
+System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
+
+LowLevel;Client;You are not a high enough level.;你的等级不足。
+LowGold;Client;Not enough gold.;你的金币不足。
+LowDC;Client;You do not have enough DC.;你的攻击力不足。
+LowMC;Client;You do not have enough MC.;你的魔法力不足。
+LowSC;Client;You do not have enough SC.;你的道术力不足。
+
+Group_YouLeft;Client;You have left the group.;你已离开队伍。
+Group_PlayerLeft;Client;{0} has left the group.;{0} 已离开队伍。
+Group_PlayerJoined;Client;{0} has joined the group.;{0} 已加入队伍。
+Group_InviteQuestion;Client;Do you want to group with {0}?;你要与 {0} 组队吗？
+
+GroupSwitch;Client;Allow/Disallow Group Requests;允许/禁止 组队请求
+GroupAdd;Client;Add;添加
+GroupRemove;Client;Remove;移除
+GroupAddEnterName;Client;Please enter the name of the person you wish to add.;请输入你想要邀请组队的玩家名字。
+GroupRemoveEnterName;Client;Please enter the name of the person you wish to remove.;请输入你想要移出队伍的玩家名字。
+TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
+
+Quest_ShareQuestion;Client;{0} would like to share a quest with you. Do you accept?;{0} 想与你共享一个任务，是否接受？
+
+Damage_Miss;Client;Miss;未命中
+Damage_Crit;Client;Crit;暴击
+
+SwitchMarriage;Client;Allow/Block Marriage;允许/禁止 结婚请求
+RequestMarriage;Client;Request Marriage;请求结婚
+RequestDivorce;Client;Request Divorce;请求离婚
+MailLover;Client;Mail Lover;给爱人发送邮件
+WhisperLover;Client;Whisper Lover;给爱人密语
+
+NoAccountID;Client;The AccountID does not exist.;该账号不存在。
+IncorrectPasswordAccountID;Client;Incorrect Password and AccountID combination.;账号或密码错误。
+Item_LocationAt;Client;{0} at {1};{0} 位于 {1}
+Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你。
+Item_DuraDroppedToZero;Client;{0}'s dura has dropped to 0.;{0} 的耐久度已降为 0。
+Error_CouldNotGetDisplayResolutions;Client;Could not get display resolutions;无法获取显示器分辨率
+Error_GetDisplayResolutionIssue;Client;Get Display Resolution Issue;获取显示器分辨率时发生错误
+Error_InvalidClientResolution;Client;Invalid Client Resolution;无效的客户端分辨率

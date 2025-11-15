@@ -72,4 +72,8 @@
     </None>
   </ItemGroup>
 
+  <Target Name="GenerateClientLanguageIni" AfterTargets="Build">
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\Tools.LanguageGenerator\Tools.LanguageGenerator.csproj&quot; -- $(Configuration)" />
+  </Target>
+
 </Project>
