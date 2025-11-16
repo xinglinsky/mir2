@@ -51,7 +51,7 @@ namespace Client.MirScenes
                 // Location = new Point(322, 44),
                 Parent = Background,
                 Size = new Size(155, 17),
-                Text = "Legend of Mir 2",
+                Text = GameLanguage.GameName,
                 DrawFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
             };
 
@@ -208,7 +208,7 @@ namespace Client.MirScenes
             {
                 Location = new Point(-65, 0),
                 Parent = LastAccessLabel,
-                Text = "Last Online:",
+                Text = GameLanguage.LastOnline + ":",
                 Size = new Size(100, 21),
                 DrawFormat = TextFormatFlags.Left | TextFormatFlags.VerticalCenter,
                 Border = true,
@@ -524,7 +524,7 @@ namespace Client.MirScenes
                         break;
                 }
 
-                LastAccessLabel.Text = Characters[_selected].LastAccess == DateTime.MinValue ? "Never" : Characters[_selected].LastAccess.ToString();
+                LastAccessLabel.Text = Characters[_selected].LastAccess == DateTime.MinValue ? GameLanguage.Never : Characters[_selected].LastAccess.ToString();
                 LastAccessLabel.Visible = true;
                 LastAccessLabelLabel.Visible = true;
                 StartGameButton.Enabled = true;
@@ -625,7 +625,7 @@ namespace Client.MirScenes
 
                 NameLabel.Text = info.Name;
                 LevelLabel.Text = info.Level.ToString();
-                ClassLabel.Text = info.Class.ToString();
+                ClassLabel.Text = GameLanguage.GetClassName((MirClass)info.Class);
 
                 NameLabel.Visible = true;
                 LevelLabel.Visible = true;

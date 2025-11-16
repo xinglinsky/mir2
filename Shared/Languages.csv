@@ -33,6 +33,7 @@ Awakening_AlreadyMaxLevel;Client;Awakening already at maximum level.;觉醒等�
 Awakening_CannotAwaken;Client;Cannot awaken this item.;无法对该物品进行觉醒。
 Awakening_NotEnoughMaterials;Client;You have not supplied enough materials.;你提供的材料数量不足。
 BigMap;Client;BigMap ({0});大地图 ({0})
+BigMap_PathNotFound;Client;Could not find suitable path.;无法找到合适的路径。
 BigMap_TeleportToNPC;Client;Teleport to this NPC for {0} Gold?;是否支付 {0} 金币传送到该 NPC？
 BlockingMentorRequests;Server;You're now blocking mentor requests.;你现在禁止师徒请求。
 BlockList;Client;Block List;黑名单
@@ -54,11 +55,17 @@ ChatSettings;Client;Chat Settings;聊天设置
 Chat_All;Client;All;全部
 Chat_Group;Client;Group;队伍
 Chat_Guild;Client;Guild;行会
+Chat_ItemLinkTooLong;Client;Unable to link item, message exceeds allowed length;无法插入物品链接，消息长度超出限制。
 Chat_Lover;Client;Lover;情侣
 Chat_Mentor;Client;Mentor;师徒
 Chat_Report;Client;Report;举报
 Chat_Short;Client;Shout;喊话
 Chat_Whisper;Client;Whisper;密语
+ClassName_Archer;Client;Archer;弓手
+ClassName_Assassin;Client;Assassin;刺客
+ClassName_Taoist;Client;Taoist;道士
+ClassName_Warrior;Client;Warrior;战士
+ClassName_Wizard;Client;Wizard;法师
 ClassRequired;Client;Class Required : {0};需要职业: {0}
 Client_WrongVersion;Client;Wrong version, please update your game. Game will now Close;客户端版本不匹配，请更新游戏。游戏即将关闭.
 Close;Client;Close ({0});关闭 ({0})
@@ -67,6 +74,7 @@ Count;Client; Count {0};数量 {0}
 CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色.
 Creatures;Client;Creatures ({0});宠物 ({0})
 Creature_NameLengthInvalid;Client;Creature name must be between {0} and {1} characters.;宠物名字长度必须在 {0} 到 {1} 个字符之间。
+Creature_VerificationFailed;Client;Verification Failed!!;验证失败！！
 Credit;Client;Credit;积分
 Damage_Crit;Client;Crit;暴击
 Damage_Miss;Client;Miss;未命中
@@ -125,7 +133,9 @@ GameShop_BuyWithCredits;Client;Buy with Credits;使用积分购买
 GameShop_BuyWithCreditsHint;Client;Buy item(s) with Credits.;使用积分购买物品。
 GameShop_BuyWithGold;Client;Buy with Gold;使用金币购买
 GameShop_BuyWithGoldHint;Client;Buy item(s) with Gold.;使用金币购买物品。
+GameShop_CannotAffordItem;Client;You can't afford the selected item.;你无法负担当前选择的物品。
 GameShop_PageText;Client;{0} / {1};第 {0} / {1} 页
+GameShop_SelectPaymentTypeRequired;Client;You MUST select a payment type!;你必须先选择一种支付方式！
 GameShop_ShowAll;Client;Show All;全部
 Gold;Client;Gold;金币
 GroupAdd;Client;Add;添加
@@ -147,7 +157,16 @@ Guild;Client;Guild ({0});行会 ({0})
 GuildInvite;Client;Guild Invite;行会邀请
 GuildInviteAccept;Client;Accept Guild Invite;接受行会邀请
 GuildInviteDecline;Client;Decline Guild Invite;拒绝行会邀请
+Guild_DonatedToFund;Client;{0} donated {1} gold to guild funds.;{0} 向行会资金捐献了 {1} 金币。
+Guild_InsufficientRetrieveItems;Client;Insufficient rights to retrieve items.;你没有取出物品的权限。
+Guild_InsufficientStoreItems;Client;Insufficient rights to store items.;你没有存入物品的权限。
+Guild_InvalidNameBackslash;Client;You cannot use the \ sign in a guildname!;公会名称中不能包含反斜杠字符 (\)。
 Guild_JoinRequest;Client;Do you want to join the {0} guild?;是否加入 {0} 行会？
+Guild_MemberJoined;Client;{0} joined guild.;{0} 加入了行会。
+Guild_MemberKicked;Client;{0} got removed from the guild.;{0} 被移出行会。
+Guild_MemberLeft;Client;{0} left the guild.;{0} 离开了行会。
+Guild_MemberLoggedOn;Client;{0} logged on.;{0} 上线了。
+Guild_RetrievedFromFund;Client;{0} retrieved {1} gold from guild funds.;{0} 从行会资金中取出了 {1} 金币。
 Help;Client;Help ({0});帮助 ({0})
 HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
 HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
@@ -160,6 +179,7 @@ Hero_GenderNotExist;Client;The gender you selected does not exist.\n Contact a G
 Hero_InvalidName;Client;Your Hero Name is not acceptable.;英雄名称不合法。
 Hero_NameExists;Client;A Character with this name already exists.;已存在使用该名称的角色。
 Hero_NoBagSpace;Client;No bag space.;背包空间不足。
+Hero_Prefix;Client;(Hero) ;(英雄) 
 Hero_TooManyHeroes;Client;You cannot make anymore Heroes.;你的英雄数量已达到上限。
 Holy;Client;Holy: + {0} (+{1});神圣: + {0} (+{1})
 Holy2;Client;Holy: + {0};神圣: + {0}
@@ -257,11 +277,13 @@ Item_Antidote;Both;Antidote;解毒剂
 Item_AntidoteMarble;Both;AntidoteMarble;解毒石珠
 Item_Apple;Both;Apple;苹果
 Item_ApusBow;Both;ApusBow;阿普斯之弓
+Item_ArcherCannotUse;Client;Archers cannot use this item.;弓手无法使用该物品。
 Item_ArmourBookACC;Both;ArmourBook(ACC);护甲之书（命中）
 Item_ArmourBookDC;Both;ArmourBook(DC);护甲之书（物攻）
 Item_ArmourBookMC;Both;ArmourBook(MC);护甲之书（魔攻）
 Item_ArmourBookSC;Both;ArmourBook(SC);护甲之书（道攻）
 Item_ArmourCastTool;Both;ArmourCastTool;护甲铸造工具
+Item_AssassinCannotUse;Client;Assassins cannot use this item.;刺客无法使用该物品。
 Item_AwakeningSoul0;Both;AwakeningSoul0;觉醒之魂0
 Item_AwakeningSoul1;Both;AwakeningSoul1;觉醒之魂1
 Item_AwakeningSoul2;Both;AwakeningSoul2;觉醒之魂2
@@ -458,6 +480,7 @@ Item_CannibalStem;Both;CannibalStem;食人花茎
 Item_CannibalWine;Both;CannibalWine;食人酒
 Item_CanniTea;Both;CanniTea;食人茶
 Item_CannotDrop;Client;You cannot drop {0};你无法丢弃 {0}。
+Item_CannotSwapItems;Client;You cannot swap items.;你不能交换这些物品。
 Item_CantDrop;Client;Can't drop;无法丢弃
 Item_CantDropOnDeath;Client;Can't drop on death;死亡时不会掉落
 Item_CantRepair;Client;Can't repair;无法修理
@@ -1278,6 +1301,7 @@ Item_Nokyoungokhwan3;Both;Nokyoungokhwan3;鹿茸玉环戒指3
 Item_Nokyoungokhwan4;Both;Nokyoungokhwan4;鹿茸玉环戒指4
 Item_Nokyoungokhwan5;Both;Nokyoungokhwan5;鹿茸玉环戒指5
 Item_NoLongerLoyal;Client;{0} is no longer loyal to you.;{0} 不再忠于你.
+Item_NoRoomToSplitStack;Client;No room to split stack.;没有空间拆分堆叠物品。
 Item_OldCopperRing;Both;OldCopperRing;旧铜戒指
 Item_OldFisherman;Both;OldFisherman;老渔夫装扮
 Item_OldGinseng;Both;OldGinseng;老山参
@@ -1695,6 +1719,7 @@ Item_TajiRing;Both;TajiRing;太极戒指
 Item_TaoArmourF;Both;TaoArmour(F);道士战甲（女）
 Item_TaoArmourM;Both;TaoArmour(M);道士战甲（男）
 Item_TaoCoronet;Both;TaoCoronet;道冠冕
+Item_TaoistCannotUse;Client;Taoists cannot use this item.;道士无法使用该物品。
 Item_TaoistDrugL;Both;TaoistDrug(L);道士药剂（大）
 Item_TaoistDrugM;Both;TaoistDrug(M);道士药剂（中）
 Item_TaoistDrugS;Both;TaoistDrug(S);道士药剂（小）
@@ -1742,6 +1767,7 @@ Item_TitanArmourF;Both;TitanArmour(F);泰坦铠甲（女）
 Item_TitanArmourM;Both;TitanArmour(M);泰坦铠甲（男）
 Item_TitaniumMask;Both;TitaniumMask;钛金面具
 Item_TitanRing;Both;TitanRing;泰坦戒指
+Item_TooHeavyToTransfer;Client;Too heavy to transfer.;物品太重，无法转移。
 Item_Torch;Both;Torch;火把
 Item_ToughBow;Both;ToughBow;坚固长弓
 Item_ToughGlove;Both;ToughGlove;结实护腕
@@ -1788,6 +1814,7 @@ Item_VioletRing;Both;VioletRing;紫罗戒指
 Item_Walleye;Both;Walleye;大眼鱼
 Item_WarGodOil;Both;WarGodOil;战神油
 Item_WarMageStaff;Both;WarMageStaff;战法杖
+Item_WarriorCannotUse;Client;Warriors cannot use this item.;战士无法使用该物品。
 Item_WarriorNecklace;Both;WarriorNecklace;战士项链
 Item_WarSpiritBlade;Both;WarSpiritBlade;战魂之刃
 Item_Web;Both;Web;蜘蛛网
@@ -1814,6 +1841,7 @@ Item_WindMarble;Both;WindMarble;风之石珠
 Item_Wine;Both;Wine;葡萄酒
 Item_WisdomCoronet;Both;WisdomCoronet;智慧冠冕
 Item_WitchRobeF;Both;WitchRobe(F);女巫长袍（女）
+Item_WizardCannotUse;Client;Wizards cannot use this item.;法师无法使用该物品。
 Item_WizardRing;Both;WizardRing;巫师戒指
 Item_WizardRobeM;Both;WizardRobe(M);巫师长袍（男）
 Item_Wolf;Both;Wolf;野狼
@@ -2000,6 +2028,7 @@ Magic_Vampirism;Both;Vampirism;吸血术
 Mail;Client;Mail;邮件
 MailLover;Client;Mail Lover;给爱人发送邮件
 Mail_AllParcelsCollected;Client;All parcels have been collected.;所有包裹已领取。
+Mail_CannotMailItem;Client;You cannot mail this item.;该物品无法通过邮件发送。
 Mail_DeleteParcelWithItemsConfirm;Client;This parcel contains items or gold. Are you sure you want to delete it?;这封包裹中包含物品或金币，确定要删除吗？
 Mail_NoParcels;Client;No parcels to collect.;没有可领取的包裹。
 MainDialog_HP;Client;HP {0}/{1};HP {0}/{1}
@@ -2912,6 +2941,10 @@ NPC_Bones;Both;Bones;白骨
 NPC_Book_Vivian;Both;Book_Vivian;书商 维薇安
 NPC_BorderVillage_Board;Both;BorderVillage_Board;边境村 告示牌
 NPC_BrokenCarriage;Both;BrokenCarriage;损坏马车
+NPC_CannotCarryMoreGold;Client;Cannot carry anymore gold.;你的金币已达携带上限。
+NPC_CannotConsignItem;Client;Cannot consign this item.;该物品无法寄售。
+NPC_CannotRepairItem;Client;Cannot repair this item.;该物品无法修理。
+NPC_CannotSellItem;Client;Cannot sell this item.;该物品无法出售。
 NPC_Captain_Andrew;Both;Captain_Andrew;队长 安德鲁
 NPC_Captain_Jerald;Both;Captain_Jerald;队长 杰拉德
 NPC_CaveGuide_Paddy;Both;CaveGuide_Paddy;洞穴向导 帕迪
@@ -3085,6 +3118,7 @@ NPC_MirGuide_James;Both;MirGuide_James;向导 詹姆斯
 NPC_MirGuide_Peter;Both;MirGuide_Peter;向导 彼得
 NPC_MirGuide_Stephen;Both;MirGuide_Stephen;向导 史蒂芬
 NPC_MissDo;Both;MissDo;多小姐
+NPC_MissingToolsOrIngredients;Client;You do not have the required tools or ingredients.;缺少所需的工具或材料。
 NPC_MissMi;Both;MissMi;米小姐
 NPC_MissRe;Both;MissRe;瑞小姐
 NPC_MongchonDelegate_Michael;Both;MongchonDelegate_Michael;盟重使者 迈克尔
@@ -3095,6 +3129,8 @@ NPC_MysteriousPillar;Both;MysteriousPillar;神秘石柱
 NPC_MysteriousStone;Both;MysteriousStone;神秘石像
 NPC_Mysterious_Grim;Both;Mysterious_Grim;神秘 格里姆
 NPC_Mysterious_Yu;Both;Mysterious_Yu;神秘 禹
+NPC_NotEnoughGold;Client;You do not have enough gold.;你的金币不足。
+NPC_NotEnoughPearls;Client;You do not have enough Pearls.;你的珍珠数量不足。
 NPC_OddOldMan;Both;OddOldMan;古怪老人
 NPC_OldFisherman_Frank;Both;OldFisherman_Frank;老渔夫 弗兰克
 NPC_OldSkeleton;Both;OldSkeleton;老骷髅
@@ -3349,6 +3385,7 @@ Relationship_NotMarried;Client;You're not married.;你还没有结婚。
 Relationship_TimeSinceDays;Client;Time Since: {0} Days;已分开: {0} 天
 RemoveFriend;Client;Remove;删除好友
 RemoveMentorMentee;Client;Remove Mentor/Mentee;解除师徒关系
+Rental_CannotRemoveLockedItem;Client;Unable to remove locked item, cancel item rental and try again.;无法移除已锁定的物品，请先取消租赁后重试。
 Reply;Client;Reply;回复
 RequestDivorce;Client;Request Divorce;请求离婚
 RequestMarriage;Client;Request Marriage;请求结婚
@@ -3356,6 +3393,16 @@ RequiredDC;Client;Required DC : {0};需要 攻击: {0}
 RequiredLevel;Client;Required Level : {0};需要等级: {0}
 RequiredMC;Client;Required MC : {0};需要 魔法: {0}
 RequiredSC;Client;Required SC : {0};需要 道术: {0}
+Req_MaxLevelExceeded;Client;You have exceeded the maximum level.;你的等级超过了该物品的使用上限。
+Req_NoFishingRodEquipped;Client;You do not have a fishing rod equipped.;你没有装备鱼竿。
+Req_NoMountEquipped;Client;You do not have a mount equipped.;你没有装备坐骑。
+Req_NotEnoughAC;Client;You do not have enough AC.;你的防御不足。
+Req_NotEnoughBaseAC;Client;You do not have enough Base AC.;你的基础防御不足。
+Req_NotEnoughBaseDC;Client;You do not have enough Base DC.;你的基础攻击不足。
+Req_NotEnoughBaseMAC;Client;You do not have enough Base MAC.;你的基础魔御不足。
+Req_NotEnoughBaseMC;Client;You do not have enough Base MC.;你的基础魔法不足。
+Req_NotEnoughBaseSC;Client;You do not have enough Base SC.;你的基础道术不足。
+Req_NotEnoughMAC;Client;You do not have enough MAC.;你的魔御不足。
 Resolution;Client;Resolution;分辨率
 RestedBuff;Client;Rested{0}Increases Exp Rate by {1}%{2};休息状态{0}经验获取率提高 {1}%{2}
 Rotate;Client;Rotate;旋转
@@ -3386,6 +3433,7 @@ SwitchMarriage;Client;Allow/Block Marriage;允许/禁止 结婚请求
 SystemMessage;Client;System Message;系统消息
 SystemMessageInfo;Client;System Message Info;系统消息信息
 System_NothingFound;Client;Nothing Found.;未发现任何东西。
+System_ObservationDisabled;Client;That player has disabled observation.;该玩家已关闭被观察功能。
 System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
 System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
 System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
@@ -3393,6 +3441,7 @@ System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
 TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
 ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
 TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
+TooHeavyToWear;Client;It is too heavy to wear.;物品太重，无法穿戴。
 Trade;Client;Trade ({0});交易 ({0})
 Trade_DealCancelledFaceOther;Client;Deal cancelled.\r\nTo deal correctly you must face the other party.;交易已取消。\r\n要正确完成交易，请面向对方。
 Trade_Request;Client;Player {0} has requested to trade with you.;玩家 {0} 请求与你进行交易。
@@ -3409,6 +3458,7 @@ TrustMerchant_FailSold;Client;This item has already been sold.;该物品已被�
 TrustMerchant_FailTooFar;Client;You are too far away from the Trust Merchant.;你距离寄售商太远。
 TrustMerchant_FailWeightSpace;Client;You do not have enough weight or space spare to buy this item.;你的负重或背包空间不足，无法购买该物品。
 TrustMerchant_GetBackUnsold;Client;{0} has not sold, Are you sure you want to get it back?;{0} 尚未售出，确定要取回吗？
+TrustMerchant_SearchCooldown;Client;You can search again after {0} seconds.;你可以在 {0} 秒后再次搜索。
 Usrname;Client;Username;账号
 WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱.
 WeaponCurse;Server;Curse dwells within your weapon.;武器中蕴含着诅咒之力。

@@ -202,7 +202,7 @@ namespace Client.MirControls
             }
             if (pType == -1)
             {
-                GameScene.Scene.ChatDialog.ReceiveChat("You MUST select a payment type!", ChatType.System);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.GameShop_SelectPaymentTypeRequired, ChatType.System);
                 return;
             }
             switch (pType)
@@ -218,7 +218,7 @@ namespace Client.MirControls
                         messageBox.Show();
                     }
                     else
-                        GameScene.Scene.ChatDialog.ReceiveChat("You can't afford the selected item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.GameShop_CannotAffordItem, ChatType.System);
                     break;
                 case 1: //  Gold
                     if (Item.GoldPrice * Quantity <= GameScene.Gold)
@@ -231,7 +231,7 @@ namespace Client.MirControls
                         messageBox.Show();
                     }
                     else
-                        GameScene.Scene.ChatDialog.ReceiveChat("You can't afford the selected item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.GameShop_CannotAffordItem, ChatType.System);
                     break;
                 default:
 

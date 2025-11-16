@@ -805,13 +805,13 @@ namespace Client.MirScenes
             if (Settings.SkillMode || ctrl == true)
             {
                 Settings.SkillMode = false;
-                GameScene.Scene.ChatDialog.ReceiveChat("[SkillMode Ctrl]", ChatType.Hint);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.SkillMode_Ctrl, ChatType.Hint);
                 GameScene.Scene.OptionDialog.ToggleSkillButtons(true);
             }
             else if (!Settings.SkillMode || ctrl == false)
             {
                 Settings.SkillMode = true;
-                GameScene.Scene.ChatDialog.ReceiveChat("[SkillMode ~]", ChatType.Hint);
+                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.SkillMode_Tilde, ChatType.Hint);
                 GameScene.Scene.OptionDialog.ToggleSkillButtons(false);
             }
         }
@@ -923,7 +923,7 @@ namespace Client.MirScenes
             }
 
             int cost;
-            string prefix = actor == Hero ? "(Hero) " : string.Empty;
+            string prefix = actor == Hero ? GameLanguage.Hero_Prefix : string.Empty;
             switch (magic.Spell)
             {
                 case Spell.Fencing:
@@ -4918,7 +4918,7 @@ namespace Client.MirScenes
             if (p.ObjectID == Hero?.ObjectID)
             {
                 actor = Hero;
-                prefix = "(Hero) ";
+                prefix = GameLanguage.Hero_Prefix;
             }
 
             switch (p.Spell)
@@ -4933,15 +4933,15 @@ namespace Client.MirScenes
                     break;
                 case Spell.HalfMoon:
                     actor.HalfMoon = p.CanUse;
-                    ChatDialog.ReceiveChat(prefix + (actor.HalfMoon ? "Use HalfMoon." : "Do not use HalfMoon."), ChatType.Hint);
+                    ChatDialog.ReceiveChat(prefix + (actor.HalfMoon ? GameLanguage.Skill_UseHalfMoon : GameLanguage.Skill_DoNotUseHalfMoon), ChatType.Hint);
                     break;
                 case Spell.CrossHalfMoon:
                     actor.CrossHalfMoon = p.CanUse;
-                    ChatDialog.ReceiveChat(prefix + (actor.CrossHalfMoon ? "Use CrossHalfMoon." : "Do not use CrossHalfMoon."), ChatType.Hint);
+                    ChatDialog.ReceiveChat(prefix + (actor.CrossHalfMoon ? GameLanguage.Skill_UseCrossHalfMoon : GameLanguage.Skill_DoNotUseCrossHalfMoon), ChatType.Hint);
                     break;
                 case Spell.DoubleSlash:
                     actor.DoubleSlash = p.CanUse;
-                    ChatDialog.ReceiveChat(prefix + (actor.DoubleSlash ? "Use DoubleSlash." : "Do not use DoubleSlash."), ChatType.Hint);
+                    ChatDialog.ReceiveChat(prefix + (actor.DoubleSlash ? GameLanguage.Skill_UseDoubleSlash : GameLanguage.Skill_DoNotUseDoubleSlash), ChatType.Hint);
                     break;
                 case Spell.FlamingSword:
                     actor.FlamingSword = p.CanUse;
@@ -5633,9 +5633,11 @@ namespace Client.MirScenes
             };
             inputBox.OKButton.Click += (o, e) =>
             {
+                if (string.IsNullOrEmpty(inputBox.InputTextBox.Text)) return;
+
                 if (inputBox.InputTextBox.Text.Contains('\\'))
                 {
-                    ChatDialog.ReceiveChat("You cannot use the \\ sign in a guildname!", ChatType.System);
+                    ChatDialog.ReceiveChat(GameLanguage.Guild_InvalidNameBackslash, ChatType.System);
                     inputBox.InputTextBox.Text = "";
                 }
                 Network.Enqueue(new C.GuildNameReturn { Name = inputBox.InputTextBox.Text });
@@ -5671,20 +5673,20 @@ namespace Client.MirScenes
                     GuildDialog.MemberStatusChange(p.Name, false);
                     break;
                 case 1: // logged on
-                    ChatDialog.ReceiveChat(String.Format("{0} logged on.", p.Name), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_MemberLoggedOn, p.Name), ChatType.Guild);
                     GuildDialog.MemberStatusChange(p.Name, true);
                     break;
                 case 2://new member
-                    ChatDialog.ReceiveChat(String.Format("{0} joined guild.", p.Name), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_MemberJoined, p.Name), ChatType.Guild);
                     GuildDialog.MemberCount++;
                     GuildDialog.MembersChanged = true;
                     break;
                 case 3://kicked member
-                    ChatDialog.ReceiveChat(String.Format("{0} got removed from the guild.", p.Name), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_MemberKicked, p.Name), ChatType.Guild);
                     GuildDialog.MembersChanged = true;
                     break;
                 case 4://member left
-                    ChatDialog.ReceiveChat(String.Format("{0} left the guild.", p.Name), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_MemberLeft, p.Name), ChatType.Guild);
                     GuildDialog.MembersChanged = true;
                     break;
                 case 5://rank change (name or different rank)
@@ -5761,11 +5763,11 @@ namespace Client.MirScenes
             switch (p.Type)
             {
                 case 0:
-                    ChatDialog.ReceiveChat(String.Format("{0} donated {1} gold to guild funds.", p.Name, p.Amount), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_DonatedToFund, p.Name, p.Amount), ChatType.Guild);
                     GuildDialog.Gold += p.Amount;
                     break;
                 case 1:
-                    ChatDialog.ReceiveChat(String.Format("{0} retrieved {1} gold from guild funds.", p.Name, p.Amount), ChatType.Guild);
+                    ChatDialog.ReceiveChat(String.Format(GameLanguage.Guild_RetrievedFromFund, p.Name, p.Amount), ChatType.Guild);
                     if (GuildDialog.Gold > p.Amount)
                         GuildDialog.Gold -= p.Amount;
                     else

@@ -689,7 +689,7 @@ namespace Client.MirScenes.Dialogs
                         maxQuantity = Math.Min(ushort.MaxValue, (ushort)(GameScene.Gold / (SelectedItem.Price() / SelectedItem.Count)));
                         if (maxQuantity == 0)
                         {
-                            GameScene.Scene.ChatDialog.ReceiveChat("You do not have enough Pearls.", ChatType.System);
+                            GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_NotEnoughPearls, ChatType.System);
                             return;
                         }
                     }
@@ -976,7 +976,7 @@ namespace Client.MirScenes.Dialogs
                 case PanelType.Sell:
                     if (TargetItem.Info.Bind.HasFlag(BindMode.DontSell))
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat("Cannot sell this item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_CannotSellItem, ChatType.System);
                         return;
                     }
                     if (GameScene.Gold + TargetItem.Price() / 2 <= uint.MaxValue)
@@ -985,12 +985,12 @@ namespace Client.MirScenes.Dialogs
                         TargetItem = null;
                         return;
                     }
-                    GameScene.Scene.ChatDialog.ReceiveChat("Cannot carry anymore gold.", ChatType.System);
+                    GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_CannotCarryMoreGold, ChatType.System);
                     break;
                 case PanelType.Repair:
                     if (TargetItem.Info.Bind.HasFlag(BindMode.DontRepair))
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat("Cannot repair this item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_CannotRepairItem, ChatType.System);
                         return;
                     }
                     if (GameScene.Gold >= TargetItem.RepairPrice() * GameScene.NPCRate)
@@ -1004,7 +1004,7 @@ namespace Client.MirScenes.Dialogs
                 case PanelType.SpecialRepair:
                     if ((TargetItem.Info.Bind.HasFlag(BindMode.DontRepair)) || (TargetItem.Info.Bind.HasFlag(BindMode.NoSRepair)))
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat("Cannot repair this item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_CannotRepairItem, ChatType.System);
                         return;
                     }
                     if (GameScene.Gold >= (TargetItem.RepairPrice() * 3) * GameScene.NPCRate)
@@ -1018,7 +1018,7 @@ namespace Client.MirScenes.Dialogs
                 case PanelType.Consign:
                     if (TargetItem.Info.Bind.HasFlag(BindMode.DontStore) || TargetItem.Info.Bind.HasFlag(BindMode.DontSell))
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat("Cannot consign this item.", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_CannotConsignItem, ChatType.System);
                         return;
                     }
                     MirAmountBox box = new MirAmountBox("Consignment Price:", TargetItem.Image, Globals.MaxConsignment, Globals.MinConsignment)
@@ -1999,7 +1999,7 @@ namespace Client.MirScenes.Dialogs
             {
                 if (Recipe.Gold > GameScene.Gold)
                 {
-                    GameScene.Scene.ChatDialog.ReceiveChat("You do not have enough gold.", ChatType.System);
+                    GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_NotEnoughGold, ChatType.System);
                     return;
                 }
 
@@ -2015,13 +2015,13 @@ namespace Client.MirScenes.Dialogs
                     {
                         if (!HasCraftItems((ushort)amountBox.Amount))
                         {
-                            GameScene.Scene.ChatDialog.ReceiveChat("You do not have the required tools or ingredients.", ChatType.System);
+                            GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_MissingToolsOrIngredients, ChatType.System);
                             return;
                         }
                         
                         if ((Recipe.Gold * amountBox.Amount) > GameScene.Gold)
                         {
-                            GameScene.Scene.ChatDialog.ReceiveChat("You do not have enough gold.", ChatType.System);
+                            GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NPC_NotEnoughGold, ChatType.System);
                             return;
                         }
 

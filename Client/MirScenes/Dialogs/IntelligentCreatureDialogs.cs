@@ -498,7 +498,7 @@ namespace Client.MirScenes.Dialogs
                 {
                     if (String.Compare(verificationBox.InputTextBox.Text, GameScene.User.IntelligentCreatures[selectedCreature].CustomName, StringComparison.OrdinalIgnoreCase) != 0)
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat("Verification Failed!!", ChatType.System);
+                        GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.Creature_VerificationFailed, ChatType.System);
                     }
                     else
                     {

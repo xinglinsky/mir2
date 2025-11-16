@@ -55,6 +55,11 @@
 
                          PatchErr = "Could not get Patch Information",
                          LastOnline = "Last Online",
+                         ClassName_Warrior = "Warrior",
+                         ClassName_Wizard = "Wizard",
+                         ClassName_Taoist = "Taoist",
+                         ClassName_Assassin = "Assassin",
+                         ClassName_Archer = "Archer",
 
                          Gold = "Gold",
                          Credit = "Credit",
@@ -66,6 +71,8 @@
                          GameShop_PageText = "{0} / {1}",
                          GameShop_BuyConfirmCredits = "Are you sure you would like to buy {1} x \n{0}({3}) for {2} Credits?",
                          GameShop_BuyConfirmGold = "Are you sure you would like to buy {1} x \n{0}({3}) for {2} Gold?",
+                         GameShop_SelectPaymentTypeRequired = "You MUST select a payment type!",
+                         GameShop_CannotAffordItem = "You can't afford the selected item.",
 
                          YouGained = "You gained {0}.",
 
@@ -167,6 +174,7 @@
                          Hero_NameExists = "A Character with this name already exists.",
                          Hero_NoBagSpace = "No bag space.",
                          Hero_CreatedSuccessfully = "Hero created successfully.",
+                         Hero_Prefix = "(Hero) ",
 
                          Client_WrongVersion = "Wrong version, please update your game.\nGame will now Close",
 
@@ -235,6 +243,7 @@
                          Trade_Request = "Player {0} has requested to trade with you.",
                          Item_CannotDrop = "You cannot drop {0}",
                          Creature_NameLengthInvalid = "Creature name must be between {0} and {1} characters.",
+                         Creature_VerificationFailed = "Verification Failed!!",
                          Keyboard_ResetDefault = "Keyboard settings have been reset back to default.",
                          Mail_DeleteParcelWithItemsConfirm = "This parcel contains items or gold. Are you sure you want to delete it?",
                          Mail_NoParcels = "No parcels to collect.",
@@ -251,10 +260,12 @@
                          Awakening_AlreadyMaxLevel = "Awakening already at maximum level.",
                          Awakening_CannotAwaken = "Cannot awaken this item.",
                          BigMap_TeleportToNPC = "Teleport to this NPC for {0} Gold?",
+                         BigMap_PathNotFound = "Could not find suitable path.",
                          System_PlayerNotOnline = "Player is not online",
                          TrustMerchant_GetBackUnsold = "{0} has not sold, Are you sure you want to get it back?",
                          TrustMerchant_BuyConfirm = "Are you sure you want to buy {0} for {1:#,##0} {2}?",
                          TrustMerchant_BidConfirm = "Are you sure you want to bid {0:#,##0} Gold for {1}?",
+                         TrustMerchant_SearchCooldown = "You can search again after {0} seconds.",
                          TrustMerchant_FailDead = "You cannot use the TrustMerchant when dead.",
                          TrustMerchant_FailNotUsing = "You cannot buy from the TrustMerchant without using.",
                          TrustMerchant_FailSold = "This item has already been sold.",
@@ -321,6 +332,12 @@
                          Guild_ChangeRankConfirm = "Are you sure you want to change the rank of {0} to {1}?",
                          Guild_KickMemberConfirm = "Are you sure you want to kick {0}?",
                          Guild_CreateRankConfirm = "Are you sure you want to create a new rank?",
+                         Guild_MemberLoggedOn = "{0} logged on.",
+                         Guild_MemberJoined = "{0} joined guild.",
+                         Guild_MemberKicked = "{0} got removed from the guild.",
+                         Guild_MemberLeft = "{0} left the guild.",
+                         Guild_DonatedToFund = "{0} donated {1} gold to guild funds.",
+                         Guild_RetrievedFromFund = "{0} retrieved {1} gold from guild funds.",
 
                          ItemTypeWeapon = "Weapon",
                          ItemTypeArmour = "Armour",
@@ -376,7 +393,17 @@
                          GroupRemoveEnterName = "Please enter the name of the person you wish to remove.",
                          Group_MaxMembers = "Your group already has the maximum number of members.",
                          Group_NotLeader = "You are not the leader of your group.",
+                         Guild_InvalidNameBackslash = "You cannot use the \\ sign in a guildname!",
                          TooHeavyToHold = "It is too heavy to Hold.",
+                         TooHeavyToWear = "It is too heavy to wear.",
+                         Chat_ItemLinkTooLong = "Unable to link item, message exceeds allowed length",
+                         Item_NoRoomToSplitStack = "No room to split stack.",
+                         Item_CannotSwapItems = "You cannot swap items.",
+                         Guild_InsufficientRetrieveItems = "Insufficient rights to retrieve items.",
+                         Guild_InsufficientStoreItems = "Insufficient rights to store items.",
+                         Rental_CannotRemoveLockedItem = "Unable to remove locked item, cancel item rental and try again.",
+                         Mail_CannotMailItem = "You cannot mail this item.",
+                         Item_TooHeavyToTransfer = "Too heavy to transfer.",
                          SwitchMarriage = "Allow/Block Marriage",
                          RequestMarriage = "Request Marriage",
                          RequestDivorce = "Request Divorce",
@@ -413,6 +440,7 @@
                          System_PleaseEnterInfo = "Please enter the required information.",
                          System_PersonObservingLoggedOff = "The person you was observing has logged off.",
                          System_UnknownTypeRequired = "Unknown Type Required",
+                         System_ObservationDisabled = "That player has disabled observation.",
 
                          // Group related
                          Group_YouLeft = "You have left the group.",
@@ -453,6 +481,21 @@
                          Item_CantTrade = "Can't trade",
                          Item_CantStore = "Can't store",
                          Item_CantRepair = "Can't repair",
+                         Item_WarriorCannotUse = "Warriors cannot use this item.",
+                         Item_WizardCannotUse = "Wizards cannot use this item.",
+                         Item_TaoistCannotUse = "Taoists cannot use this item.",
+                         Item_AssassinCannotUse = "Assassins cannot use this item.",
+                         Item_ArcherCannotUse = "Archers cannot use this item.",
+                         Req_NotEnoughAC = "You do not have enough AC.",
+                         Req_NotEnoughMAC = "You do not have enough MAC.",
+                         Req_MaxLevelExceeded = "You have exceeded the maximum level.",
+                         Req_NotEnoughBaseAC = "You do not have enough Base AC.",
+                         Req_NotEnoughBaseMAC = "You do not have enough Base MAC.",
+                         Req_NotEnoughBaseDC = "You do not have enough Base DC.",
+                         Req_NotEnoughBaseMC = "You do not have enough Base MC.",
+                         Req_NotEnoughBaseSC = "You do not have enough Base SC.",
+                         Req_NoMountEquipped = "You do not have a mount equipped.",
+                         Req_NoFishingRodEquipped = "You do not have a fishing rod equipped.",
 
                          // Damage types
                          Damage_Miss = "Miss",
@@ -489,6 +532,13 @@
                          LowDC = "You do not have enough DC.",
                          LowMC = "You do not have enough MC.",
                          LowSC = "You do not have enough SC.",
+                         NPC_NotEnoughPearls = "You do not have enough Pearls.",
+                         NPC_CannotSellItem = "Cannot sell this item.",
+                         NPC_CannotCarryMoreGold = "Cannot carry anymore gold.",
+                         NPC_CannotRepairItem = "Cannot repair this item.",
+                         NPC_CannotConsignItem = "Cannot consign this item.",
+                         NPC_NotEnoughGold = "You do not have enough gold.",
+                         NPC_MissingToolsOrIngredients = "You do not have the required tools or ingredients.",
                          GameName = "Legend of Mir 2",
                          ExpandedStorageExpiresOn = "Expanded Storage Expires On",
 
@@ -562,12 +612,25 @@
 
         GameLanguage.PatchErr = reader.ReadString("Language", "PatchErr", GameLanguage.PatchErr);
         GameLanguage.LastOnline = reader.ReadString("Language", "LastOnline", GameLanguage.LastOnline);
+        GameLanguage.GameName = reader.ReadString("Language", "GameName", GameLanguage.GameName);
+        GameLanguage.ClassName_Warrior = reader.ReadString("Language", "ClassName_Warrior", GameLanguage.ClassName_Warrior);
+        GameLanguage.ClassName_Wizard = reader.ReadString("Language", "ClassName_Wizard", GameLanguage.ClassName_Wizard);
+        GameLanguage.ClassName_Taoist = reader.ReadString("Language", "ClassName_Taoist", GameLanguage.ClassName_Taoist);
+        GameLanguage.ClassName_Assassin = reader.ReadString("Language", "ClassName_Assassin", GameLanguage.ClassName_Assassin);
+        GameLanguage.ClassName_Archer = reader.ReadString("Language", "ClassName_Archer", GameLanguage.ClassName_Archer);
 
         GameLanguage.LowLevel = reader.ReadString("Language", "LowLevel", GameLanguage.LowLevel);
         GameLanguage.LowGold = reader.ReadString("Language", "LowGold", GameLanguage.LowGold);
         GameLanguage.LowDC = reader.ReadString("Language", "LowDC", GameLanguage.LowDC);
         GameLanguage.LowMC = reader.ReadString("Language", "LowMC", GameLanguage.LowMC);
         GameLanguage.LowSC = reader.ReadString("Language", "LowSC", GameLanguage.LowSC);
+        GameLanguage.NPC_NotEnoughPearls = reader.ReadString("Language", "NPC_NotEnoughPearls", GameLanguage.NPC_NotEnoughPearls);
+        GameLanguage.NPC_CannotSellItem = reader.ReadString("Language", "NPC_CannotSellItem", GameLanguage.NPC_CannotSellItem);
+        GameLanguage.NPC_CannotCarryMoreGold = reader.ReadString("Language", "NPC_CannotCarryMoreGold", GameLanguage.NPC_CannotCarryMoreGold);
+        GameLanguage.NPC_CannotRepairItem = reader.ReadString("Language", "NPC_CannotRepairItem", GameLanguage.NPC_CannotRepairItem);
+        GameLanguage.NPC_CannotConsignItem = reader.ReadString("Language", "NPC_CannotConsignItem", GameLanguage.NPC_CannotConsignItem);
+        GameLanguage.NPC_NotEnoughGold = reader.ReadString("Language", "NPC_NotEnoughGold", GameLanguage.NPC_NotEnoughGold);
+        GameLanguage.NPC_MissingToolsOrIngredients = reader.ReadString("Language", "NPC_MissingToolsOrIngredients", GameLanguage.NPC_MissingToolsOrIngredients);
 
         GameLanguage.Gold = reader.ReadString("Language", "Gold", GameLanguage.Gold);
         GameLanguage.Credit = reader.ReadString("Language", "Credit", GameLanguage.Credit);
@@ -580,6 +643,8 @@
         GameLanguage.GameShop_PageText = reader.ReadString("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
         GameLanguage.GameShop_BuyConfirmCredits = reader.ReadString("Language", "GameShop_BuyConfirmCredits", GameLanguage.GameShop_BuyConfirmCredits);
         GameLanguage.GameShop_BuyConfirmGold = reader.ReadString("Language", "GameShop_BuyConfirmGold", GameLanguage.GameShop_BuyConfirmGold);
+        GameLanguage.GameShop_SelectPaymentTypeRequired = reader.ReadString("Language", "GameShop_SelectPaymentTypeRequired", GameLanguage.GameShop_SelectPaymentTypeRequired);
+        GameLanguage.GameShop_CannotAffordItem = reader.ReadString("Language", "GameShop_CannotAffordItem", GameLanguage.GameShop_CannotAffordItem);
 
         GameLanguage.YouGained = reader.ReadString("Language", "YouGained", GameLanguage.YouGained);
         GameLanguage.YouGained2 = reader.ReadString("Language", "YouGained2", GameLanguage.YouGained2);
@@ -684,6 +749,7 @@
         GameLanguage.Hero_NameExists = reader.ReadString("Language", "Hero_NameExists", GameLanguage.Hero_NameExists);
         GameLanguage.Hero_NoBagSpace = reader.ReadString("Language", "Hero_NoBagSpace", GameLanguage.Hero_NoBagSpace);
         GameLanguage.Hero_CreatedSuccessfully = reader.ReadString("Language", "Hero_CreatedSuccessfully", GameLanguage.Hero_CreatedSuccessfully);
+        GameLanguage.Hero_Prefix = reader.ReadString("Language", "Hero_Prefix", GameLanguage.Hero_Prefix);
 
         GameLanguage.Client_WrongVersion = reader.ReadString("Language", "Client_WrongVersion", GameLanguage.Client_WrongVersion);
 
@@ -745,6 +811,7 @@
         GameLanguage.Trade_Request = reader.ReadString("Language", "Trade_Request", GameLanguage.Trade_Request);
         GameLanguage.Item_CannotDrop = reader.ReadString("Language", "Item_CannotDrop", GameLanguage.Item_CannotDrop);
         GameLanguage.Creature_NameLengthInvalid = reader.ReadString("Language", "Creature_NameLengthInvalid", GameLanguage.Creature_NameLengthInvalid);
+        GameLanguage.Creature_VerificationFailed = reader.ReadString("Language", "Creature_VerificationFailed", GameLanguage.Creature_VerificationFailed);
         GameLanguage.Keyboard_ResetDefault = reader.ReadString("Language", "Keyboard_ResetDefault", GameLanguage.Keyboard_ResetDefault);
         GameLanguage.Mail_DeleteParcelWithItemsConfirm = reader.ReadString("Language", "Mail_DeleteParcelWithItemsConfirm", GameLanguage.Mail_DeleteParcelWithItemsConfirm);
         GameLanguage.Mail_NoParcels = reader.ReadString("Language", "Mail_NoParcels", GameLanguage.Mail_NoParcels);
@@ -761,10 +828,12 @@
         GameLanguage.Awakening_AlreadyMaxLevel = reader.ReadString("Language", "Awakening_AlreadyMaxLevel", GameLanguage.Awakening_AlreadyMaxLevel);
         GameLanguage.Awakening_CannotAwaken = reader.ReadString("Language", "Awakening_CannotAwaken", GameLanguage.Awakening_CannotAwaken);
         GameLanguage.BigMap_TeleportToNPC = reader.ReadString("Language", "BigMap_TeleportToNPC", GameLanguage.BigMap_TeleportToNPC);
+        GameLanguage.BigMap_PathNotFound = reader.ReadString("Language", "BigMap_PathNotFound", GameLanguage.BigMap_PathNotFound);
         GameLanguage.System_PlayerNotOnline = reader.ReadString("Language", "System_PlayerNotOnline", GameLanguage.System_PlayerNotOnline);
         GameLanguage.TrustMerchant_GetBackUnsold = reader.ReadString("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
         GameLanguage.TrustMerchant_BuyConfirm = reader.ReadString("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
         GameLanguage.TrustMerchant_BidConfirm = reader.ReadString("Language", "TrustMerchant_BidConfirm", GameLanguage.TrustMerchant_BidConfirm);
+        GameLanguage.TrustMerchant_SearchCooldown = reader.ReadString("Language", "TrustMerchant_SearchCooldown", GameLanguage.TrustMerchant_SearchCooldown);
         GameLanguage.TrustMerchant_FailDead = reader.ReadString("Language", "TrustMerchant_FailDead", GameLanguage.TrustMerchant_FailDead);
         GameLanguage.TrustMerchant_FailNotUsing = reader.ReadString("Language", "TrustMerchant_FailNotUsing", GameLanguage.TrustMerchant_FailNotUsing);
         GameLanguage.TrustMerchant_FailSold = reader.ReadString("Language", "TrustMerchant_FailSold", GameLanguage.TrustMerchant_FailSold);
@@ -793,6 +862,12 @@
         GameLanguage.Keyboard_Layout = reader.ReadString("Language", "Keyboard_Layout", GameLanguage.Keyboard_Layout);
 
         GameLanguage.Chat_Report = reader.ReadString("Language", "Chat_Report", GameLanguage.Chat_Report);
+        GameLanguage.Guild_MemberLoggedOn = reader.ReadString("Language", "Guild_MemberLoggedOn", GameLanguage.Guild_MemberLoggedOn);
+        GameLanguage.Guild_MemberJoined = reader.ReadString("Language", "Guild_MemberJoined", GameLanguage.Guild_MemberJoined);
+        GameLanguage.Guild_MemberKicked = reader.ReadString("Language", "Guild_MemberKicked", GameLanguage.Guild_MemberKicked);
+        GameLanguage.Guild_MemberLeft = reader.ReadString("Language", "Guild_MemberLeft", GameLanguage.Guild_MemberLeft);
+        GameLanguage.Guild_DonatedToFund = reader.ReadString("Language", "Guild_DonatedToFund", GameLanguage.Guild_DonatedToFund);
+        GameLanguage.Guild_RetrievedFromFund = reader.ReadString("Language", "Guild_RetrievedFromFund", GameLanguage.Guild_RetrievedFromFund);
 
         GameLanguage.Ranking_OnlineOnly = reader.ReadString("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
 
@@ -855,7 +930,19 @@
         GameLanguage.GroupRemove = reader.ReadString("Language", "GroupRemove", GameLanguage.GroupRemove);
         GameLanguage.GroupAddEnterName = reader.ReadString("Language", "GroupAddEnterName", GameLanguage.GroupAddEnterName);
         GameLanguage.GroupRemoveEnterName = reader.ReadString("Language", "GroupRemoveEnterName", GameLanguage.GroupRemoveEnterName);
+        GameLanguage.Group_MaxMembers = reader.ReadString("Language", "Group_MaxMembers", GameLanguage.Group_MaxMembers);
+        GameLanguage.Group_NotLeader = reader.ReadString("Language", "Group_NotLeader", GameLanguage.Group_NotLeader);
+        GameLanguage.Guild_InvalidNameBackslash = reader.ReadString("Language", "Guild_InvalidNameBackslash", GameLanguage.Guild_InvalidNameBackslash);
         GameLanguage.TooHeavyToHold = reader.ReadString("Language", "TooHeavyToHold", GameLanguage.TooHeavyToHold);
+        GameLanguage.TooHeavyToWear = reader.ReadString("Language", "TooHeavyToWear", GameLanguage.TooHeavyToWear);
+        GameLanguage.Chat_ItemLinkTooLong = reader.ReadString("Language", "Chat_ItemLinkTooLong", GameLanguage.Chat_ItemLinkTooLong);
+        GameLanguage.Item_NoRoomToSplitStack = reader.ReadString("Language", "Item_NoRoomToSplitStack", GameLanguage.Item_NoRoomToSplitStack);
+        GameLanguage.Item_CannotSwapItems = reader.ReadString("Language", "Item_CannotSwapItems", GameLanguage.Item_CannotSwapItems);
+        GameLanguage.Guild_InsufficientRetrieveItems = reader.ReadString("Language", "Guild_InsufficientRetrieveItems", GameLanguage.Guild_InsufficientRetrieveItems);
+        GameLanguage.Guild_InsufficientStoreItems = reader.ReadString("Language", "Guild_InsufficientStoreItems", GameLanguage.Guild_InsufficientStoreItems);
+        GameLanguage.Rental_CannotRemoveLockedItem = reader.ReadString("Language", "Rental_CannotRemoveLockedItem", GameLanguage.Rental_CannotRemoveLockedItem);
+        GameLanguage.Mail_CannotMailItem = reader.ReadString("Language", "Mail_CannotMailItem", GameLanguage.Mail_CannotMailItem);
+        GameLanguage.Item_TooHeavyToTransfer = reader.ReadString("Language", "Item_TooHeavyToTransfer", GameLanguage.Item_TooHeavyToTransfer);
         GameLanguage.SwitchMarriage = reader.ReadString("Language", "SwitchMarriage", GameLanguage.SwitchMarriage);
         GameLanguage.RequestMarriage = reader.ReadString("Language", "RequestMarriage", GameLanguage.RequestMarriage);
         GameLanguage.RequestDivorce = reader.ReadString("Language", "RequestDivorce", GameLanguage.RequestDivorce);
@@ -879,6 +966,7 @@
         GameLanguage.System_PleaseEnterInfo = reader.ReadString("Language", "System_PleaseEnterInfo", GameLanguage.System_PleaseEnterInfo);
         GameLanguage.System_PersonObservingLoggedOff = reader.ReadString("Language", "System_PersonObservingLoggedOff", GameLanguage.System_PersonObservingLoggedOff);
         GameLanguage.System_UnknownTypeRequired = reader.ReadString("Language", "System_UnknownTypeRequired", GameLanguage.System_UnknownTypeRequired);
+        GameLanguage.System_ObservationDisabled = reader.ReadString("Language", "System_ObservationDisabled", GameLanguage.System_ObservationDisabled);
 
         // Group related
         GameLanguage.Group_YouLeft = reader.ReadString("Language", "Group_YouLeft", GameLanguage.Group_YouLeft);
@@ -919,6 +1007,21 @@
         GameLanguage.Item_CantTrade = reader.ReadString("Language", "Item_CantTrade", GameLanguage.Item_CantTrade);
         GameLanguage.Item_CantStore = reader.ReadString("Language", "Item_CantStore", GameLanguage.Item_CantStore);
         GameLanguage.Item_CantRepair = reader.ReadString("Language", "Item_CantRepair", GameLanguage.Item_CantRepair);
+        GameLanguage.Item_WarriorCannotUse = reader.ReadString("Language", "Item_WarriorCannotUse", GameLanguage.Item_WarriorCannotUse);
+        GameLanguage.Item_WizardCannotUse = reader.ReadString("Language", "Item_WizardCannotUse", GameLanguage.Item_WizardCannotUse);
+        GameLanguage.Item_TaoistCannotUse = reader.ReadString("Language", "Item_TaoistCannotUse", GameLanguage.Item_TaoistCannotUse);
+        GameLanguage.Item_AssassinCannotUse = reader.ReadString("Language", "Item_AssassinCannotUse", GameLanguage.Item_AssassinCannotUse);
+        GameLanguage.Item_ArcherCannotUse = reader.ReadString("Language", "Item_ArcherCannotUse", GameLanguage.Item_ArcherCannotUse);
+        GameLanguage.Req_NotEnoughAC = reader.ReadString("Language", "Req_NotEnoughAC", GameLanguage.Req_NotEnoughAC);
+        GameLanguage.Req_NotEnoughMAC = reader.ReadString("Language", "Req_NotEnoughMAC", GameLanguage.Req_NotEnoughMAC);
+        GameLanguage.Req_MaxLevelExceeded = reader.ReadString("Language", "Req_MaxLevelExceeded", GameLanguage.Req_MaxLevelExceeded);
+        GameLanguage.Req_NotEnoughBaseAC = reader.ReadString("Language", "Req_NotEnoughBaseAC", GameLanguage.Req_NotEnoughBaseAC);
+        GameLanguage.Req_NotEnoughBaseMAC = reader.ReadString("Language", "Req_NotEnoughBaseMAC", GameLanguage.Req_NotEnoughBaseMAC);
+        GameLanguage.Req_NotEnoughBaseDC = reader.ReadString("Language", "Req_NotEnoughBaseDC", GameLanguage.Req_NotEnoughBaseDC);
+        GameLanguage.Req_NotEnoughBaseMC = reader.ReadString("Language", "Req_NotEnoughBaseMC", GameLanguage.Req_NotEnoughBaseMC);
+        GameLanguage.Req_NotEnoughBaseSC = reader.ReadString("Language", "Req_NotEnoughBaseSC", GameLanguage.Req_NotEnoughBaseSC);
+        GameLanguage.Req_NoMountEquipped = reader.ReadString("Language", "Req_NoMountEquipped", GameLanguage.Req_NoMountEquipped);
+        GameLanguage.Req_NoFishingRodEquipped = reader.ReadString("Language", "Req_NoFishingRodEquipped", GameLanguage.Req_NoFishingRodEquipped);
 
         // Damage types
         GameLanguage.Damage_Miss = reader.ReadString("Language", "Damage_Miss", GameLanguage.Damage_Miss);
@@ -992,12 +1095,25 @@
         reader.Write("Language", "Never", GameLanguage.Never);
         reader.Write("Language", "PatchErr", GameLanguage.PatchErr);
         reader.Write("Language", "LastOnline", GameLanguage.LastOnline);
+        reader.Write("Language", "GameName", GameLanguage.GameName);
+        reader.Write("Language", "ClassName_Warrior", GameLanguage.ClassName_Warrior);
+        reader.Write("Language", "ClassName_Wizard", GameLanguage.ClassName_Wizard);
+        reader.Write("Language", "ClassName_Taoist", GameLanguage.ClassName_Taoist);
+        reader.Write("Language", "ClassName_Assassin", GameLanguage.ClassName_Assassin);
+        reader.Write("Language", "ClassName_Archer", GameLanguage.ClassName_Archer);
 
         reader.Write("Language", "LowLevel", GameLanguage.LowLevel);
         reader.Write("Language", "LowGold", GameLanguage.LowGold);
         reader.Write("Language", "LowDC", GameLanguage.LowDC);
         reader.Write("Language", "LowMC", GameLanguage.LowMC);
         reader.Write("Language", "LowSC", GameLanguage.LowSC);
+        reader.Write("Language", "NPC_NotEnoughPearls", GameLanguage.NPC_NotEnoughPearls);
+        reader.Write("Language", "NPC_CannotSellItem", GameLanguage.NPC_CannotSellItem);
+        reader.Write("Language", "NPC_CannotCarryMoreGold", GameLanguage.NPC_CannotCarryMoreGold);
+        reader.Write("Language", "NPC_CannotRepairItem", GameLanguage.NPC_CannotRepairItem);
+        reader.Write("Language", "NPC_CannotConsignItem", GameLanguage.NPC_CannotConsignItem);
+        reader.Write("Language", "NPC_NotEnoughGold", GameLanguage.NPC_NotEnoughGold);
+        reader.Write("Language", "NPC_MissingToolsOrIngredients", GameLanguage.NPC_MissingToolsOrIngredients);
 
         reader.Write("Language", "Gold", GameLanguage.Gold);
         reader.Write("Language", "Credit", GameLanguage.Credit);
@@ -1010,6 +1126,8 @@
         reader.Write("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
         reader.Write("Language", "GameShop_BuyConfirmCredits", GameLanguage.GameShop_BuyConfirmCredits);
         reader.Write("Language", "GameShop_BuyConfirmGold", GameLanguage.GameShop_BuyConfirmGold);
+        reader.Write("Language", "GameShop_SelectPaymentTypeRequired", GameLanguage.GameShop_SelectPaymentTypeRequired);
+        reader.Write("Language", "GameShop_CannotAffordItem", GameLanguage.GameShop_CannotAffordItem);
 
         reader.Write("Language", "YouGained", GameLanguage.YouGained);
         reader.Write("Language", "YouGained2", GameLanguage.YouGained2);
@@ -1172,6 +1290,7 @@
         reader.Write("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
         reader.Write("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
         reader.Write("Language", "TrustMerchant_BidConfirm", GameLanguage.TrustMerchant_BidConfirm);
+        reader.Write("Language", "TrustMerchant_SearchCooldown", GameLanguage.TrustMerchant_SearchCooldown);
         reader.Write("Language", "MentorRequests", GameLanguage.MentorRequests);
         reader.Write("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         reader.Write("Language", "NoMentorship", GameLanguage.NoMentorship);
@@ -1190,6 +1309,12 @@
         reader.Write("Language", "Keyboard_Layout", GameLanguage.Keyboard_Layout);
 
         reader.Write("Language", "Chat_Report", GameLanguage.Chat_Report);
+        reader.Write("Language", "Guild_MemberLoggedOn", GameLanguage.Guild_MemberLoggedOn);
+        reader.Write("Language", "Guild_MemberJoined", GameLanguage.Guild_MemberJoined);
+        reader.Write("Language", "Guild_MemberKicked", GameLanguage.Guild_MemberKicked);
+        reader.Write("Language", "Guild_MemberLeft", GameLanguage.Guild_MemberLeft);
+        reader.Write("Language", "Guild_DonatedToFund", GameLanguage.Guild_DonatedToFund);
+        reader.Write("Language", "Guild_RetrievedFromFund", GameLanguage.Guild_RetrievedFromFund);
 
         reader.Write("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
 
@@ -1253,6 +1378,7 @@
         reader.Write("Language", "GroupAddEnterName", GameLanguage.GroupAddEnterName);
         reader.Write("Language", "GroupRemoveEnterName", GameLanguage.GroupRemoveEnterName);
         reader.Write("Language", "TooHeavyToHold", GameLanguage.TooHeavyToHold);
+        reader.Write("Language", "TooHeavyToWear", GameLanguage.TooHeavyToWear);
         reader.Write("Language", "SwitchMarriage", GameLanguage.SwitchMarriage);
         reader.Write("Language", "RequestMarriage", GameLanguage.RequestMarriage);
         reader.Write("Language", "RequestDivorce", GameLanguage.RequestDivorce);
@@ -1316,6 +1442,21 @@
         reader.Write("Language", "Item_CantTrade", GameLanguage.Item_CantTrade);
         reader.Write("Language", "Item_CantStore", GameLanguage.Item_CantStore);
         reader.Write("Language", "Item_CantRepair", GameLanguage.Item_CantRepair);
+        reader.Write("Language", "Item_WarriorCannotUse", GameLanguage.Item_WarriorCannotUse);
+        reader.Write("Language", "Item_WizardCannotUse", GameLanguage.Item_WizardCannotUse);
+        reader.Write("Language", "Item_TaoistCannotUse", GameLanguage.Item_TaoistCannotUse);
+        reader.Write("Language", "Item_AssassinCannotUse", GameLanguage.Item_AssassinCannotUse);
+        reader.Write("Language", "Item_ArcherCannotUse", GameLanguage.Item_ArcherCannotUse);
+        reader.Write("Language", "Req_NotEnoughAC", GameLanguage.Req_NotEnoughAC);
+        reader.Write("Language", "Req_NotEnoughMAC", GameLanguage.Req_NotEnoughMAC);
+        reader.Write("Language", "Req_MaxLevelExceeded", GameLanguage.Req_MaxLevelExceeded);
+        reader.Write("Language", "Req_NotEnoughBaseAC", GameLanguage.Req_NotEnoughBaseAC);
+        reader.Write("Language", "Req_NotEnoughBaseMAC", GameLanguage.Req_NotEnoughBaseMAC);
+        reader.Write("Language", "Req_NotEnoughBaseDC", GameLanguage.Req_NotEnoughBaseDC);
+        reader.Write("Language", "Req_NotEnoughBaseMC", GameLanguage.Req_NotEnoughBaseMC);
+        reader.Write("Language", "Req_NotEnoughBaseSC", GameLanguage.Req_NotEnoughBaseSC);
+        reader.Write("Language", "Req_NoMountEquipped", GameLanguage.Req_NoMountEquipped);
+        reader.Write("Language", "Req_NoFishingRodEquipped", GameLanguage.Req_NoFishingRodEquipped);
 
         // Damage types
         reader.Write("Language", "Damage_Miss", GameLanguage.Damage_Miss);
@@ -1507,6 +1648,25 @@
             return value;
 
         return englishName;
+    }
+
+    public static string GetClassName(MirClass classType)
+    {
+        switch (classType)
+        {
+            case MirClass.Warrior:
+                return ClassName_Warrior;
+            case MirClass.Wizard:
+                return ClassName_Wizard;
+            case MirClass.Taoist:
+                return ClassName_Taoist;
+            case MirClass.Assassin:
+                return ClassName_Assassin;
+            case MirClass.Archer:
+                return ClassName_Archer;
+            default:
+                return classType.ToString();
+        }
     }
 
     public static string GetMagicDescription(Spell spell, ClientMagic magic)
