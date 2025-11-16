@@ -140,6 +140,9 @@ namespace Server.MirDatabase
                 List<string> lines = File.ReadAllLines(fileName).ToList();
 
                 ParseFile(lines);
+
+                // 应用基于 quest_details_translation.csv 的任务文本翻译
+                QuestDetailTranslations.Apply(this);
             }
             else
                 MessageQueue.Enqueue(string.Format("File Not Found: {0}, Quest: {1}", fileName, Name));

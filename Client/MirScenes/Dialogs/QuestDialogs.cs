@@ -1299,13 +1299,19 @@ namespace Client.MirScenes.Dialogs
         {
             Color textColour = Color.FromName(colour);
 
+            // 尝试对花括号标记中的文本应用本地化：地图名 / NPC 名 / 物品名
+            string localizedText = text;
+            localizedText = GameLanguage.GetMapName(localizedText);
+            localizedText = GameLanguage.GetNPCName(localizedText);
+            localizedText = GameLanguage.GetItemName(localizedText);
+
             MirLabel temp = new MirLabel
             {
                 AutoSize = true,
                 Visible = true,
                 Parent = this,
                 Location = p,
-                Text = text,
+                Text = localizedText,
                 ForeColour = textColour,
                 Font = Font
             };
@@ -1718,7 +1724,7 @@ namespace Client.MirScenes.Dialogs
 
             _groupLabel = new MirLabel
             {
-                Text = Group,
+                Text = GameLanguage.GetMapName(Group),
                 AutoSize = true,
                 Parent = this,
                 Font = new Font(Settings.FontName, 8F),

@@ -1058,18 +1058,21 @@ namespace Client.MirScenes.Dialogs
                                 TargetItem = null;
                                 return;
                             }
-                            GameScene.Scene.ChatDialog.ReceiveChat(String.Format("You don't have enough gold to refine your {0}.", TargetItem.FriendlyName), ChatType.System);
+                            string itemName = GameLanguage.GetItemName(TargetItem.Info.FriendlyName);
+                            GameScene.Scene.ChatDialog.ReceiveChat(String.Format("You don't have enough gold to refine your {0}.", itemName), ChatType.System);
                             return;
                         }
 
                     }
-                    GameScene.Scene.ChatDialog.ReceiveChat(String.Format("You haven't deposited any items to refine your {0} with.", TargetItem.FriendlyName), ChatType.System);
+                    string itemName1 = GameLanguage.GetItemName(TargetItem.Info.FriendlyName);
+                    GameScene.Scene.ChatDialog.ReceiveChat(String.Format("You haven't deposited any items to refine your {0} with.", itemName1), ChatType.System);
                     break;
                 case PanelType.CheckRefine:
 
                     if (TargetItem.RefineAdded == 0)
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat(String.Format("Your {0} hasn't been refined so it doesn't need checking.", TargetItem.FriendlyName), ChatType.System);
+                        string itemName = GameLanguage.GetItemName(TargetItem.Info.FriendlyName);
+                        GameScene.Scene.ChatDialog.ReceiveChat(String.Format("Your {0} hasn't been refined so it doesn't need checking.", itemName), ChatType.System);
                         return;
                     }
                     Network.Enqueue(new C.CheckRefine { UniqueID = TargetItem.UniqueID });
@@ -1079,7 +1082,8 @@ namespace Client.MirScenes.Dialogs
 
                     if (TargetItem.Info.Type != ItemType.Ring)
                     {
-                        GameScene.Scene.ChatDialog.ReceiveChat(String.Format("{0} isn't a ring.", TargetItem.FriendlyName), ChatType.System);
+                        string itemName = GameLanguage.GetItemName(TargetItem.Info.FriendlyName);
+                        GameScene.Scene.ChatDialog.ReceiveChat(String.Format("{0} isn't a ring.", itemName), ChatType.System);
                         return;
                     }
 

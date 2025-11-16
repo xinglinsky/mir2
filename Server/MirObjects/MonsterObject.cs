@@ -1066,7 +1066,8 @@ namespace Server.MirObjects
 
             foreach (var player in Envir.Players)
             {
-                player.ReceiveChat($"{Name} has dropped {item.FriendlyName}.", ChatType.System2);
+                string itemName = GameLanguage.GetItemName(item.Info.FriendlyName);
+                player.ReceiveChat($"{Name} has dropped {itemName}.", ChatType.System2);
             }
 
             return ob.Drop(Settings.DropRange);
