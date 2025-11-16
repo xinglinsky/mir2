@@ -200,7 +200,7 @@ namespace Client.MirNetwork
                         return;
                     }
 
-                    MirMessageBox.Show("Lost connection with the server.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_LostConnection, true);
                     Disconnect();
                     return;
                 }

@@ -358,7 +358,7 @@ namespace Client.MirScenes.Dialogs
                     {
                         if (Selected.Listing.Seller == "For Sale")
                         {
-                            MirMessageBox box = new MirMessageBox(string.Format("{0} has not sold, Are you sure you want to get it back?", Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
+                            MirMessageBox box = new MirMessageBox(string.Format(GameLanguage.TrustMerchant_GetBackUnsold, Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
                             box.YesButton.Click += (o1, e2) =>
                             {
                                 MarketTime = CMain.Time + 3000;
@@ -376,7 +376,7 @@ namespace Client.MirScenes.Dialogs
                     {
                         if (Selected.Listing.Seller == "No Bid")
                         {
-                            MirMessageBox box = new MirMessageBox(string.Format("{0} has not sold, Are you sure you want to get it back?", Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
+                            MirMessageBox box = new MirMessageBox(string.Format(GameLanguage.TrustMerchant_GetBackUnsold, Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
                             box.YesButton.Click += (o1, e2) =>
                             {
                                 MarketTime = CMain.Time + 3000;
@@ -398,7 +398,7 @@ namespace Client.MirScenes.Dialogs
                         case MarketItemType.Consign:
                         case MarketItemType.GameShop:
                             {
-                                MirMessageBox box = new MirMessageBox(string.Format("Are you sure you want to buy {0} for {1:#,##0} {2}?", Selected.Listing.Item.FriendlyName, Selected.Listing.Price, MarketType == MarketPanelType.GameShop ? "Credits" : "Gold"), MirMessageBoxButtons.YesNo);
+                                MirMessageBox box = new MirMessageBox(string.Format(GameLanguage.TrustMerchant_BuyConfirm, Selected.Listing.Item.FriendlyName, Selected.Listing.Price, MarketType == MarketPanelType.GameShop ? "Credits" : "Gold"), MirMessageBoxButtons.YesNo);
                                 box.YesButton.Click += (o1, e2) =>
                                 {
                                     MarketTime = CMain.Time + 3000;
@@ -413,7 +413,7 @@ namespace Client.MirScenes.Dialogs
 
                                 bidAmount.OKButton.Click += (o1, e1) =>
                                 {
-                                    MirMessageBox box = new MirMessageBox(string.Format("Are you sure you want to bid {0:#,##0} Gold for {1}?", bidAmount.Amount, Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
+                                    MirMessageBox box = new MirMessageBox(string.Format(GameLanguage.TrustMerchant_BidConfirm, bidAmount.Amount, Selected.Listing.Item.FriendlyName), MirMessageBoxButtons.YesNo);
                                     box.YesButton.Click += (o2, e2) =>
                                     {
                                         MarketTime = CMain.Time + 3000;

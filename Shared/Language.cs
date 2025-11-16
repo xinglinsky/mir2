@@ -64,6 +64,8 @@
                          GameShop_BuyWithCreditsHint = "Buy item(s) with Credits.",
                          GameShop_ShowAll = "Show All",
                          GameShop_PageText = "{0} / {1}",
+                         GameShop_BuyConfirmCredits = "Are you sure you would like to buy {1} x \n{0}({3}) for {2} Credits?",
+                         GameShop_BuyConfirmGold = "Are you sure you would like to buy {1} x \n{0}({3}) for {2} Gold?",
 
                          YouGained = "You gained {0}.",
 
@@ -113,6 +115,12 @@
                          Password = "Password",
 
                          ShuttingDown = "Disconnected: Server is shutting down.",
+                         Disconnect_LoggedInElsewhere = "Disconnected: Another user logged onto your account.",
+                         Disconnect_PacketError = "Disconnected: Packet Error.",
+                         Disconnect_ServerCrashed = "Disconnected: Server Crashed.",
+                         Disconnect_KickedByAdmin = "Disconnected: Kicked by Admin.",
+                         Disconnect_MaxConnectionsReached = "Disconnected: Maximum connections reached.",
+                         Disconnect_LostConnection = "Lost connection with the server.",
                          MaxCombine = "Max Combine Count : {0}{1}Shift + Left click to split the stack",
                          Count = " Count {0}",
                          ExtraSlots8 = "Are you sure you would like to buy 8 extra slots for 1,000,000 gold?" +
@@ -142,6 +150,7 @@
                          NoCreatures = "You do not own any creatures.",
                          NoMount = "You do not own a mount.",
                          NoFishingRod = "You are not holding a fishing rod.",
+                         AttemptingConnectFirst = "Attempting to connect to the server.",
                          AttemptingConnect = "Attempting to connect to the server.{0}Attempt:{1}",
 
                          CreatingCharactersDisabled = "Creating new characters is currently disabled.",
@@ -149,6 +158,15 @@
                          NoClass = "The class you selected does not exist. Contact a GM for assistance.",
                          ToManyCharacters = "You cannot make anymore then {0} Characters.",
                          CharacterNameExists = "A Character with this name already exists.",
+
+                         Hero_CreatingDisabled = "Creating new heroes is currently disabled.",
+                         Hero_InvalidName = "Your Hero Name is not acceptable.",
+                         Hero_GenderNotExist = "The gender you selected does not exist.\n Contact a GM for assistance.",
+                         Hero_ClassNotExist = "The class you selected does not exist.\n Contact a GM for assistance.",
+                         Hero_TooManyHeroes = "You cannot make anymore Heroes.",
+                         Hero_NameExists = "A Character with this name already exists.",
+                         Hero_NoBagSpace = "No bag space.",
+                         Hero_CreatedSuccessfully = "Hero created successfully.",
 
                          Client_WrongVersion = "Wrong version, please update your game.\nGame will now Close",
 
@@ -213,7 +231,40 @@
                          FriendEnterAddName = "Please enter the name of the person you would like to Add.",
                          FriendEnterBlockName = "Please enter the name of the person you would like to Block.",
                          Friend_RemoveConfirm = "Are you sure you wish to remove '{0}'?",
+                         Trade_DealCancelledFaceOther = "Deal cancelled.\r\nTo deal correctly you must face the other party.",
+                         Trade_Request = "Player {0} has requested to trade with you.",
+                         Item_CannotDrop = "You cannot drop {0}",
+                         Creature_NameLengthInvalid = "Creature name must be between {0} and {1} characters.",
+                         Keyboard_ResetDefault = "Keyboard settings have been reset back to default.",
+                         Mail_DeleteParcelWithItemsConfirm = "This parcel contains items or gold. Are you sure you want to delete it?",
+                         Mail_NoParcels = "No parcels to collect.",
+                         Mail_AllParcelsCollected = "All parcels have been collected.",
+                         Reincarnation_Request = "Would you like to be revived?",
+                         Potion_UseSpecialConfirm = "Are you sure you want to use this Potion?",
+                         Item_CombineConfirm = "Do you want to try and combine these items?",
+                         ItemRental_CancelledFaceOther = "Item rental cancelled.\r\nTo complete item rental please face the other party throughout the transaction.",
+                         Guild_JoinRequest = "Do you want to join the {0} guild?",
+                         Marriage_Request = "{0} has asked for your hand in marriage.",
+                         Divorce_Request = "{0} has requested a divorce",
+                         Mentor_Request = "{0} (Level {1}) has requested you teach him the ways of the {2}.",
+                         Awakening_NotEnoughMaterials = "You have not supplied enough materials.",
+                         Awakening_AlreadyMaxLevel = "Awakening already at maximum level.",
+                         Awakening_CannotAwaken = "Cannot awaken this item.",
+                         BigMap_TeleportToNPC = "Teleport to this NPC for {0} Gold?",
                          System_PlayerNotOnline = "Player is not online",
+                         TrustMerchant_GetBackUnsold = "{0} has not sold, Are you sure you want to get it back?",
+                         TrustMerchant_BuyConfirm = "Are you sure you want to buy {0} for {1:#,##0} {2}?",
+                         TrustMerchant_BidConfirm = "Are you sure you want to bid {0:#,##0} Gold for {1}?",
+                         TrustMerchant_FailDead = "You cannot use the TrustMerchant when dead.",
+                         TrustMerchant_FailNotUsing = "You cannot buy from the TrustMerchant without using.",
+                         TrustMerchant_FailSold = "This item has already been sold.",
+                         TrustMerchant_FailExpired = "This item has Expired and cannot be brought.",
+                         TrustMerchant_FailWeightSpace = "You do not have enough weight or space spare to buy this item.",
+                         TrustMerchant_FailOwnItems = "You cannot buy your own items.",
+                         TrustMerchant_FailTooFar = "You are too far away from the Trust Merchant.",
+                         TrustMerchant_FailHoldGold = "You cannot hold enough gold to get your sale.",
+                         TrustMerchant_FailMinBid = "This item has not met the minimum bid yet.",
+                         TrustMerchant_FailAuctionEnded = "Auction has already ended for this item.",
                          AddMentor = "Add Mentor",
                          RemoveMentorMentee = "Remove Mentor/Mentee",
                          MentorRequests = "Allow/Disallow Mentor Requests",
@@ -371,6 +422,12 @@
 
                          // Quest related
                          Quest_ShareQuestion = "{0} would like to share a quest with you. Do you accept?",
+                         Quest_TaskTitle = "Tasks",
+                         Quest_ProgressTitle = "Progress",
+                         Quest_ReturnTitle = "Quest Return",
+                         Quest_TimeLimitTitle = "Time Limit",
+                         Quest_SelectRewardRequired = "You must select a reward item.",
+                         Quest_CancelConfirm = "Are you sure you want to cancel this quest?",
 
                          // Item related
                          Item_LocationAt = "{0} at {1}",
@@ -521,6 +578,8 @@
         GameLanguage.GameShop_BuyWithCreditsHint = reader.ReadString("Language", "GameShop_BuyWithCreditsHint", GameLanguage.GameShop_BuyWithCreditsHint);
         GameLanguage.GameShop_ShowAll = reader.ReadString("Language", "GameShop_ShowAll", GameLanguage.GameShop_ShowAll);
         GameLanguage.GameShop_PageText = reader.ReadString("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
+        GameLanguage.GameShop_BuyConfirmCredits = reader.ReadString("Language", "GameShop_BuyConfirmCredits", GameLanguage.GameShop_BuyConfirmCredits);
+        GameLanguage.GameShop_BuyConfirmGold = reader.ReadString("Language", "GameShop_BuyConfirmGold", GameLanguage.GameShop_BuyConfirmGold);
 
         GameLanguage.YouGained = reader.ReadString("Language", "YouGained", GameLanguage.YouGained);
         GameLanguage.YouGained2 = reader.ReadString("Language", "YouGained2", GameLanguage.YouGained2);
@@ -568,6 +627,12 @@
         GameLanguage.Password = reader.ReadString("Language", "Password", GameLanguage.Password);
 
         GameLanguage.ShuttingDown = reader.ReadString("Language", "ShuttingDown", GameLanguage.ShuttingDown);
+        GameLanguage.Disconnect_LoggedInElsewhere = reader.ReadString("Language", "Disconnect_LoggedInElsewhere", GameLanguage.Disconnect_LoggedInElsewhere);
+        GameLanguage.Disconnect_PacketError = reader.ReadString("Language", "Disconnect_PacketError", GameLanguage.Disconnect_PacketError);
+        GameLanguage.Disconnect_ServerCrashed = reader.ReadString("Language", "Disconnect_ServerCrashed", GameLanguage.Disconnect_ServerCrashed);
+        GameLanguage.Disconnect_KickedByAdmin = reader.ReadString("Language", "Disconnect_KickedByAdmin", GameLanguage.Disconnect_KickedByAdmin);
+        GameLanguage.Disconnect_MaxConnectionsReached = reader.ReadString("Language", "Disconnect_MaxConnectionsReached", GameLanguage.Disconnect_MaxConnectionsReached);
+        GameLanguage.Disconnect_LostConnection = reader.ReadString("Language", "Disconnect_LostConnection", GameLanguage.Disconnect_LostConnection);
 
         GameLanguage.MaxCombine = reader.ReadString("Language", "MaxCombine", GameLanguage.MaxCombine);
         GameLanguage.Count = reader.ReadString("Language", "Count", GameLanguage.Count);
@@ -602,6 +667,7 @@
         GameLanguage.NoFishingRod = reader.ReadString("Language", "NoFishingRod", GameLanguage.NoFishingRod);
         GameLanguage.NotInGuild = reader.ReadString("Language", "NotInGuild", GameLanguage.NotInGuild);
         GameLanguage.NoBagSpace = reader.ReadString("Language", "NoBagSpace", GameLanguage.NoBagSpace);
+        GameLanguage.AttemptingConnectFirst = reader.ReadString("Language", "AttemptingConnectFirst", GameLanguage.AttemptingConnectFirst);
         GameLanguage.AttemptingConnect = reader.ReadString("Language", "AttemptingConnect", GameLanguage.AttemptingConnect);
 
         GameLanguage.CreatingCharactersDisabled = reader.ReadString("Language", "CreatingCharactersDisabled", GameLanguage.CreatingCharactersDisabled);
@@ -609,6 +675,15 @@
         GameLanguage.NoClass = reader.ReadString("Language", "NoClass", GameLanguage.NoClass);
         GameLanguage.ToManyCharacters = reader.ReadString("Language", "ToManyCharacters", GameLanguage.ToManyCharacters);
         GameLanguage.CharacterNameExists = reader.ReadString("Language", "CharacterNameExists", GameLanguage.CharacterNameExists);
+
+        GameLanguage.Hero_CreatingDisabled = reader.ReadString("Language", "Hero_CreatingDisabled", GameLanguage.Hero_CreatingDisabled);
+        GameLanguage.Hero_InvalidName = reader.ReadString("Language", "Hero_InvalidName", GameLanguage.Hero_InvalidName);
+        GameLanguage.Hero_GenderNotExist = reader.ReadString("Language", "Hero_GenderNotExist", GameLanguage.Hero_GenderNotExist);
+        GameLanguage.Hero_ClassNotExist = reader.ReadString("Language", "Hero_ClassNotExist", GameLanguage.Hero_ClassNotExist);
+        GameLanguage.Hero_TooManyHeroes = reader.ReadString("Language", "Hero_TooManyHeroes", GameLanguage.Hero_TooManyHeroes);
+        GameLanguage.Hero_NameExists = reader.ReadString("Language", "Hero_NameExists", GameLanguage.Hero_NameExists);
+        GameLanguage.Hero_NoBagSpace = reader.ReadString("Language", "Hero_NoBagSpace", GameLanguage.Hero_NoBagSpace);
+        GameLanguage.Hero_CreatedSuccessfully = reader.ReadString("Language", "Hero_CreatedSuccessfully", GameLanguage.Hero_CreatedSuccessfully);
 
         GameLanguage.Client_WrongVersion = reader.ReadString("Language", "Client_WrongVersion", GameLanguage.Client_WrongVersion);
 
@@ -665,8 +740,41 @@
         GameLanguage.FriendWhisper = reader.ReadString("Language", "FriendWhisper", GameLanguage.FriendWhisper);
         GameLanguage.FriendEnterAddName = reader.ReadString("Language", "FriendEnterAddName", GameLanguage.FriendEnterAddName);
         GameLanguage.FriendEnterBlockName = reader.ReadString("Language", "FriendEnterBlockName", GameLanguage.FriendEnterBlockName);
-        GameLanguage.AddMentor = reader.ReadString("Language", "AddMentor", GameLanguage.AddMentor);
-        GameLanguage.RemoveMentorMentee = reader.ReadString("Language", "RemoveMentorMentee", GameLanguage.RemoveMentorMentee);
+        GameLanguage.Friend_RemoveConfirm = reader.ReadString("Language", "Friend_RemoveConfirm", GameLanguage.Friend_RemoveConfirm);
+        GameLanguage.Trade_DealCancelledFaceOther = reader.ReadString("Language", "Trade_DealCancelledFaceOther", GameLanguage.Trade_DealCancelledFaceOther);
+        GameLanguage.Trade_Request = reader.ReadString("Language", "Trade_Request", GameLanguage.Trade_Request);
+        GameLanguage.Item_CannotDrop = reader.ReadString("Language", "Item_CannotDrop", GameLanguage.Item_CannotDrop);
+        GameLanguage.Creature_NameLengthInvalid = reader.ReadString("Language", "Creature_NameLengthInvalid", GameLanguage.Creature_NameLengthInvalid);
+        GameLanguage.Keyboard_ResetDefault = reader.ReadString("Language", "Keyboard_ResetDefault", GameLanguage.Keyboard_ResetDefault);
+        GameLanguage.Mail_DeleteParcelWithItemsConfirm = reader.ReadString("Language", "Mail_DeleteParcelWithItemsConfirm", GameLanguage.Mail_DeleteParcelWithItemsConfirm);
+        GameLanguage.Mail_NoParcels = reader.ReadString("Language", "Mail_NoParcels", GameLanguage.Mail_NoParcels);
+        GameLanguage.Mail_AllParcelsCollected = reader.ReadString("Language", "Mail_AllParcelsCollected", GameLanguage.Mail_AllParcelsCollected);
+        GameLanguage.Reincarnation_Request = reader.ReadString("Language", "Reincarnation_Request", GameLanguage.Reincarnation_Request);
+        GameLanguage.Potion_UseSpecialConfirm = reader.ReadString("Language", "Potion_UseSpecialConfirm", GameLanguage.Potion_UseSpecialConfirm);
+        GameLanguage.Item_CombineConfirm = reader.ReadString("Language", "Item_CombineConfirm", GameLanguage.Item_CombineConfirm);
+        GameLanguage.ItemRental_CancelledFaceOther = reader.ReadString("Language", "ItemRental_CancelledFaceOther", GameLanguage.ItemRental_CancelledFaceOther);
+        GameLanguage.Guild_JoinRequest = reader.ReadString("Language", "Guild_JoinRequest", GameLanguage.Guild_JoinRequest);
+        GameLanguage.Marriage_Request = reader.ReadString("Language", "Marriage_Request", GameLanguage.Marriage_Request);
+        GameLanguage.Divorce_Request = reader.ReadString("Language", "Divorce_Request", GameLanguage.Divorce_Request);
+        GameLanguage.Mentor_Request = reader.ReadString("Language", "Mentor_Request", GameLanguage.Mentor_Request);
+        GameLanguage.Awakening_NotEnoughMaterials = reader.ReadString("Language", "Awakening_NotEnoughMaterials", GameLanguage.Awakening_NotEnoughMaterials);
+        GameLanguage.Awakening_AlreadyMaxLevel = reader.ReadString("Language", "Awakening_AlreadyMaxLevel", GameLanguage.Awakening_AlreadyMaxLevel);
+        GameLanguage.Awakening_CannotAwaken = reader.ReadString("Language", "Awakening_CannotAwaken", GameLanguage.Awakening_CannotAwaken);
+        GameLanguage.BigMap_TeleportToNPC = reader.ReadString("Language", "BigMap_TeleportToNPC", GameLanguage.BigMap_TeleportToNPC);
+        GameLanguage.System_PlayerNotOnline = reader.ReadString("Language", "System_PlayerNotOnline", GameLanguage.System_PlayerNotOnline);
+        GameLanguage.TrustMerchant_GetBackUnsold = reader.ReadString("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
+        GameLanguage.TrustMerchant_BuyConfirm = reader.ReadString("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
+        GameLanguage.TrustMerchant_BidConfirm = reader.ReadString("Language", "TrustMerchant_BidConfirm", GameLanguage.TrustMerchant_BidConfirm);
+        GameLanguage.TrustMerchant_FailDead = reader.ReadString("Language", "TrustMerchant_FailDead", GameLanguage.TrustMerchant_FailDead);
+        GameLanguage.TrustMerchant_FailNotUsing = reader.ReadString("Language", "TrustMerchant_FailNotUsing", GameLanguage.TrustMerchant_FailNotUsing);
+        GameLanguage.TrustMerchant_FailSold = reader.ReadString("Language", "TrustMerchant_FailSold", GameLanguage.TrustMerchant_FailSold);
+        GameLanguage.TrustMerchant_FailExpired = reader.ReadString("Language", "TrustMerchant_FailExpired", GameLanguage.TrustMerchant_FailExpired);
+        GameLanguage.TrustMerchant_FailWeightSpace = reader.ReadString("Language", "TrustMerchant_FailWeightSpace", GameLanguage.TrustMerchant_FailWeightSpace);
+        GameLanguage.TrustMerchant_FailOwnItems = reader.ReadString("Language", "TrustMerchant_FailOwnItems", GameLanguage.TrustMerchant_FailOwnItems);
+        GameLanguage.TrustMerchant_FailTooFar = reader.ReadString("Language", "TrustMerchant_FailTooFar", GameLanguage.TrustMerchant_FailTooFar);
+        GameLanguage.TrustMerchant_FailHoldGold = reader.ReadString("Language", "TrustMerchant_FailHoldGold", GameLanguage.TrustMerchant_FailHoldGold);
+        GameLanguage.TrustMerchant_FailMinBid = reader.ReadString("Language", "TrustMerchant_FailMinBid", GameLanguage.TrustMerchant_FailMinBid);
+        GameLanguage.TrustMerchant_FailAuctionEnded = reader.ReadString("Language", "TrustMerchant_FailAuctionEnded", GameLanguage.TrustMerchant_FailAuctionEnded);
         GameLanguage.MentorRequests = reader.ReadString("Language", "MentorRequests", GameLanguage.MentorRequests);
         GameLanguage.MentorEnterName = reader.ReadString("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         GameLanguage.NoMentorship = reader.ReadString("Language", "NoMentorship", GameLanguage.NoMentorship);
@@ -780,6 +888,12 @@
 
         // Quest related
         GameLanguage.Quest_ShareQuestion = reader.ReadString("Language", "Quest_ShareQuestion", GameLanguage.Quest_ShareQuestion);
+        GameLanguage.Quest_TaskTitle = reader.ReadString("Language", "Quest_TaskTitle", GameLanguage.Quest_TaskTitle);
+        GameLanguage.Quest_ProgressTitle = reader.ReadString("Language", "Quest_ProgressTitle", GameLanguage.Quest_ProgressTitle);
+        GameLanguage.Quest_ReturnTitle = reader.ReadString("Language", "Quest_ReturnTitle", GameLanguage.Quest_ReturnTitle);
+        GameLanguage.Quest_TimeLimitTitle = reader.ReadString("Language", "Quest_TimeLimitTitle", GameLanguage.Quest_TimeLimitTitle);
+        GameLanguage.Quest_SelectRewardRequired = reader.ReadString("Language", "Quest_SelectRewardRequired", GameLanguage.Quest_SelectRewardRequired);
+        GameLanguage.Quest_CancelConfirm = reader.ReadString("Language", "Quest_CancelConfirm", GameLanguage.Quest_CancelConfirm);
 
         // Item related
         GameLanguage.Item_LocationAt = reader.ReadString("Language", "Item_LocationAt", GameLanguage.Item_LocationAt);
@@ -894,6 +1008,8 @@
         reader.Write("Language", "GameShop_BuyWithCreditsHint", GameLanguage.GameShop_BuyWithCreditsHint);
         reader.Write("Language", "GameShop_ShowAll", GameLanguage.GameShop_ShowAll);
         reader.Write("Language", "GameShop_PageText", GameLanguage.GameShop_PageText);
+        reader.Write("Language", "GameShop_BuyConfirmCredits", GameLanguage.GameShop_BuyConfirmCredits);
+        reader.Write("Language", "GameShop_BuyConfirmGold", GameLanguage.GameShop_BuyConfirmGold);
 
         reader.Write("Language", "YouGained", GameLanguage.YouGained);
         reader.Write("Language", "YouGained2", GameLanguage.YouGained2);
@@ -966,6 +1082,7 @@
         reader.Write("Language", "NoMount", GameLanguage.NoMount);
         reader.Write("Language", "NoFishingRod", GameLanguage.NoFishingRod);
         reader.Write("Language", "NotInGuild", GameLanguage.NotInGuild);
+        reader.Write("Language", "AttemptingConnectFirst", GameLanguage.AttemptingConnectFirst);
         reader.Write("Language", "AttemptingConnect", GameLanguage.AttemptingConnect);
         reader.Write("Language", "NoBagSpace", GameLanguage.NoBagSpace);
 
@@ -1030,8 +1147,31 @@
         reader.Write("Language", "FriendWhisper", GameLanguage.FriendWhisper);
         reader.Write("Language", "FriendEnterAddName", GameLanguage.FriendEnterAddName);
         reader.Write("Language", "FriendEnterBlockName", GameLanguage.FriendEnterBlockName);
-        reader.Write("Language", "AddMentor", GameLanguage.AddMentor);
-        reader.Write("Language", "RemoveMentorMentee", GameLanguage.RemoveMentorMentee);
+        reader.Write("Language", "Friend_RemoveConfirm", GameLanguage.Friend_RemoveConfirm);
+        reader.Write("Language", "Trade_DealCancelledFaceOther", GameLanguage.Trade_DealCancelledFaceOther);
+        reader.Write("Language", "Trade_Request", GameLanguage.Trade_Request);
+        reader.Write("Language", "Item_CannotDrop", GameLanguage.Item_CannotDrop);
+        reader.Write("Language", "Creature_NameLengthInvalid", GameLanguage.Creature_NameLengthInvalid);
+        reader.Write("Language", "Keyboard_ResetDefault", GameLanguage.Keyboard_ResetDefault);
+        reader.Write("Language", "Mail_DeleteParcelWithItemsConfirm", GameLanguage.Mail_DeleteParcelWithItemsConfirm);
+        reader.Write("Language", "Mail_NoParcels", GameLanguage.Mail_NoParcels);
+        reader.Write("Language", "Mail_AllParcelsCollected", GameLanguage.Mail_AllParcelsCollected);
+        reader.Write("Language", "Reincarnation_Request", GameLanguage.Reincarnation_Request);
+        reader.Write("Language", "Potion_UseSpecialConfirm", GameLanguage.Potion_UseSpecialConfirm);
+        reader.Write("Language", "Item_CombineConfirm", GameLanguage.Item_CombineConfirm);
+        reader.Write("Language", "ItemRental_CancelledFaceOther", GameLanguage.ItemRental_CancelledFaceOther);
+        reader.Write("Language", "Guild_JoinRequest", GameLanguage.Guild_JoinRequest);
+        reader.Write("Language", "Marriage_Request", GameLanguage.Marriage_Request);
+        reader.Write("Language", "Divorce_Request", GameLanguage.Divorce_Request);
+        reader.Write("Language", "Mentor_Request", GameLanguage.Mentor_Request);
+        reader.Write("Language", "Awakening_NotEnoughMaterials", GameLanguage.Awakening_NotEnoughMaterials);
+        reader.Write("Language", "Awakening_AlreadyMaxLevel", GameLanguage.Awakening_AlreadyMaxLevel);
+        reader.Write("Language", "Awakening_CannotAwaken", GameLanguage.Awakening_CannotAwaken);
+        reader.Write("Language", "BigMap_TeleportToNPC", GameLanguage.BigMap_TeleportToNPC);
+        reader.Write("Language", "System_PlayerNotOnline", GameLanguage.System_PlayerNotOnline);
+        reader.Write("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
+        reader.Write("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
+        reader.Write("Language", "TrustMerchant_BidConfirm", GameLanguage.TrustMerchant_BidConfirm);
         reader.Write("Language", "MentorRequests", GameLanguage.MentorRequests);
         reader.Write("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         reader.Write("Language", "NoMentorship", GameLanguage.NoMentorship);
@@ -1145,6 +1285,12 @@
 
         // Quest related
         reader.Write("Language", "Quest_ShareQuestion", GameLanguage.Quest_ShareQuestion);
+        reader.Write("Language", "Quest_TaskTitle", GameLanguage.Quest_TaskTitle);
+        reader.Write("Language", "Quest_ProgressTitle", GameLanguage.Quest_ProgressTitle);
+        reader.Write("Language", "Quest_ReturnTitle", GameLanguage.Quest_ReturnTitle);
+        reader.Write("Language", "Quest_TimeLimitTitle", GameLanguage.Quest_TimeLimitTitle);
+        reader.Write("Language", "Quest_SelectRewardRequired", GameLanguage.Quest_SelectRewardRequired);
+        reader.Write("Language", "Quest_CancelConfirm", GameLanguage.Quest_CancelConfirm);
 
         // Item related
         reader.Write("Language", "Item_LocationAt", GameLanguage.Item_LocationAt);

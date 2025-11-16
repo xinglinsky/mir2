@@ -22,13 +22,18 @@ ArcherDes;Client;Archers are a class of great accuracy and strength, using their
 AssassinDes;Client;Assassins are members of a secret organization and their history is relatively unknown. They're capable of hiding themselves and performing attacks while being unseen by others, which naturally makes them excellent at making fast kills. It is necessary for them to avoid being in battles with multiple enemies due to their weak vitality and strength.;刺客出身神秘组织，擅长隐身与偷袭，可在不被察觉的情况下快速击杀目标，但体力和力量较弱，不适合对抗大量敌人.
 AttackMode_All;Client;[Mode: Attack All];[模式: 全体攻击]
 AttackMode_EnemyGuild;Client;[Mode: Enemy Guild];[模式: 敌对行会]
-AttackMode_Group;Client;[Mode: Group];[模式: 组队]
-AttackMode_Guild;Client;[Mode: Guild];[模式: 行会]
-AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平]
+AttackMode_Group;Client;[Mode: Group];[模式: 组队攻击]
+AttackMode_Guild;Client;[Mode: Guild];[模式: 行会攻击]
+AttackMode_Peace;Client;[Mode: Peaceful];[模式: 和平战斗]
 AttackMode_RedBrown;Client;[Mode: Red/Brown];[模式: 善恶决斗]
 AttemptingConnect;Client;Attempting to connect to the server.{0}Attempt:{1};正在尝试连接服务器...{0}第 {1} 次尝试
+AttemptingConnectFirst;Client;Attempting to connect to the server.;正在尝试连接服务器...
 Autostart;Client;Auto start;自动启动
+Awakening_AlreadyMaxLevel;Client;Awakening already at maximum level.;觉醒等级已达到上限。
+Awakening_CannotAwaken;Client;Cannot awaken this item.;无法对该物品进行觉醒。
+Awakening_NotEnoughMaterials;Client;You have not supplied enough materials.;你提供的材料数量不足。
 BigMap;Client;BigMap ({0});大地图 ({0})
+BigMap_TeleportToNPC;Client;Teleport to this NPC for {0} Gold?;是否支付 {0} 金币传送到该 NPC？
 BlockingMentorRequests;Server;You're now blocking mentor requests.;你现在禁止师徒请求。
 BlockList;Client;Block List;黑名单
 CanNotDrop;Server;You cannot drop items on this map;你不能在这个地图丢弃物品。
@@ -61,6 +66,7 @@ CouldNotFindPlayer;Server;Could not find player {0};找不到玩家 {0}。
 Count;Client; Count {0};数量 {0}
 CreatingCharactersDisabled;Client;Creating new characters is currently disabled.;当前禁止创建新角色.
 Creatures;Client;Creatures ({0});宠物 ({0})
+Creature_NameLengthInvalid;Client;Creature name must be between {0} and {1} characters.;宠物名字长度必须在 {0} 到 {1} 个字符之间。
 Credit;Client;Credit;积分
 Damage_Crit;Client;Crit;暴击
 Damage_Miss;Client;Miss;未命中
@@ -71,6 +77,13 @@ Delete;Client;Delete;删除
 DeleteCharacter;Client;Are you sure you want to Delete the character {0};你确定要删除角色 {0} 吗？
 DeleteCharactersDisabled;Client;Deleting characters is currently disabled.;当前禁止删除角色.
 DiedTip;Client;You have died, Do you want to revive in town?;你已经死亡，是否回城复活？
+Disconnect_KickedByAdmin;Client;Disconnected: Kicked by Admin.;连接已断开：被管理员强制下线。
+Disconnect_LoggedInElsewhere;Client;Disconnected: Another user logged onto your account.;连接已断开：你的账号在另一处登录。
+Disconnect_LostConnection;Client;Lost connection with the server.;与服务器的连接已中断。
+Disconnect_MaxConnectionsReached;Client;Disconnected: Maximum connections reached.;连接已断开：服务器连接数已达上限。
+Disconnect_PacketError;Client;Disconnected: Packet Error.;连接已断开：数据包错误。
+Disconnect_ServerCrashed;Client;Disconnected: Server Crashed.;连接已断开：服务器崩溃。
+Divorce_Request;Client;{0} has requested a divorce;{0} 向你提出离婚。
 DropAmount;Client;Drop Amount:;丢弃数量:
 DropTip;Client;Are you sure you want to drop {0}?;你确定要丢弃 {0} 吗？
 Durability;Client;Durability;耐久度
@@ -106,6 +119,8 @@ Friend_RemoveConfirm;Client;Are you sure you wish to remove '{0}'?;你确定要�
 GameMaster;Client;GameMaster;游戏管理员
 GameName;Both;Legend of Mir 2;传奇2
 GameShop;Client;Game Shop ({0});商城 ({0})
+GameShop_BuyConfirmCredits;Client;Are you sure you would like to buy {1} x \n{0}({3}) for {2} Credits?;确定要以 {2} 点数购买 {1} 个\n{0}({3}) 吗？
+GameShop_BuyConfirmGold;Client;Are you sure you would like to buy {1} x \n{0}({3}) for {2} Gold?;确定要以 {2} 金币购买 {1} 个\n{0}({3}) 吗？
 GameShop_BuyWithCredits;Client;Buy with Credits;使用积分购买
 GameShop_BuyWithCreditsHint;Client;Buy item(s) with Credits.;使用积分购买物品。
 GameShop_BuyWithGold;Client;Buy with Gold;使用金币购买
@@ -132,11 +147,20 @@ Guild;Client;Guild ({0});行会 ({0})
 GuildInvite;Client;Guild Invite;行会邀请
 GuildInviteAccept;Client;Accept Guild Invite;接受行会邀请
 GuildInviteDecline;Client;Decline Guild Invite;拒绝行会邀请
+Guild_JoinRequest;Client;Do you want to join the {0} guild?;是否加入 {0} 行会？
 Help;Client;Help ({0});帮助 ({0})
 HeroCharacter;Client;Hero Character ({0});英雄角色 ({0})
 HeroExperienceGained;Client;Hero Experience Gained {0};英雄获得经验 {0}
 HeroInventory;Client;Hero Inventory ({0});英雄背包 ({0})
 HeroSkills;Client;Hero Skills ({0});英雄技能 ({0})
+Hero_ClassNotExist;Client;The class you selected does not exist.\n Contact a GM for assistance.;你选择的职业不存在。\n请联系管理员。
+Hero_CreatedSuccessfully;Client;Hero created successfully.;英雄创建成功。
+Hero_CreatingDisabled;Client;Creating new heroes is currently disabled.;当前禁止创建英雄。
+Hero_GenderNotExist;Client;The gender you selected does not exist.\n Contact a GM for assistance.;你选择的性别不存在。\n请联系管理员。
+Hero_InvalidName;Client;Your Hero Name is not acceptable.;英雄名称不合法。
+Hero_NameExists;Client;A Character with this name already exists.;已存在使用该名称的角色。
+Hero_NoBagSpace;Client;No bag space.;背包空间不足。
+Hero_TooManyHeroes;Client;You cannot make anymore Heroes.;你的英雄数量已达到上限。
 Holy;Client;Holy: + {0} (+{1});神圣: + {0} (+{1})
 Holy2;Client;Holy: + {0};神圣: + {0}
 IncorrectPasswordAccountID;Client;Incorrect Password and AccountID combination.;账号或密码错误。
@@ -153,6 +177,7 @@ ItemGradeHeroic;Client;Heroic;英雄
 ItemGradeLegendary;Client;Legendary;传说
 ItemGradeMythical;Client;Mythical;神话
 ItemGradeRare;Client;Rare;稀有
+ItemRental_CancelledFaceOther;Client;Item rental cancelled.\r\nTo complete item rental please face the other party throughout the transaction.;物品租赁已取消。\r\n要正确完成租赁，请在交易全过程中面向对方。
 ItemTextFormat;Client;{0}{1}{2} {3};{0}{1}{2} {3}
 ItemTypeAmulet;Client;Amulet;护符
 ItemTypeArmour;Client;Armour;盔甲
@@ -432,6 +457,7 @@ Item_CannibalSeed;Both;CannibalSeed;食人花种子
 Item_CannibalStem;Both;CannibalStem;食人花茎
 Item_CannibalWine;Both;CannibalWine;食人酒
 Item_CanniTea;Both;CanniTea;食人茶
+Item_CannotDrop;Client;You cannot drop {0};你无法丢弃 {0}。
 Item_CantDrop;Client;Can't drop;无法丢弃
 Item_CantDropOnDeath;Client;Can't drop on death;死亡时不会掉落
 Item_CantRepair;Client;Can't repair;无法修理
@@ -470,6 +496,7 @@ Item_ClawPendant;Both;ClawPendant;利爪坠饰
 Item_CleanSkull;Both;CleanSkull;洁净头骨
 Item_ClearRing;Both;ClearRing;清明戒指
 Item_CloudRing;Both;CloudRing;云纹戒指
+Item_CombineConfirm;Client;Do you want to try and combine these items?;确定要尝试合成这些物品吗？
 Item_CompoundBow;Both;CompoundBow;复合弓
 Item_Concentration;Both;Concentration;集中射击
 Item_ConquerorSpear;Both;ConquerorSpear;征服之矛
@@ -1845,6 +1872,7 @@ Keybinds;Client;Keybinds;按键设置
 Keyboard_EnforceRelaxed;Client;Assign Rule: Relaxed;分配规则：宽松
 Keyboard_EnforceStrict;Client;Assign Rule: Strict;分配规则：严格
 Keyboard_Layout;Client;Keyboard ({0});键位设置 ({0})
+Keyboard_ResetDefault;Client;Keyboard settings have been reset back to default.;键位设置已恢复为默认。
 LastOnline;Client;Last Online;最后在线
 LevelUp;Both;Congratulations! You have leveled up. Your HP and MP have been restored.;恭喜你升级了，你的生命值和魔法值已恢复。
 Login_Disabled;Client;Logging in is currently disabled.;当前禁止登录游戏.
@@ -1971,6 +1999,9 @@ Magic_VampireShot;Both;VampireShot;吸血箭
 Magic_Vampirism;Both;Vampirism;吸血术
 Mail;Client;Mail;邮件
 MailLover;Client;Mail Lover;给爱人发送邮件
+Mail_AllParcelsCollected;Client;All parcels have been collected.;所有包裹已领取。
+Mail_DeleteParcelWithItemsConfirm;Client;This parcel contains items or gold. Are you sure you want to delete it?;这封包裹中包含物品或金币，确定要删除吗？
+Mail_NoParcels;Client;No parcels to collect.;没有可领取的包裹。
 MainDialog_HP;Client;HP {0}/{1};HP {0}/{1}
 MainDialog_MP;Client;MP {0}/{1} ;MP {0}/{1} 
 Map_1FofDeadMine;Both;1FofDeadMine;死矿一层
@@ -2270,6 +2301,7 @@ Map_ZumaTemple_3F;Both;ZumaTemple_3F;祖玛寺庙三层
 Map_ZumaTemple_4F;Both;ZumaTemple_4F;祖玛寺庙四层
 Map_ZumaTemple_5F;Both;ZumaTemple_5F;祖玛寺庙五层
 Map_ZumaTemple_7F;Both;ZumaTemple_7F;祖玛寺庙七层
+Marriage_Request;Client;{0} has asked for your hand in marriage.;{0} 向你求婚。
 MaxCombine;Client;Max Combine Count : {0}{1}Shift + Left click to split the stack;最大堆叠数量: {0}{1}按住 Shift + 左键 可以分开堆叠
 MC;Client;MC + {0}~{1} (+{2});魔法 + {0}~{1} (+{2})
 MC2;Client;MC + {0}~{1};魔法 + {0}~{1}
@@ -2286,6 +2318,7 @@ Mentor_MenteeExp;Client;MENTEE EXP: {0};徒弟经验: {0}
 Mentor_MenteeLabel;Client;MENTEE;徒弟
 Mentor_MentorLabel;Client;MENTOR;师父
 Mentor_Online;Client;ONLINE;在线
+Mentor_Request;Client;{0} (Level {1}) has requested you teach him the ways of the {2}.;{0}（等级 {1}）请求你担任他的 {2} 导师。
 Menu;Client;Menu;菜单
 Monster_00;Both;00;未知怪物
 Monster_AncBringer;Both;AncBringer;远古使者
@@ -2905,30 +2938,30 @@ NPC_General_Jane;Both;General_Jane;将军 简
 NPC_General_Martyn;Both;General_Martyn;将军 马丁
 NPC_General_Paula;Both;General_Paula;将军 宝拉
 NPC_General_Sir.Kevin;Both;General_Sir.Kevin;将军 凯文爵士
-NPC_GM_Armour;Both;GM_Armour;GM 铠甲管理员
-NPC_GM_Awakening;Both;GM_Awakening;GM 觉醒管理员
-NPC_GM_Belt;Both;GM_Belt;GM 腰带管理员
-NPC_GM_Book;Both;GM_Book;GM 书籍管理员
-NPC_GM_Boot;Both;GM_Boot;GM 靴子管理员
-NPC_GM_Bracelet;Both;GM_Bracelet;GM 手镯管理员
-NPC_GM_CraftingMaterial;Both;GM_CraftingMaterial;GM 制作材料管理员
-NPC_GM_Fishing;Both;GM_Fishing;GM 钓鱼管理员
-NPC_GM_Gem;Both;GM_Gem;GM 宝石管理员
-NPC_GM_Grocery;Both;GM_Grocery;GM 杂货管理员
-NPC_GM_Helmet;Both;GM_Helmet;GM 头盔管理员
-NPC_GM_Manager;Both;GM_Manager;GM 管理员
-NPC_GM_Meat;Both;GM_Meat;GM 肉类管理员
-NPC_GM_Mount;Both;GM_Mount;GM 坐骑管理员
-NPC_GM_Necklace;Both;GM_Necklace;GM 项链管理员
-NPC_GM_Nothing;Both;GM_Nothing;GM 空白管理员
-NPC_GM_Ore;Both;GM_Ore;GM 矿石管理员
-NPC_GM_Potion;Both;GM_Potion;GM 药水管理员
-NPC_GM_Quest;Both;GM_Quest;GM 任务管理员
-NPC_GM_Ring;Both;GM_Ring;GM 戒指管理员
-NPC_GM_Script;Both;GM_Script;GM 脚本管理员
-NPC_GM_Stone;Both;GM_Stone;GM 石头管理员
-NPC_GM_Teleporter;Both;GM_Teleporter;GM 传送管理员
-NPC_GM_Weapon;Both;GM_Weapon;GM 武器管理员
+NPC_GM_Armour;Both;GM_Armour;铠甲管理员
+NPC_GM_Awakening;Both;GM_Awakening;觉醒管理员
+NPC_GM_Belt;Both;GM_Belt;腰带管理员
+NPC_GM_Book;Both;GM_Book;书籍管理员
+NPC_GM_Boot;Both;GM_Boot;靴子管理员
+NPC_GM_Bracelet;Both;GM_Bracelet;手镯管理员
+NPC_GM_CraftingMaterial;Both;GM_CraftingMaterial;制作材料管理员
+NPC_GM_Fishing;Both;GM_Fishing;钓鱼管理员
+NPC_GM_Gem;Both;GM_Gem;宝石管理员
+NPC_GM_Grocery;Both;GM_Grocery;杂货管理员
+NPC_GM_Helmet;Both;GM_Helmet;头盔管理员
+NPC_GM_Manager;Both;GM_Manager;管理员
+NPC_GM_Meat;Both;GM_Meat;肉类管理员
+NPC_GM_Mount;Both;GM_Mount;坐骑管理员
+NPC_GM_Necklace;Both;GM_Necklace;项链管理员
+NPC_GM_Nothing;Both;GM_Nothing;空白管理员
+NPC_GM_Ore;Both;GM_Ore;矿石管理员
+NPC_GM_Potion;Both;GM_Potion;药水管理员
+NPC_GM_Quest;Both;GM_Quest;任务管理员
+NPC_GM_Ring;Both;GM_Ring;戒指管理员
+NPC_GM_Script;Both;GM_Script;脚本管理员
+NPC_GM_Stone;Both;GM_Stone;石头管理员
+NPC_GM_Teleporter;Both;GM_Teleporter;传送管理员
+NPC_GM_Weapon;Both;GM_Weapon;武器管理员
 NPC_Grocery_Bull;Both;Grocery_Bull;杂货商 布尔
 NPC_GTMerchant_Graeme;Both;GTMerchant_Graeme;领地 商人 格雷姆
 NPC_GTMerchant_Jamie;Both;GTMerchant_Jamie;领地 商人 杰米
@@ -3143,6 +3176,7 @@ PetMode_Both;Client;[Pet: Attack and Move];[宠物: 攻击并移动]
 PetMode_FocusMasterTarget;Client;[Pet: Focus Master Target];[宠物: 集火主人目标]
 PetMode_MoveOnly;Client;[Pet: Do Not Attack];[宠物: 仅移动]
 PetMode_None;Client;[Pet: Do Not Attack or Move];[宠物: 不攻击且不移动]
+Potion_UseSpecialConfirm;Client;Are you sure you want to use this Potion?;确定要使用这个药水吗？
 Quests;Client;Quests ({0});任务 ({0})
 Quest_!AttackOma;Both;!Attack Oma;！进攻半兽人
 Quest_AbnormalCreatures;Both;Abnormal Creatures;异常生物
@@ -3157,6 +3191,7 @@ Quest_BoarTooth;Both;Boar Tooth;野猪獠牙
 Quest_BossMobHunt;Both;Boss Mob Hunt;首领怪物狩猎
 Quest_BossMobofWoomyon;Both;Boss Mob of Woomyon;雾隐森林首领怪
 Quest_CallfromtheDead;Both;Call from the Dead;亡者的呼唤
+Quest_CancelConfirm;Client;Are you sure you want to cancel this quest?;确定要取消这个任务吗？
 Quest_CheckSupplyPath;Both;Check Supply Path;检查补给路线
 Quest_ChestnutRequest;Both;Chestnut Request;栗子委托
 Quest_CleanUp;Both;Clean Up;清理怪物
@@ -3236,6 +3271,7 @@ Quest_NewPoison;Both;New Poison;新型毒药
 Quest_NewsfromaFriend;Both;News from a Friend;来自朋友的消息
 Quest_PartTimeJob;Both;Part Time Job;兼职工作
 Quest_PoisonedFriend;Both;Poisoned Friend;中毒的朋友
+Quest_ProgressTitle;Client;Progress;任务进度
 Quest_RareMedicine;Both;Rare Medicine;稀有药剂
 Quest_RareOre;Both;Rare Ore;稀有矿石
 Quest_RedSnake'sTeeth;Both;Red Snake's Teeth;红蛇毒牙
@@ -3244,6 +3280,7 @@ Quest_ResearchReport;Both;Research Report;研究报告
 Quest_RestockingSupplies;Both;Restocking Supplies;补给再采购
 Quest_ReturningaBook;Both;Returning a Book;归还书籍
 Quest_ReturntheNecklace;Both;Return the Necklace;归还项链
+Quest_ReturnTitle;Client;Quest Return;任务交付
 Quest_RevengeonZombies;Both;Revenge on Zombies;僵尸复仇
 Quest_RunawayStudent;Both;Runaway Student;逃跑的学徒
 Quest_SafteyofSecretPath;Both;Saftey of Secret Path;秘路安全
@@ -3252,6 +3289,7 @@ Quest_SavetheCursedSouls;Both;Save the Cursed Souls;拯救被诅咒的灵魂
 Quest_SecretoftheSkull;Both;Secret of the Skull;头骨之谜
 Quest_SecretPath;Both;Secret Path;秘密小路
 Quest_SecretRecipeDelivery;Both;Secret Recipe Delivery;秘方送达
+Quest_SelectRewardRequired;Client;You must select a reward item.;你必须选择一个奖励物品。
 Quest_SerpentValley;Both;SerpentValley;蛇谷之行
 Quest_ShareQuestion;Client;{0} would like to share a quest with you. Do you accept?;{0} 想与你共享一个任务，是否接受？
 Quest_ShippingRelics;Both;Shipping Relics;运送遗物
@@ -3263,6 +3301,7 @@ Quest_SkullCollector;Both;Skull Collector;头骨收集者
 Quest_Smith's2ndTest;Both;Smith's 2nd Test;铁匠的第二次考验
 Quest_StolenBook;Both;Stolen Book;被盗的书
 Quest_TalkwiththeButcher;Both;Talk with the Butcher;与屠夫对话
+Quest_TaskTitle;Client;Tasks;任务目标
 Quest_TestforFatalSwordSkill;Both;Test for FatalSword Skill;致命剑术考验
 Quest_TestforFocusSkill;Both;Test for Focus Skill;专注术考验
 Quest_TestfortheFencingSkill;Both;Test for the Fencing Skill;基本剑术考验
@@ -3273,6 +3312,7 @@ Quest_TheCraftLady'sRequest;Both;The CraftLady's Request;手工匠人的请求
 Quest_TheSmith's1stTest;Both;The Smith's 1st Test;铁匠的第一次考验
 Quest_TheVillageChief'sRequest;Both;The VillageChief's Request;村长的请求
 Quest_ThreatstoMongchon;Both;Threats to Mongchon;盟重之威胁
+Quest_TimeLimitTitle;Client;Time Limit;时间限制
 Quest_ToBichon;Both;To Bichon;前往比奇
 Quest_TriptoMongchon;Both;Trip to Mongchon;前往盟重
 Quest_UniformOrderStatus;Both;Uniform Order Status;制服订单进度
@@ -3289,6 +3329,7 @@ Quest_ZombiesintheMines;Both;Zombies in the Mines;矿洞中的僵尸
 Ranking;Client;Ranking ({0});排行 ({0})
 Ranking_OnlineOnly;Client;Online Only;只显示在线
 Read;Client;Read;读取
+Reincarnation_Request;Client;Would you like to be revived?;你想要被复活吗？
 Relationship;Client;Relationship ({0});关系 ({0})
 RelationshipRequest;Client;Relationship Request;关系请求
 RelationshipRequestAccept;Client;Accept Relationship Request;接受关系请求
@@ -3353,6 +3394,21 @@ TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicin
 ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
 TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。
 Trade;Client;Trade ({0});交易 ({0})
+Trade_DealCancelledFaceOther;Client;Deal cancelled.\r\nTo deal correctly you must face the other party.;交易已取消。\r\n要正确完成交易，请面向对方。
+Trade_Request;Client;Player {0} has requested to trade with you.;玩家 {0} 请求与你进行交易。
+TrustMerchant_BidConfirm;Client;Are you sure you want to bid {0:#,##0} Gold for {1}?;确定要以 {0:#,##0} 金币竞拍 {1} 吗？
+TrustMerchant_BuyConfirm;Client;Are you sure you want to buy {0} for {1:#,##0} {2}?;确定要以 {1:#,##0} {2} 购买 {0} 吗？
+TrustMerchant_FailAuctionEnded;Client;Auction has already ended for this item.;该物品的拍卖已结束。
+TrustMerchant_FailDead;Client;You cannot use the TrustMerchant when dead.;你已死亡，无法使用寄售商。
+TrustMerchant_FailExpired;Client;This item has Expired and cannot be brought.;该物品已过期，无法购买。
+TrustMerchant_FailHoldGold;Client;You cannot hold enough gold to get your sale.;你的金币携带上限不足以领取这笔销售金。
+TrustMerchant_FailMinBid;Client;This item has not met the minimum bid yet.;该物品尚未达到最低竞拍价格。
+TrustMerchant_FailNotUsing;Client;You cannot buy from the TrustMerchant without using.;未与寄售商交互时无法购买物品。
+TrustMerchant_FailOwnItems;Client;You cannot buy your own items.;你不能购买自己上架的物品。
+TrustMerchant_FailSold;Client;This item has already been sold.;该物品已被其他玩家购买。
+TrustMerchant_FailTooFar;Client;You are too far away from the Trust Merchant.;你距离寄售商太远。
+TrustMerchant_FailWeightSpace;Client;You do not have enough weight or space spare to buy this item.;你的负重或背包空间不足，无法购买该物品。
+TrustMerchant_GetBackUnsold;Client;{0} has not sold, Are you sure you want to get it back?;{0} 尚未售出，确定要取回吗？
 Usrname;Client;Username;账号
 WarriorsDes;Client;Warriors are a class of great strength and vitality. They are not easily killed in battle and have the advantage of being able to use a variety of heavy weapons and Armour. Therefore, Warriors favor attacks that are based on melee physical damage. They are weak in ranged attacks, however the variety of equipment that are developed specifically for Warriors complement their weakness in ranged combat.;战士拥有强大的力量和体力，不易在战斗中被击倒，能使用多种重型武器和盔甲，擅长近身物理攻击，但远程能力较弱.
 WeaponCurse;Server;Curse dwells within your weapon.;武器中蕴含着诅咒之力。

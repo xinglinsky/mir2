@@ -452,7 +452,7 @@ namespace Client.MirScenes.Dialogs
                 {
                     if (!CreatureNameReg.IsMatch(inputBox.InputTextBox.Text))
                     {
-                        MirMessageBox failedMessage = new MirMessageBox(string.Format("Creature name must be between {0} and {1} characters.", Globals.MinCharacterNameLength, Globals.MaxCharacterNameLength), MirMessageBoxButtons.OK);
+                        MirMessageBox failedMessage = new MirMessageBox(string.Format(GameLanguage.Creature_NameLengthInvalid, Globals.MinCharacterNameLength, Globals.MaxCharacterNameLength), MirMessageBoxButtons.OK);
                         failedMessage.Show();
                     }
                     else

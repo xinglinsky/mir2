@@ -133,7 +133,7 @@ namespace Client.MirScenes.Dialogs
 
                 if (Reward.SelectedItemIndex < 0 && SelectedQuest.QuestInfo.RewardsSelectItem.Count > 0)
                 {
-                    MirMessageBox messageBox = new MirMessageBox("You must select a reward item.");
+                    MirMessageBox messageBox = new MirMessageBox(GameLanguage.Quest_SelectRewardRequired);
                     messageBox.Show();
                     return;
                 }
@@ -585,7 +585,7 @@ namespace Client.MirScenes.Dialogs
             };
             _cancelButton.Click += (o, e) =>
             {
-                MirMessageBox messageBox = new MirMessageBox("Are you sure you want to cancel this quest?", MirMessageBoxButtons.YesNo);
+                MirMessageBox messageBox = new MirMessageBox(GameLanguage.Quest_CancelConfirm, MirMessageBoxButtons.YesNo);
 
                 messageBox.YesButton.Click += (o1, a) =>
                 {
@@ -1017,7 +1017,10 @@ namespace Client.MirScenes.Dialogs
         public Font Font = new Font(Settings.FontName, 8F);
         public List<string> CurrentLines = new List<string>();
 
-        private const string TaskTitle = "Tasks", ProgressTitle = "Progress", ReturnTitle = "Quest Return", TimeLimitTitle = "Time Limit";
+        private static string TaskTitle { get { return GameLanguage.Quest_TaskTitle; } }
+        private static string ProgressTitle { get { return GameLanguage.Quest_ProgressTitle; } }
+        private static string ReturnTitle { get { return GameLanguage.Quest_ReturnTitle; } }
+        private static string TimeLimitTitle { get { return GameLanguage.Quest_TimeLimitTitle; } }
 
         public QuestMessage(MirButton scrollUpButton, MirButton scrollDownButton, MirButton positionBar, int lineCount, bool displayProgress = false)
         {

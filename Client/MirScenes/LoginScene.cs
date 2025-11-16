@@ -81,7 +81,7 @@ namespace Client.MirScenes
                 Visible = Settings.UseTestConfig
             };
 
-            _connectBox = new MirMessageBox("Attempting to connect to the server.", MirMessageBoxButtons.Cancel);
+            _connectBox = new MirMessageBox(GameLanguage.AttemptingConnectFirst, MirMessageBoxButtons.Cancel);
             _connectBox.CancelButton.Click += (o, e) => Program.Form.Close();
             Shown += (sender, args) =>
                 {

@@ -160,7 +160,7 @@ namespace Client.MirScenes.Dialogs
 
                 UpdateText();
 
-                MirMessageBox messageBox = new MirMessageBox("Keyboard settings have been reset back to default.", MirMessageBoxButtons.OK);
+                MirMessageBox messageBox = new MirMessageBox(GameLanguage.Keyboard_ResetDefault, MirMessageBoxButtons.OK);
                 messageBox.Show();
             };
 

@@ -212,7 +212,7 @@ namespace Client.MirControls
                     {
                         CreditCost = Item.CreditPrice * Quantity;
                         string itemName = GameLanguage.GetItemName(Item.Info.FriendlyName);
-                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy {1} x \n{0}({3}) for {2} Credits?", itemName, Quantity, CreditCost, Item.Count), MirMessageBoxButtons.YesNo);
+                        messageBox = new MirMessageBox(string.Format(GameLanguage.GameShop_BuyConfirmCredits, itemName, Quantity, CreditCost, Item.Count), MirMessageBoxButtons.YesNo);
                         messageBox.YesButton.Click += (o, e) => Network.Enqueue(new C.GameshopBuy { GIndex = Item.GIndex, Quantity = Quantity, PType = pType });
                         messageBox.NoButton.Click += (o, e) => { };
                         messageBox.Show();
@@ -225,7 +225,7 @@ namespace Client.MirControls
                     {
                         GoldCost = Item.GoldPrice * Quantity;
                         string itemName = GameLanguage.GetItemName(Item.Info.FriendlyName);
-                        messageBox = new MirMessageBox(string.Format("Are you sure would you like to buy{1} x \n{0}({3}) for {2} Gold?", itemName, Quantity, GoldCost, Item.Count), MirMessageBoxButtons.YesNo);
+                        messageBox = new MirMessageBox(string.Format(GameLanguage.GameShop_BuyConfirmGold, itemName, Quantity, GoldCost, Item.Count), MirMessageBoxButtons.YesNo);
                         messageBox.YesButton.Click += (o, e) => Network.Enqueue(new C.GameshopBuy { GIndex = Item.GIndex, Quantity = Quantity, PType = pType });
                         messageBox.NoButton.Click += (o, e) => { };
                         messageBox.Show();

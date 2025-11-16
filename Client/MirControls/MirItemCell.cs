@@ -523,7 +523,7 @@ namespace Client.MirControls
                         if (CMain.Time < GameScene.UseItemTime) return;
                         if (Item.Info.Type == ItemType.Potion && Item.Info.Shape == 4)
                         {
-                            MirMessageBox messageBox = new MirMessageBox("Are you use you want to use this Potion?", MirMessageBoxButtons.YesNo);
+                            MirMessageBox messageBox = new MirMessageBox(GameLanguage.Potion_UseSpecialConfirm, MirMessageBoxButtons.YesNo);
                             messageBox.YesButton.Click += (o, e) =>
                             {
                                 Network.Enqueue(new C.UseItem { UniqueID = Item.UniqueID, Grid = GridType });
@@ -940,7 +940,7 @@ namespace Client.MirControls
                                 {
                                     if (CMain.Ctrl)
                                     {
-                                        MirMessageBox messageBox = new MirMessageBox("Do you want to try and combine these items?", MirMessageBoxButtons.YesNo);
+                                        MirMessageBox messageBox = new MirMessageBox(GameLanguage.Item_CombineConfirm, MirMessageBoxButtons.YesNo);
                                         messageBox.YesButton.Click += (o, e) =>
                                         {
                                             //Combine

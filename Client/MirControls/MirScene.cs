@@ -248,19 +248,19 @@ namespace Client.MirControls
                     MirMessageBox.Show(GameLanguage.ShuttingDown, true);
                     break;
                 case 1:
-                    MirMessageBox.Show("Disconnected: Another user logged onto your account.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_LoggedInElsewhere, true);
                     break;
                 case 2:
-                    MirMessageBox.Show("Disconnected: Packet Error.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_PacketError, true);
                     break;
                 case 3:
-                    MirMessageBox.Show("Disconnected: Server Crashed.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_ServerCrashed, true);
                     break;
                 case 4:
-                    MirMessageBox.Show("Disconnected: Kicked by Admin.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_KickedByAdmin, true);
                     break;
                 case 5:
-                    MirMessageBox.Show("Disconnected: Maximum connections reached.", true);
+                    MirMessageBox.Show(GameLanguage.Disconnect_MaxConnectionsReached, true);
                     break;
             }
 
