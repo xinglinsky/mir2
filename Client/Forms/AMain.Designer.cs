@@ -351,7 +351,7 @@ namespace Launcher
             // AMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.BackColor = System.Drawing.SystemColors.ActiveCaption;
             this.BackgroundImage = global::Client.Resources.Images.pfffft;
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Center;
