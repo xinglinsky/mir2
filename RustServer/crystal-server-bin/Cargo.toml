@@ -1,0 +1,9 @@
+[package]
+name = "crystal-server-bin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+crystal-server-net = { path = "../crystal-server-net" }
+crystal-shared-proto = { path = "../crystal-shared-proto" }
