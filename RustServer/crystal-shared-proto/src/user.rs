@@ -761,6 +761,100 @@ impl SObjectRun {
 }
 
 #[derive(Clone, Debug)]
+pub struct SUserDash {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SUserDash {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::UserDash as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SUserDash {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectDash(pub SObjectTurnWalkRun);
+
+impl SObjectDash {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        self.0.encode_with_id(ServerPacketId::ObjectDash)
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SObjectDash(SObjectTurnWalkRun::decode_from(payload)?))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SUserDashFail {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SUserDashFail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::UserDashFail as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SUserDashFail {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectDashFail(pub SObjectTurnWalkRun);
+
+impl SObjectDashFail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        self.0.encode_with_id(ServerPacketId::ObjectDashFail)
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SObjectDashFail(SObjectTurnWalkRun::decode_from(payload)?))
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SChat {
     pub message: String,
     pub chat_type: u8,
@@ -1421,6 +1515,84 @@ impl SObjectDied {
 }
 
 #[derive(Clone, Debug)]
+pub struct SColourChanged {
+    pub name_colour_argb: i32,
+}
+
+impl SColourChanged {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.name_colour_argb)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ColourChanged as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name_colour_argb = read_i32_le(&mut c)?;
+        Ok(SColourChanged { name_colour_argb })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectColourChanged {
+    pub object_id: u32,
+    pub name_colour_argb: i32,
+}
+
+impl SObjectColourChanged {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i32_le(&mut buf, self.name_colour_argb)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectColourChanged as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let name_colour_argb = read_i32_le(&mut c)?;
+        Ok(SObjectColourChanged {
+            object_id,
+            name_colour_argb,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectGuildNameChanged {
+    pub object_id: u32,
+    pub guild_name: String,
+}
+
+impl SObjectGuildNameChanged {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_string(&mut buf, &self.guild_name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectGuildNameChanged as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let guild_name = read_string(&mut c)?;
+        Ok(SObjectGuildNameChanged {
+            object_id,
+            guild_name,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SGainExperience {
     pub amount: u32,
 }
@@ -1547,6 +1719,97 @@ impl SObjectLeveled {
         let mut c = Cursor::new(payload);
         let object_id = read_u32_le(&mut c)?;
         Ok(SObjectLeveled { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectHide {
+    pub object_id: u32,
+}
+
+impl SObjectHide {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectHide as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        Ok(SObjectHide { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectShow {
+    pub object_id: u32,
+}
+
+impl SObjectShow {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectShow as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        Ok(SObjectShow { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SPoisoned {
+    pub poison: u16,
+}
+
+impl SPoisoned {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u16_le(&mut buf, self.poison)?;
+        Ok(RawPacket {
+            id: ServerPacketId::Poisoned as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let poison = read_u16_le(&mut c)?;
+        Ok(SPoisoned { poison })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectPoisoned {
+    pub object_id: u32,
+    pub poison: u16,
+}
+
+impl SObjectPoisoned {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_u16_le(&mut buf, self.poison)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectPoisoned as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let poison = read_u16_le(&mut c)?;
+        Ok(SObjectPoisoned { object_id, poison })
     }
 }
 

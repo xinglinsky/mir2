@@ -7,3 +7,4 @@ edition = "2021"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 crystal-server-net = { path = "../crystal-server-net" }
 crystal-shared-proto = { path = "../crystal-shared-proto" }
+crystal-server-core = { path = "../crystal-server-core" }

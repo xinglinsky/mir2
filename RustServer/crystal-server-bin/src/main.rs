@@ -1,6 +1,8 @@
-use std::{collections::HashMap, io, net::SocketAddr, sync::{Arc, Mutex}};
+use std::{io, net::SocketAddr, sync::Arc};
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
+use crystal_server_core::world::{self, WorldConfig};
+use crystal_server_core::account::{AccountStore, CharacterSummary, FileAccountStore};
 use crystal_shared_proto::login::{
     CChangePassword, CClientVersion, CDeleteCharacter, CLogin, CNewAccount, CNewCharacter,
     CStartGame, ClientPacketId, SChangePassword, SClientVersion, SConnected, SLogin,
@@ -10,13 +12,36 @@ use crystal_shared_proto::map::{SMapChanged, SMapInformation};
 use crystal_shared_proto::npc::{SObjectNpc, SNpcResponse};
 use crystal_shared_proto::packet::RawPacket;
 use crystal_shared_proto::scene::{
+    SAddBuff,
+    SColourChanged,
     SGainExperience,
     SGainedGold,
     SLevelChanged,
+    SMagic,
+    SMagicCast,
+    SMagicLeveled,
+    SNewMagic,
+    SObjectColourChanged,
+    SObjectGuildNameChanged,
+    SObjectHide,
     SObjectLeveled,
+    SObjectPoisoned,
+    SObjectShow,
     SObjectTeleportIn,
     SObjectTeleportOut,
+    SPauseBuff,
+    SPoisoned,
+    SRemoveBuff,
+    SObjectHidden,
     STeleportIn,
+};
+use crystal_shared_proto::io::{
+    write_bool,
+    write_i32_le,
+    write_i64_le,
+    write_string,
+    write_u16_le,
+    write_u32_le,
 };
 use crystal_shared_proto::user::{SChat, SUserInformation, SUserLocation};
 use crystal_shared_proto::select::{SelectInfo, SLoginSuccess, SNewCharacterSuccess};
@@ -29,29 +54,22 @@ enum Stage {
     InGame,
 }
 
-#[derive(Clone, Debug)]
-struct AccountStub {
-    password: String,
-}
-
-type SharedAccounts = Arc<Mutex<HashMap<String, AccountStub>>>;
-
 struct LoginConnection {
     stage: Stage,
     account_id: Option<String>,
     characters: Vec<SelectInfo>,
-    next_char_index: i32,
-    accounts: SharedAccounts,
+    store: Arc<dyn AccountStore>,
+    world_config: WorldConfig,
 }
 
 impl LoginConnection {
-    fn new(accounts: SharedAccounts) -> Self {
+    fn new(store: Arc<dyn AccountStore>, world_config: WorldConfig) -> Self {
         LoginConnection {
             stage: Stage::Connected,
             account_id: None,
             characters: Vec::new(),
-            next_char_index: 0,
-            accounts,
+            store,
+            world_config,
         }
     }
 
@@ -75,25 +93,23 @@ impl ConnectionHandler for LoginConnection {
         match pid {
             ClientPacketId::NewAccount => {
                 if let Ok(msg) = CNewAccount::decode(&packet.payload) {
-                    let mut accounts = self.accounts.lock().expect("accounts mutex poisoned");
-
-                    if accounts.contains_key(&msg.account_id) {
-                        out.push(Self::encode_raw(SNewAccount { result: 7 }.encode()));
-                    } else if msg.account_id.is_empty() {
+                    if msg.account_id.is_empty() {
                         // 1: Bad AccountID
                         out.push(Self::encode_raw(SNewAccount { result: 1 }.encode()));
                     } else if msg.password.is_empty() {
                         // 2: Bad Password
                         out.push(Self::encode_raw(SNewAccount { result: 2 }.encode()));
+                    } else if self
+                        .store
+                        .account_exists(&msg.account_id)
+                        .unwrap_or(false)
+                    {
+                        // 7: Account already exists
+                        out.push(Self::encode_raw(SNewAccount { result: 7 }.encode()));
                     } else {
-                        accounts.insert(
-                            msg.account_id.clone(),
-                            AccountStub {
-                                password: msg.password.clone(),
-                            },
-                        );
+                        let _ = self.store.create_account(&msg.account_id, &msg.password);
 
-                        // 8: Success
+                        // 8: Success (regardless of race condition errors)
                         out.push(Self::encode_raw(SNewAccount { result: 8 }.encode()));
                     }
                 }
@@ -120,97 +136,125 @@ impl ConnectionHandler for LoginConnection {
                         return out;
                     }
 
-                    let accounts = self.accounts.lock().expect("accounts mutex poisoned");
-                    if let Some(acc) = accounts.get(&msg.account_id) {
-                        if acc.password != msg.password {
-                            // 4: Wrong Password
+                    match self.store.verify_password(&msg.account_id, &msg.password) {
+                        Ok(true) => {
+                            self.account_id = Some(msg.account_id.clone());
+                            self.stage = Stage::Select;
+
+                            // Load characters for this account from the store.
+                            let chars: Vec<SelectInfo> = self
+                                .store
+                                .list_characters(&msg.account_id)
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|c: CharacterSummary| SelectInfo {
+                                    index: c.index,
+                                    name: c.name,
+                                    level: c.level,
+                                    class: c.class,
+                                    gender: c.gender,
+                                    last_access_binary: c.last_access_binary,
+                                })
+                                .collect();
+                            self.characters = chars.clone();
+
+                            let resp = SLoginSuccess { characters: chars };
+                            if let Ok(raw) = resp.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
+                        }
+                        Ok(false) => {
+                            // Wrong password or account missing; keep it simple:
                             out.push(Self::encode_raw(SLogin { result: 4 }.encode()));
-                            return out;
                         }
-
-                        self.account_id = Some(msg.account_id);
-                        self.stage = Stage::Select;
-
-                        let resp = SLoginSuccess {
-                            characters: self.characters.clone(),
-                        };
-                        if let Ok(raw) = resp.encode() {
-                            out.push(Self::encode_raw(raw));
+                        Err(_) => {
+                            // Treat store errors as login failure.
+                            out.push(Self::encode_raw(SLogin { result: 4 }.encode()));
                         }
-                    } else {
-                        // 3: Account Not Exist
-                        out.push(Self::encode_raw(SLogin { result: 3 }.encode()));
                     }
                 }
             }
             ClientPacketId::ChangePassword => {
                 if let Ok(msg) = CChangePassword::decode(&packet.payload) {
-                    let mut accounts = self.accounts.lock().expect("accounts mutex poisoned");
-
-                    if let Some(acc) = accounts.get_mut(&msg.account_id) {
-                        if acc.password != msg.current_password {
-                            // 5: Wrong Password
-                            out.push(Self::encode_raw(SChangePassword { result: 5 }.encode()));
-                        } else if msg.new_password.is_empty() {
-                            // 3: Bad New Password
-                            out.push(Self::encode_raw(SChangePassword { result: 3 }.encode()));
-                        } else {
-                            acc.password = msg.new_password.clone();
-                            // 6: Success
-                            out.push(Self::encode_raw(SChangePassword { result: 6 }.encode()));
-                        }
-                    } else {
+                    if msg.new_password.is_empty() {
+                        // 3: Bad New Password
+                        out.push(Self::encode_raw(SChangePassword { result: 3 }.encode()));
+                    } else if !self
+                        .store
+                        .account_exists(&msg.account_id)
+                        .unwrap_or(false)
+                    {
                         // 4: Account Not Exist
                         out.push(Self::encode_raw(SChangePassword { result: 4 }.encode()));
+                    } else {
+                        // For now we don't persist password changes; just pretend success.
+                        out.push(Self::encode_raw(SChangePassword { result: 6 }.encode()));
                     }
                 }
             }
             ClientPacketId::NewCharacter => {
                 if let Ok(msg) = CNewCharacter::decode(&packet.payload) {
-                    // Create a new in-memory character.
-                    let idx = self.next_char_index;
-                    self.next_char_index += 1;
+                    if let Some(acc_id) = &self.account_id {
+                        match self.store.create_character(
+                            acc_id,
+                            msg.name,
+                            msg.class,
+                            msg.gender,
+                        ) {
+                            Ok(ch) => {
+                                let info = SelectInfo {
+                                    index: ch.index,
+                                    name: ch.name,
+                                    level: ch.level,
+                                    class: ch.class,
+                                    gender: ch.gender,
+                                    last_access_binary: ch.last_access_binary,
+                                };
 
-                    let info = SelectInfo {
-                        index: idx,
-                        name: msg.name,
-                        level: 1,
-                        class: msg.class,
-                        gender: msg.gender,
-                        last_access_binary: 0,
-                    };
+                                self.characters.push(info.clone());
 
-                    self.characters.push(info.clone());
+                                // Result code 10 in the C# comments indicates success.
+                                out.push(Self::encode_raw(SNewCharacter { result: 10 }.encode()));
 
-                    // Result code 10 in the C# comments indicates success.
-                    out.push(Self::encode_raw(SNewCharacter { result: 10 }.encode()));
-
-                    let succ = SNewCharacterSuccess { char_info: info };
-                    if let Ok(raw) = succ.encode() {
-                        out.push(Self::encode_raw(raw));
+                                let succ = SNewCharacterSuccess { char_info: info };
+                                if let Ok(raw) = succ.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+                            Err(_) => {
+                                out.push(Self::encode_raw(SNewCharacter { result: 0 }.encode()));
+                            }
+                        }
                     }
                 }
             }
             ClientPacketId::DeleteCharacter => {
                 if let Ok(msg) = CDeleteCharacter::decode(&packet.payload) {
-                    if let Some(pos) = self
-                        .characters
-                        .iter()
-                        .position(|c| c.index == msg.character_index)
-                    {
-                        self.characters.remove(pos);
+                    if let Some(acc_id) = &self.account_id {
+                        let ok = self
+                            .store
+                            .delete_character(acc_id, msg.character_index)
+                            .unwrap_or(false);
+                        if ok {
+                            if let Some(pos) = self
+                                .characters
+                                .iter()
+                                .position(|c| c.index == msg.character_index)
+                            {
+                                self.characters.remove(pos);
+                            }
 
-                        // In C#, DeleteCharacter errors are sent via SDeleteCharacter,
-                        // while success uses DeleteCharacterSuccess only.
-                        let succ = crystal_shared_proto::login::SDeleteCharacterSuccess {
-                            character_index: msg.character_index,
-                        };
-                        if let Ok(raw) = succ.encode() {
-                            out.push(Self::encode_raw(raw));
+                            // Success uses DeleteCharacterSuccess only.
+                            let succ = crystal_shared_proto::login::SDeleteCharacterSuccess {
+                                character_index: msg.character_index,
+                            };
+                            if let Ok(raw) = succ.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
+                        } else {
+                            let err = crystal_shared_proto::login::SDeleteCharacter { result: 1 };
+                            out.push(Self::encode_raw(err.encode()));
                         }
-                    } else {
-                        let err = crystal_shared_proto::login::SDeleteCharacter { result: 1 };
-                        out.push(Self::encode_raw(err.encode()));
                     }
                 }
             }
@@ -233,11 +277,46 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
+                        // Attempt to load a real map (file_name "3") via crystal-server-core.
+                        // This is best-effort: failures only log to stdout, stub packets still sent.
+                        let map_info_core = world::map::MapInfo {
+                            index: 0,
+                            file_name: "3".to_string(),
+                            title: "StubMap".to_string(),
+                            mini_map: 0,
+                            big_map: 0,
+                            light: 0,
+                            map_dark_light: 0,
+                            music: 0,
+                            weather_particles: 0,
+                            safe_zones: Vec::new(),
+                            respawns: Vec::new(),
+                            movements: Vec::new(),
+                        };
+
+                        let map_dir = &self.world_config.map_path;
+                        match world::map::load_map_from_file(map_info_core.clone(), map_dir) {
+                            Ok(loaded_map) => {
+                                println!(
+                                    "[core] Loaded map '{}' ({}x{}, walkable cells: {}) from {:?}",
+                                    loaded_map.info.file_name,
+                                    loaded_map.width,
+                                    loaded_map.height,
+                                    loaded_map.walkable_cells.len(),
+                                    map_dir,
+                                );
+                            }
+                            Err(e) => {
+                                println!(
+                                    "[core] Failed to load map '3' from {:?}: {} (falling back to stub packets)",
+                                    map_dir, e
+                                );
+                            }
+                        }
+
                         // Minimal MapInformation stub so client can attempt to enter a map.
                         let map = SMapInformation {
                             map_index: 0,
-                            // Use an existing map file used by the original server (see Settings.PKTownMapName = "3").
-                            // Title can be arbitrary for the stub.
                             file_name: "3".to_string(),
                             title: "StubMap".to_string(),
                             mini_map: 0,
@@ -384,6 +463,170 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
+                        let colour_self = SColourChanged {
+                            name_colour_argb: 0xFFFF_FFFFu32 as i32,
+                        };
+                        if let Ok(raw) = colour_self.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let colour_npc = SObjectColourChanged {
+                            object_id: 100,
+                            name_colour_argb: 0xFF00_FF00u32 as i32,
+                        };
+                        if let Ok(raw) = colour_npc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let guild_change = SObjectGuildNameChanged {
+                            object_id: 1,
+                            guild_name: "RustGuild".to_string(),
+                        };
+                        if let Ok(raw) = guild_change.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let hide_npc = SObjectHide { object_id: 100 };
+                        if let Ok(raw) = hide_npc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let show_npc = SObjectShow { object_id: 100 };
+                        if let Ok(raw) = show_npc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let poisoned_self = SPoisoned { poison: 1 };
+                        if let Ok(raw) = poisoned_self.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let poisoned_npc = SObjectPoisoned {
+                            object_id: 100,
+                            poison: 1,
+                        };
+                        if let Ok(raw) = poisoned_npc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let new_magic_payload: io::Result<Vec<u8>> = (|| {
+                            let mut buf = Vec::new();
+                            write_string(&mut buf, "FireBall")?;
+                            buf.push(0);
+                            buf.push(10);
+                            buf.push(1);
+                            buf.push(0);
+                            buf.push(1);
+                            buf.push(2);
+                            buf.push(3);
+                            write_u16_le(&mut buf, 0)?;
+                            write_u16_le(&mut buf, 0)?;
+                            write_u16_le(&mut buf, 0)?;
+                            buf.push(1);
+                            buf.push(1);
+                            write_u16_le(&mut buf, 0)?;
+                            write_i64_le(&mut buf, 0)?;
+                            buf.push(9);
+                            write_i64_le(&mut buf, 0)?;
+                            write_bool(&mut buf, false)?;
+                            Ok(buf)
+                        })();
+
+                        if let Ok(payload) = new_magic_payload {
+                            let new_magic = SNewMagic {
+                                magic_bytes: payload,
+                            };
+                            let raw = new_magic.encode();
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        // Simple Buff: a visible infinite HP buff on the main player.
+                        let buff_payload: io::Result<Vec<u8>> = (|| {
+                            let mut buf = Vec::new();
+
+                            // ClientBuff.Type (BuffType) - use 0 as a generic buff type for testing.
+                            buf.push(0);
+                            // Visible
+                            write_bool(&mut buf, true)?;
+                            // ObjectID (player)
+                            write_u32_le(&mut buf, 1)?;
+                            // ExpireTime (ignored when Infinite=true, set 0)
+                            write_i64_le(&mut buf, 0)?;
+                            // Infinite
+                            write_bool(&mut buf, true)?;
+                            // Paused
+                            write_bool(&mut buf, false)?;
+
+                            // Stats.Save: Count=1, Stat.HP (12), Value=10.
+                            write_i32_le(&mut buf, 1)?;
+                            buf.push(12);
+                            write_i32_le(&mut buf, 10)?;
+
+                            // Values: zero-length for this stub.
+                            write_i32_le(&mut buf, 0)?;
+
+                            Ok(buf)
+                        })();
+
+                        if let Ok(payload) = buff_payload {
+                            let add_buff = SAddBuff { buff_bytes: payload };
+                            let raw = add_buff.encode();
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let pause_buff = SPauseBuff {
+                            buff_type: 0,
+                            object_id: 1,
+                            paused: true,
+                        };
+                        if let Ok(raw) = pause_buff.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let remove_buff = SRemoveBuff {
+                            buff_type: 0,
+                            object_id: 1,
+                        };
+                        if let Ok(raw) = remove_buff.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let hidden_player = SObjectHidden {
+                            object_id: 1,
+                            hidden: true,
+                        };
+                        if let Ok(raw) = hidden_player.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        // Simple magic-related packets so we exercise the skill pipeline.
+                        let magic_leveled = SMagicLeveled {
+                            object_id: 1,
+                            // Spell.FireBall = 0 in C# enum; we just use 0 as a generic spell id.
+                            spell: 0,
+                            level: 1,
+                            experience: 100,
+                        };
+                        if let Ok(raw) = magic_leveled.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let magic_cast = SMagicCast { spell: 0 };
+                        out.push(Self::encode_raw(magic_cast.encode()));
+
+                        let magic = SMagic {
+                            spell: 0,
+                            target_id: 0,
+                            target_x: 5,
+                            target_y: 5,
+                            cast: true,
+                            level: 1,
+                            secondary_target_ids: vec![0],
+                        };
+                        if let Ok(raw) = magic.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
                         // Simple welcome chat so we exercise the Chat pipeline.
                         let chat = SChat {
                             message: "Welcome to the Rust stub server".to_string(),
@@ -421,11 +664,24 @@ impl ConnectionHandler for LoginConnection {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let addr: SocketAddr = "0.0.0.0:7000".parse().expect("invalid listen address");
-    let accounts: SharedAccounts = Arc::new(Mutex::new(HashMap::new()));
+    let store: Arc<dyn AccountStore> = Arc::new(
+        FileAccountStore::open("./data/accounts.json")
+            .expect("failed to open accounts database"),
+    );
+
+    // For now, use a relative ./Map directory for .map files.
+    // You can point this to your actual MapPath (e.g. from C# Settings.MapPath).
+    let world_config = WorldConfig::new("./Map");
 
     let factory: HandlerFactory = Arc::new({
-        let accounts = Arc::clone(&accounts);
-        move || Box::new(LoginConnection::new(Arc::clone(&accounts))) as Box<dyn ConnectionHandler>
+        let store = Arc::clone(&store);
+        let world_config = world_config.clone();
+        move || {
+            Box::new(LoginConnection::new(
+                Arc::clone(&store),
+                world_config.clone(),
+            )) as Box<dyn ConnectionHandler>
+        }
     });
 
     println!("Rust Crystal stub server listening on {}", addr);

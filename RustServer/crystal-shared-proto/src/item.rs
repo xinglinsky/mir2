@@ -74,6 +74,26 @@ impl SNewChatItem {
 }
 
 #[derive(Clone, Debug)]
+pub struct SRefreshItem {
+    pub item_bytes: Vec<u8>,
+}
+
+impl SRefreshItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        Ok(RawPacket {
+            id: ServerPacketId::RefreshItem as i16,
+            payload: self.item_bytes.clone(),
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SRefreshItem {
+            item_bytes: payload.to_vec(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SDuraChanged {
     pub unique_id: u64,
     pub current_dura: u16,
@@ -169,6 +189,19 @@ mod tests {
         assert_eq!(raw.payload, p.item_bytes);
 
         let decoded = SNewChatItem::decode(&raw.payload).expect("decode SNewChatItem");
+        assert_eq!(decoded.item_bytes, p.item_bytes);
+    }
+
+    #[test]
+    fn refresh_item_roundtrip() {
+        let p = SRefreshItem {
+            item_bytes: vec![1, 2, 3, 4, 5],
+        };
+
+        let raw = p.encode().expect("encode SRefreshItem");
+        assert_eq!(raw.id, ServerPacketId::RefreshItem as i16);
+
+        let decoded = SRefreshItem::decode(&raw.payload).expect("decode SRefreshItem");
         assert_eq!(decoded.item_bytes, p.item_bytes);
     }
 

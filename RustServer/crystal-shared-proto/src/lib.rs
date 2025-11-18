@@ -13,3 +13,4 @@ pub mod shop;
 pub mod mail;
 pub mod scene;
 pub mod npc;
+pub mod magic;
