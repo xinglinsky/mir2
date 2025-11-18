@@ -13,6 +13,16 @@ pub fn write_i32_le<W: Write>(w: &mut W, value: i32) -> io::Result<()> {
     w.write_all(&value.to_le_bytes())
 }
 
+pub fn read_i16_le<R: Read>(r: &mut R) -> io::Result<i16> {
+    let mut buf = [0u8; 2];
+    r.read_exact(&mut buf)?;
+    Ok(i16::from_le_bytes(buf))
+}
+
+pub fn write_i16_le<W: Write>(w: &mut W, value: i16) -> io::Result<()> {
+    w.write_all(&value.to_le_bytes())
+}
+
 pub fn read_u16_le<R: Read>(r: &mut R) -> io::Result<u16> {
     let mut buf = [0u8; 2];
     r.read_exact(&mut buf)?;
@@ -33,6 +43,16 @@ pub fn write_u32_le<W: Write>(w: &mut W, value: u32) -> io::Result<()> {
     w.write_all(&value.to_le_bytes())
 }
 
+pub fn read_f32_le<R: Read>(r: &mut R) -> io::Result<f32> {
+    let mut buf = [0u8; 4];
+    r.read_exact(&mut buf)?;
+    Ok(f32::from_le_bytes(buf))
+}
+
+pub fn write_f32_le<W: Write>(w: &mut W, value: f32) -> io::Result<()> {
+    w.write_all(&value.to_le_bytes())
+}
+
 pub fn read_i64_le<R: Read>(r: &mut R) -> io::Result<i64> {
     let mut buf = [0u8; 8];
     r.read_exact(&mut buf)?;
@@ -40,6 +60,16 @@ pub fn read_i64_le<R: Read>(r: &mut R) -> io::Result<i64> {
 }
 
 pub fn write_i64_le<W: Write>(w: &mut W, value: i64) -> io::Result<()> {
+    w.write_all(&value.to_le_bytes())
+}
+
+pub fn read_u64_le<R: Read>(r: &mut R) -> io::Result<u64> {
+    let mut buf = [0u8; 8];
+    r.read_exact(&mut buf)?;
+    Ok(u64::from_le_bytes(buf))
+}
+
+pub fn write_u64_le<W: Write>(w: &mut W, value: u64) -> io::Result<()> {
     w.write_all(&value.to_le_bytes())
 }
 

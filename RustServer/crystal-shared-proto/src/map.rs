@@ -23,6 +23,82 @@ pub struct SMapInformation {
     pub weather_particles: u16,
 }
 
+#[derive(Clone, Debug)]
+pub struct SMapChanged {
+    pub map_index: i32,
+    pub file_name: String,
+    pub title: String,
+    pub mini_map: u16,
+    pub big_map: u16,
+    pub lights: u8,
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+    pub map_dark_light: u8,
+    pub music: u16,
+    pub weather: u16,
+}
+
+impl SMapChanged {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+
+        write_i32_le(&mut buf, self.map_index)?;
+        write_string(&mut buf, &self.file_name)?;
+        write_string(&mut buf, &self.title)?;
+        write_u16_le(&mut buf, self.mini_map)?;
+        write_u16_le(&mut buf, self.big_map)?;
+        buf.push(self.lights);
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        buf.push(self.map_dark_light);
+        write_u16_le(&mut buf, self.music)?;
+        write_u16_le(&mut buf, self.weather)?;
+
+        Ok(RawPacket {
+            id: ServerPacketId::MapChanged as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+
+        let map_index = read_i32_le(&mut c)?;
+        let file_name = read_string(&mut c)?;
+        let title = read_string(&mut c)?;
+        let mini_map = read_u16_le(&mut c)?;
+        let big_map = read_u16_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let lights = one[0];
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        c.read_exact(&mut one)?;
+        let map_dark_light = one[0];
+        let music = read_u16_le(&mut c)?;
+        let weather = read_u16_le(&mut c)?;
+
+        Ok(SMapChanged {
+            map_index,
+            file_name,
+            title,
+            mini_map,
+            big_map,
+            lights,
+            location_x,
+            location_y,
+            direction,
+            map_dark_light,
+            music,
+            weather,
+        })
+    }
+}
+
 impl SMapInformation {
     pub fn encode(&self) -> io::Result<RawPacket> {
         let mut buf = Vec::new();
@@ -134,5 +210,40 @@ mod tests {
         assert_eq!(decoded.map_dark_light, packet.map_dark_light);
         assert_eq!(decoded.music, packet.music);
         assert_eq!(decoded.weather_particles, packet.weather_particles);
+    }
+
+    #[test]
+    fn map_changed_roundtrip() {
+        let packet = SMapChanged {
+            map_index: 2,
+            file_name: "3".to_string(),
+            title: "Another".to_string(),
+            mini_map: 11,
+            big_map: 22,
+            lights: 2,
+            location_x: 50,
+            location_y: 60,
+            direction: 1,
+            map_dark_light: 7,
+            music: 200,
+            weather: 5,
+        };
+
+        let raw = packet.encode().expect("encode SMapChanged");
+        assert_eq!(raw.id, ServerPacketId::MapChanged as i16);
+
+        let decoded = SMapChanged::decode(&raw.payload).expect("decode SMapChanged");
+        assert_eq!(decoded.map_index, packet.map_index);
+        assert_eq!(decoded.file_name, packet.file_name);
+        assert_eq!(decoded.title, packet.title);
+        assert_eq!(decoded.mini_map, packet.mini_map);
+        assert_eq!(decoded.big_map, packet.big_map);
+        assert_eq!(decoded.lights, packet.lights);
+        assert_eq!(decoded.location_x, packet.location_x);
+        assert_eq!(decoded.location_y, packet.location_y);
+        assert_eq!(decoded.direction, packet.direction);
+        assert_eq!(decoded.map_dark_light, packet.map_dark_light);
+        assert_eq!(decoded.music, packet.music);
+        assert_eq!(decoded.weather, packet.weather);
     }
 }

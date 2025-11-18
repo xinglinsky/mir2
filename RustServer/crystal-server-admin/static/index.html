@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Crystal Admin Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f172a; color: #e5e7eb; }
+    .layout { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+    header { padding: 0.75rem 1.5rem; background: #020617; border-bottom: 1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    header span { color:#64748b; font-size:0.9rem; }
+    main { display: grid; grid-template-columns: 220px 1fr; }
+    nav { border-right: 1px solid #1e293b; background:#020617; padding: 1rem 0.75rem; }
+    .nav-group-title { margin: 0.75rem 0 0.25rem; font-size: 0.75rem; text-transform: uppercase; color:#64748b; padding:0 0.25rem; }
+    .nav-btn { width: 100%; text-align: left; border: none; background: transparent; color: #cbd5f5; padding: 0.4rem 0.5rem; border-radius: 0.35rem; font-size: 0.9rem; cursor: pointer; }
+    .nav-btn:hover { background: #0f172a; }
+    .nav-btn.active { background: #1d293b; color: #f9fafb; }
+    .content { padding: 1rem 1.5rem; overflow-y: auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+    .card { background:#020617; border-radius:0.5rem; border:1px solid #1f2937; padding:0.75rem 0.9rem; }
+    .card-title { font-size:0.75rem; text-transform:uppercase; color:#6b7280; }
+    .card-value { margin-top:0.35rem; font-size:1.2rem; font-weight:600; }
+    .toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem; }
+    .btn { border-radius:0.375rem; border:1px solid #1f2937; background:#111827; color:#e5e7eb; padding:0.3rem 0.75rem; font-size:0.85rem; cursor:pointer; }
+    .btn:hover { background:#1f2937; }
+    .btn.danger { border-color:#7f1d1d; background:#450a0a; }
+    .btn.danger:hover { background:#7f1d1d; }
+    .btn.success { border-color:#14532d; background:#022c22; }
+    .btn.success:hover { background:#14532d; }
+    .pill { display:inline-flex; align-items:center; padding:0.1rem 0.5rem; border-radius:999px; font-size:0.75rem; background:#111827; border:1px solid #1f2937; color:#9ca3af; }
+    table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+    th, td { padding:0.4rem 0.5rem; border-bottom:1px solid #1f2937; }
+    th { text-align:left; font-weight:500; color:#9ca3af; background:#020617; position:sticky; top:0; }
+    tbody tr:hover { background:#020617; }
+    .log-list { background:#020617; border-radius:0.5rem; border:1px solid #1f2937; padding:0.5rem 0.6rem; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:0.8rem; max-height:280px; overflow-y:auto; }
+    .log-entry { padding:0.1rem 0; color:#e5e7eb; }
+    .log-entry span { color:#6b7280; margin-right:0.3rem; }
+    .form-field { margin-bottom:0.5rem; }
+    .form-field label { display:block; font-size:0.8rem; color:#9ca3af; margin-bottom:0.2rem; }
+    .form-field textarea { width:100%; min-height:80px; resize:vertical; border-radius:0.375rem; border:1px solid #1f2937; background:#020617; color:#e5e7eb; padding:0.4rem 0.5rem; font-family:inherit; font-size:0.85rem; }
+    .status-bar { margin-top:0.5rem; font-size:0.75rem; color:#9ca3af; }
+    .status-bar span { margin-right:0.75rem; }
+    @media (max-width: 768px) { main { grid-template-columns: 1fr; } nav { border-right:none; border-bottom:1px solid #1e293b; display:flex; overflow-x:auto; } .nav-group-title { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header>
+      <div>
+        <h1>Crystal Admin Console</h1>
+        <span>Rust · Web 控制台 · Stub 接入 A–E</span>
+      </div>
+      <div class="pill" id="health-pill">Health: unknown</div>
+    </header>
+    <main>
+      <nav>
+        <p class="nav-group-title">Overview</p>
+        <button class="nav-btn active" data-target="section-dashboard">Dashboard</button>
+        <p class="nav-group-title">Logs</p>
+        <button class="nav-btn" data-target="section-logs">Logs</button>
+        <button class="nav-btn" data-target="section-debug-logs">Debug Logs</button>
+        <button class="nav-btn" data-target="section-chat-logs">Chat Logs</button>
+        <p class="nav-group-title">Players</p>
+        <button class="nav-btn" data-target="section-players">Online Players</button>
+        <p class="nav-group-title">Control</p>
+        <button class="nav-btn" data-target="section-control">Server Control</button>
+        <button class="nav-btn" data-target="section-broadcast">Broadcast</button>
+      </nav>
+      <div class="content">
+        <section id="section-dashboard" class="section active">
+          <h2>Dashboard</h2>
+          <p style="color:#9ca3af;font-size:0.9rem;">当前为示例数据，后续会对接真实服务器状态。</p>
+          <div class="cards" id="metrics-cards"></div>
+        </section>
+
+        <section id="section-logs" class="section">
+          <h2>Logs</h2>
+          <div class="log-list" id="logs-list"></div>
+        </section>
+
+        <section id="section-debug-logs" class="section">
+          <h2>Debug Logs</h2>
+          <div class="log-list" id="debug-logs-list"></div>
+        </section>
+
+        <section id="section-chat-logs" class="section">
+          <h2>Chat Logs</h2>
+          <div class="log-list" id="chat-logs-list"></div>
+        </section>
+
+        <section id="section-players" class="section">
+          <h2>Online Players</h2>
+          <p style="color:#9ca3af;font-size:0.9rem;">列表当前为 stub 数据，后续会从运行中的服务器获取。</p>
+          <div style="margin-top:0.75rem;">
+            <table id="players-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Level</th>
+                  <th>Class</th>
+                  <th>Gender</th>
+                  <th>Map</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="section-control" class="section">
+          <h2>Server Control</h2>
+          <p style="color:#9ca3af;font-size:0.9rem;">目前控制接口只是在后台打印日志，不会真正启停服务器。</p>
+          <div class="toolbar" style="margin-top:0.75rem;">
+            <button class="btn success" data-action="start">Start</button>
+            <button class="btn" data-action="reboot">Reboot</button>
+            <button class="btn danger" data-action="stop">Stop</button>
+          </div>
+          <div class="toolbar">
+            <button class="btn" data-action="clear-blocked-ips">Clear Blocked IPs</button>
+            <button class="btn" data-action="reload-npcs">Reload NPCs</button>
+            <button class="btn" data-action="reload-drops">Reload Drops</button>
+            <button class="btn" data-action="reload-line-messages">Reload Line Messages</button>
+          </div>
+          <div class="status-bar" id="control-status"></div>
+        </section>
+
+        <section id="section-broadcast" class="section">
+          <h2>Broadcast</h2>
+          <p style="color:#9ca3af;font-size:0.9rem;">对应 MirForms 中的全区公告功能，目前只会在后台打印日志。</p>
+          <div style="margin-top:0.75rem; max-width:560px;">
+            <div class="form-field">
+              <label for="broadcast-message">Message</label>
+              <textarea id="broadcast-message" placeholder="输入要广播的内容..."></textarea>
+            </div>
+            <button class="btn success" id="broadcast-send">Send Broadcast</button>
+            <div class="status-bar" id="broadcast-status"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function selectSection(id) {
+      document.querySelectorAll('.section').forEach(sec => {
+        sec.classList.toggle('active', sec.id === id);
+      });
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === id);
+      });
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectSection(btn.dataset.target);
+      });
+    });
+
+    async function fetchJson(url, options) {
+      try {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        return await res.json();
+      } catch (err) {
+        console.error('fetchJson error', url, err);
+        throw err;
+      }
+    }
+
+    async function loadHealth() {
+      const pill = document.getElementById('health-pill');
+      try {
+        const data = await fetchJson('/health');
+        pill.textContent = 'Health: ' + (data.status || 'unknown');
+      } catch {
+        pill.textContent = 'Health: error';
+      }
+    }
+
+    async function loadMetrics() {
+      const container = document.getElementById('metrics-cards');
+      container.innerHTML = '';
+      try {
+        const m = await fetchJson('/metrics');
+        const items = [
+          { label: 'Players', value: m.players },
+          { label: 'Monsters', value: m.monsters },
+          { label: 'Connections', value: m.connections },
+          { label: 'Blocked IPs', value: m.blocked_ips },
+          { label: 'Uptime (s)', value: m.uptime_seconds },
+          { label: 'Cycle Delay (ms)', value: m.cycle_delay_ms }
+        ];
+        for (const it of items) {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = '<div class="card-title">' + it.label + '</div><div class="card-value">' + it.value + '</div>';
+          container.appendChild(card);
+        }
+      } catch {
+        container.textContent = 'Failed to load metrics';
+      }
+    }
+
+    async function loadLogs(endpoint, targetId) {
+      const container = document.getElementById(targetId);
+      container.innerHTML = '';
+      try {
+        const logs = await fetchJson(endpoint);
+        if (!Array.isArray(logs) || logs.length === 0) {
+          container.textContent = 'No entries.';
+          return;
+        }
+        const now = new Date();
+        logs.forEach((entry, idx) => {
+          const div = document.createElement('div');
+          div.className = 'log-entry';
+          const ts = new Date(now.getTime() - (logs.length - idx - 1) * 1000).toLocaleTimeString();
+          div.innerHTML = '<span>[' + ts + ']</span>' + (entry.message || '');
+          container.appendChild(div);
+        });
+      } catch {
+        container.textContent = 'Failed to load logs.';
+      }
+    }
+
+    async function loadPlayers() {
+      const tbody = document.querySelector('#players-table tbody');
+      tbody.innerHTML = '';
+      try {
+        const players = await fetchJson('/players');
+        if (!Array.isArray(players) || players.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 6;
+          td.textContent = 'No online players.';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+        players.forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + (p.id ?? '') + '</td>' +
+            '<td>' + (p.name ?? '') + '</td>' +
+            '<td>' + (p.level ?? '') + '</td>' +
+            '<td>' + (p.class ?? '') + '</td>' +
+            '<td>' + (p.gender ?? '') + '</td>' +
+            '<td>' + (p.map ?? '') + '</td>';
+          tbody.appendChild(tr);
+        });
+      } catch {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.textContent = 'Failed to load players.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function callControl(action) {
+      const status = document.getElementById('control-status');
+      status.textContent = 'Calling ' + action + '...';
+      let url;
+      switch (action) {
+        case 'start': url = '/control/start'; break;
+        case 'stop': url = '/control/stop'; break;
+        case 'reboot': url = '/control/reboot'; break;
+        case 'clear-blocked-ips': url = '/control/clear-blocked-ips'; break;
+        case 'reload-npcs': url = '/reload/npcs'; break;
+        case 'reload-drops': url = '/reload/drops'; break;
+        case 'reload-line-messages': url = '/reload/line-messages'; break;
+        default: return;
+      }
+      try {
+        await fetchJson(url, { method: 'POST' });
+        status.textContent = 'Action ' + action + ' completed (stub).';
+      } catch {
+        status.textContent = 'Action ' + action + ' failed.';
+      }
+    }
+
+    document.querySelectorAll('#section-control .btn').forEach(btn => {
+      const action = btn.dataset.action;
+      if (!action) return;
+      btn.addEventListener('click', () => callControl(action));
+    });
+
+    async function sendBroadcast() {
+      const textarea = document.getElementById('broadcast-message');
+      const status = document.getElementById('broadcast-status');
+      const msg = textarea.value.trim();
+      if (!msg) {
+        status.textContent = '请输入要广播的内容。';
+        return;
+      }
+      status.textContent = 'Sending broadcast...';
+      try {
+        await fetchJson('/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        status.textContent = 'Broadcast sent (stub).';
+        textarea.value = '';
+      } catch {
+        status.textContent = 'Broadcast failed.';
+      }
+    }
+
+    document.getElementById('broadcast-send').addEventListener('click', sendBroadcast);
+
+    // Initial load
+    loadHealth();
+    loadMetrics();
+    loadLogs('/logs', 'logs-list');
+    loadLogs('/debug-logs', 'debug-logs-list');
+    loadLogs('/chat-logs', 'chat-logs-list');
+    loadPlayers();
+
+    // Simple polling for metrics/logs/players
+    setInterval(loadHealth, 15000);
+    setInterval(loadMetrics, 15000);
+    setInterval(() => loadLogs('/logs', 'logs-list'), 15000);
+    setInterval(() => loadLogs('/debug-logs', 'debug-logs-list'), 15000);
+    setInterval(() => loadLogs('/chat-logs', 'chat-logs-list'), 15000);
+    setInterval(loadPlayers, 15000);
+  </script>
+</body>
+</html>

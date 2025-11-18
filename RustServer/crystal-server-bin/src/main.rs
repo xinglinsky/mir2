@@ -6,9 +6,19 @@ use crystal_shared_proto::login::{
     CStartGame, ClientPacketId, SChangePassword, SClientVersion, SConnected, SLogin,
     SLoginBanned, SNewAccount, SNewCharacter, SStartGame,
 };
-use crystal_shared_proto::map::SMapInformation;
+use crystal_shared_proto::map::{SMapChanged, SMapInformation};
+use crystal_shared_proto::npc::{SObjectNpc, SNpcResponse};
 use crystal_shared_proto::packet::RawPacket;
-use crystal_shared_proto::user::SUserInformation;
+use crystal_shared_proto::scene::{
+    SGainExperience,
+    SGainedGold,
+    SLevelChanged,
+    SObjectLeveled,
+    SObjectTeleportIn,
+    SObjectTeleportOut,
+    STeleportIn,
+};
+use crystal_shared_proto::user::{SChat, SUserInformation, SUserLocation};
 use crystal_shared_proto::select::{SelectInfo, SLoginSuccess, SNewCharacterSuccess};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -275,6 +285,112 @@ impl ConnectionHandler for LoginConnection {
                             observer: false,
                         };
                         if let Ok(raw) = user.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        // Initial UserLocation so client processes a location update.
+                        let loc = SUserLocation {
+                            location_x: 0,
+                            location_y: 0,
+                            direction: 0,
+                        };
+                        if let Ok(raw) = loc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let map_changed = SMapChanged {
+                            map_index: 0,
+                            file_name: "3".to_string(),
+                            title: "StubMap".to_string(),
+                            mini_map: 0,
+                            big_map: 0,
+                            lights: 0,
+                            location_x: 0,
+                            location_y: 0,
+                            direction: 0,
+                            map_dark_light: 0,
+                            music: 0,
+                            weather: 0,
+                        };
+                        if let Ok(raw) = map_changed.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let tele_out = SObjectTeleportOut {
+                            object_id: 1,
+                            teleport_type: 0,
+                        };
+                        if let Ok(raw) = tele_out.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let tele_in = STeleportIn;
+                        out.push(Self::encode_raw(tele_in.encode()));
+
+                        let obj_tele_in = SObjectTeleportIn {
+                            object_id: 1,
+                            teleport_type: 0,
+                        };
+                        if let Ok(raw) = obj_tele_in.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let exp = SGainExperience { amount: 1_000 };
+                        if let Ok(raw) = exp.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let level_up = SLevelChanged {
+                            level: ch.level + 1,
+                            experience: 0,
+                            max_experience: 1,
+                        };
+                        if let Ok(raw) = level_up.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let leveled = SObjectLeveled { object_id: 1 };
+                        if let Ok(raw) = leveled.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let gold = SGainedGold { gold: 5_000 };
+                        if let Ok(raw) = gold.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let npc = SObjectNpc {
+                            object_id: 100,
+                            name: "Rust NPC".to_string(),
+                            name_colour_argb: -1,
+                            image: 0,
+                            colour_argb: -1,
+                            location_x: 5,
+                            location_y: 5,
+                            direction: 0,
+                            quest_ids: Vec::new(),
+                        };
+                        if let Ok(raw) = npc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let npc_resp = SNpcResponse {
+                            page: vec![
+                                "Welcome to the Rust NPC".to_string(),
+                                "This is a stub response from the Rust server.".to_string(),
+                            ],
+                        };
+                        if let Ok(raw) = npc_resp.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        // Simple welcome chat so we exercise the Chat pipeline.
+                        let chat = SChat {
+                            message: "Welcome to the Rust stub server".to_string(),
+                            // ChatType.Normal = 0
+                            chat_type: 0,
+                        };
+                        if let Ok(raw) = chat.encode() {
                             out.push(Self::encode_raw(raw));
                         }
                     } else {

@@ -363,3 +363,5 @@ MigrationBackup/
 FodyWeavers.xsd
 /Build
 RustServer/target/
+RustServer/deploy/
+.windsurf/

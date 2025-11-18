@@ -4,4 +4,5 @@ members = [
     "crystal-shared-proto",
     "crystal-server-net",
     "crystal-server-bin",
+    "crystal-server-admin"
 ]
