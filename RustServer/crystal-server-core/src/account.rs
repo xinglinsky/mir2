@@ -62,6 +62,7 @@ pub trait AccountStore: Send + Sync {
         gender: u8,
     ) -> Result<CharacterSummary, StoreError>;
     fn delete_character(&self, account_id: &str, index: i32) -> Result<bool, StoreError>;
+    fn set_password(&self, id: &str, new_password: &str) -> Result<bool, StoreError>;
 }
 
 fn hash_password(password: &str) -> String {
@@ -217,6 +218,17 @@ impl AccountStore for FileAccountStore {
         };
         if let Some(pos) = acc.characters.iter().position(|c| c.index == index) {
             acc.characters.remove(pos);
+            self.save_locked(&db)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn set_password(&self, id: &str, new_password: &str) -> Result<bool, StoreError> {
+        let mut db = self.db.lock().unwrap();
+        if let Some(acc) = Self::get_account_mut(&mut db, id) {
+            acc.password_hash = hash_password(new_password);
             self.save_locked(&db)?;
             Ok(true)
         } else {

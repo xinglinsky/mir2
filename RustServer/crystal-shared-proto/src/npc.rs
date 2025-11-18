@@ -3,8 +3,8 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_f32_le, read_i32_le, read_string, read_u16_le, read_u32_le, write_f32_le, write_i32_le,
-    write_string, write_u16_le, write_u32_le,
+    read_f32_le, read_i32_le, read_string, read_u16_le, read_u32_le, read_u64_le, write_f32_le,
+    write_i32_le, write_string, write_u16_le, write_u32_le, write_u64_le,
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
@@ -320,6 +320,170 @@ impl SNpcReplaceWedRing {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SNpcConsign;
+
+impl SNpcConsign {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::NPCConsign as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SNpcConsign payload must be empty",
+            ));
+        }
+        Ok(SNpcConsign)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNpcMarket {
+    /// Raw bytes representing the ClientAuction list: count (i32) followed by
+    /// repeated ClientAuction.Save payloads.
+    pub listings_bytes: Vec<u8>,
+    pub pages: i32,
+    pub user_mode: bool,
+}
+
+impl SNpcMarket {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.listings_bytes);
+        write_i32_le(&mut buf, self.pages)?;
+        buf.push(self.user_mode as u8);
+        Ok(RawPacket {
+            id: ServerPacketId::NPCMarket as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() < 5 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SNpcMarket payload too short",
+            ));
+        }
+        let tail_start = payload.len() - 5;
+        let listings_bytes = payload[..tail_start].to_vec();
+        let mut c = Cursor::new(&payload[tail_start..]);
+        let pages = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let user_mode = one[0] != 0;
+        Ok(SNpcMarket {
+            listings_bytes,
+            pages,
+            user_mode,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNpcMarketPage {
+    /// Raw bytes representing the ClientAuction list: count (i32) followed by
+    /// repeated ClientAuction.Save payloads.
+    pub listings_bytes: Vec<u8>,
+}
+
+impl SNpcMarketPage {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::NPCMarketPage as i16,
+            payload: self.listings_bytes.clone(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SNpcMarketPage {
+            listings_bytes: payload.to_vec(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SConsignItem {
+    pub unique_id: u64,
+    pub success: bool,
+}
+
+impl SConsignItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        buf.push(self.success as u8);
+        Ok(RawPacket {
+            id: ServerPacketId::ConsignItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let success = one[0] != 0;
+        Ok(SConsignItem { unique_id, success })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SMarketFail {
+    pub reason: u8,
+}
+
+impl SMarketFail {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::new();
+        buf.push(self.reason);
+        RawPacket {
+            id: ServerPacketId::MarketFail as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SMarketFail payload must be exactly 1 byte",
+            ));
+        }
+        Ok(SMarketFail {
+            reason: payload[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SMarketSuccess {
+    pub message: String,
+}
+
+impl SMarketSuccess {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.message)?;
+        Ok(RawPacket {
+            id: ServerPacketId::MarketSuccess as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let message = read_string(&mut c)?;
+        Ok(SMarketSuccess { message })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,5 +625,86 @@ mod tests {
         let decoded = SNpcReplaceWedRing::decode(&raw.payload)
             .expect("decode SNpcReplaceWedRing");
         assert!((decoded.rate - p.rate).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn npc_consign_roundtrip() {
+        let p = SNpcConsign;
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::NPCConsign as i16);
+
+        let decoded = SNpcConsign::decode(&raw.payload).expect("decode SNpcConsign");
+        let _ = decoded;
+    }
+
+    #[test]
+    fn npc_market_roundtrip() {
+        let p = SNpcMarket {
+            listings_bytes: vec![0, 0, 0, 0], // count = 0
+            pages: 3,
+            user_mode: true,
+        };
+
+        let raw = p.encode().expect("encode SNpcMarket");
+        assert_eq!(raw.id, ServerPacketId::NPCMarket as i16);
+
+        let decoded = SNpcMarket::decode(&raw.payload).expect("decode SNpcMarket");
+        assert_eq!(decoded.listings_bytes, p.listings_bytes);
+        assert_eq!(decoded.pages, p.pages);
+        assert_eq!(decoded.user_mode, p.user_mode);
+    }
+
+    #[test]
+    fn npc_market_page_roundtrip() {
+        let p = SNpcMarketPage {
+            listings_bytes: vec![1, 2, 3, 4, 5],
+        };
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::NPCMarketPage as i16);
+        assert_eq!(raw.payload, p.listings_bytes);
+
+        let decoded = SNpcMarketPage::decode(&raw.payload).expect("decode SNpcMarketPage");
+        assert_eq!(decoded.listings_bytes, p.listings_bytes);
+    }
+
+    #[test]
+    fn consign_item_roundtrip() {
+        let p = SConsignItem {
+            unique_id: 0x1122_3344_5566_7788,
+            success: true,
+        };
+
+        let raw = p.encode().expect("encode SConsignItem");
+        assert_eq!(raw.id, ServerPacketId::ConsignItem as i16);
+
+        let decoded = SConsignItem::decode(&raw.payload).expect("decode SConsignItem");
+        assert_eq!(decoded.unique_id, p.unique_id);
+        assert_eq!(decoded.success, p.success);
+    }
+
+    #[test]
+    fn market_fail_roundtrip() {
+        let p = SMarketFail { reason: 4 };
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::MarketFail as i16);
+
+        let decoded = SMarketFail::decode(&raw.payload).expect("decode SMarketFail");
+        assert_eq!(decoded.reason, p.reason);
+    }
+
+    #[test]
+    fn market_success_roundtrip() {
+        let p = SMarketSuccess {
+            message: "You bought Sword".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SMarketSuccess");
+        assert_eq!(raw.id, ServerPacketId::MarketSuccess as i16);
+
+        let decoded = SMarketSuccess::decode(&raw.payload).expect("decode SMarketSuccess");
+        assert_eq!(decoded.message, p.message);
     }
 }

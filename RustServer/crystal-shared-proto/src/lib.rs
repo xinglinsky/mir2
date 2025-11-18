@@ -14,3 +14,4 @@ pub mod mail;
 pub mod scene;
 pub mod npc;
 pub mod magic;
+pub mod guild;

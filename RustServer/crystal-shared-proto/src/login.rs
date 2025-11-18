@@ -19,6 +19,10 @@ pub enum ClientPacketId {
     DeleteCharacter = 7,
     StartGame = 8,
     LogOut = 9,
+    Turn = 10,
+    Walk = 11,
+    Run = 12,
+    Chat = 13,
 }
 
 impl ClientPacketId {
@@ -34,6 +38,10 @@ impl ClientPacketId {
             7 => Some(ClientPacketId::DeleteCharacter),
             8 => Some(ClientPacketId::StartGame),
             9 => Some(ClientPacketId::LogOut),
+            10 => Some(ClientPacketId::Turn),
+            11 => Some(ClientPacketId::Walk),
+            12 => Some(ClientPacketId::Run),
+            13 => Some(ClientPacketId::Chat),
             _ => None,
         }
     }
@@ -77,6 +85,7 @@ pub enum ServerPacketId {
     NewItemInfo = 32,
     NewHeroInfo = 33,
     NewChatItem = 34,
+    TimeOfDay = 59,
     ObjectItem = 62,
     ObjectGold = 63,
     GainedItem = 64,
@@ -131,6 +140,22 @@ pub enum ServerPacketId {
     ObjectEffect = 122,
     ObjectProjectile = 123,
     RangeAttack = 124,
+    Pushed = 125,
+    ObjectPushed = 126,
+    ObjectName = 127,
+    UserStorage = 128,
+    SwitchGroup = 129,
+    DeleteGroup = 130,
+    DeleteMember = 131,
+    GroupInvite = 132,
+    AddMember = 133,
+    Revived = 134,
+    ObjectRevived = 135,
+    SpellToggle = 136,
+    ObjectHealth = 137,
+    ObjectMana = 138,
+    MapEffect = 139,
+    AllowObserve = 140,
     ObjectRangeAttack = 141,
     AddBuff = 142,
     RemoveBuff = 143,
@@ -142,15 +167,68 @@ pub enum ServerPacketId {
     ObjectDash = 149,
     UserDashFail = 150,
     ObjectDashFail = 151,
+    NPCConsign = 152,
+    NPCMarket = 153,
+    NPCMarketPage = 154,
+    ConsignItem = 155,
+    MarketFail = 156,
+    MarketSuccess = 157,
+    GuildNoticeChange = 164,
+    GuildMemberChange = 165,
+    GuildStatus = 166,
+    GuildInvite = 167,
+    GuildExpGain = 168,
+    GuildNameRequest = 169,
+    GuildStorageGoldChange = 170,
+    GuildStorageItemChange = 171,
+    GuildStorageList = 172,
+    GuildRequestWar = 173,
     NewQuestInfo = 202,
     GainedQuestItem = 203,
     DeleteQuestItem = 204,
+    CancelReincarnation = 205,
+    RequestReincarnation = 206,
+    UserBackStep = 207,
+    ObjectBackStep = 208,
+    UserDashAttack = 209,
+    ObjectDashAttack = 210,
+    UserAttackMove = 211,
+    CombineItem = 212,
+    ItemUpgraded = 213,
+    SetConcentration = 214,
+    SetElemental = 215,
+    RemoveDelayedExplosion = 216,
+    ObjectDeco = 217,
+    ObjectSneaking = 218,
+    ObjectLevelEffects = 219,
+    SetBindingShot = 220,
+    SendOutputMessage = 221,
+    NPCAwakening = 222,
+    NPCDisassemble = 223,
+    NPCDowngrade = 224,
+    NPCReset = 225,
+    AwakeningNeedMaterials = 226,
+    AwakeningLockedItem = 227,
+    Awakening = 228,
     ReceiveMail = 229,
     MailLockedItem = 230,
     MailSendRequest = 231,
     MailSent = 232,
     ParcelCollected = 233,
     MailCost = 234,
+    ResizeInventory = 235,
+    ResizeStorage = 236,
+    NewIntelligentCreature = 237,
+    UpdateIntelligentCreatureList = 238,
+    IntelligentCreatureEnableRename = 239,
+    IntelligentCreaturePickup = 240,
+    NPCPearlGoods = 241,
+    TransformUpdate = 242,
+    FriendUpdate = 243,
+    LoverUpdate = 244,
+    MentorUpdate = 245,
+    GuildBuffList = 246,
+    NPCRequestInput = 247,
     GameShopInfo = 248,
     GameShopStock = 249,
 }
@@ -371,6 +449,90 @@ impl CLogOut {
             ));
         }
         Ok(CLogOut)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTurn {
+    pub direction: u8,
+}
+
+impl CTurn {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.direction);
+        RawPacket {
+            id: ClientPacketId::Turn as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CTurn payload must be exactly 1 byte",
+            ));
+        }
+        Ok(CTurn {
+            direction: payload[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CWalk {
+    pub direction: u8,
+}
+
+impl CWalk {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.direction);
+        RawPacket {
+            id: ClientPacketId::Walk as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CWalk payload must be exactly 1 byte",
+            ));
+        }
+        Ok(CWalk {
+            direction: payload[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRun {
+    pub direction: u8,
+}
+
+impl CRun {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.direction);
+        RawPacket {
+            id: ClientPacketId::Run as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CRun payload must be exactly 1 byte",
+            ));
+        }
+        Ok(CRun {
+            direction: payload[0],
+        })
     }
 }
 

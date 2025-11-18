@@ -1,12 +1,12 @@
 use std::{io, net::SocketAddr, sync::Arc};
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
-use crystal_server_core::world::{self, WorldConfig};
+use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
 use crystal_server_core::account::{AccountStore, CharacterSummary, FileAccountStore};
 use crystal_shared_proto::login::{
     CChangePassword, CClientVersion, CDeleteCharacter, CLogin, CNewAccount, CNewCharacter,
-    CStartGame, ClientPacketId, SChangePassword, SClientVersion, SConnected, SLogin,
-    SLoginBanned, SNewAccount, SNewCharacter, SStartGame,
+    CRun, CStartGame, CTurn, CWalk, ClientPacketId, SChangePassword, SClientVersion,
+    SConnected, SLogin, SLoginBanned, SNewAccount, SNewCharacter, SStartGame,
 };
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
 use crystal_shared_proto::npc::{SObjectNpc, SNpcResponse};
@@ -59,22 +59,51 @@ struct LoginConnection {
     account_id: Option<String>,
     characters: Vec<SelectInfo>,
     store: Arc<dyn AccountStore>,
+    world_db: Arc<WorldDatabase>,
     world_config: WorldConfig,
+    current_x: i32,
+    current_y: i32,
+    direction: u8,
 }
 
 impl LoginConnection {
-    fn new(store: Arc<dyn AccountStore>, world_config: WorldConfig) -> Self {
+    fn new(
+        store: Arc<dyn AccountStore>,
+        world_db: Arc<WorldDatabase>,
+        world_config: WorldConfig,
+    ) -> Self {
         LoginConnection {
             stage: Stage::Connected,
             account_id: None,
             characters: Vec::new(),
             store,
+            world_db,
             world_config,
+            current_x: 0,
+            current_y: 0,
+            direction: 0,
         }
     }
 
     fn encode_raw(raw: RawPacket) -> Vec<u8> {
         raw.encode()
+    }
+
+    fn apply_step(&mut self, direction: u8, distance: i32) {
+        let (dx, dy) = match direction {
+            0 => (0, -1),
+            1 => (1, -1),
+            2 => (1, 0),
+            3 => (1, 1),
+            4 => (0, 1),
+            5 => (-1, 1),
+            6 => (-1, 0),
+            7 => (-1, -1),
+            _ => (0, 0),
+        };
+        self.direction = direction;
+        self.current_x += dx * distance;
+        self.current_y += dy * distance;
     }
 }
 
@@ -179,16 +208,37 @@ impl ConnectionHandler for LoginConnection {
                     if msg.new_password.is_empty() {
                         // 3: Bad New Password
                         out.push(Self::encode_raw(SChangePassword { result: 3 }.encode()));
-                    } else if !self
-                        .store
-                        .account_exists(&msg.account_id)
-                        .unwrap_or(false)
-                    {
-                        // 4: Account Not Exist
-                        out.push(Self::encode_raw(SChangePassword { result: 4 }.encode()));
                     } else {
-                        // For now we don't persist password changes; just pretend success.
-                        out.push(Self::encode_raw(SChangePassword { result: 6 }.encode()));
+                        // First ensure the account exists.
+                        let exists = self
+                            .store
+                            .account_exists(&msg.account_id)
+                            .unwrap_or(false);
+
+                        if !exists {
+                            // 4: Account Not Exist
+                            out.push(Self::encode_raw(SChangePassword { result: 4 }.encode()));
+                        } else {
+                            // Then verify the current password.
+                            match self
+                                .store
+                                .verify_password(&msg.account_id, &msg.current_password)
+                            {
+                                Ok(true) => {
+                                    // Update the stored password hash.
+                                    let _ = self
+                                        .store
+                                        .set_password(&msg.account_id, &msg.new_password);
+
+                                    // 6: Success
+                                    out.push(Self::encode_raw(SChangePassword { result: 6 }.encode()));
+                                }
+                                Ok(false) | Err(_) => {
+                                    // 5: Wrong Password (or treat store errors as failure)
+                                    out.push(Self::encode_raw(SChangePassword { result: 5 }.encode()));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -277,24 +327,39 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
-                        // Attempt to load a real map (file_name "3") via crystal-server-core.
-                        // This is best-effort: failures only log to stdout, stub packets still sent.
-                        let map_info_core = world::map::MapInfo {
-                            index: 0,
-                            file_name: "3".to_string(),
-                            title: "StubMap".to_string(),
-                            mini_map: 0,
-                            big_map: 0,
-                            light: 0,
-                            map_dark_light: 0,
-                            music: 0,
-                            weather_particles: 0,
-                            safe_zones: Vec::new(),
-                            respawns: Vec::new(),
-                            movements: Vec::new(),
+                        // Choose a MapInfo to drive loading and packets. Prefer file_name "3",
+                        // otherwise fall back to the first entry or a stub if DB is empty.
+                        let map_info_core = {
+                            let map_infos = &self.world_db.map_infos;
+                            if let Some(info) = map_infos
+                                .iter()
+                                .find(|m| m.file_name.eq_ignore_ascii_case("3"))
+                            {
+                                info.clone()
+                            } else if let Some(info) = map_infos.first() {
+                                info.clone()
+                            } else {
+                                world::map::MapInfo {
+                                    index: 0,
+                                    file_name: "3".to_string(),
+                                    title: "StubMap".to_string(),
+                                    mini_map: 0,
+                                    big_map: 0,
+                                    light: 0,
+                                    map_dark_light: 0,
+                                    music: 0,
+                                    weather_particles: 0,
+                                    safe_zones: Vec::new(),
+                                    respawns: Vec::new(),
+                                    movements: Vec::new(),
+                                }
+                            }
                         };
 
                         let map_dir = &self.world_config.map_path;
+                        let mut spawn_x: i32 = 0;
+                        let mut spawn_y: i32 = 0;
+
                         match world::map::load_map_from_file(map_info_core.clone(), map_dir) {
                             Ok(loaded_map) => {
                                 println!(
@@ -305,6 +370,39 @@ impl ConnectionHandler for LoginConnection {
                                     loaded_map.walkable_cells.len(),
                                     map_dir,
                                 );
+
+                                // Prefer spawning near the first SafeZone marked as StartPoint;
+                                // if none, fall back to the first SafeZone; if still none,
+                                // use the map centre as before.
+                                let (center_x, center_y) = map_info_core
+                                    .safe_zones
+                                    .iter()
+                                    .find(|z| z.start_point)
+                                    .or_else(|| map_info_core.safe_zones.first())
+                                    .map(|z| (z.location_x, z.location_y))
+                                    .unwrap_or_else(|| {
+                                        (
+                                            loaded_map.width as i32 / 2,
+                                            loaded_map.height as i32 / 2,
+                                        )
+                                    });
+
+                                if let Some(&(wx, wy)) = loaded_map
+                                    .walkable_cells
+                                    .iter()
+                                    .min_by_key(|(x, y)| {
+                                        let dx = *x as i32 - center_x;
+                                        let dy = *y as i32 - center_y;
+                                        dx.abs() + dy.abs()
+                                    })
+                                {
+                                    spawn_x = wx as i32;
+                                    spawn_y = wy as i32;
+                                } else {
+                                    // No walkable cells found; fall back to the chosen centre.
+                                    spawn_x = center_x;
+                                    spawn_y = center_y;
+                                }
                             }
                             Err(e) => {
                                 println!(
@@ -314,25 +412,30 @@ impl ConnectionHandler for LoginConnection {
                             }
                         }
 
-                        // Minimal MapInformation stub so client can attempt to enter a map.
+                        // MapInformation packet using the chosen MapInfo. Lightning/Fire flags are
+                        // still stubbed for now until the full set of MapInfo flags is mirrored.
                         let map = SMapInformation {
-                            map_index: 0,
-                            file_name: "3".to_string(),
-                            title: "StubMap".to_string(),
-                            mini_map: 0,
-                            big_map: 0,
-                            lights: 0,
+                            map_index: map_info_core.index,
+                            file_name: map_info_core.file_name.clone(),
+                            title: map_info_core.title.clone(),
+                            mini_map: map_info_core.mini_map,
+                            big_map: map_info_core.big_map,
+                            lights: map_info_core.light,
                             lightning: false,
                             fire: false,
-                            map_dark_light: 0,
-                            music: 0,
-                            weather_particles: 0,
+                            map_dark_light: map_info_core.map_dark_light,
+                            music: map_info_core.music,
+                            weather_particles: map_info_core.weather_particles,
                         };
                         if let Ok(raw) = map.encode() {
                             out.push(Self::encode_raw(raw));
                         }
 
                         // Minimal UserInformation so the client receives basic player state.
+                        self.current_x = spawn_x;
+                        self.current_y = spawn_y;
+                        self.direction = 0;
+
                         let user = SUserInformation {
                             object_id: 1,
                             real_id: 1,
@@ -343,9 +446,9 @@ impl ConnectionHandler for LoginConnection {
                             class: ch.class,
                             gender: ch.gender,
                             level: ch.level,
-                            location_x: 0,
-                            location_y: 0,
-                            direction: 0,
+                            location_x: self.current_x,
+                            location_y: self.current_y,
+                            direction: self.direction,
                             hair: 0,
                             hp: 100,
                             mp: 50,
@@ -369,26 +472,26 @@ impl ConnectionHandler for LoginConnection {
 
                         // Initial UserLocation so client processes a location update.
                         let loc = SUserLocation {
-                            location_x: 0,
-                            location_y: 0,
-                            direction: 0,
+                            location_x: self.current_x,
+                            location_y: self.current_y,
+                            direction: self.direction,
                         };
                         if let Ok(raw) = loc.encode() {
                             out.push(Self::encode_raw(raw));
                         }
 
                         let map_changed = SMapChanged {
-                            map_index: 0,
-                            file_name: "3".to_string(),
-                            title: "StubMap".to_string(),
-                            mini_map: 0,
-                            big_map: 0,
-                            lights: 0,
-                            location_x: 0,
-                            location_y: 0,
+                            map_index: map_info_core.index,
+                            file_name: map_info_core.file_name.clone(),
+                            title: map_info_core.title.clone(),
+                            mini_map: map_info_core.mini_map,
+                            big_map: map_info_core.big_map,
+                            lights: map_info_core.light,
+                            location_x: spawn_x,
+                            location_y: spawn_y,
                             direction: 0,
-                            map_dark_light: 0,
-                            music: 0,
+                            map_dark_light: map_info_core.map_dark_light,
+                            music: map_info_core.music,
                             weather: 0,
                         };
                         if let Ok(raw) = map_changed.encode() {
@@ -652,6 +755,56 @@ impl ConnectionHandler for LoginConnection {
                 self.stage = Stage::Connected;
                 self.account_id = None;
             }
+            ClientPacketId::Turn => {
+                if self.stage == Stage::InGame {
+                    if let Ok(msg) = CTurn::decode(&packet.payload) {
+                        self.apply_step(msg.direction, 0);
+
+                        let loc = SUserLocation {
+                            location_x: self.current_x,
+                            location_y: self.current_y,
+                            direction: self.direction,
+                        };
+                        if let Ok(raw) = loc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+            }
+            ClientPacketId::Walk => {
+                if self.stage == Stage::InGame {
+                    if let Ok(msg) = CWalk::decode(&packet.payload) {
+                        self.apply_step(msg.direction, 1);
+
+                        let loc = SUserLocation {
+                            location_x: self.current_x,
+                            location_y: self.current_y,
+                            direction: self.direction,
+                        };
+                        if let Ok(raw) = loc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+            }
+            ClientPacketId::Run => {
+                if self.stage == Stage::InGame {
+                    if let Ok(msg) = CRun::decode(&packet.payload) {
+                        self.apply_step(msg.direction, 2);
+
+                        let loc = SUserLocation {
+                            location_x: self.current_x,
+                            location_y: self.current_y,
+                            direction: self.direction,
+                        };
+                        if let Ok(raw) = loc.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+            }
+            ClientPacketId::Chat => {
+            }
             ClientPacketId::Disconnect | ClientPacketId::KeepAlive => {
                 // For this stub, ignore these packets.
             }
@@ -669,16 +822,39 @@ async fn main() -> io::Result<()> {
             .expect("failed to open accounts database"),
     );
 
-    // For now, use a relative ./Map directory for .map files.
+    // Load MapInfoList from the C# Server.MirDB database so we can use
+    // real map metadata to drive map loading and packets. This keeps
+    // compatibility with the existing C# server's database format.
+    let mut world_db = WorldDatabase::new();
+    match world::map::load_map_infos_from_mirdb("./Server.MirDB") {
+        Ok(maps) => {
+            println!(
+                "[core] Loaded {} MapInfo entries from Server.MirDB",
+                maps.len()
+            );
+            world_db.map_infos = maps;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (MapInfoList): {} (continuing with empty DB)",
+                e
+            );
+        }
+    }
+    let world_db = Arc::new(world_db);
+
+    // For now, use a relative ./Maps directory for .map files.
     // You can point this to your actual MapPath (e.g. from C# Settings.MapPath).
-    let world_config = WorldConfig::new("./Map");
+    let world_config = WorldConfig::new("./Maps");
 
     let factory: HandlerFactory = Arc::new({
         let store = Arc::clone(&store);
+        let world_db = Arc::clone(&world_db);
         let world_config = world_config.clone();
         move || {
             Box::new(LoginConnection::new(
                 Arc::clone(&store),
+                Arc::clone(&world_db),
                 world_config.clone(),
             )) as Box<dyn ConnectionHandler>
         }

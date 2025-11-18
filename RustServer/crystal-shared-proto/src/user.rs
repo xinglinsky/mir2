@@ -761,6 +761,53 @@ impl SObjectRun {
 }
 
 #[derive(Clone, Debug)]
+pub struct SPushed {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SPushed {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::Pushed as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SPushed {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectPushed(pub SObjectTurnWalkRun);
+
+impl SObjectPushed {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        self.0.encode_with_id(ServerPacketId::ObjectPushed)
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SObjectPushed(SObjectTurnWalkRun::decode_from(payload)?))
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SUserDash {
     pub location_x: i32,
     pub location_y: i32,
@@ -851,6 +898,691 @@ impl SObjectDashFail {
 
     pub fn decode(payload: &[u8]) -> io::Result<Self> {
         Ok(SObjectDashFail(SObjectTurnWalkRun::decode_from(payload)?))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SUserBackStep {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SUserBackStep {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::UserBackStep as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SUserBackStep {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectBackStep {
+    pub object_id: u32,
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+    pub distance: i32,
+}
+
+impl SObjectBackStep {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        write_i32_le(&mut buf, self.distance)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectBackStep as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        let distance = read_i32_le(&mut c)?;
+        Ok(SObjectBackStep {
+            object_id,
+            location_x,
+            location_y,
+            direction,
+            distance,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SUserDashAttack {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SUserDashAttack {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::UserDashAttack as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SUserDashAttack {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectDashAttack {
+    pub object_id: u32,
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+    pub distance: i32,
+}
+
+impl SObjectDashAttack {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        write_i32_le(&mut buf, self.distance)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectDashAttack as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        let distance = read_i32_le(&mut c)?;
+        Ok(SObjectDashAttack {
+            object_id,
+            location_x,
+            location_y,
+            direction,
+            distance,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SUserAttackMove {
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+}
+
+impl SUserAttackMove {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ServerPacketId::UserAttackMove as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        Ok(SUserAttackMove {
+            location_x,
+            location_y,
+            direction,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectName {
+    pub object_id: u32,
+    pub name: String,
+}
+
+impl SObjectName {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectName as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let name = read_string(&mut c)?;
+        Ok(SObjectName { object_id, name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRevived;
+
+impl SRevived {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::Revived as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SRevived payload must be empty",
+            ));
+        }
+        Ok(SRevived)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectRevived {
+    pub object_id: u32,
+    pub effect: bool,
+}
+
+impl SObjectRevived {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.effect)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectRevived as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let effect = read_bool(&mut c)?;
+        Ok(SObjectRevived { object_id, effect })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSpellToggle {
+    pub object_id: u32,
+    pub spell: u8,
+    pub can_use: bool,
+}
+
+impl SSpellToggle {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        buf.push(self.spell);
+        write_bool(&mut buf, self.can_use)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SpellToggle as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let spell = one[0];
+        let can_use = read_bool(&mut c)?;
+        Ok(SSpellToggle {
+            object_id,
+            spell,
+            can_use,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectHealth {
+    pub object_id: u32,
+    pub percent: u8,
+    pub expire: u8,
+}
+
+impl SObjectHealth {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        buf.push(self.percent);
+        buf.push(self.expire);
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectHealth as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let percent = one[0];
+        c.read_exact(&mut one)?;
+        let expire = one[0];
+        Ok(SObjectHealth {
+            object_id,
+            percent,
+            expire,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectMana {
+    pub object_id: u32,
+    pub percent: u8,
+}
+
+impl SObjectMana {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        buf.push(self.percent);
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectMana as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let percent = one[0];
+        Ok(SObjectMana { object_id, percent })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SAllowObserve {
+    pub allow: bool,
+}
+
+impl SAllowObserve {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.allow)?;
+        Ok(RawPacket {
+            id: ServerPacketId::AllowObserve as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let allow = read_bool(&mut c)?;
+        Ok(SAllowObserve { allow })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct STimeOfDay {
+    pub lights: u8,
+}
+
+impl STimeOfDay {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.lights);
+        RawPacket {
+            id: ServerPacketId::TimeOfDay as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "STimeOfDay payload must be exactly 1 byte",
+            ));
+        }
+        Ok(STimeOfDay { lights: payload[0] })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSendOutputMessage {
+    pub message: String,
+    pub msg_type: u8,
+}
+
+impl SSendOutputMessage {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.message)?;
+        buf.push(self.msg_type);
+        Ok(RawPacket {
+            id: ServerPacketId::SendOutputMessage as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let message = read_string(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let msg_type = one[0];
+        Ok(SSendOutputMessage { message, msg_type })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRemoveDelayedExplosion {
+    pub object_id: u32,
+}
+
+impl SRemoveDelayedExplosion {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RemoveDelayedExplosion as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        Ok(SRemoveDelayedExplosion { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectDeco {
+    pub object_id: u32,
+    pub location_x: i32,
+    pub location_y: i32,
+    pub image: i32,
+}
+
+impl SObjectDeco {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        write_i32_le(&mut buf, self.image)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectDeco as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let image = read_i32_le(&mut c)?;
+        Ok(SObjectDeco {
+            object_id,
+            location_x,
+            location_y,
+            image,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectSneaking {
+    pub object_id: u32,
+    pub sneaking_active: bool,
+}
+
+impl SObjectSneaking {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.sneaking_active)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectSneaking as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let sneaking_active = read_bool(&mut c)?;
+        Ok(SObjectSneaking {
+            object_id,
+            sneaking_active,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SObjectLevelEffects {
+    pub object_id: u32,
+    pub level_effects: u16,
+}
+
+impl SObjectLevelEffects {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_u16_le(&mut buf, self.level_effects)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectLevelEffects as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let level_effects = read_u16_le(&mut c)?;
+        Ok(SObjectLevelEffects {
+            object_id,
+            level_effects,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSetBindingShot {
+    pub object_id: u32,
+    pub enabled: bool,
+    pub value: i64,
+}
+
+impl SSetBindingShot {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.enabled)?;
+        write_i64_le(&mut buf, self.value)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SetBindingShot as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let enabled = read_bool(&mut c)?;
+        let value = read_i64_le(&mut c)?;
+        Ok(SSetBindingShot {
+            object_id,
+            enabled,
+            value,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSwitchGroup {
+    pub allow_group: bool,
+}
+
+impl SSwitchGroup {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.allow_group)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SwitchGroup as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let allow_group = read_bool(&mut c)?;
+        Ok(SSwitchGroup { allow_group })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SDeleteGroup;
+
+impl SDeleteGroup {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::DeleteGroup as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SDeleteGroup payload must be empty",
+            ));
+        }
+        Ok(SDeleteGroup)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SDeleteMember {
+    pub name: String,
+}
+
+impl SDeleteMember {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::DeleteMember as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(SDeleteMember { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SGroupInvite {
+    pub name: String,
+}
+
+impl SGroupInvite {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::GroupInvite as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(SGroupInvite { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SAddMember {
+    pub name: String,
+}
+
+impl SAddMember {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::AddMember as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(SAddMember { name })
     }
 }
 
@@ -2420,6 +3152,479 @@ mod tests {
 
         let decoded = STeleportIn::decode(&raw.payload).expect("decode STeleportIn");
         let _ = decoded;
+    }
+
+    #[test]
+    fn pushed_roundtrip() {
+        let p = SPushed {
+            location_x: 10,
+            location_y: 20,
+            direction: 3,
+        };
+
+        let raw = p.encode().expect("encode SPushed");
+        assert_eq!(raw.id, ServerPacketId::Pushed as i16);
+
+        let decoded = SPushed::decode(&raw.payload).expect("decode SPushed");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_pushed_roundtrip() {
+        let base = SObjectTurnWalkRun {
+            object_id: 1,
+            location_x: 11,
+            location_y: 22,
+            direction: 4,
+        };
+        let p = SObjectPushed(base);
+
+        let raw = p.encode().expect("encode SObjectPushed");
+        assert_eq!(raw.id, ServerPacketId::ObjectPushed as i16);
+
+        let decoded = SObjectPushed::decode(&raw.payload).expect("decode SObjectPushed");
+        assert_eq!(decoded.0.object_id, 1);
+        assert_eq!(decoded.0.location_x, 11);
+        assert_eq!(decoded.0.location_y, 22);
+        assert_eq!(decoded.0.direction, 4);
+    }
+
+    #[test]
+    fn user_dash_roundtrip() {
+        let p = SUserDash {
+            location_x: 5,
+            location_y: 6,
+            direction: 2,
+        };
+
+        let raw = p.encode().expect("encode SUserDash");
+        assert_eq!(raw.id, ServerPacketId::UserDash as i16);
+
+        let decoded = SUserDash::decode(&raw.payload).expect("decode SUserDash");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_dash_roundtrip() {
+        let base = SObjectTurnWalkRun {
+            object_id: 7,
+            location_x: 8,
+            location_y: 9,
+            direction: 1,
+        };
+        let p = SObjectDash(base);
+
+        let raw = p.encode().expect("encode SObjectDash");
+        assert_eq!(raw.id, ServerPacketId::ObjectDash as i16);
+
+        let decoded = SObjectDash::decode(&raw.payload).expect("decode SObjectDash");
+        assert_eq!(decoded.0.object_id, 7);
+        assert_eq!(decoded.0.location_x, 8);
+        assert_eq!(decoded.0.location_y, 9);
+        assert_eq!(decoded.0.direction, 1);
+    }
+
+    #[test]
+    fn user_dash_fail_roundtrip() {
+        let p = SUserDashFail {
+            location_x: -1,
+            location_y: -2,
+            direction: 5,
+        };
+
+        let raw = p.encode().expect("encode SUserDashFail");
+        assert_eq!(raw.id, ServerPacketId::UserDashFail as i16);
+
+        let decoded = SUserDashFail::decode(&raw.payload).expect("decode SUserDashFail");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_dash_fail_roundtrip() {
+        let base = SObjectTurnWalkRun {
+            object_id: 3,
+            location_x: 4,
+            location_y: 5,
+            direction: 6,
+        };
+        let p = SObjectDashFail(base);
+
+        let raw = p.encode().expect("encode SObjectDashFail");
+        assert_eq!(raw.id, ServerPacketId::ObjectDashFail as i16);
+
+        let decoded = SObjectDashFail::decode(&raw.payload).expect("decode SObjectDashFail");
+        assert_eq!(decoded.0.object_id, 3);
+        assert_eq!(decoded.0.location_x, 4);
+        assert_eq!(decoded.0.location_y, 5);
+        assert_eq!(decoded.0.direction, 6);
+    }
+
+    #[test]
+    fn user_back_step_roundtrip() {
+        let p = SUserBackStep {
+            location_x: 100,
+            location_y: 200,
+            direction: 1,
+        };
+
+        let raw = p.encode().expect("encode SUserBackStep");
+        assert_eq!(raw.id, ServerPacketId::UserBackStep as i16);
+
+        let decoded = SUserBackStep::decode(&raw.payload).expect("decode SUserBackStep");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_back_step_roundtrip() {
+        let p = SObjectBackStep {
+            object_id: 9,
+            location_x: 10,
+            location_y: 11,
+            direction: 2,
+            distance: 3,
+        };
+
+        let raw = p.encode().expect("encode SObjectBackStep");
+        assert_eq!(raw.id, ServerPacketId::ObjectBackStep as i16);
+
+        let decoded = SObjectBackStep::decode(&raw.payload).expect("decode SObjectBackStep");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+        assert_eq!(decoded.distance, p.distance);
+    }
+
+    #[test]
+    fn user_dash_attack_roundtrip() {
+        let p = SUserDashAttack {
+            location_x: 1,
+            location_y: 2,
+            direction: 3,
+        };
+
+        let raw = p.encode().expect("encode SUserDashAttack");
+        assert_eq!(raw.id, ServerPacketId::UserDashAttack as i16);
+
+        let decoded = SUserDashAttack::decode(&raw.payload).expect("decode SUserDashAttack");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_dash_attack_roundtrip() {
+        let p = SObjectDashAttack {
+            object_id: 7,
+            location_x: 8,
+            location_y: 9,
+            direction: 4,
+            distance: 5,
+        };
+
+        let raw = p.encode().expect("encode SObjectDashAttack");
+        assert_eq!(raw.id, ServerPacketId::ObjectDashAttack as i16);
+
+        let decoded = SObjectDashAttack::decode(&raw.payload)
+            .expect("decode SObjectDashAttack");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+        assert_eq!(decoded.distance, p.distance);
+    }
+
+    #[test]
+    fn user_attack_move_roundtrip() {
+        let p = SUserAttackMove {
+            location_x: -10,
+            location_y: -20,
+            direction: 7,
+        };
+
+        let raw = p.encode().expect("encode SUserAttackMove");
+        assert_eq!(raw.id, ServerPacketId::UserAttackMove as i16);
+
+        let decoded = SUserAttackMove::decode(&raw.payload).expect("decode SUserAttackMove");
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+    }
+
+    #[test]
+    fn object_name_roundtrip() {
+        let p = SObjectName {
+            object_id: 42,
+            name: "Mob".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SObjectName");
+        assert_eq!(raw.id, ServerPacketId::ObjectName as i16);
+
+        let decoded = SObjectName::decode(&raw.payload).expect("decode SObjectName");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.name, p.name);
+    }
+
+    #[test]
+    fn revived_roundtrip() {
+        let p = SRevived;
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::Revived as i16);
+
+        let decoded = SRevived::decode(&raw.payload).expect("decode SRevived");
+        let _ = decoded;
+    }
+
+    #[test]
+    fn object_revived_roundtrip() {
+        let p = SObjectRevived {
+            object_id: 7,
+            effect: true,
+        };
+
+        let raw = p.encode().expect("encode SObjectRevived");
+        assert_eq!(raw.id, ServerPacketId::ObjectRevived as i16);
+
+        let decoded = SObjectRevived::decode(&raw.payload).expect("decode SObjectRevived");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.effect, p.effect);
+    }
+
+    #[test]
+    fn spell_toggle_roundtrip() {
+        let p = SSpellToggle {
+            object_id: 1,
+            spell: 3,
+            can_use: true,
+        };
+
+        let raw = p.encode().expect("encode SSpellToggle");
+        assert_eq!(raw.id, ServerPacketId::SpellToggle as i16);
+
+        let decoded = SSpellToggle::decode(&raw.payload).expect("decode SSpellToggle");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.spell, p.spell);
+        assert_eq!(decoded.can_use, p.can_use);
+    }
+
+    #[test]
+    fn object_health_roundtrip() {
+        let p = SObjectHealth {
+            object_id: 9,
+            percent: 80,
+            expire: 5,
+        };
+
+        let raw = p.encode().expect("encode SObjectHealth");
+        assert_eq!(raw.id, ServerPacketId::ObjectHealth as i16);
+
+        let decoded = SObjectHealth::decode(&raw.payload).expect("decode SObjectHealth");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.percent, p.percent);
+        assert_eq!(decoded.expire, p.expire);
+    }
+
+    #[test]
+    fn object_mana_roundtrip() {
+        let p = SObjectMana {
+            object_id: 10,
+            percent: 60,
+        };
+
+        let raw = p.encode().expect("encode SObjectMana");
+        assert_eq!(raw.id, ServerPacketId::ObjectMana as i16);
+
+        let decoded = SObjectMana::decode(&raw.payload).expect("decode SObjectMana");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.percent, p.percent);
+    }
+
+    #[test]
+    fn allow_observe_roundtrip() {
+        let p = SAllowObserve { allow: true };
+
+        let raw = p.encode().expect("encode SAllowObserve");
+        assert_eq!(raw.id, ServerPacketId::AllowObserve as i16);
+
+        let decoded = SAllowObserve::decode(&raw.payload).expect("decode SAllowObserve");
+        assert_eq!(decoded.allow, p.allow);
+    }
+
+    #[test]
+    fn time_of_day_roundtrip() {
+        let p = STimeOfDay { lights: 3 };
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::TimeOfDay as i16);
+        assert_eq!(raw.payload.len(), 1);
+
+        let decoded = STimeOfDay::decode(&raw.payload).expect("decode STimeOfDay");
+        assert_eq!(decoded.lights, p.lights);
+    }
+
+    #[test]
+    fn send_output_message_roundtrip() {
+        let p = SSendOutputMessage {
+            message: "Hello".to_string(),
+            msg_type: 2,
+        };
+
+        let raw = p.encode().expect("encode SSendOutputMessage");
+        assert_eq!(raw.id, ServerPacketId::SendOutputMessage as i16);
+
+        let decoded = SSendOutputMessage::decode(&raw.payload)
+            .expect("decode SSendOutputMessage");
+        assert_eq!(decoded.message, p.message);
+        assert_eq!(decoded.msg_type, p.msg_type);
+    }
+
+    #[test]
+    fn remove_delayed_explosion_roundtrip() {
+        let p = SRemoveDelayedExplosion { object_id: 123 };
+
+        let raw = p.encode().expect("encode SRemoveDelayedExplosion");
+        assert_eq!(raw.id, ServerPacketId::RemoveDelayedExplosion as i16);
+
+        let decoded = SRemoveDelayedExplosion::decode(&raw.payload)
+            .expect("decode SRemoveDelayedExplosion");
+        assert_eq!(decoded.object_id, p.object_id);
+    }
+
+    #[test]
+    fn object_deco_roundtrip() {
+        let p = SObjectDeco {
+            object_id: 7,
+            location_x: 10,
+            location_y: 20,
+            image: 999,
+        };
+
+        let raw = p.encode().expect("encode SObjectDeco");
+        assert_eq!(raw.id, ServerPacketId::ObjectDeco as i16);
+
+        let decoded = SObjectDeco::decode(&raw.payload).expect("decode SObjectDeco");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.image, p.image);
+    }
+
+    #[test]
+    fn object_sneaking_roundtrip() {
+        let p = SObjectSneaking {
+            object_id: 5,
+            sneaking_active: true,
+        };
+
+        let raw = p.encode().expect("encode SObjectSneaking");
+        assert_eq!(raw.id, ServerPacketId::ObjectSneaking as i16);
+
+        let decoded = SObjectSneaking::decode(&raw.payload)
+            .expect("decode SObjectSneaking");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.sneaking_active, p.sneaking_active);
+    }
+
+    #[test]
+    fn object_level_effects_roundtrip() {
+        let p = SObjectLevelEffects {
+            object_id: 8,
+            level_effects: 0x1234,
+        };
+
+        let raw = p.encode().expect("encode SObjectLevelEffects");
+        assert_eq!(raw.id, ServerPacketId::ObjectLevelEffects as i16);
+
+        let decoded = SObjectLevelEffects::decode(&raw.payload)
+            .expect("decode SObjectLevelEffects");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.level_effects, p.level_effects);
+    }
+
+    #[test]
+    fn set_binding_shot_roundtrip() {
+        let p = SSetBindingShot {
+            object_id: 9,
+            enabled: true,
+            value: 123456789,
+        };
+
+        let raw = p.encode().expect("encode SSetBindingShot");
+        assert_eq!(raw.id, ServerPacketId::SetBindingShot as i16);
+
+        let decoded = SSetBindingShot::decode(&raw.payload).expect("decode SSetBindingShot");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.enabled, p.enabled);
+        assert_eq!(decoded.value, p.value);
+    }
+
+    #[test]
+    fn switch_group_roundtrip() {
+        let p = SSwitchGroup { allow_group: true };
+
+        let raw = p.encode().expect("encode SSwitchGroup");
+        assert_eq!(raw.id, ServerPacketId::SwitchGroup as i16);
+
+        let decoded = SSwitchGroup::decode(&raw.payload).expect("decode SSwitchGroup");
+        assert_eq!(decoded.allow_group, p.allow_group);
+    }
+
+    #[test]
+    fn delete_group_roundtrip() {
+        let p = SDeleteGroup;
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::DeleteGroup as i16);
+        let _ = SDeleteGroup::decode(&raw.payload).expect("decode SDeleteGroup");
+    }
+
+    #[test]
+    fn delete_member_roundtrip() {
+        let p = SDeleteMember {
+            name: "NameA".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SDeleteMember");
+        assert_eq!(raw.id, ServerPacketId::DeleteMember as i16);
+
+        let decoded = SDeleteMember::decode(&raw.payload).expect("decode SDeleteMember");
+        assert_eq!(decoded.name, p.name);
+    }
+
+    #[test]
+    fn group_invite_roundtrip() {
+        let p = SGroupInvite {
+            name: "PlayerX".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SGroupInvite");
+        assert_eq!(raw.id, ServerPacketId::GroupInvite as i16);
+
+        let decoded = SGroupInvite::decode(&raw.payload).expect("decode SGroupInvite");
+        assert_eq!(decoded.name, p.name);
+    }
+
+    #[test]
+    fn add_member_roundtrip() {
+        let p = SAddMember {
+            name: "PlayerY".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SAddMember");
+        assert_eq!(raw.id, ServerPacketId::AddMember as i16);
+
+        let decoded = SAddMember::decode(&raw.payload).expect("decode SAddMember");
+        assert_eq!(decoded.name, p.name);
     }
 
 }

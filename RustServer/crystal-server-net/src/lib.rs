@@ -34,6 +34,8 @@ pub async fn run_server(addr: SocketAddr, factory: HandlerFactory) -> io::Result
 }
 
 async fn handle_connection(mut stream: TcpStream, factory: HandlerFactory) -> io::Result<()> {
+    stream.set_nodelay(true)?;
+
     let mut handler = factory();
     let initial = handler.on_connect();
     for response in initial {
