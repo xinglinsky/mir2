@@ -76,8 +76,8 @@ pub use crate::user::{
 };
 
 pub use crate::npc::{
-    SConsignItem, SMarketFail, SMarketSuccess, SObjectNpc, SNpcConsign, SNpcMarket,
-    SNpcMarketPage, SNpcResponse,
+    SConsignItem, SDefaultNpc, SMarketFail, SMarketSuccess, SObjectNpc, SNpcConsign,
+    SNpcImageUpdate, SNpcMarket, SNpcMarketPage, SNpcResponse, SNpcUpdate,
 };
 pub use crate::magic::{
     SNewMagic,
@@ -108,4 +108,9 @@ pub use crate::guild::{
     SGuildStorageGoldChange,
     SGuildStorageItemChange,
     SGuildStorageList,
+};
+pub use crate::stats::{SBaseStatsInfo, SHeroBaseStatsInfo, SUserName};
+pub use crate::social::{
+    SDivorceRequest, SMarriageRequest, SMentorRequest, STradeAccept, STradeCancel,
+    STradeConfirm, STradeGold, STradeItem, STradeRequest,
 };

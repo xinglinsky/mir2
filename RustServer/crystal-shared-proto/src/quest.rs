@@ -1,6 +1,9 @@
 use std::io;
 
-use crate::io::{read_u16_le, read_u64_le, write_u16_le, write_u64_le};
+use crate::io::{
+    read_bool, read_i32_le, read_u16_le, read_u64_le, write_bool, write_i32_le, write_u16_le,
+    write_u64_le,
+};
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
@@ -71,6 +74,115 @@ impl SDeleteQuestItem {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SChangeQuest {
+    /// Raw bytes representing ClientQuestProgress.Save(writer) payload.
+    pub quest_bytes: Vec<u8>,
+    /// QuestState as a raw byte, matching the C# QuestState enum underlying value.
+    pub quest_state: u8,
+    pub track_quest: bool,
+}
+
+impl SChangeQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.quest_bytes);
+        buf.push(self.quest_state);
+        write_bool(&mut buf, self.track_quest)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ChangeQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() < 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SChangeQuest payload too short",
+            ));
+        }
+        let tail_start = payload.len() - 2;
+        let quest_bytes = payload[..tail_start].to_vec();
+        let quest_state = payload[tail_start];
+        let track_quest = payload[tail_start + 1] != 0;
+        Ok(SChangeQuest {
+            quest_bytes,
+            quest_state,
+            track_quest,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SCompleteQuest {
+    pub completed_quests: Vec<i32>,
+}
+
+impl SCompleteQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        let count: i32 = self
+            .completed_quests
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many quests"))?;
+        write_i32_le(&mut buf, count)?;
+        for q in &self.completed_quests {
+            write_i32_le(&mut buf, *q)?;
+        }
+        Ok(RawPacket {
+            id: ServerPacketId::CompleteQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let count = read_i32_le(&mut c)?;
+        if count < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative completed quest count",
+            ));
+        }
+        let mut completed_quests = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let q = read_i32_le(&mut c)?;
+            completed_quests.push(q);
+        }
+        Ok(SCompleteQuest { completed_quests })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SShareQuest {
+    pub quest_index: i32,
+    pub sharer_name: String,
+}
+
+impl SShareQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.quest_index)?;
+        crate::io::write_string(&mut buf, &self.sharer_name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ShareQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let quest_index = read_i32_le(&mut c)?;
+        let sharer_name = crate::io::read_string(&mut c)?;
+        Ok(SShareQuest {
+            quest_index,
+            sharer_name,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +228,50 @@ mod tests {
         let decoded = SDeleteQuestItem::decode(&raw.payload).expect("decode SDeleteQuestItem");
         assert_eq!(decoded.unique_id, p.unique_id);
         assert_eq!(decoded.count, p.count);
+    }
+
+    #[test]
+    fn change_quest_roundtrip() {
+        let p = SChangeQuest {
+            quest_bytes: vec![1, 2, 3, 4],
+            quest_state: 3,
+            track_quest: true,
+        };
+
+        let raw = p.encode().expect("encode SChangeQuest");
+        assert_eq!(raw.id, ServerPacketId::ChangeQuest as i16);
+
+        let decoded = SChangeQuest::decode(&raw.payload).expect("decode SChangeQuest");
+        assert_eq!(decoded.quest_bytes, p.quest_bytes);
+        assert_eq!(decoded.quest_state, p.quest_state);
+        assert_eq!(decoded.track_quest, p.track_quest);
+    }
+
+    #[test]
+    fn complete_quest_roundtrip() {
+        let p = SCompleteQuest {
+            completed_quests: vec![10, 20, 30],
+        };
+
+        let raw = p.encode().expect("encode SCompleteQuest");
+        assert_eq!(raw.id, ServerPacketId::CompleteQuest as i16);
+
+        let decoded = SCompleteQuest::decode(&raw.payload).expect("decode SCompleteQuest");
+        assert_eq!(decoded.completed_quests, p.completed_quests);
+    }
+
+    #[test]
+    fn share_quest_roundtrip() {
+        let p = SShareQuest {
+            quest_index: 123,
+            sharer_name: "Sharer".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SShareQuest");
+        assert_eq!(raw.id, ServerPacketId::ShareQuest as i16);
+
+        let decoded = SShareQuest::decode(&raw.payload).expect("decode SShareQuest");
+        assert_eq!(decoded.quest_index, p.quest_index);
+        assert_eq!(decoded.sharer_name, p.sharer_name);
     }
 }

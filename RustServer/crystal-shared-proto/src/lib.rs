@@ -15,3 +15,5 @@ pub mod scene;
 pub mod npc;
 pub mod magic;
 pub mod guild;
+pub mod stats;
+pub mod social;

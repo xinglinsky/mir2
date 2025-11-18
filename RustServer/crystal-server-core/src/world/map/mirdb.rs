@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::Path;
 
-use super::data::{MapInfo, MovementInfo, RespawnInfo, SafeZoneInfo};
+use super::data::{MapInfo, MineZone, MovementInfo, RespawnInfo, SafeZoneInfo};
 
 /// Load MapInfo records directly from a C# Server.MirDB database file.
 ///
@@ -100,27 +100,26 @@ fn read_map_info<R: Read>(r: &mut R) -> io::Result<MapInfo> {
         movements.push(read_movement(r)?);
     }
 
-    // Booleans and extra fields, currently read and discarded to
-    // preserve binary compatibility.
-    let _no_teleport = read_bool(r)?;
-    let _no_reconnect = read_bool(r)?;
-    let _no_reconnect_map = read_string(r)?;
+    // Booleans and extra fields, mirroring C# MapInfo.Save layout.
+    let no_teleport = read_bool(r)?;
+    let no_reconnect = read_bool(r)?;
+    let no_reconnect_map = read_string(r)?;
 
-    let _no_random = read_bool(r)?;
-    let _no_escape = read_bool(r)?;
-    let _no_recall = read_bool(r)?;
-    let _no_drug = read_bool(r)?;
-    let _no_position = read_bool(r)?;
-    let _no_throw_item = read_bool(r)?;
-    let _no_drop_player = read_bool(r)?;
-    let _no_drop_monster = read_bool(r)?;
-    let _no_names = read_bool(r)?;
-    let _fight_flag = read_bool(r)?;
+    let no_random = read_bool(r)?;
+    let no_escape = read_bool(r)?;
+    let no_recall = read_bool(r)?;
+    let no_drug = read_bool(r)?;
+    let no_position = read_bool(r)?;
+    let no_throw_item = read_bool(r)?;
+    let no_drop_player = read_bool(r)?;
+    let no_drop_monster = read_bool(r)?;
+    let no_names = read_bool(r)?;
+    let fight = read_bool(r)?;
 
-    let _fire_flag = read_bool(r)?;
-    let _fire_damage = read_i32(r)?;
-    let _lightning_flag = read_bool(r)?;
-    let _lightning_damage = read_i32(r)?;
+    let fire = read_bool(r)?;
+    let fire_damage = read_i32(r)?;
+    let lightning = read_bool(r)?;
+    let lightning_damage = read_i32(r)?;
 
     let map_dark_light = read_u8(r)?;
 
@@ -132,25 +131,32 @@ fn read_map_info<R: Read>(r: &mut R) -> io::Result<MapInfo> {
             format!("negative MineZone count {} in MapInfo", mine_zone_count),
         ));
     }
+    let mut mine_zones = Vec::with_capacity(mine_zone_count as usize);
     for _ in 0..mine_zone_count {
-        let _mx = read_i32(r)?;
-        let _my = read_i32(r)?;
-        let _msize = read_u16(r)?;
-        let _mine = read_u8(r)?;
+        let mx = read_i32(r)?;
+        let my = read_i32(r)?;
+        let msize = read_u16(r)?;
+        let mine = read_u8(r)?;
+        mine_zones.push(MineZone {
+            mine,
+            location_x: mx,
+            location_y: my,
+            size: msize,
+        });
     }
 
-    let _mine_index = read_u8(r)?;
-    let _no_mount = read_bool(r)?;
-    let _need_bridle = read_bool(r)?;
-    let _no_fight_flag = read_bool(r)?;
+    let mine_index = read_u8(r)?;
+    let no_mount = read_bool(r)?;
+    let need_bridle = read_bool(r)?;
+    let no_fight = read_bool(r)?;
 
     let music = read_u16(r)?;
-    let _no_town_teleport = read_bool(r)?;
-    let _no_reincarnation = read_bool(r)?;
+    let no_town_teleport = read_bool(r)?;
+    let no_reincarnation = read_bool(r)?;
 
     let weather_particles = read_u16(r)?;
-    let _gt = read_bool(r)?;
-    let _gt_index = read_u8(r)?;
+    let gt = read_bool(r)?;
+    let gt_index = read_u8(r)?;
 
     Ok(MapInfo {
         index,
@@ -162,6 +168,32 @@ fn read_map_info<R: Read>(r: &mut R) -> io::Result<MapInfo> {
         map_dark_light,
         music,
         weather_particles,
+        no_teleport,
+        no_reconnect,
+        no_random,
+        no_escape,
+        no_recall,
+        no_drug,
+        no_position,
+        no_throw_item,
+        no_drop_player,
+        no_drop_monster,
+        no_names,
+        no_mount,
+        need_bridle,
+        no_fight,
+        fight,
+        fire,
+        fire_damage,
+        lightning,
+        lightning_damage,
+        no_town_teleport,
+        no_reincarnation,
+        no_reconnect_map,
+        mine_zones,
+        mine_index,
+        gt,
+        gt_index,
         safe_zones,
         respawns,
         movements,

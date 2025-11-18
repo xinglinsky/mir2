@@ -146,6 +146,37 @@ impl SDeleteItem {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SChatItemStats {
+    pub chat_item_id: u64,
+    /// Raw bytes representing UserItem.Save(writer) as written by the C# server.
+    pub stats_bytes: Vec<u8>,
+}
+
+impl SChatItemStats {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.chat_item_id)?;
+        buf.extend_from_slice(&self.stats_bytes);
+        Ok(RawPacket {
+            id: ServerPacketId::ChatItemStats as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let chat_item_id = read_u64_le(&mut c)?;
+        let pos = c.position() as usize;
+        let stats_bytes = payload[pos..].to_vec();
+
+        Ok(SChatItemStats {
+            chat_item_id,
+            stats_bytes,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,5 +264,20 @@ mod tests {
         let decoded = SDeleteItem::decode(&raw.payload).expect("decode SDeleteItem");
         assert_eq!(decoded.unique_id, p.unique_id);
         assert_eq!(decoded.count, p.count);
+    }
+
+    #[test]
+    fn chat_item_stats_roundtrip() {
+        let p = SChatItemStats {
+            chat_item_id: 0xAABB_CCDD_EEFF_0011,
+            stats_bytes: vec![1, 2, 3, 4, 5],
+        };
+
+        let raw = p.encode().expect("encode SChatItemStats");
+        assert_eq!(raw.id, ServerPacketId::ChatItemStats as i16);
+
+        let decoded = SChatItemStats::decode(&raw.payload).expect("decode SChatItemStats");
+        assert_eq!(decoded.chat_item_id, p.chat_item_id);
+        assert_eq!(decoded.stats_bytes, p.stats_bytes);
     }
 }

@@ -56,11 +56,13 @@ enum Stage {
 
 struct LoginConnection {
     stage: Stage,
+    session_id: world::SessionId,
     account_id: Option<String>,
     characters: Vec<SelectInfo>,
     store: Arc<dyn AccountStore>,
     world_db: Arc<WorldDatabase>,
     world_config: WorldConfig,
+    world: world::World<WorldDatabase>,
     current_x: i32,
     current_y: i32,
     direction: u8,
@@ -72,13 +74,16 @@ impl LoginConnection {
         world_db: Arc<WorldDatabase>,
         world_config: WorldConfig,
     ) -> Self {
+        let world = world::World::new((*world_db).clone(), world_config.clone());
         LoginConnection {
             stage: Stage::Connected,
+            session_id: 1,
             account_id: None,
             characters: Vec::new(),
             store,
             world_db,
             world_config,
+            world,
             current_x: 0,
             current_y: 0,
             direction: 0,
@@ -90,20 +95,36 @@ impl LoginConnection {
     }
 
     fn apply_step(&mut self, direction: u8, distance: i32) {
-        let (dx, dy) = match direction {
-            0 => (0, -1),
-            1 => (1, -1),
-            2 => (1, 0),
-            3 => (1, 1),
-            4 => (0, 1),
-            5 => (-1, 1),
-            6 => (-1, 0),
-            7 => (-1, -1),
-            _ => (0, 0),
+        let cmd = match distance {
+            0 => world::WorldCommand::Turn {
+                session_id: self.session_id,
+                direction,
+            },
+            1 => world::WorldCommand::Walk {
+                session_id: self.session_id,
+                direction,
+            },
+            2 => world::WorldCommand::Run {
+                session_id: self.session_id,
+                direction,
+            },
+            _ => return,
         };
-        self.direction = direction;
-        self.current_x += dx * distance;
-        self.current_y += dy * distance;
+
+        let events = self.world.handle_command(cmd);
+        for event in events {
+            if let world::WorldEvent::UserLocation {
+                x,
+                y,
+                direction,
+                ..
+            } = event
+            {
+                self.current_x = x;
+                self.current_y = y;
+                self.direction = direction;
+            }
+        }
     }
 }
 
@@ -349,6 +370,32 @@ impl ConnectionHandler for LoginConnection {
                                     map_dark_light: 0,
                                     music: 0,
                                     weather_particles: 0,
+                                    no_teleport: false,
+                                    no_reconnect: false,
+                                    no_random: false,
+                                    no_escape: false,
+                                    no_recall: false,
+                                    no_drug: false,
+                                    no_position: false,
+                                    no_throw_item: false,
+                                    no_drop_player: false,
+                                    no_drop_monster: false,
+                                    no_names: false,
+                                    no_mount: false,
+                                    need_bridle: false,
+                                    no_fight: false,
+                                    fight: false,
+                                    fire: false,
+                                    fire_damage: 0,
+                                    lightning: false,
+                                    lightning_damage: 0,
+                                    no_town_teleport: false,
+                                    no_reincarnation: false,
+                                    no_reconnect_map: String::new(),
+                                    mine_zones: Vec::new(),
+                                    mine_index: 0,
+                                    gt: false,
+                                    gt_index: 0,
                                     safe_zones: Vec::new(),
                                     respawns: Vec::new(),
                                     movements: Vec::new(),
@@ -412,6 +459,28 @@ impl ConnectionHandler for LoginConnection {
                             }
                         }
 
+                        // Initialize world state for this session.
+                        let events = self.world.handle_command(world::WorldCommand::StartGame {
+                            session_id: self.session_id,
+                            map_index: map_info_core.index,
+                            x: spawn_x,
+                            y: spawn_y,
+                            direction: 0,
+                        });
+                        for event in events {
+                            if let world::WorldEvent::UserLocation {
+                                x,
+                                y,
+                                direction,
+                                ..
+                            } = event
+                            {
+                                self.current_x = x;
+                                self.current_y = y;
+                                self.direction = direction;
+                            }
+                        }
+
                         // MapInformation packet using the chosen MapInfo. Lightning/Fire flags are
                         // still stubbed for now until the full set of MapInfo flags is mirrored.
                         let map = SMapInformation {
@@ -421,8 +490,8 @@ impl ConnectionHandler for LoginConnection {
                             mini_map: map_info_core.mini_map,
                             big_map: map_info_core.big_map,
                             lights: map_info_core.light,
-                            lightning: false,
-                            fire: false,
+                            lightning: map_info_core.lightning,
+                            fire: map_info_core.fire,
                             map_dark_light: map_info_core.map_dark_light,
                             music: map_info_core.music,
                             weather_particles: map_info_core.weather_particles,
@@ -432,10 +501,6 @@ impl ConnectionHandler for LoginConnection {
                         }
 
                         // Minimal UserInformation so the client receives basic player state.
-                        self.current_x = spawn_x;
-                        self.current_y = spawn_y;
-                        self.direction = 0;
-
                         let user = SUserInformation {
                             object_id: 1,
                             real_id: 1,
@@ -498,23 +563,25 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
-                        let tele_out = SObjectTeleportOut {
-                            object_id: 1,
-                            teleport_type: 0,
-                        };
-                        if let Ok(raw) = tele_out.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
+                        if !map_info_core.no_teleport {
+                            let tele_out = SObjectTeleportOut {
+                                object_id: 1,
+                                teleport_type: 0,
+                            };
+                            if let Ok(raw) = tele_out.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
 
-                        let tele_in = STeleportIn;
-                        out.push(Self::encode_raw(tele_in.encode()));
+                            let tele_in = STeleportIn;
+                            out.push(Self::encode_raw(tele_in.encode()));
 
-                        let obj_tele_in = SObjectTeleportIn {
-                            object_id: 1,
-                            teleport_type: 0,
-                        };
-                        if let Ok(raw) = obj_tele_in.encode() {
-                            out.push(Self::encode_raw(raw));
+                            let obj_tele_in = SObjectTeleportIn {
+                                object_id: 1,
+                                teleport_type: 0,
+                            };
+                            if let Ok(raw) = obj_tele_in.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
                         }
 
                         let exp = SGainExperience { amount: 1_000 };

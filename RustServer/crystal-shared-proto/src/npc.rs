@@ -321,6 +321,82 @@ impl SNpcReplaceWedRing {
 }
 
 #[derive(Clone, Debug)]
+pub struct SDefaultNpc {
+    pub object_id: u32,
+}
+
+impl SDefaultNpc {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::DefaultNPC as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        Ok(SDefaultNpc { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNpcUpdate {
+    pub npc_id: u32,
+}
+
+impl SNpcUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        Ok(SNpcUpdate { npc_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNpcImageUpdate {
+    pub object_id: u32,
+    pub image: u16,
+    pub colour_argb: i32,
+}
+
+impl SNpcImageUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_u16_le(&mut buf, self.image)?;
+        write_i32_le(&mut buf, self.colour_argb)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCImageUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let image = read_u16_le(&mut c)?;
+        let colour_argb = read_i32_le(&mut c)?;
+        Ok(SNpcImageUpdate {
+            object_id,
+            image,
+            colour_argb,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SNpcConsign;
 
 impl SNpcConsign {
@@ -625,6 +701,46 @@ mod tests {
         let decoded = SNpcReplaceWedRing::decode(&raw.payload)
             .expect("decode SNpcReplaceWedRing");
         assert!((decoded.rate - p.rate).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn default_npc_roundtrip() {
+        let p = SDefaultNpc { object_id: 42 };
+
+        let raw = p.encode().expect("encode SDefaultNpc");
+        assert_eq!(raw.id, ServerPacketId::DefaultNPC as i16);
+
+        let decoded = SDefaultNpc::decode(&raw.payload).expect("decode SDefaultNpc");
+        assert_eq!(decoded.object_id, p.object_id);
+    }
+
+    #[test]
+    fn npc_update_roundtrip() {
+        let p = SNpcUpdate { npc_id: 123 }; 
+
+        let raw = p.encode().expect("encode SNpcUpdate");
+        assert_eq!(raw.id, ServerPacketId::NPCUpdate as i16);
+
+        let decoded = SNpcUpdate::decode(&raw.payload).expect("decode SNpcUpdate");
+        assert_eq!(decoded.npc_id, p.npc_id);
+    }
+
+    #[test]
+    fn npc_image_update_roundtrip() {
+        let p = SNpcImageUpdate {
+            object_id: 7,
+            image: 10,
+            colour_argb: 0x00FF00,
+        };
+
+        let raw = p.encode().expect("encode SNpcImageUpdate");
+        assert_eq!(raw.id, ServerPacketId::NPCImageUpdate as i16);
+
+        let decoded = SNpcImageUpdate::decode(&raw.payload)
+            .expect("decode SNpcImageUpdate");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.image, p.image);
+        assert_eq!(decoded.colour_argb, p.colour_argb);
     }
 
     #[test]
