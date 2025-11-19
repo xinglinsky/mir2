@@ -1,6 +1,7 @@
 pub mod map;
 pub mod monster;
 pub mod npc;
+pub mod magic;
 
 pub mod drop;
 

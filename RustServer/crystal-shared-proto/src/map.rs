@@ -3,9 +3,10 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_i32_le, read_string, read_u16_le, read_u32_le, write_i32_le, write_string,
-    write_u16_le, write_u32_le,
+    read_i32_le, read_string, read_u16_le, read_u32_le, write_bool, write_i16_le, write_i32_le,
+    write_string, write_u16_le, write_u32_le,
 };
+use crate::map_types::{ClientMapInfoData, WorldMapSetupData};
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
@@ -174,6 +175,20 @@ impl SNewMapInfo {
     }
 }
 
+impl SNewMapInfo {
+    pub fn decode_map_info(&self) -> io::Result<ClientMapInfoData> {
+        ClientMapInfoData::decode_from_bytes(&self.info_bytes)
+    }
+
+    pub fn from_map_info(map_index: i32, info: &ClientMapInfoData) -> io::Result<Self> {
+        let bytes = info.encode_to_bytes()?;
+        Ok(SNewMapInfo {
+            map_index,
+            info_bytes: bytes,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SWorldMapSetupInfo {
     /// Raw bytes representing WorldMapSetup.Save(writer) payload.
@@ -208,6 +223,20 @@ impl SWorldMapSetupInfo {
 
         Ok(SWorldMapSetupInfo {
             setup_bytes: setup_bytes.to_vec(),
+            teleport_to_npc_cost,
+        })
+    }
+}
+
+impl SWorldMapSetupInfo {
+    pub fn decode_world_map_setup(&self) -> io::Result<WorldMapSetupData> {
+        WorldMapSetupData::decode_from_bytes(&self.setup_bytes)
+    }
+
+    pub fn from_world_map_setup(setup: &WorldMapSetupData, teleport_to_npc_cost: i32) -> io::Result<Self> {
+        let bytes = setup.encode_to_bytes()?;
+        Ok(SWorldMapSetupInfo {
+            setup_bytes: bytes,
             teleport_to_npc_cost,
         })
     }
@@ -326,6 +355,13 @@ impl SMapInformation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map_types::{
+        ClientMapInfoData,
+        ClientMovementInfoData,
+        ClientNpcInfoData,
+        WorldMapIconData,
+        WorldMapSetupData,
+    };
 
     #[test]
     fn map_information_roundtrip() {
@@ -430,6 +466,42 @@ mod tests {
     }
 
     #[test]
+    fn new_map_info_structured_roundtrip() {
+        let info = ClientMapInfoData {
+            width: 100,
+            height: 200,
+            big_map: 1,
+            title: "Test Map".to_string(),
+            movements: vec![ClientMovementInfoData {
+                destination: 1,
+                title: "Gate".to_string(),
+                location_x: 10,
+                location_y: 20,
+                icon: 0,
+            }],
+            npcs: vec![ClientNpcInfoData {
+                object_id: 42,
+                name: "NPC".to_string(),
+                location_x: 5,
+                location_y: 6,
+                icon: 1,
+                can_teleport_to: true,
+            }],
+        };
+
+        let pkt = SNewMapInfo::from_map_info(3, &info).expect("from_map_info");
+        let raw = pkt.encode().expect("encode SNewMapInfo");
+        assert_eq!(raw.id, ServerPacketId::NewMapInfo as i16);
+
+        let decoded_pkt = SNewMapInfo::decode(&raw.payload).expect("decode SNewMapInfo");
+        assert_eq!(decoded_pkt.map_index, 3);
+        let decoded_info = decoded_pkt
+            .decode_map_info()
+            .expect("decode_map_info");
+        assert_eq!(decoded_info, info);
+    }
+
+    #[test]
     fn world_map_setup_info_roundtrip() {
         let packet = SWorldMapSetupInfo {
             setup_bytes: vec![9, 8, 7],
@@ -443,6 +515,30 @@ mod tests {
             SWorldMapSetupInfo::decode(&raw.payload).expect("decode SWorldMapSetupInfo");
         assert_eq!(decoded.setup_bytes, packet.setup_bytes);
         assert_eq!(decoded.teleport_to_npc_cost, packet.teleport_to_npc_cost);
+    }
+
+    #[test]
+    fn world_map_setup_structured_roundtrip() {
+        let setup = WorldMapSetupData {
+            enabled: true,
+            icons: vec![WorldMapIconData {
+                image_index: 5,
+                title: "Town".to_string(),
+                map_index: 1,
+            }],
+        };
+
+        let pkt = SWorldMapSetupInfo::from_world_map_setup(&setup, 500)
+            .expect("from_world_map_setup");
+        let raw = pkt.encode().expect("encode SWorldMapSetupInfo");
+
+        let decoded_pkt =
+            SWorldMapSetupInfo::decode(&raw.payload).expect("decode SWorldMapSetupInfo");
+        assert_eq!(decoded_pkt.teleport_to_npc_cost, 500);
+        let decoded_setup = decoded_pkt
+            .decode_world_map_setup()
+            .expect("decode_world_map_setup");
+        assert_eq!(decoded_setup, setup);
     }
 
     #[test]

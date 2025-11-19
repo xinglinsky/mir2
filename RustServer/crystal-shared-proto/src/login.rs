@@ -23,6 +23,8 @@ pub enum ClientPacketId {
     Walk = 11,
     Run = 12,
     Chat = 13,
+    /// Basic melee/magic attack. Matches ClientPackets.Attack in C#.
+    Attack = 44,
 }
 
 impl ClientPacketId {
@@ -42,6 +44,7 @@ impl ClientPacketId {
             11 => Some(ClientPacketId::Walk),
             12 => Some(ClientPacketId::Run),
             13 => Some(ClientPacketId::Chat),
+            44 => Some(ClientPacketId::Attack),
             _ => None,
         }
     }
@@ -571,6 +574,37 @@ impl CRun {
 }
 
 #[derive(Clone, Debug)]
+pub struct CAttack {
+    pub direction: u8,
+    pub spell: u8,
+}
+
+impl CAttack {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(2);
+        buf.push(self.direction);
+        buf.push(self.spell);
+        RawPacket {
+            id: ClientPacketId::Attack as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 2 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CAttack payload must be exactly 2 bytes",
+            ));
+        }
+        Ok(CAttack {
+            direction: payload[0],
+            spell: payload[1],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CStartGame {
     pub character_index: i32,
 }
@@ -984,6 +1018,21 @@ mod tests {
 
         let decoded = CDeleteCharacter::decode(&raw.payload).expect("decode CDeleteCharacter");
         assert_eq!(decoded.character_index, c.character_index);
+    }
+
+    #[test]
+    fn attack_roundtrip() {
+        let c = CAttack {
+            direction: 3,
+            spell: 5,
+        };
+
+        let raw = c.encode();
+        assert_eq!(raw.id, ClientPacketId::Attack as i16);
+
+        let decoded = CAttack::decode(&raw.payload).expect("decode CAttack");
+        assert_eq!(decoded.direction, c.direction);
+        assert_eq!(decoded.spell, c.spell);
     }
 
     #[test]

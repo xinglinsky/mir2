@@ -5,52 +5,27 @@ use std::{
 };
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
-use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
-use crystal_server_core::account::{AccountStore, CharacterSummary, SqliteAccountStore};
+use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider};
+use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
+use crystal_server_core::account::{AccountStore, CharacterSummary, CharacterPosition, SqliteAccountStore};
 use crystal_shared_proto::login::{
-    CChangePassword, CClientVersion, CDeleteCharacter, CLogin, CNewAccount, CNewCharacter,
-    CRun, CStartGame, CTurn, CWalk, ClientPacketId, SChangePassword, SClientVersion,
-    SConnected, SLogin, SLoginBanned, SNewAccount, SNewCharacter, SStartGame,
+    CAttack, CChangePassword, CClientVersion, CDeleteCharacter, CLogin, CNewAccount,
+    CNewCharacter, CRun, CStartGame, CTurn, CWalk, ClientPacketId, SChangePassword,
+    SClientVersion, SConnected, SLogin, SLoginBanned, SNewAccount, SNewCharacter, SStartGame,
 };
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
-use crystal_shared_proto::npc::{SObjectNpc, SNpcResponse};
 use crystal_shared_proto::packet::RawPacket;
-use crystal_shared_proto::item_types::{AwakeData, StatsMap, UserItemData};
 use crystal_shared_proto::scene::{
-    SAddBuff,
-    SColourChanged,
-    SGainExperience,
-    SGainedItem,
-    SGainedGold,
-    SLevelChanged,
-    SMagic,
-    SMagicCast,
-    SMagicLeveled,
-    SNewMagic,
-    SObjectColourChanged,
-    SObjectGuildNameChanged,
-    SObjectHide,
-    SObjectLeveled,
-    SObjectPoisoned,
-    SObjectShow,
     SObjectTeleportIn,
     SObjectTeleportOut,
-    SPauseBuff,
-    SPoisoned,
-    SRemoveBuff,
-    SObjectHidden,
     STeleportIn,
+    SObjectMonster,
+    SObjectNpc,
 };
-use crystal_shared_proto::io::{
-    write_bool,
-    write_i32_le,
-    write_i64_le,
-    write_string,
-    write_u16_le,
-    write_u32_le,
-};
-use crystal_shared_proto::user::{SChat, SUserInformation, SUserLocation};
+use crystal_shared_proto::user::{SUserInformation, SUserLocation};
 use crystal_shared_proto::select::{SelectInfo, SLoginSuccess, SNewCharacterSuccess};
+use crystal_shared_proto::scene::{SNewMagic, SMagicLeveled};
+use crystal_shared_proto::io::write_bool;
 
 mod config;
 
@@ -71,9 +46,11 @@ struct LoginConnection {
     world_db: Arc<WorldDatabase>,
     world_config: WorldConfig,
     world: Arc<Mutex<world::World<WorldDatabase>>>,
+    current_map_index: i32,
     current_x: i32,
     current_y: i32,
     direction: u8,
+    current_char_index: Option<i32>,
 }
 
 impl LoginConnection {
@@ -92,9 +69,11 @@ impl LoginConnection {
             world_db,
             world_config,
             world,
+            current_map_index: 0,
             current_x: 0,
             current_y: 0,
             direction: 0,
+            current_char_index: None,
         }
     }
 
@@ -102,36 +81,103 @@ impl LoginConnection {
         raw.encode()
     }
 
-    fn demo_user_item() -> UserItemData {
-        UserItemData {
-            unique_id: 0xABCDEF01,
-            item_index: 1000,
-            current_dura: 30,
-            max_dura: 30,
-            count: 1,
-            soul_bound_id: -1,
-            identified: true,
-            cursed: false,
-            slots: Vec::new(),
-            gem_count: 0,
-            added_stats: StatsMap { entries: vec![] },
-            awake: AwakeData {
-                awake_type: 0,
-                values: Vec::new(),
-            },
-            refined_value: 0,
-            refine_added: 0,
-            refine_success_chance: 0,
-            wedding_ring: -1,
-            expire_info: None,
-            rental_information: None,
-            is_shop_item: false,
-            sealed_info: None,
-            gm_made: false,
+    /// Send a NewMagic packet for the given learned magic, mirroring the
+    /// C# SendMagicInfo(UserMagic) flow. This builds ClientMagic.Save(writer)
+    /// bytes from MagicInfo + UserMagic and appends the Hero bool (false).
+    fn send_new_magic(&self, magic: &WorldUserMagic, out: &mut Vec<Vec<u8>>) {
+        if let Some(info) = self.world_db.get_magic_info(magic.spell) {
+            if let Ok(mut bytes) = encode_client_magic_bytes(info, magic, 0) {
+                if write_bool(&mut bytes, false).is_err() {
+                    return;
+                }
+                let pkt = SNewMagic { magic_bytes: bytes };
+                let raw = pkt.encode();
+                out.push(Self::encode_raw(raw));
+            }
         }
     }
 
-    fn apply_step(&mut self, direction: u8, distance: i32) {
+    /// Send a MagicLeveled packet to notify the client that a magic's level
+    /// and experience have changed, mirroring C# HumanObject.MagicLeveled.
+    fn send_magic_leveled(
+        &self,
+        spell: u8,
+        level: u8,
+        experience: u16,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        let pkt = SMagicLeveled {
+            object_id: 1, // TODO: wire real object ID when object system is in place.
+            spell,
+            level,
+            experience,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    fn send_monsters_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
+        let monsters = {
+            let world = self.world.lock().unwrap();
+            world.monsters_for_map(map_index)
+        };
+
+        for monster in monsters {
+            if let Some(info) = self.world_db.get_monster_info(monster.monster_index) {
+                let packet = SObjectMonster {
+                    object_id: monster.id as u32,
+                    name: info.name.clone(),
+                    name_colour_argb: -1,
+                    location_x: monster.x,
+                    location_y: monster.y,
+                    image: info.image,
+                    direction: monster.direction,
+                    effect: info.effect,
+                    ai: info.ai,
+                    light: info.light,
+                    dead: false,
+                    skeleton: false,
+                    poison: 0,
+                    hidden: false,
+                    shock_time: 0,
+                    binding_shot_center: false,
+                    extra: false,
+                    extra_byte: 0,
+                    buffs: Vec::new(),
+                };
+                if let Ok(raw) = packet.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
+        }
+    }
+
+    fn send_npcs_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
+        for npc in self
+            .world_db
+            .npc_infos
+            .iter()
+            .filter(|n| n.map_index == map_index)
+        {
+            let packet = SObjectNpc {
+                object_id: npc.index as u32,
+                name: npc.name.clone(),
+                name_colour_argb: -1,
+                image: npc.image,
+                colour_argb: -1,
+                location_x: npc.location_x,
+                location_y: npc.location_y,
+                direction: 0,
+                quest_ids: npc.collect_quest_indexes.clone(),
+            };
+            if let Ok(raw) = packet.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        }
+    }
+
+    fn apply_step(&mut self, direction: u8, distance: i32) -> bool {
         let cmd = match distance {
             0 => world::WorldCommand::Turn {
                 session_id: self.session_id,
@@ -145,26 +191,36 @@ impl LoginConnection {
                 session_id: self.session_id,
                 direction,
             },
-            _ => return,
+            _ => return false,
         };
 
         let events = {
             let mut world = self.world.lock().unwrap();
             world.handle_command(cmd)
         };
+        let mut map_changed = false;
+
         for event in events {
-            if let world::WorldEvent::UserLocation {
-                x,
-                y,
-                direction,
-                ..
-            } = event
-            {
-                self.current_x = x;
-                self.current_y = y;
-                self.direction = direction;
+            match event {
+                world::WorldEvent::UserLocation {
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    ..
+                } => {
+                    self.current_map_index = map_index;
+                    self.current_x = x;
+                    self.current_y = y;
+                    self.direction = direction;
+                }
+                world::WorldEvent::MapChanged { .. } => {
+                    map_changed = true;
+                }
             }
         }
+
+        map_changed
     }
 }
 
@@ -378,6 +434,7 @@ impl ConnectionHandler for LoginConnection {
                         .cloned()
                     {
                         self.stage = Stage::InGame;
+                        self.current_char_index = Some(ch.index);
 
                         // Signal successful start game so the client switches to GameScene.
                         let ok = SStartGame {
@@ -388,13 +445,141 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
-                        // Choose a MapInfo to drive loading and packets. Prefer file_name "3",
-                        // otherwise fall back to the first entry or a stub if DB is empty.
+                        // Load last known position for this character, if any.
+                        let stored_pos = if let Some(ref account_id) = self.account_id {
+                            self
+                                .store
+                                .load_character_position(account_id, ch.index)
+                                .unwrap_or(None)
+                        } else {
+                            None
+                        };
+
+                        // Load bind point (BindMapIndex / BindLocation equivalent), if any.
+                        let bind_pos = if let Some(ref account_id) = self.account_id {
+                            self
+                                .store
+                                .load_character_bind(account_id, ch.index)
+                                .unwrap_or(None)
+                        } else {
+                            None
+                        };
+
+                        // Choose a MapInfo to drive loading and packets. Priority:
+                        // 1) stored_pos.map_index if valid; 2) bind_pos.map_index if valid;
+                        // 3) first map with a SafeZone marked StartPoint; 4) first entry;
+                        // 5) stub if DB is empty.
                         let map_info_core = {
                             let map_infos = &self.world_db.map_infos;
-                            if let Some(info) = map_infos
+                            if let Some(pos) = &stored_pos {
+                                if let Some(info) = map_infos.iter().find(|m| m.index == pos.map_index)
+                                {
+                                    info.clone()
+                                } else if let Some(info) = map_infos
+                                    .iter()
+                                    .find(|m| m.safe_zones.iter().any(|z| z.start_point))
+                                {
+                                    info.clone()
+                                } else if let Some(info) = map_infos.first() {
+                                    info.clone()
+                                } else {
+                                    world::map::MapInfo {
+                                        index: 0,
+                                        file_name: "3".to_string(),
+                                        title: "StubMap".to_string(),
+                                        mini_map: 0,
+                                        big_map: 0,
+                                        light: 0,
+                                        map_dark_light: 0,
+                                        music: 0,
+                                        weather_particles: 0,
+                                        no_teleport: false,
+                                        no_reconnect: false,
+                                        no_random: false,
+                                        no_escape: false,
+                                        no_recall: false,
+                                        no_drug: false,
+                                        no_position: false,
+                                        no_throw_item: false,
+                                        no_drop_player: false,
+                                        no_drop_monster: false,
+                                        no_names: false,
+                                        no_mount: false,
+                                        need_bridle: false,
+                                        no_fight: false,
+                                        fight: false,
+                                        fire: false,
+                                        fire_damage: 0,
+                                        lightning: false,
+                                        lightning_damage: 0,
+                                        no_town_teleport: false,
+                                        no_reincarnation: false,
+                                        no_reconnect_map: String::new(),
+                                        mine_zones: Vec::new(),
+                                        mine_index: 0,
+                                        gt: false,
+                                        gt_index: 0,
+                                        safe_zones: Vec::new(),
+                                        respawns: Vec::new(),
+                                        movements: Vec::new(),
+                                    }
+                                }
+                            } else if let Some(pos) = &bind_pos {
+                                if let Some(info) = map_infos.iter().find(|m| m.index == pos.map_index)
+                                {
+                                    info.clone()
+                                } else if let Some(info) = map_infos
+                                    .iter()
+                                    .find(|m| m.safe_zones.iter().any(|z| z.start_point))
+                                {
+                                    info.clone()
+                                } else if let Some(info) = map_infos.first() {
+                                    info.clone()
+                                } else {
+                                    world::map::MapInfo {
+                                        index: 0,
+                                        file_name: "3".to_string(),
+                                        title: "StubMap".to_string(),
+                                        mini_map: 0,
+                                        big_map: 0,
+                                        light: 0,
+                                        map_dark_light: 0,
+                                        music: 0,
+                                        weather_particles: 0,
+                                        no_teleport: false,
+                                        no_reconnect: false,
+                                        no_random: false,
+                                        no_escape: false,
+                                        no_recall: false,
+                                        no_drug: false,
+                                        no_position: false,
+                                        no_throw_item: false,
+                                        no_drop_player: false,
+                                        no_drop_monster: false,
+                                        no_names: false,
+                                        no_mount: false,
+                                        need_bridle: false,
+                                        no_fight: false,
+                                        fight: false,
+                                        fire: false,
+                                        fire_damage: 0,
+                                        lightning: false,
+                                        lightning_damage: 0,
+                                        no_town_teleport: false,
+                                        no_reincarnation: false,
+                                        no_reconnect_map: String::new(),
+                                        mine_zones: Vec::new(),
+                                        mine_index: 0,
+                                        gt: false,
+                                        gt_index: 0,
+                                        safe_zones: Vec::new(),
+                                        respawns: Vec::new(),
+                                        movements: Vec::new(),
+                                    }
+                                }
+                            } else if let Some(info) = map_infos
                                 .iter()
-                                .find(|m| m.file_name.eq_ignore_ascii_case("3"))
+                                .find(|m| m.safe_zones.iter().any(|z| z.start_point))
                             {
                                 info.clone()
                             } else if let Some(info) = map_infos.first() {
@@ -458,9 +643,8 @@ impl ConnectionHandler for LoginConnection {
                                     map_dir,
                                 );
 
-                                // Prefer spawning near the first SafeZone marked as StartPoint;
-                                // if none, fall back to the first SafeZone; if still none,
-                                // use the map centre as before.
+                                // Default spawn based on SafeZone.StartPoint / first SafeZone /
+                                // map centre plus nearest walkable cell.
                                 let (center_x, center_y) = map_info_core
                                     .safe_zones
                                     .iter()
@@ -486,9 +670,39 @@ impl ConnectionHandler for LoginConnection {
                                     spawn_x = wx as i32;
                                     spawn_y = wy as i32;
                                 } else {
-                                    // No walkable cells found; fall back to the chosen centre.
                                     spawn_x = center_x;
                                     spawn_y = center_y;
+                                }
+
+                                // If we have a stored position on this map, use it directly;
+                                // otherwise, if we have a bind point on this map, use that.
+                                if let Some(pos) = &stored_pos {
+                                    if pos.map_index == map_info_core.index {
+                                        spawn_x = pos.x;
+                                        spawn_y = pos.y;
+                                    }
+                                } else if let Some(pos) = &bind_pos {
+                                    if pos.map_index == map_info_core.index {
+                                        spawn_x = pos.x;
+                                        spawn_y = pos.y;
+                                    }
+                                }
+
+                                // If this is the very first login (no stored position and no
+                                // bind yet), initialize a default bind at the chosen spawn
+                                // location so future escape/respawn logic can use it.
+                                if stored_pos.is_none() && bind_pos.is_none() {
+                                    if let Some(ref account_id) = self.account_id {
+                                        let bind = CharacterPosition {
+                                            map_index: map_info_core.index,
+                                            x: spawn_x,
+                                            y: spawn_y,
+                                            direction: 0,
+                                        };
+                                        let _ = self
+                                            .store
+                                            .save_character_bind(account_id, ch.index, &bind);
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -499,7 +713,50 @@ impl ConnectionHandler for LoginConnection {
                             }
                         }
 
+                        // Build initial magic list for this character from persistent storage.
+                        // If no magics are stored yet, fall back to a default magic derived
+                        // from the static MagicInfo table and persist it immediately.
+                        let mut user_magics = if let Some(ref account_id) = self.account_id {
+                            self
+                                .store
+                                .load_character_magics(account_id, ch.index)
+                                .unwrap_or_else(|_| Vec::new())
+                        } else {
+                            Vec::new()
+                        };
+
+                        if user_magics.is_empty() {
+                            if let Some(mi) = self
+                                .world_db
+                                .get_magic_info(0)
+                                .or_else(|| self.world_db.magic_infos().first())
+                            {
+                                user_magics.push(WorldUserMagic::new(mi.spell));
+                            }
+                        }
+
+                        // Convert stored UserMagic entries into ClientMagic.Save(writer) bytes
+                        // for the UserInformation.Magics list.
+                        let mut magic_bytes = Vec::new();
+                        for um in &user_magics {
+                            if let Some(mi) = self.world_db.get_magic_info(um.spell) {
+                                if let Ok(bytes) = encode_client_magic_bytes(mi, um, 0) {
+                                    magic_bytes.push(bytes);
+                                }
+                            }
+                        }
+
+                        if let Some(ref account_id) = self.account_id {
+                            let _ = self
+                                .store
+                                .save_character_magics(account_id, ch.index, &user_magics);
+                        }
+
                         // Initialize world state for this session.
+                        let initial_direction = stored_pos
+                            .as_ref()
+                            .map(|p| p.direction)
+                            .unwrap_or(0);
                         let events = {
                             let mut world = self.world.lock().unwrap();
                             world.handle_command(world::WorldCommand::StartGame {
@@ -507,7 +764,8 @@ impl ConnectionHandler for LoginConnection {
                                 map_index: map_info_core.index,
                                 x: spawn_x,
                                 y: spawn_y,
-                                direction: 0,
+                                direction: initial_direction,
+                                magics: user_magics,
                             })
                         };
                         for event in events {
@@ -543,7 +801,8 @@ impl ConnectionHandler for LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
-                        // Minimal UserInformation so the client receives basic player state.
+                        // UserInformation so the client receives basic player state and the
+                        // initial list of learned magics.
                         let user = SUserInformation {
                             object_id: 1,
                             real_id: 1,
@@ -569,6 +828,7 @@ impl ConnectionHandler for LoginConnection {
                             credit: 0,
                             has_expanded_storage: false,
                             expanded_storage_expiry_binary: 0,
+                            magics: magic_bytes,
                             summoned_creature_type: 0,
                             creature_summoned: false,
                             allow_observe: false,
@@ -626,237 +886,9 @@ impl ConnectionHandler for LoginConnection {
                                 out.push(Self::encode_raw(raw));
                             }
                         }
-
-                        let exp = SGainExperience { amount: 1_000 };
-                        if let Ok(raw) = exp.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let level_up = SLevelChanged {
-                            level: ch.level + 1,
-                            experience: 0,
-                            max_experience: 1,
-                        };
-                        if let Ok(raw) = level_up.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let leveled = SObjectLeveled { object_id: 1 };
-                        if let Ok(raw) = leveled.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let gold = SGainedGold { gold: 5_000 };
-                        if let Ok(raw) = gold.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        // Give the player a demo item so we can observe it in the client inventory.
-                        let demo_item = Self::demo_user_item();
-                        if let Ok(pkt) = SGainedItem::from_user_item(&demo_item) {
-                            if let Ok(raw) = pkt.encode() {
-                                out.push(Self::encode_raw(raw));
-                            }
-                        }
-
-                        let npc = SObjectNpc {
-                            object_id: 100,
-                            name: "Rust NPC".to_string(),
-                            name_colour_argb: -1,
-                            image: 0,
-                            colour_argb: -1,
-                            location_x: 5,
-                            location_y: 5,
-                            direction: 0,
-                            quest_ids: Vec::new(),
-                        };
-                        if let Ok(raw) = npc.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let npc_resp = SNpcResponse {
-                            page: vec![
-                                "Welcome to the Rust NPC".to_string(),
-                                "This is a stub response from the Rust server.".to_string(),
-                            ],
-                        };
-                        if let Ok(raw) = npc_resp.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let colour_self = SColourChanged {
-                            name_colour_argb: 0xFFFF_FFFFu32 as i32,
-                        };
-                        if let Ok(raw) = colour_self.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let colour_npc = SObjectColourChanged {
-                            object_id: 100,
-                            name_colour_argb: 0xFF00_FF00u32 as i32,
-                        };
-                        if let Ok(raw) = colour_npc.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let guild_change = SObjectGuildNameChanged {
-                            object_id: 1,
-                            guild_name: "RustGuild".to_string(),
-                        };
-                        if let Ok(raw) = guild_change.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let hide_npc = SObjectHide { object_id: 100 };
-                        if let Ok(raw) = hide_npc.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let show_npc = SObjectShow { object_id: 100 };
-                        if let Ok(raw) = show_npc.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let poisoned_self = SPoisoned { poison: 1 };
-                        if let Ok(raw) = poisoned_self.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let poisoned_npc = SObjectPoisoned {
-                            object_id: 100,
-                            poison: 1,
-                        };
-                        if let Ok(raw) = poisoned_npc.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let new_magic_payload: io::Result<Vec<u8>> = (|| {
-                            let mut buf = Vec::new();
-                            write_string(&mut buf, "FireBall")?;
-                            buf.push(0);
-                            buf.push(10);
-                            buf.push(1);
-                            buf.push(0);
-                            buf.push(1);
-                            buf.push(2);
-                            buf.push(3);
-                            write_u16_le(&mut buf, 0)?;
-                            write_u16_le(&mut buf, 0)?;
-                            write_u16_le(&mut buf, 0)?;
-                            buf.push(1);
-                            buf.push(1);
-                            write_u16_le(&mut buf, 0)?;
-                            write_i64_le(&mut buf, 0)?;
-                            buf.push(9);
-                            write_i64_le(&mut buf, 0)?;
-                            write_bool(&mut buf, false)?;
-                            Ok(buf)
-                        })();
-
-                        if let Ok(payload) = new_magic_payload {
-                            let new_magic = SNewMagic {
-                                magic_bytes: payload,
-                            };
-                            let raw = new_magic.encode();
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        // Simple Buff: a visible infinite HP buff on the main player.
-                        let buff_payload: io::Result<Vec<u8>> = (|| {
-                            let mut buf = Vec::new();
-
-                            // ClientBuff.Type (BuffType) - use 0 as a generic buff type for testing.
-                            buf.push(0);
-                            // Visible
-                            write_bool(&mut buf, true)?;
-                            // ObjectID (player)
-                            write_u32_le(&mut buf, 1)?;
-                            // ExpireTime (ignored when Infinite=true, set 0)
-                            write_i64_le(&mut buf, 0)?;
-                            // Infinite
-                            write_bool(&mut buf, true)?;
-                            // Paused
-                            write_bool(&mut buf, false)?;
-
-                            // Stats.Save: Count=1, Stat.HP (12), Value=10.
-                            write_i32_le(&mut buf, 1)?;
-                            buf.push(12);
-                            write_i32_le(&mut buf, 10)?;
-
-                            // Values: zero-length for this stub.
-                            write_i32_le(&mut buf, 0)?;
-
-                            Ok(buf)
-                        })();
-
-                        if let Ok(payload) = buff_payload {
-                            let add_buff = SAddBuff { buff_bytes: payload };
-                            let raw = add_buff.encode();
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let pause_buff = SPauseBuff {
-                            buff_type: 0,
-                            object_id: 1,
-                            paused: true,
-                        };
-                        if let Ok(raw) = pause_buff.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let remove_buff = SRemoveBuff {
-                            buff_type: 0,
-                            object_id: 1,
-                        };
-                        if let Ok(raw) = remove_buff.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let hidden_player = SObjectHidden {
-                            object_id: 1,
-                            hidden: true,
-                        };
-                        if let Ok(raw) = hidden_player.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        // Simple magic-related packets so we exercise the skill pipeline.
-                        let magic_leveled = SMagicLeveled {
-                            object_id: 1,
-                            // Spell.FireBall = 0 in C# enum; we just use 0 as a generic spell id.
-                            spell: 0,
-                            level: 1,
-                            experience: 100,
-                        };
-                        if let Ok(raw) = magic_leveled.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let magic_cast = SMagicCast { spell: 0 };
-                        out.push(Self::encode_raw(magic_cast.encode()));
-
-                        let magic = SMagic {
-                            spell: 0,
-                            target_id: 0,
-                            target_x: 5,
-                            target_y: 5,
-                            cast: true,
-                            level: 1,
-                            secondary_target_ids: vec![0],
-                        };
-                        if let Ok(raw) = magic.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        // Simple welcome chat so we exercise the Chat pipeline.
-                        let chat = SChat {
-                            message: "Welcome to the Rust stub server".to_string(),
-                            // ChatType.Normal = 0
-                            chat_type: 0,
-                        };
-                        if let Ok(raw) = chat.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
+                        self.current_map_index = map_info_core.index;
+                        self.send_monsters_for_map(self.current_map_index, &mut out);
+                        self.send_npcs_for_map(self.current_map_index, &mut out);
                     } else {
                         let err = SStartGame {
                             result: 2, // Character not found
@@ -869,14 +901,40 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::LogOut => {
+                // On logout, persist the latest learned magics and position for this character.
+                if self.stage == Stage::InGame {
+                    if let (Some(ref account_id), Some(char_idx)) =
+                        (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        let magics = {
+                            let world = self.world.lock().unwrap();
+                            world.player_magics(self.session_id)
+                        };
+                        let _ = self
+                            .store
+                            .save_character_magics(account_id, char_idx, &magics);
+
+                        let pos = CharacterPosition {
+                            map_index: self.current_map_index,
+                            x: self.current_x,
+                            y: self.current_y,
+                            direction: self.direction,
+                        };
+                        let _ = self
+                            .store
+                            .save_character_position(account_id, char_idx, &pos);
+                    }
+                }
+
                 // Reset simple in-memory state.
                 self.stage = Stage::Connected;
                 self.account_id = None;
+                self.current_char_index = None;
             }
             ClientPacketId::Turn => {
                 if self.stage == Stage::InGame {
                     if let Ok(msg) = CTurn::decode(&packet.payload) {
-                        self.apply_step(msg.direction, 0);
+                        let _ = self.apply_step(msg.direction, 0);
 
                         let loc = SUserLocation {
                             location_x: self.current_x,
@@ -892,7 +950,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Walk => {
                 if self.stage == Stage::InGame {
                     if let Ok(msg) = CWalk::decode(&packet.payload) {
-                        self.apply_step(msg.direction, 1);
+                        let map_changed = self.apply_step(msg.direction, 1);
 
                         let loc = SUserLocation {
                             location_x: self.current_x,
@@ -901,6 +959,30 @@ impl ConnectionHandler for LoginConnection {
                         };
                         if let Ok(raw) = loc.encode() {
                             out.push(Self::encode_raw(raw));
+                        }
+
+                        if map_changed {
+                            if let Some(info) = self.world_db.get_map_info(self.current_map_index) {
+                                let map_changed_pkt = SMapChanged {
+                                    map_index: info.index,
+                                    file_name: info.file_name.clone(),
+                                    title: info.title.clone(),
+                                    mini_map: info.mini_map,
+                                    big_map: info.big_map,
+                                    lights: info.light,
+                                    location_x: self.current_x,
+                                    location_y: self.current_y,
+                                    direction: self.direction,
+                                    map_dark_light: info.map_dark_light,
+                                    music: info.music,
+                                    weather: 0,
+                                };
+                                if let Ok(raw) = map_changed_pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+                            self.send_monsters_for_map(self.current_map_index, &mut out);
+                            self.send_npcs_for_map(self.current_map_index, &mut out);
                         }
                     }
                 }
@@ -908,7 +990,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Run => {
                 if self.stage == Stage::InGame {
                     if let Ok(msg) = CRun::decode(&packet.payload) {
-                        self.apply_step(msg.direction, 2);
+                        let map_changed = self.apply_step(msg.direction, 2);
 
                         let loc = SUserLocation {
                             location_x: self.current_x,
@@ -918,10 +1000,42 @@ impl ConnectionHandler for LoginConnection {
                         if let Ok(raw) = loc.encode() {
                             out.push(Self::encode_raw(raw));
                         }
+
+                        if map_changed {
+                            if let Some(info) = self.world_db.get_map_info(self.current_map_index) {
+                                let map_changed_pkt = SMapChanged {
+                                    map_index: info.index,
+                                    file_name: info.file_name.clone(),
+                                    title: info.title.clone(),
+                                    mini_map: info.mini_map,
+                                    big_map: info.big_map,
+                                    lights: info.light,
+                                    location_x: self.current_x,
+                                    location_y: self.current_y,
+                                    direction: self.direction,
+                                    map_dark_light: info.map_dark_light,
+                                    music: info.music,
+                                    weather: 0,
+                                };
+                                if let Ok(raw) = map_changed_pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+                            self.send_monsters_for_map(self.current_map_index, &mut out);
+                            self.send_npcs_for_map(self.current_map_index, &mut out);
+                        }
                     }
                 }
             }
             ClientPacketId::Chat => {
+                // Chat is currently unimplemented in this stub server.
+            }
+            ClientPacketId::Attack => {
+                if self.stage == Stage::InGame {
+                    if let Ok(_msg) = CAttack::decode(&packet.payload) {
+                        // Attack handling will be wired into world combat logic later.
+                    }
+                }
             }
             ClientPacketId::Disconnect | ClientPacketId::KeepAlive => {
                 // For this stub, ignore these packets.
@@ -1006,6 +1120,24 @@ async fn main() -> io::Result<()> {
         Err(e) => {
             println!(
                 "[core] Failed to load Server.MirDB (NPCInfoList): {} (continuing without NPC DB)",
+                e
+            );
+        }
+    }
+
+    // Load MagicInfoList so that the combat/skill system can access real spell
+    // definitions (costs, ranges, power, etc.) from the MirDB.
+    match world::map::load_magic_infos_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(magics) => {
+            println!(
+                "[core] Loaded {} MagicInfo entries from Server.MirDB",
+                magics.len()
+            );
+            world_db.magic_infos = magics;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (MagicInfoList): {} (continuing without Magic DB)",
                 e
             );
         }

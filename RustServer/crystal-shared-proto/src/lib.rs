@@ -20,3 +20,4 @@ pub mod social;
 pub mod hero;
 pub mod creature;
 pub mod item_types;
+pub mod map_types;

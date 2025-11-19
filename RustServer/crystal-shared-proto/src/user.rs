@@ -42,6 +42,8 @@ pub struct SUserInformation {
     pub credit: u32,
     pub has_expanded_storage: bool,
     pub expanded_storage_expiry_binary: i64,
+    /// Raw ClientMagic.Save(writer) bytes for each learned magic.
+    pub magics: Vec<Vec<u8>>,
     pub summoned_creature_type: u8,
     pub creature_summoned: bool,
     pub allow_observe: bool,
@@ -106,8 +108,16 @@ impl SUserInformation {
         write_bool(&mut buf, self.has_expanded_storage)?;
         write_i64_le(&mut buf, self.expanded_storage_expiry_binary)?;
 
-        // Magics: count = 0
-        write_i32_le(&mut buf, 0)?;
+        // Magics: variable-length list of ClientMagic.Save(writer) payloads.
+        let magics_count: i32 = self
+            .magics
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many magics"))?;
+        write_i32_le(&mut buf, magics_count)?;
+        for magic in &self.magics {
+            buf.extend_from_slice(magic);
+        }
 
         // IntelligentCreatures: count = 0
         write_i32_le(&mut buf, 0)?;
@@ -287,6 +297,7 @@ impl SUserInformation {
             credit,
             has_expanded_storage,
             expanded_storage_expiry_binary,
+            magics: Vec::new(),
             summoned_creature_type,
             creature_summoned,
             allow_observe,
@@ -3006,6 +3017,7 @@ mod tests {
             credit: 0,
             has_expanded_storage: false,
             expanded_storage_expiry_binary: 0,
+            magics: Vec::new(),
             summoned_creature_type: 0,
             creature_summoned: false,
             allow_observe: false,

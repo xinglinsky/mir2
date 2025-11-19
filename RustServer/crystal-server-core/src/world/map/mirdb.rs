@@ -4,6 +4,7 @@ use std::path::Path;
 
 use super::data::{MapInfo, MineZone, MovementInfo, RespawnInfo, SafeZoneInfo};
 use crate::stats::{Stat, Stats};
+use crate::world::magic::MagicInfo;
 use crate::world::monster::MonsterInfo;
 use crate::world::npc::NpcInfo;
 
@@ -285,6 +286,118 @@ pub fn load_npc_infos_from_mirdb<P: AsRef<Path>>(path: P) -> io::Result<Vec<NpcI
     }
 
     Ok(npc_infos)
+}
+
+/// Load MagicInfo records from a C# Server.MirDB file.
+///
+/// This mirrors the layout produced by Envir.SaveDB and MagicInfo.Save in the
+/// original C# server. The function walks past the MapInfo, ItemInfo, MonsterInfo,
+/// NPCInfo, QuestInfo and DragonInfo tables before materialising the MagicInfoList
+/// section as Rust MagicInfo values.
+pub fn load_magic_infos_from_mirdb<P: AsRef<Path>>(path: P) -> io::Result<Vec<MagicInfo>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+
+    // Header written by Envir.SaveDB
+    let version = read_i32(&mut reader)?;
+    let custom_version = read_i32(&mut reader)?;
+
+    // Various index counters (max indices), currently ignored.
+    let _map_index = read_i32(&mut reader)?;
+    let _item_index = read_i32(&mut reader)?;
+    let _monster_index = read_i32(&mut reader)?;
+    let _npc_index = read_i32(&mut reader)?;
+    let _quest_index = read_i32(&mut reader)?;
+    let _gameshop_index = read_i32(&mut reader)?;
+    let _conquest_index = read_i32(&mut reader)?;
+    let _respawn_index = read_i32(&mut reader)?;
+
+    if version < 60 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported Server.MirDB version {} (expected >= 60)", version),
+        ));
+    }
+
+    // MapInfoList
+    let map_count = read_i32(&mut reader)?;
+    if map_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MapInfo count {} in Server.MirDB", map_count),
+        ));
+    }
+    for _ in 0..map_count {
+        // Re-use the existing MapInfo parser to walk past this section.
+        let _ = read_map_info(&mut reader)?;
+    }
+
+    // ItemInfoList
+    let item_count = read_i32(&mut reader)?;
+    if item_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ItemInfo count {} in Server.MirDB", item_count),
+        ));
+    }
+    for _ in 0..item_count {
+        skip_item_info(&mut reader, version, custom_version)?;
+    }
+
+    // MonsterInfoList
+    let monster_count = read_i32(&mut reader)?;
+    if monster_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MonsterInfo count {} in Server.MirDB", monster_count),
+        ));
+    }
+    for _ in 0..monster_count {
+        skip_monster_info(&mut reader, version, custom_version)?;
+    }
+
+    // NPCInfoList
+    let npc_count = read_i32(&mut reader)?;
+    if npc_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative NPCInfo count {} in Server.MirDB", npc_count),
+        ));
+    }
+    for _ in 0..npc_count {
+        let _ = read_npc_info(&mut reader)?;
+    }
+
+    // QuestInfoList
+    let quest_count = read_i32(&mut reader)?;
+    if quest_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative QuestInfo count {} in Server.MirDB", quest_count),
+        ));
+    }
+    for _ in 0..quest_count {
+        skip_quest_info(&mut reader, version, custom_version)?;
+    }
+
+    // DragonInfo – single record.
+    skip_dragon_info(&mut reader, version, custom_version)?;
+
+    // MagicInfoList – actually materialised as MagicInfo values.
+    let magic_count = read_i32(&mut reader)?;
+    if magic_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MagicInfo count {} in Server.MirDB", magic_count),
+        ));
+    }
+
+    let mut magic_infos = Vec::with_capacity(magic_count as usize);
+    for _ in 0..magic_count {
+        magic_infos.push(read_magic_info(&mut reader, version, custom_version)?);
+    }
+
+    Ok(magic_infos)
 }
 
 fn read_map_info<R: Read>(r: &mut R) -> io::Result<MapInfo> {
@@ -640,6 +753,53 @@ fn read_movement<R: Read>(r: &mut R) -> io::Result<MovementInfo> {
         conquest_index,
         show_on_big_map,
         icon,
+    })
+}
+
+fn read_magic_info<R: Read>(r: &mut R, _version: i32, _custom_version: i32) -> io::Result<MagicInfo> {
+    // MagicInfo.Save layout from Server/MirDatabase/MagicInfo.cs
+    let name = read_string(r)?;
+    let spell = read_u8(r)?;
+    let base_cost = read_u8(r)?;
+    let level_cost = read_u8(r)?;
+    let icon = read_u8(r)?;
+    let level1 = read_u8(r)?;
+    let level2 = read_u8(r)?;
+    let level3 = read_u8(r)?;
+    let need1 = read_u16(r)?;
+    let need2 = read_u16(r)?;
+    let need3 = read_u16(r)?;
+    let delay_base = read_u32(r)?;
+    let delay_reduction = read_u32(r)?;
+    let power_base = read_u16(r)?;
+    let power_bonus = read_u16(r)?;
+    let mpower_base = read_u16(r)?;
+    let mpower_bonus = read_u16(r)?;
+    let range = read_u8(r)?;
+    let multiplier_base = read_f32(r)?;
+    let multiplier_bonus = read_f32(r)?;
+
+    Ok(MagicInfo {
+        name,
+        spell,
+        base_cost,
+        level_cost,
+        icon,
+        level1,
+        level2,
+        level3,
+        need1,
+        need2,
+        need3,
+        delay_base,
+        delay_reduction,
+        power_base,
+        power_bonus,
+        mpower_base,
+        mpower_bonus,
+        range,
+        multiplier_base,
+        multiplier_bonus,
     })
 }
 

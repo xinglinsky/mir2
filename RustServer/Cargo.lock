@@ -219,6 +219,7 @@ name = "crystal-server-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "crystal-shared-proto",
  "hex",
  "rusqlite",
  "serde",

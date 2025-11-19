@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use crate::world::magic::UserMagic;
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -38,6 +39,22 @@ pub struct CharacterSummary {
     pub class: u8,
     pub gender: u8,
     pub last_access_binary: i64,
+    #[serde(default)]
+    pub map_index: i32,
+    #[serde(default)]
+    pub x: i32,
+    #[serde(default)]
+    pub y: i32,
+    #[serde(default)]
+    pub direction: u8,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CharacterPosition {
+    pub map_index: i32,
+    pub x: i32,
+    pub y: i32,
+    pub direction: u8,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,6 +87,56 @@ pub trait AccountStore: Send + Sync {
     ) -> Result<CharacterSummary, StoreError>;
     fn delete_character(&self, account_id: &str, index: i32) -> Result<bool, StoreError>;
     fn set_password(&self, id: &str, new_password: &str) -> Result<bool, StoreError>;
+
+    /// Load the learned magics for a given character. If no record exists yet,
+    /// returns an empty Vec.
+    fn load_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<UserMagic>, StoreError>;
+
+    /// Persist the learned magics for a given character, replacing any
+    /// previously stored record.
+    fn save_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+        magics: &[UserMagic],
+    ) -> Result<(), StoreError>;
+
+    /// Load the last known position for a given character. Returns Ok(None)
+    /// if no position has been stored yet.
+    fn load_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError>;
+
+    /// Persist the last known position for a given character.
+    fn save_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError>;
+
+    /// Load the bind point for a given character (equivalent to BindMapIndex /
+    /// BindLocation in the C# server). Returns Ok(None) if no bind has been
+    /// stored yet.
+    fn load_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError>;
+
+    /// Persist the bind point for a given character.
+    fn save_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError>;
 }
 
 fn hash_password(password: &str) -> String {
@@ -85,164 +152,6 @@ fn verify_password_hash(password: &str, hash: &str) -> bool {
     hash_password(password) == hash
 }
 
-pub struct FileAccountStore {
-    path: PathBuf,
-    db: Mutex<AccountDb>,
-}
-
-impl FileAccountStore {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StoreError> {
-        let path = path.as_ref().to_path_buf();
-        let db = if path.exists() {
-            let mut file = fs::File::open(&path)?;
-            let mut buf = String::new();
-            file.read_to_string(&mut buf)?;
-            if buf.trim().is_empty() {
-                AccountDb::default()
-            } else {
-                serde_json::from_str(&buf)?
-            }
-        } else {
-            if let Some(parent) = path.parent() {
-                if !parent.as_os_str().is_empty() {
-                    fs::create_dir_all(parent)?;
-                }
-            }
-            AccountDb::default()
-        };
-
-        Ok(FileAccountStore {
-            path,
-            db: Mutex::new(db),
-        })
-    }
-
-    fn save_locked(&self, db: &AccountDb) -> Result<(), StoreError> {
-        let tmp_path = self.path.with_extension("tmp");
-        let json = serde_json::to_string_pretty(db)?;
-        {
-            let mut f = fs::File::create(&tmp_path)?;
-            f.write_all(json.as_bytes())?;
-            f.flush()?;
-        }
-        fs::rename(tmp_path, &self.path)?;
-        Ok(())
-    }
-
-    fn get_account_mut<'a>(
-        db: &'a mut AccountDb,
-        id: &str,
-    ) -> Option<&'a mut StoredAccount> {
-        db.accounts.iter_mut().find(|a| a.id == id)
-    }
-
-    fn get_account<'a>(db: &'a AccountDb, id: &str) -> Option<&'a StoredAccount> {
-        db.accounts.iter().find(|a| a.id == id)
-    }
-}
-
-impl AccountStore for FileAccountStore {
-    fn account_exists(&self, id: &str) -> Result<bool, StoreError> {
-        let db = self.db.lock().unwrap();
-        Ok(Self::get_account(&db, id).is_some())
-    }
-
-    fn create_account(&self, id: &str, password: &str) -> Result<(), StoreError> {
-        let mut db = self.db.lock().unwrap();
-        if Self::get_account(&db, id).is_some() {
-            return Ok(());
-        }
-
-        let now = chrono::Utc::now().timestamp_millis();
-        let acc = StoredAccount {
-            id: id.to_string(),
-            password_hash: hash_password(password),
-            created_at: now,
-            last_login_at: None,
-            next_char_index: 0,
-            characters: Vec::new(),
-        };
-        db.accounts.push(acc);
-        self.save_locked(&db)
-    }
-
-    fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError> {
-        let mut db = self.db.lock().unwrap();
-        if let Some(acc) = Self::get_account_mut(&mut db, id) {
-            let ok = verify_password_hash(password, &acc.password_hash);
-            if ok {
-                acc.last_login_at = Some(chrono::Utc::now().timestamp_millis());
-                self.save_locked(&db)?;
-            }
-            Ok(ok)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn list_characters(&self, account_id: &str) -> Result<Vec<CharacterSummary>, StoreError> {
-        let db = self.db.lock().unwrap();
-        if let Some(acc) = Self::get_account(&db, account_id) {
-            Ok(acc.characters.clone())
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
-    fn create_character(
-        &self,
-        account_id: &str,
-        name: String,
-        class: u8,
-        gender: u8,
-    ) -> Result<CharacterSummary, StoreError> {
-        let mut db = self.db.lock().unwrap();
-        let acc = Self::get_account_mut(&mut db, account_id)
-            .ok_or_else(|| StoreError::Io(io::Error::new(io::ErrorKind::NotFound, "account not found")))?;
-
-        let index = acc.next_char_index;
-        acc.next_char_index += 1;
-
-        let now = chrono::Utc::now().timestamp_millis();
-        let ch = CharacterSummary {
-            index,
-            name,
-            level: 1,
-            class,
-            gender,
-            last_access_binary: now,
-        };
-        acc.characters.push(ch.clone());
-        self.save_locked(&db)?;
-        Ok(ch)
-    }
-
-    fn delete_character(&self, account_id: &str, index: i32) -> Result<bool, StoreError> {
-        let mut db = self.db.lock().unwrap();
-        let acc = match Self::get_account_mut(&mut db, account_id) {
-            Some(a) => a,
-            None => return Ok(false),
-        };
-        if let Some(pos) = acc.characters.iter().position(|c| c.index == index) {
-            acc.characters.remove(pos);
-            self.save_locked(&db)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn set_password(&self, id: &str, new_password: &str) -> Result<bool, StoreError> {
-        let mut db = self.db.lock().unwrap();
-        if let Some(acc) = Self::get_account_mut(&mut db, id) {
-            acc.password_hash = hash_password(new_password);
-            self.save_locked(&db)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-}
 
 /// SQLite implementation of AccountStore.
 ///
@@ -297,6 +206,36 @@ impl SqliteAccountStore {
                     class               INTEGER NOT NULL,
                     gender              INTEGER NOT NULL,
                     last_access_binary  INTEGER NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_magics (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    magics_json  TEXT NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_positions (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    map_index    INTEGER NOT NULL,
+                    x            INTEGER NOT NULL,
+                    y            INTEGER NOT NULL,
+                    direction    INTEGER NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_binds (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    map_index    INTEGER NOT NULL,
+                    x            INTEGER NOT NULL,
+                    y            INTEGER NOT NULL,
+                    direction    INTEGER NOT NULL,
                     PRIMARY KEY(account_id, idx),
                     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
                 );
@@ -366,6 +305,10 @@ impl AccountStore for SqliteAccountStore {
                     class: row.get::<_, i64>(3)? as u8,
                     gender: row.get::<_, i64>(4)? as u8,
                     last_access_binary: row.get(5)?,
+                    map_index: 0,
+                    x: 0,
+                    y: 0,
+                    direction: 0,
                 })
             })?;
 
@@ -415,6 +358,10 @@ impl AccountStore for SqliteAccountStore {
                 class,
                 gender,
                 last_access_binary: now,
+                map_index: 0,
+                x: 0,
+                y: 0,
+                direction: 0,
             })
         })
     }
@@ -437,6 +384,154 @@ impl AccountStore for SqliteAccountStore {
                 (id, &hashed),
             )?;
             Ok(rows > 0)
+        })
+    }
+
+    fn load_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<UserMagic>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT magics_json FROM character_magics WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            )?;
+            let mut rows = stmt.query((account_id, index))?;
+            if let Some(row) = rows.next()? {
+                let json: String = row.get(0)?;
+                let magics: Vec<UserMagic> = serde_json::from_str(&json)?;
+                Ok(magics)
+            } else {
+                Ok(Vec::new())
+            }
+        })
+    }
+
+    fn save_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+        magics: &[UserMagic],
+    ) -> Result<(), StoreError> {
+        let json = serde_json::to_string(magics)?;
+        self.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO character_magics (account_id, idx, magics_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET magics_json = excluded.magics_json",
+                (account_id, &index, &json),
+            )?;
+            Ok(())
+        })
+    }
+
+    fn load_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT map_index, x, y, direction FROM character_positions WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            )?;
+            let mut rows = stmt.query((account_id, index))?;
+            if let Some(row) = rows.next()? {
+                let map_index: i32 = row.get(0)?;
+                let x: i32 = row.get(1)?;
+                let y: i32 = row.get(2)?;
+                let direction: i64 = row.get(3)?;
+                Ok(Some(CharacterPosition {
+                    map_index,
+                    x,
+                    y,
+                    direction: direction as u8,
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO character_positions (account_id, idx, map_index, x, y, direction)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET
+                     map_index = excluded.map_index,
+                     x = excluded.x,
+                     y = excluded.y,
+                     direction = excluded.direction",
+                (
+                    account_id,
+                    &index,
+                    &pos.map_index,
+                    &pos.x,
+                    &pos.y,
+                    &(pos.direction as i64),
+                ),
+            )?;
+            Ok(())
+        })
+    }
+
+    fn load_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT map_index, x, y, direction FROM character_binds WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            )?;
+            let mut rows = stmt.query((account_id, index))?;
+            if let Some(row) = rows.next()? {
+                let map_index: i32 = row.get(0)?;
+                let x: i32 = row.get(1)?;
+                let y: i32 = row.get(2)?;
+                let direction: i64 = row.get(3)?;
+                Ok(Some(CharacterPosition {
+                    map_index,
+                    x,
+                    y,
+                    direction: direction as u8,
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO character_binds (account_id, idx, map_index, x, y, direction)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET
+                     map_index = excluded.map_index,
+                     x = excluded.x,
+                     y = excluded.y,
+                     direction = excluded.direction",
+                (
+                    account_id,
+                    &index,
+                    &pos.map_index,
+                    &pos.x,
+                    &pos.y,
+                    &(pos.direction as i64),
+                ),
+            )?;
+            Ok(())
         })
     }
 }

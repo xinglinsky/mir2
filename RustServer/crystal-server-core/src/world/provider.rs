@@ -1,18 +1,21 @@
 use crate::world::map::MapInfo;
 use crate::world::monster::MonsterInfo;
 use crate::world::npc::NpcInfo;
+use crate::world::magic::MagicInfo;
 
 #[derive(Clone, Debug, Default)]
 pub struct WorldDatabase {
     pub map_infos: Vec<MapInfo>,
     pub monster_infos: Vec<MonsterInfo>,
     pub npc_infos: Vec<NpcInfo>,
+    pub magic_infos: Vec<MagicInfo>,
 }
 
 pub trait WorldProvider {
     fn map_infos(&self) -> &[MapInfo];
     fn monster_infos(&self) -> &[MonsterInfo];
     fn npc_infos(&self) -> &[NpcInfo];
+    fn magic_infos(&self) -> &[MagicInfo];
 
     fn get_map_info(&self, index: i32) -> Option<&MapInfo> {
         self.map_infos().iter().find(|m| m.index == index)
@@ -30,6 +33,10 @@ pub trait WorldProvider {
 
     fn get_npc_info(&self, index: i32) -> Option<&NpcInfo> {
         self.npc_infos().iter().find(|n| n.index == index)
+    }
+
+    fn get_magic_info(&self, spell: u8) -> Option<&MagicInfo> {
+        self.magic_infos().iter().find(|m| m.spell == spell)
     }
 }
 
@@ -50,5 +57,9 @@ impl WorldProvider for WorldDatabase {
 
     fn npc_infos(&self) -> &[NpcInfo] {
         &self.npc_infos
+    }
+
+    fn magic_infos(&self) -> &[MagicInfo] {
+        &self.magic_infos
     }
 }

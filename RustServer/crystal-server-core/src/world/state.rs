@@ -5,6 +5,7 @@ use crate::world::config::WorldConfig;
 use crate::world::map::{self, CellAttribute, RespawnInfo};
 use crate::world::monster::MonsterInstance;
 use crate::world::provider::WorldProvider;
+use crate::world::magic::UserMagic;
 
 pub type SessionId = u32;
 
@@ -15,6 +16,7 @@ pub struct PlayerState {
     pub x: i32,
     pub y: i32,
     pub direction: u8,
+    pub magics: Vec<UserMagic>,
 }
 
 #[derive(Clone, Debug)]
@@ -25,6 +27,7 @@ pub enum WorldCommand {
         x: i32,
         y: i32,
         direction: u8,
+        magics: Vec<UserMagic>,
     },
     Turn {
         session_id: SessionId,
@@ -43,6 +46,13 @@ pub enum WorldCommand {
 #[derive(Clone, Debug)]
 pub enum WorldEvent {
     UserLocation {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    MapChanged {
         session_id: SessionId,
         map_index: i32,
         x: i32,
@@ -81,6 +91,7 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
         direction: u8,
+        magics: Vec<UserMagic>,
     ) -> &PlayerState {
         self.players
             .entry(session_id)
@@ -96,6 +107,7 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction,
+                magics,
             });
 
         self.players.get(&session_id).unwrap()
@@ -141,6 +153,42 @@ impl<P: WorldProvider> World<P> {
         self.monsters.insert(map_index, instances);
     }
 
+    pub fn monsters_for_map(&self, map_index: i32) -> Vec<MonsterInstance> {
+        self.monsters
+            .get(&map_index)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Learn a new magic for the given player session. If the magic is already
+    /// present, this is a no-op and returns None.
+    pub fn learn_magic_for_player(&mut self, session_id: SessionId, spell: u8) -> Option<UserMagic> {
+        let player = self.players.get_mut(&session_id)?;
+        if player.magics.iter().any(|m| m.spell == spell) {
+            return None;
+        }
+
+        let magic = UserMagic::new(spell);
+        player.magics.push(magic.clone());
+        Some(magic)
+    }
+
+    /// Update the level and experience for an existing magic on the given
+    /// player. Returns the updated magic if found.
+    pub fn set_magic_level_for_player(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+        level: u8,
+        experience: u16,
+    ) -> Option<UserMagic> {
+        let player = self.players.get_mut(&session_id)?;
+        let magic = player.magics.iter_mut().find(|m| m.spell == spell)?;
+        magic.level = level;
+        magic.experience = experience;
+        Some(magic.clone())
+    }
+
     fn create_monsters_from_respawn(&mut self, map: &map::Map, respawn: &RespawnInfo) -> Vec<MonsterInstance> {
         let mut result = Vec::new();
 
@@ -178,7 +226,60 @@ impl<P: WorldProvider> World<P> {
         result
     }
 
-    fn apply_step(player: &mut PlayerState, map: Option<map::Map>, direction: u8, distance: i32) {
+    /// Get a cloned list of learned magics for the given player session.
+    pub fn player_magics(&self, session_id: SessionId) -> Vec<UserMagic> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.magics.clone())
+            .unwrap_or_default()
+    }
+
+    fn check_map_movement(&mut self, player: &mut PlayerState, events: &mut Vec<WorldEvent>) {
+        let current_map_index = player.map_index;
+        // Limit the lifetime of the immutable borrow from provider so that we can
+        // subsequently borrow &mut self when loading maps and spawning monsters.
+        let (dest_map_index, dest_x, dest_y) = {
+            let Some(map_info) = self.provider.get_map_info(current_map_index) else {
+                return;
+            };
+
+            let Some(movement) = map_info
+                .movements
+                .iter()
+                .find(|m| m.source_x == player.x && m.source_y == player.y)
+            else {
+                return;
+            };
+
+            (movement.dest_map_index, movement.dest_x, movement.dest_y)
+        };
+
+        match self.get_or_load_map(dest_map_index) {
+            Some(dest_map) => {
+                self.spawn_monsters_for_map(dest_map_index, &dest_map);
+
+                player.map_index = dest_map_index;
+                player.x = dest_x;
+                player.y = dest_y;
+
+                events.push(WorldEvent::MapChanged {
+                    session_id: player.session_id,
+                    map_index: player.map_index,
+                    x: player.x,
+                    y: player.y,
+                    direction: player.direction,
+                });
+            }
+            None => {
+                debug!(
+                    "Map movement failed: could not load destination map {} from ({}, {})",
+                    dest_map_index, player.x, player.y
+                );
+            }
+        }
+    }
+
+    fn apply_step(player: &mut PlayerState, _map: Option<map::Map>, direction: u8, distance: i32) {
         let (dx, dy) = match direction {
             0 => (0, -1),
             1 => (1, -1),
@@ -214,8 +315,28 @@ impl<P: WorldProvider> World<P> {
             // TEMP: ignore map cell attributes and treat everything within bounds as walkable.
             // Once map loading and cell attributes are fully validated, restore the map-based
             // collision checks below.
-            new_x = tx;
-            new_y = ty;
+            // if let Some(ref m) = map {
+            //     let ux = tx as u16;
+            //     let uy = ty as u16;
+
+            //     match m.cell(ux, uy) {
+            //         Some(cell) if matches!(cell.attribute, CellAttribute::Walk) => {
+            //             new_x = tx;
+            //             new_y = ty;
+            //         }
+            //         Some(_) => {
+            //             debug!("Move blocked: non-walkable cell at ({}, {})", tx, ty);
+            //             break;
+            //         }
+            //         None => {
+            //             debug!("Move blocked: no cell data at ({}, {})", tx, ty);
+            //             break;
+            //         }
+            //     }
+            // } else {
+                new_x = tx;
+                new_y = ty;
+            // }
         }
 
         player.x = new_x;
@@ -232,11 +353,12 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction,
+                magics,
             } => {
                 if let Some(map) = self.get_or_load_map(map_index) {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
-                let p = self.upsert_player(session_id, map_index, x, y, direction);
+                let p = self.upsert_player(session_id, map_index, x, y, direction, magics);
                 events.push(WorldEvent::UserLocation {
                     session_id: p.session_id,
                     map_index: p.map_index,
@@ -271,8 +393,9 @@ impl<P: WorldProvider> World<P> {
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
-                    if let Some(p) = self.players.get_mut(&session_id) {
-                        Self::apply_step(p, map, direction, 1);
+                    if let Some(mut p) = self.players.remove(&session_id) {
+                        Self::apply_step(&mut p, map, direction, 1);
+                        self.check_map_movement(&mut p, &mut events);
                         events.push(WorldEvent::UserLocation {
                             session_id: p.session_id,
                             map_index: p.map_index,
@@ -280,6 +403,7 @@ impl<P: WorldProvider> World<P> {
                             y: p.y,
                             direction: p.direction,
                         });
+                        self.players.insert(session_id, p);
                     }
                 }
             }
@@ -290,8 +414,9 @@ impl<P: WorldProvider> World<P> {
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
-                    if let Some(p) = self.players.get_mut(&session_id) {
-                        Self::apply_step(p, map, direction, 2);
+                    if let Some(mut p) = self.players.remove(&session_id) {
+                        Self::apply_step(&mut p, map, direction, 2);
+                        self.check_map_movement(&mut p, &mut events);
                         events.push(WorldEvent::UserLocation {
                             session_id: p.session_id,
                             map_index: p.map_index,
@@ -299,6 +424,7 @@ impl<P: WorldProvider> World<P> {
                             y: p.y,
                             direction: p.direction,
                         });
+                        self.players.insert(session_id, p);
                     }
                 }
             }
