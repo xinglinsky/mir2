@@ -2,6 +2,8 @@ use std::{
     io,
     net::SocketAddr,
     sync::{Arc, Mutex},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
@@ -21,11 +23,19 @@ use crystal_shared_proto::scene::{
     STeleportIn,
     SObjectMonster,
     SObjectNpc,
+    SObjectRemove,
+    SNewMagic,
+    SMagicLeveled,
 };
 use crystal_shared_proto::user::{SUserInformation, SUserLocation};
-use crystal_shared_proto::select::{SelectInfo, SLoginSuccess, SNewCharacterSuccess};
-use crystal_shared_proto::scene::{SNewMagic, SMagicLeveled};
-use crystal_shared_proto::io::write_bool;
+use crystal_shared_proto::select::{
+    SelectInfo,
+    SLoginSuccess,
+    SLogOutSuccess,
+    SLogOutFailed,
+    SNewCharacterSuccess,
+};
+use crystal_shared_proto::io::{write_bool, read_string};
 
 mod config;
 
@@ -926,10 +936,41 @@ impl ConnectionHandler for LoginConnection {
                     }
                 }
 
-                // Reset simple in-memory state.
-                self.stage = Stage::Connected;
-                self.account_id = None;
-                self.current_char_index = None;
+                // After a successful logout, keep the account logged in but
+                // return to the Select stage and send LogOutSuccess with the
+                // latest character list, mirroring the C# server.
+                if let Some(ref acc_id) = self.account_id {
+                    let chars: Vec<SelectInfo> = self
+                        .store
+                        .list_characters(acc_id)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|c: CharacterSummary| SelectInfo {
+                            index: c.index,
+                            name: c.name,
+                            level: c.level,
+                            class: c.class,
+                            gender: c.gender,
+                            last_access_binary: c.last_access_binary,
+                        })
+                        .collect();
+                    self.characters = chars.clone();
+
+                    let resp = SLogOutSuccess { characters: chars };
+                    if let Ok(raw) = resp.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+
+                    self.stage = Stage::Select;
+                    self.current_char_index = None;
+                } else {
+                    // If we somehow do not have an account associated with
+                    // this connection, signal failure so the client can
+                    // re-enable its UI.
+                    let resp = SLogOutFailed;
+                    let raw = resp.encode();
+                    out.push(Self::encode_raw(raw));
+                }
             }
             ClientPacketId::Turn => {
                 if self.stage == Stage::InGame {
@@ -1028,7 +1069,35 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::Chat => {
-                // Chat is currently unimplemented in this stub server.
+                if self.stage == Stage::InGame {
+                    use std::io::Cursor;
+
+                    if let Ok(message) = (|| {
+                        let mut c = Cursor::new(&packet.payload);
+                        let text = read_string(&mut c)?;
+                        Ok::<String, io::Error>(text)
+                    })() {
+                        if message.trim().eq_ignore_ascii_case("/kill") {
+                            let killed_id = {
+                                let mut world = self.world.lock().unwrap();
+                                world.kill_nearest_monster(
+                                    self.current_map_index,
+                                    self.current_x,
+                                    self.current_y,
+                                )
+                            };
+
+                            if let Some(id) = killed_id {
+                                let pkt = SObjectRemove {
+                                    object_id: id as u32,
+                                };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+                        }
+                    }
+                }
             }
             ClientPacketId::Attack => {
                 if self.stage == Stage::InGame {
@@ -1043,6 +1112,43 @@ impl ConnectionHandler for LoginConnection {
         }
 
         out
+    }
+
+    fn on_disconnect(&mut self) {
+        println!(
+            "[net] on_disconnect: stage={:?}, acc={:?}, char_idx={:?}, map={}, x={}, y={}",
+            self.stage,
+            self.account_id,
+            self.current_char_index,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+        // Best-effort persist on TCP disconnect: mirror the LogOut
+        // persistence path but without sending any packets.
+        if self.stage == Stage::InGame {
+            if let (Some(ref account_id), Some(char_idx)) =
+                (self.account_id.as_ref(), self.current_char_index)
+            {
+                let magics = {
+                    let world = self.world.lock().unwrap();
+                    world.player_magics(self.session_id)
+                };
+                let _ = self
+                    .store
+                    .save_character_magics(account_id, char_idx, &magics);
+
+                let pos = CharacterPosition {
+                    map_index: self.current_map_index,
+                    x: self.current_x,
+                    y: self.current_y,
+                    direction: self.direction,
+                };
+                let _ = self
+                    .store
+                    .save_character_position(account_id, char_idx, &pos);
+            }
+        }
     }
 }
 
@@ -1152,6 +1258,29 @@ async fn main() -> io::Result<()> {
     // we can introduce a dedicated world tick loop and message queues.
     let world = world::World::new((*world_db).clone(), world_config.clone());
     let world = Arc::new(Mutex::new(world));
+
+    // Simple world tick thread driving the World::update loop. For now this
+    // only advances time for future respawn/AI logic and does not emit any
+    // network events. The tick interval roughly mirrors the C# Envir.Process
+    // cadence (50–100ms range).
+    {
+        let world = Arc::clone(&world);
+        thread::spawn(move || {
+            let tick = Duration::from_millis(50);
+            loop {
+                let now_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as i64;
+                {
+                    let mut w = world.lock().unwrap();
+                    let _events = w.update(now_ms);
+                    // TODO: handle world events (monster movement, buffs, etc.).
+                }
+                thread::sleep(tick);
+            }
+        });
+    }
 
     let factory: HandlerFactory = Arc::new({
         let store = Arc::clone(&store);

@@ -34,4 +34,7 @@ pub struct MonsterInstance {
     pub x: i32,
     pub y: i32,
     pub direction: u8,
+    /// Respawn index from RespawnInfo, used to update runtime respawn counts
+    /// when the monster dies or despawns.
+    pub respawn_index: i32,
 }

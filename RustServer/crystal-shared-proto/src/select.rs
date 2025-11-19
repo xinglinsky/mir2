@@ -97,6 +97,71 @@ impl SLoginSuccess {
 }
 
 #[derive(Clone, Debug)]
+pub struct SLogOutSuccess {
+    pub characters: Vec<SelectInfo>,
+}
+
+impl SLogOutSuccess {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        let count: i32 = self
+            .characters
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many characters"))?;
+        write_i32_le(&mut buf, count)?;
+        for ch in &self.characters {
+            ch.encode_to(&mut buf)?;
+        }
+
+        Ok(RawPacket {
+            id: ServerPacketId::LogOutSuccess as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let count = read_i32_le(&mut c)?;
+        if count < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative character count",
+            ));
+        }
+
+        let mut characters = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            characters.push(SelectInfo::decode_from(&mut c)?);
+        }
+
+        Ok(SLogOutSuccess { characters })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SLogOutFailed;
+
+impl SLogOutFailed {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::LogOutFailed as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SLogOutFailed payload must be empty",
+            ));
+        }
+        Ok(SLogOutFailed)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SNewCharacterSuccess {
     pub char_info: SelectInfo,
 }
