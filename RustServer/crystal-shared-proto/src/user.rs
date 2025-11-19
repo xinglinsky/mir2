@@ -8,11 +8,12 @@ use std::io::{self, Cursor, Read};
 
 use crate::io::{
     read_bool, read_i16_le, read_i32_le, read_i64_le, read_string, read_u16_le, read_u32_le,
-    write_bool, write_i16_le, write_i32_le, write_i64_le, write_string, write_u16_le,
-    write_u32_le,
+    read_u64_le, write_bool, write_i16_le, write_i32_le, write_i64_le, write_string,
+    write_u16_le, write_u32_le, write_u64_le,
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
+use crate::item_types::UserItemData;
 
 #[derive(Clone, Debug)]
 pub struct SUserInformation {
@@ -1353,6 +1354,70 @@ impl SRemoveDelayedExplosion {
 }
 
 #[derive(Clone, Debug)]
+pub struct SObjectSitDown {
+    pub object_id: u32,
+    pub location_x: i32,
+    pub location_y: i32,
+    pub direction: u8,
+    pub sitting: bool,
+}
+
+impl SObjectSitDown {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        buf.push(self.direction);
+        write_bool(&mut buf, self.sitting)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ObjectSitDown as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        let sitting = read_bool(&mut c)?;
+        Ok(SObjectSitDown {
+            object_id,
+            location_x,
+            location_y,
+            direction,
+            sitting,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SInTrapRock {
+    pub trapped: bool,
+}
+
+impl SInTrapRock {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.trapped)?;
+        Ok(RawPacket {
+            id: ServerPacketId::InTrapRock as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let trapped = read_bool(&mut c)?;
+        Ok(SInTrapRock { trapped })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SObjectDeco {
     pub object_id: u32,
     pub location_x: i32,
@@ -1445,6 +1510,233 @@ impl SObjectLevelEffects {
 }
 
 #[derive(Clone, Debug)]
+pub struct SSetConcentration {
+    pub object_id: u32,
+    pub enabled: bool,
+    pub interrupted: bool,
+}
+
+impl SSetConcentration {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.enabled)?;
+        write_bool(&mut buf, self.interrupted)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SetConcentration as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let enabled = read_bool(&mut c)?;
+        let interrupted = read_bool(&mut c)?;
+        Ok(SSetConcentration {
+            object_id,
+            enabled,
+            interrupted,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSetElemental {
+    pub object_id: u32,
+    pub enabled: bool,
+    pub casted: bool,
+    pub value: u32,
+    pub element_type: u32,
+    pub exp_last: u32,
+}
+
+impl SSetElemental {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.enabled)?;
+        write_bool(&mut buf, self.casted)?;
+        write_u32_le(&mut buf, self.value)?;
+        write_u32_le(&mut buf, self.element_type)?;
+        write_u32_le(&mut buf, self.exp_last)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SetElemental as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let enabled = read_bool(&mut c)?;
+        let casted = read_bool(&mut c)?;
+        let value = read_u32_le(&mut c)?;
+        let element_type = read_u32_le(&mut c)?;
+        let exp_last = read_u32_le(&mut c)?;
+        Ok(SSetElemental {
+            object_id,
+            enabled,
+            casted,
+            value,
+            element_type,
+            exp_last,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SMountUpdate {
+    pub object_id: u32,
+    pub mount_type: i16,
+    pub riding_mount: bool,
+}
+
+impl SMountUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i16_le(&mut buf, self.mount_type)?;
+        write_bool(&mut buf, self.riding_mount)?;
+        Ok(RawPacket {
+            id: ServerPacketId::MountUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let mount_type = read_i16_le(&mut c)?;
+        let riding_mount = read_bool(&mut c)?;
+        Ok(SMountUpdate {
+            object_id,
+            mount_type,
+            riding_mount,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct STransformUpdate {
+    pub object_id: u32,
+    pub transform_type: i16,
+}
+
+impl STransformUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_i16_le(&mut buf, self.transform_type)?;
+        Ok(RawPacket {
+            id: ServerPacketId::TransformUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let transform_type = read_i16_le(&mut c)?;
+        Ok(STransformUpdate {
+            object_id,
+            transform_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SEquipSlotItem {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub grid_to: u8,
+    pub success: bool,
+}
+
+impl SEquipSlotItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        buf.push(self.grid_to);
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::EquipSlotItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let success = read_bool(&mut c)?;
+        Ok(SEquipSlotItem {
+            grid,
+            unique_id,
+            to,
+            grid_to,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SFishingUpdate {
+    pub object_id: u32,
+    pub fishing: bool,
+    pub progress_percent: i32,
+    pub chance_percent: i32,
+    pub fishing_point_x: i32,
+    pub fishing_point_y: i32,
+    pub found_fish: bool,
+}
+
+impl SFishingUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.fishing)?;
+        write_i32_le(&mut buf, self.progress_percent)?;
+        write_i32_le(&mut buf, self.chance_percent)?;
+        write_i32_le(&mut buf, self.fishing_point_x)?;
+        write_i32_le(&mut buf, self.fishing_point_y)?;
+        write_bool(&mut buf, self.found_fish)?;
+        Ok(RawPacket {
+            id: ServerPacketId::FishingUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let fishing = read_bool(&mut c)?;
+        let progress_percent = read_i32_le(&mut c)?;
+        let chance_percent = read_i32_le(&mut c)?;
+        let fishing_point_x = read_i32_le(&mut c)?;
+        let fishing_point_y = read_i32_le(&mut c)?;
+        let found_fish = read_bool(&mut c)?;
+        Ok(SFishingUpdate {
+            object_id,
+            fishing,
+            progress_percent,
+            chance_percent,
+            fishing_point_x,
+            fishing_point_y,
+            found_fish,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SSetBindingShot {
     pub object_id: u32,
     pub enabled: bool,
@@ -1517,6 +1809,50 @@ impl SDeleteGroup {
             ));
         }
         Ok(SDeleteGroup)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SCancelReincarnation;
+
+impl SCancelReincarnation {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::CancelReincarnation as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SCancelReincarnation payload must be empty",
+            ));
+        }
+        Ok(SCancelReincarnation)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRequestReincarnation;
+
+impl SRequestReincarnation {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::RequestReincarnation as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SRequestReincarnation payload must be empty",
+            ));
+        }
+        Ok(SRequestReincarnation)
     }
 }
 
@@ -2078,6 +2414,17 @@ impl SGainedItem {
         Ok(SGainedItem {
             item_bytes: payload.to_vec(),
         })
+    }
+}
+
+impl SGainedItem {
+    pub fn decode_user_item(&self) -> io::Result<UserItemData> {
+        UserItemData::decode_from_bytes(&self.item_bytes)
+    }
+
+    pub fn from_user_item(item: &UserItemData) -> io::Result<Self> {
+        let bytes = item.encode_to_bytes()?;
+        Ok(SGainedItem { item_bytes: bytes })
     }
 }
 
@@ -3520,6 +3867,38 @@ mod tests {
     }
 
     #[test]
+    fn object_sit_down_roundtrip() {
+        let p = SObjectSitDown {
+            object_id: 42,
+            location_x: 100,
+            location_y: 200,
+            direction: 3,
+            sitting: true,
+        };
+
+        let raw = p.encode().expect("encode SObjectSitDown");
+        assert_eq!(raw.id, ServerPacketId::ObjectSitDown as i16);
+
+        let decoded = SObjectSitDown::decode(&raw.payload).expect("decode SObjectSitDown");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.location_x, p.location_x);
+        assert_eq!(decoded.location_y, p.location_y);
+        assert_eq!(decoded.direction, p.direction);
+        assert_eq!(decoded.sitting, p.sitting);
+    }
+
+    #[test]
+    fn in_trap_rock_roundtrip() {
+        let p = SInTrapRock { trapped: true };
+
+        let raw = p.encode().expect("encode SInTrapRock");
+        assert_eq!(raw.id, ServerPacketId::InTrapRock as i16);
+
+        let decoded = SInTrapRock::decode(&raw.payload).expect("decode SInTrapRock");
+        assert_eq!(decoded.trapped, p.trapped);
+    }
+
+    #[test]
     fn object_sneaking_roundtrip() {
         let p = SObjectSneaking {
             object_id: 5,
@@ -3549,6 +3928,125 @@ mod tests {
             .expect("decode SObjectLevelEffects");
         assert_eq!(decoded.object_id, p.object_id);
         assert_eq!(decoded.level_effects, p.level_effects);
+    }
+
+    #[test]
+    fn set_concentration_roundtrip() {
+        let p = SSetConcentration {
+            object_id: 10,
+            enabled: true,
+            interrupted: false,
+        };
+
+        let raw = p.encode().expect("encode SSetConcentration");
+        assert_eq!(raw.id, ServerPacketId::SetConcentration as i16);
+
+        let decoded = SSetConcentration::decode(&raw.payload)
+            .expect("decode SSetConcentration");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.enabled, p.enabled);
+        assert_eq!(decoded.interrupted, p.interrupted);
+    }
+
+    #[test]
+    fn set_elemental_roundtrip() {
+        let p = SSetElemental {
+            object_id: 11,
+            enabled: true,
+            casted: true,
+            value: 123,
+            element_type: 2,
+            exp_last: 999,
+        };
+
+        let raw = p.encode().expect("encode SSetElemental");
+        assert_eq!(raw.id, ServerPacketId::SetElemental as i16);
+
+        let decoded = SSetElemental::decode(&raw.payload).expect("decode SSetElemental");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.enabled, p.enabled);
+        assert_eq!(decoded.casted, p.casted);
+        assert_eq!(decoded.value, p.value);
+        assert_eq!(decoded.element_type, p.element_type);
+        assert_eq!(decoded.exp_last, p.exp_last);
+    }
+
+    #[test]
+    fn mount_update_roundtrip() {
+        let p = SMountUpdate {
+            object_id: 12,
+            mount_type: 5,
+            riding_mount: true,
+        };
+
+        let raw = p.encode().expect("encode SMountUpdate");
+        assert_eq!(raw.id, ServerPacketId::MountUpdate as i16);
+
+        let decoded = SMountUpdate::decode(&raw.payload).expect("decode SMountUpdate");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.mount_type, p.mount_type);
+        assert_eq!(decoded.riding_mount, p.riding_mount);
+    }
+
+    #[test]
+    fn transform_update_roundtrip() {
+        let p = STransformUpdate {
+            object_id: 13,
+            transform_type: 3,
+        };
+
+        let raw = p.encode().expect("encode STransformUpdate");
+        assert_eq!(raw.id, ServerPacketId::TransformUpdate as i16);
+
+        let decoded = STransformUpdate::decode(&raw.payload).expect("decode STransformUpdate");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.transform_type, p.transform_type);
+    }
+
+    #[test]
+    fn equip_slot_item_roundtrip() {
+        let p = SEquipSlotItem {
+            grid: 1,
+            unique_id: 0x1234_5678_9ABC_DEF0,
+            to: 5,
+            grid_to: 2,
+            success: true,
+        };
+
+        let raw = p.encode().expect("encode SEquipSlotItem");
+        assert_eq!(raw.id, ServerPacketId::EquipSlotItem as i16);
+
+        let decoded = SEquipSlotItem::decode(&raw.payload).expect("decode SEquipSlotItem");
+        assert_eq!(decoded.grid, p.grid);
+        assert_eq!(decoded.unique_id, p.unique_id);
+        assert_eq!(decoded.to, p.to);
+        assert_eq!(decoded.grid_to, p.grid_to);
+        assert_eq!(decoded.success, p.success);
+    }
+
+    #[test]
+    fn fishing_update_roundtrip() {
+        let p = SFishingUpdate {
+            object_id: 14,
+            fishing: true,
+            progress_percent: 50,
+            chance_percent: 75,
+            fishing_point_x: 100,
+            fishing_point_y: 200,
+            found_fish: true,
+        };
+
+        let raw = p.encode().expect("encode SFishingUpdate");
+        assert_eq!(raw.id, ServerPacketId::FishingUpdate as i16);
+
+        let decoded = SFishingUpdate::decode(&raw.payload).expect("decode SFishingUpdate");
+        assert_eq!(decoded.object_id, p.object_id);
+        assert_eq!(decoded.fishing, p.fishing);
+        assert_eq!(decoded.progress_percent, p.progress_percent);
+        assert_eq!(decoded.chance_percent, p.chance_percent);
+        assert_eq!(decoded.fishing_point_x, p.fishing_point_x);
+        assert_eq!(decoded.fishing_point_y, p.fishing_point_y);
+        assert_eq!(decoded.found_fish, p.found_fish);
     }
 
     #[test]
@@ -3586,6 +4084,26 @@ mod tests {
         let raw = p.encode();
         assert_eq!(raw.id, ServerPacketId::DeleteGroup as i16);
         let _ = SDeleteGroup::decode(&raw.payload).expect("decode SDeleteGroup");
+    }
+
+    #[test]
+    fn cancel_reincarnation_roundtrip() {
+        let p = SCancelReincarnation;
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::CancelReincarnation as i16);
+        let _ = SCancelReincarnation::decode(&raw.payload)
+            .expect("decode SCancelReincarnation");
+    }
+
+    #[test]
+    fn request_reincarnation_roundtrip() {
+        let p = SRequestReincarnation;
+
+        let raw = p.encode();
+        assert_eq!(raw.id, ServerPacketId::RequestReincarnation as i16);
+        let _ = SRequestReincarnation::decode(&raw.payload)
+            .expect("decode SRequestReincarnation");
     }
 
     #[test]

@@ -67,7 +67,7 @@ impl Map {
         if x >= self.width || y >= self.height {
             return None;
         }
-        Some(y as usize * self.width as usize + x as usize)
+        Some(x as usize * self.height as usize + y as usize)
     }
 
     #[inline]

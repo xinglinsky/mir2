@@ -3,7 +3,8 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_i32_le, read_string, read_u16_le, write_i32_le, write_string, write_u16_le,
+    read_i32_le, read_string, read_u16_le, read_u32_le, write_i32_le, write_string,
+    write_u16_le, write_u32_le,
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
@@ -139,6 +140,110 @@ impl SMapEffect {
             effect,
             value,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNewMapInfo {
+    pub map_index: i32,
+    /// Raw bytes representing ClientMapInfo.Save(writer) payload.
+    pub info_bytes: Vec<u8>,
+}
+
+impl SNewMapInfo {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.map_index)?;
+        buf.extend_from_slice(&self.info_bytes);
+        Ok(RawPacket {
+            id: ServerPacketId::NewMapInfo as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let map_index = read_i32_le(&mut c)?;
+        let pos = c.position() as usize;
+        let info_bytes = payload[pos..].to_vec();
+
+        Ok(SNewMapInfo {
+            map_index,
+            info_bytes,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SWorldMapSetupInfo {
+    /// Raw bytes representing WorldMapSetup.Save(writer) payload.
+    pub setup_bytes: Vec<u8>,
+    pub teleport_to_npc_cost: i32,
+}
+
+impl SWorldMapSetupInfo {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.setup_bytes);
+        write_i32_le(&mut buf, self.teleport_to_npc_cost)?;
+
+        Ok(RawPacket {
+            id: ServerPacketId::WorldMapSetup as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() < 4 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SWorldMapSetupInfo payload too short",
+            ));
+        }
+
+        let split = payload.len() - 4;
+        let (setup_bytes, tail) = payload.split_at(split);
+        let mut c = Cursor::new(tail);
+        let teleport_to_npc_cost = read_i32_le(&mut c)?;
+
+        Ok(SWorldMapSetupInfo {
+            setup_bytes: setup_bytes.to_vec(),
+            teleport_to_npc_cost,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSearchMapResult {
+    pub map_index: i32,
+    pub npc_index: u32,
+}
+
+impl SSearchMapResult {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.map_index)?;
+        write_u32_le(&mut buf, self.npc_index)?;
+
+        Ok(RawPacket {
+            id: ServerPacketId::SearchMapResult as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 8 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SSearchMapResult payload must be exactly 8 bytes",
+            ));
+        }
+
+        let mut c = Cursor::new(payload);
+        let map_index = read_i32_le(&mut c)?;
+        let npc_index = read_u32_le(&mut c)?;
+
+        Ok(SSearchMapResult { map_index, npc_index })
     }
 }
 
@@ -307,5 +412,51 @@ mod tests {
         assert_eq!(decoded.location_y, packet.location_y);
         assert_eq!(decoded.effect, packet.effect);
         assert_eq!(decoded.value, packet.value);
+    }
+
+    #[test]
+    fn new_map_info_roundtrip() {
+        let packet = SNewMapInfo {
+            map_index: 5,
+            info_bytes: vec![1, 2, 3, 4, 5],
+        };
+
+        let raw = packet.encode().expect("encode SNewMapInfo");
+        assert_eq!(raw.id, ServerPacketId::NewMapInfo as i16);
+
+        let decoded = SNewMapInfo::decode(&raw.payload).expect("decode SNewMapInfo");
+        assert_eq!(decoded.map_index, packet.map_index);
+        assert_eq!(decoded.info_bytes, packet.info_bytes);
+    }
+
+    #[test]
+    fn world_map_setup_info_roundtrip() {
+        let packet = SWorldMapSetupInfo {
+            setup_bytes: vec![9, 8, 7],
+            teleport_to_npc_cost: 1234,
+        };
+
+        let raw = packet.encode().expect("encode SWorldMapSetupInfo");
+        assert_eq!(raw.id, ServerPacketId::WorldMapSetup as i16);
+
+        let decoded =
+            SWorldMapSetupInfo::decode(&raw.payload).expect("decode SWorldMapSetupInfo");
+        assert_eq!(decoded.setup_bytes, packet.setup_bytes);
+        assert_eq!(decoded.teleport_to_npc_cost, packet.teleport_to_npc_cost);
+    }
+
+    #[test]
+    fn search_map_result_roundtrip() {
+        let packet = SSearchMapResult {
+            map_index: 42,
+            npc_index: 123456,
+        };
+
+        let raw = packet.encode().expect("encode SSearchMapResult");
+        assert_eq!(raw.id, ServerPacketId::SearchMapResult as i16);
+
+        let decoded = SSearchMapResult::decode(&raw.payload).expect("decode SSearchMapResult");
+        assert_eq!(decoded.map_index, packet.map_index);
+        assert_eq!(decoded.npc_index, packet.npc_index);
     }
 }

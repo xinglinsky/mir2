@@ -48,10 +48,10 @@ pub fn load_map_from_bytes(info: MapInfo, bytes: &[u8]) -> io::Result<Map> {
 
 fn compute_walkable_cells(width: u16, height: u16, cells: &[MapCell]) -> Vec<(u16, u16)> {
     let mut result = Vec::new();
-    let w = width as usize;
+    let h = height as usize;
     for y in 0..height {
         for x in 0..width {
-            let idx = y as usize * w + x as usize;
+            let idx = x as usize * h + y as usize;
             if let CellAttribute::Walk = cells[idx].attribute {
                 result.push((x, y));
             }

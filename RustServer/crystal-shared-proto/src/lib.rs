@@ -17,3 +17,6 @@ pub mod magic;
 pub mod guild;
 pub mod stats;
 pub mod social;
+pub mod hero;
+pub mod creature;
+pub mod item_types;

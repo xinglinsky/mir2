@@ -3,8 +3,8 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_f32_le, read_i32_le, read_string, read_u16_le, read_u32_le, read_u64_le, write_f32_le,
-    write_i32_le, write_string, write_u16_le, write_u32_le, write_u64_le,
+    read_bool, read_f32_le, read_i32_le, read_string, read_u16_le, read_u32_le, read_u64_le, write_bool,
+    write_f32_le, write_i32_le, write_string, write_u16_le, write_u32_le, write_u64_le,
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
@@ -560,6 +560,263 @@ impl SMarketSuccess {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SNPCPearlGoods {
+    /// Raw bytes representing UserItem list: count (i32) + repeated UserItem.Save.
+    pub items_bytes: Vec<u8>,
+    pub rate: f32,
+    pub panel_type: u8,
+}
+
+impl SNPCPearlGoods {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.items_bytes);
+        write_f32_le(&mut buf, self.rate)?;
+        buf.push(self.panel_type);
+        Ok(RawPacket {
+            id: ServerPacketId::NPCPearlGoods as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() < 5 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SNPCPearlGoods payload too short",
+            ));
+        }
+        let tail_start = payload.len() - 5;
+        let items_bytes = payload[..tail_start].to_vec();
+        let mut c = Cursor::new(&payload[tail_start..]);
+        let rate = read_f32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let panel_type = one[0];
+        Ok(SNPCPearlGoods {
+            items_bytes,
+            rate,
+            panel_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNPCRequestInput {
+    pub npc_id: u32,
+    pub page_name: String,
+}
+
+impl SNPCRequestInput {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_string(&mut buf, &self.page_name)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCRequestInput as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let page_name = read_string(&mut c)?;
+        Ok(SNPCRequestInput { npc_id, page_name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNPCAwakening {
+    pub npc_id: u32,
+    pub npc_index: u32,
+}
+
+impl SNPCAwakening {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_u32_le(&mut buf, self.npc_index)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCAwakening as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let npc_index = read_u32_le(&mut c)?;
+        Ok(SNPCAwakening { npc_id, npc_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNPCDisassemble {
+    pub npc_id: u32,
+    pub npc_index: u32,
+}
+
+impl SNPCDisassemble {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_u32_le(&mut buf, self.npc_index)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCDisassemble as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let npc_index = read_u32_le(&mut c)?;
+        Ok(SNPCDisassemble { npc_id, npc_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNPCDowngrade {
+    pub npc_id: u32,
+    pub npc_index: u32,
+}
+
+impl SNPCDowngrade {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_u32_le(&mut buf, self.npc_index)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCDowngrade as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let npc_index = read_u32_le(&mut c)?;
+        Ok(SNPCDowngrade { npc_id, npc_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SNPCReset {
+    pub npc_id: u32,
+    pub npc_index: u32,
+}
+
+impl SNPCReset {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_u32_le(&mut buf, self.npc_index)?;
+        Ok(RawPacket {
+            id: ServerPacketId::NPCReset as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let npc_index = read_u32_le(&mut c)?;
+        Ok(SNPCReset { npc_id, npc_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SAwakeningNeedMaterials {
+    pub item_type: u8,
+    /// Raw bytes representing UserItem list: count (i32) + repeated UserItem.Save.
+    pub materials_bytes: Vec<u8>,
+}
+
+impl SAwakeningNeedMaterials {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.item_type);
+        buf.extend_from_slice(&self.materials_bytes);
+        Ok(RawPacket {
+            id: ServerPacketId::AwakeningNeedMaterials as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SAwakeningNeedMaterials payload too short",
+            ));
+        }
+        let item_type = payload[0];
+        let materials_bytes = payload[1..].to_vec();
+        Ok(SAwakeningNeedMaterials {
+            item_type,
+            materials_bytes,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SAwakeningLockedItem {
+    pub unique_id: u64,
+    pub locked: bool,
+}
+
+impl SAwakeningLockedItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_bool(&mut buf, self.locked)?;
+        Ok(RawPacket {
+            id: ServerPacketId::AwakeningLockedItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let locked = read_bool(&mut c)?;
+        Ok(SAwakeningLockedItem { unique_id, locked })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SAwakening {
+    pub result: u8,
+    /// Raw bytes representing UserItem.Save.
+    pub item_bytes: Vec<u8>,
+}
+
+impl SAwakening {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.result);
+        buf.extend_from_slice(&self.item_bytes);
+        Ok(RawPacket {
+            id: ServerPacketId::Awakening as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SAwakening payload too short",
+            ));
+        }
+        let result = payload[0];
+        let item_bytes = payload[1..].to_vec();
+        Ok(SAwakening { result, item_bytes })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,5 +1079,144 @@ mod tests {
 
         let decoded = SMarketSuccess::decode(&raw.payload).expect("decode SMarketSuccess");
         assert_eq!(decoded.message, p.message);
+    }
+
+    #[test]
+    fn npc_pearl_goods_roundtrip() {
+        let p = SNPCPearlGoods {
+            items_bytes: vec![0, 0, 0, 0], // count = 0
+            rate: 1.5,
+            panel_type: 3,
+        };
+
+        let raw = p.encode().expect("encode SNPCPearlGoods");
+        assert_eq!(raw.id, ServerPacketId::NPCPearlGoods as i16);
+
+        let decoded = SNPCPearlGoods::decode(&raw.payload).expect("decode SNPCPearlGoods");
+        assert_eq!(decoded.items_bytes, p.items_bytes);
+        assert!((decoded.rate - p.rate).abs() < f32::EPSILON);
+        assert_eq!(decoded.panel_type, p.panel_type);
+    }
+
+    #[test]
+    fn npc_request_input_roundtrip() {
+        let p = SNPCRequestInput {
+            npc_id: 456,
+            page_name: "InputPage".to_string(),
+        };
+
+        let raw = p.encode().expect("encode SNPCRequestInput");
+        assert_eq!(raw.id, ServerPacketId::NPCRequestInput as i16);
+
+        let decoded = SNPCRequestInput::decode(&raw.payload).expect("decode SNPCRequestInput");
+        assert_eq!(decoded.npc_id, p.npc_id);
+        assert_eq!(decoded.page_name, p.page_name);
+    }
+
+    #[test]
+    fn npc_awakening_roundtrip() {
+        let p = SNPCAwakening {
+            npc_id: 100,
+            npc_index: 200,
+        };
+
+        let raw = p.encode().expect("encode SNPCAwakening");
+        assert_eq!(raw.id, ServerPacketId::NPCAwakening as i16);
+
+        let decoded = SNPCAwakening::decode(&raw.payload).expect("decode SNPCAwakening");
+        assert_eq!(decoded.npc_id, p.npc_id);
+        assert_eq!(decoded.npc_index, p.npc_index);
+    }
+
+    #[test]
+    fn npc_disassemble_roundtrip() {
+        let p = SNPCDisassemble {
+            npc_id: 100,
+            npc_index: 200,
+        };
+
+        let raw = p.encode().expect("encode SNPCDisassemble");
+        assert_eq!(raw.id, ServerPacketId::NPCDisassemble as i16);
+
+        let decoded = SNPCDisassemble::decode(&raw.payload).expect("decode SNPCDisassemble");
+        assert_eq!(decoded.npc_id, p.npc_id);
+        assert_eq!(decoded.npc_index, p.npc_index);
+    }
+
+    #[test]
+    fn npc_downgrade_roundtrip() {
+        let p = SNPCDowngrade {
+            npc_id: 100,
+            npc_index: 200,
+        };
+
+        let raw = p.encode().expect("encode SNPCDowngrade");
+        assert_eq!(raw.id, ServerPacketId::NPCDowngrade as i16);
+
+        let decoded = SNPCDowngrade::decode(&raw.payload).expect("decode SNPCDowngrade");
+        assert_eq!(decoded.npc_id, p.npc_id);
+        assert_eq!(decoded.npc_index, p.npc_index);
+    }
+
+    #[test]
+    fn npc_reset_roundtrip() {
+        let p = SNPCReset {
+            npc_id: 100,
+            npc_index: 200,
+        };
+
+        let raw = p.encode().expect("encode SNPCReset");
+        assert_eq!(raw.id, ServerPacketId::NPCReset as i16);
+
+        let decoded = SNPCReset::decode(&raw.payload).expect("decode SNPCReset");
+        assert_eq!(decoded.npc_id, p.npc_id);
+        assert_eq!(decoded.npc_index, p.npc_index);
+    }
+
+    #[test]
+    fn awakening_need_materials_roundtrip() {
+        let p = SAwakeningNeedMaterials {
+            item_type: 1,
+            materials_bytes: vec![0, 0, 0, 0], // count = 0
+        };
+
+        let raw = p.encode().expect("encode SAwakeningNeedMaterials");
+        assert_eq!(raw.id, ServerPacketId::AwakeningNeedMaterials as i16);
+
+        let decoded =
+            SAwakeningNeedMaterials::decode(&raw.payload).expect("decode SAwakeningNeedMaterials");
+        assert_eq!(decoded.item_type, p.item_type);
+        assert_eq!(decoded.materials_bytes, p.materials_bytes);
+    }
+
+    #[test]
+    fn awakening_locked_item_roundtrip() {
+        let p = SAwakeningLockedItem {
+            unique_id: 12345,
+            locked: true,
+        };
+
+        let raw = p.encode().expect("encode SAwakeningLockedItem");
+        assert_eq!(raw.id, ServerPacketId::AwakeningLockedItem as i16);
+
+        let decoded =
+            SAwakeningLockedItem::decode(&raw.payload).expect("decode SAwakeningLockedItem");
+        assert_eq!(decoded.unique_id, p.unique_id);
+        assert_eq!(decoded.locked, p.locked);
+    }
+
+    #[test]
+    fn awakening_roundtrip() {
+        let p = SAwakening {
+            result: 1,
+            item_bytes: vec![1, 2, 3, 4],
+        };
+
+        let raw = p.encode().expect("encode SAwakening");
+        assert_eq!(raw.id, ServerPacketId::Awakening as i16);
+
+        let decoded = SAwakening::decode(&raw.payload).expect("decode SAwakening");
+        assert_eq!(decoded.result, p.result);
+        assert_eq!(decoded.item_bytes, p.item_bytes);
     }
 }

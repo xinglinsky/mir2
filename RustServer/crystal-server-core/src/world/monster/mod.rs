@@ -25,3 +25,13 @@ pub struct MonsterInfo {
     pub has_die_script: bool,
     pub stats: Stats,
 }
+
+#[derive(Clone, Debug)]
+pub struct MonsterInstance {
+    pub id: u64,
+    pub monster_index: i32,
+    pub map_index: i32,
+    pub x: i32,
+    pub y: i32,
+    pub direction: u8,
+}

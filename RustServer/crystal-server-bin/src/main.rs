@@ -1,8 +1,12 @@
-use std::{io, net::SocketAddr, sync::Arc};
+use std::{
+    io,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
-use crystal_server_core::account::{AccountStore, CharacterSummary, FileAccountStore};
+use crystal_server_core::account::{AccountStore, CharacterSummary, SqliteAccountStore};
 use crystal_shared_proto::login::{
     CChangePassword, CClientVersion, CDeleteCharacter, CLogin, CNewAccount, CNewCharacter,
     CRun, CStartGame, CTurn, CWalk, ClientPacketId, SChangePassword, SClientVersion,
@@ -11,10 +15,12 @@ use crystal_shared_proto::login::{
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
 use crystal_shared_proto::npc::{SObjectNpc, SNpcResponse};
 use crystal_shared_proto::packet::RawPacket;
+use crystal_shared_proto::item_types::{AwakeData, StatsMap, UserItemData};
 use crystal_shared_proto::scene::{
     SAddBuff,
     SColourChanged,
     SGainExperience,
+    SGainedItem,
     SGainedGold,
     SLevelChanged,
     SMagic,
@@ -46,6 +52,8 @@ use crystal_shared_proto::io::{
 use crystal_shared_proto::user::{SChat, SUserInformation, SUserLocation};
 use crystal_shared_proto::select::{SelectInfo, SLoginSuccess, SNewCharacterSuccess};
 
+mod config;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Stage {
     Connected,
@@ -62,7 +70,7 @@ struct LoginConnection {
     store: Arc<dyn AccountStore>,
     world_db: Arc<WorldDatabase>,
     world_config: WorldConfig,
-    world: world::World<WorldDatabase>,
+    world: Arc<Mutex<world::World<WorldDatabase>>>,
     current_x: i32,
     current_y: i32,
     direction: u8,
@@ -73,8 +81,8 @@ impl LoginConnection {
         store: Arc<dyn AccountStore>,
         world_db: Arc<WorldDatabase>,
         world_config: WorldConfig,
+        world: Arc<Mutex<world::World<WorldDatabase>>>,
     ) -> Self {
-        let world = world::World::new((*world_db).clone(), world_config.clone());
         LoginConnection {
             stage: Stage::Connected,
             session_id: 1,
@@ -94,6 +102,35 @@ impl LoginConnection {
         raw.encode()
     }
 
+    fn demo_user_item() -> UserItemData {
+        UserItemData {
+            unique_id: 0xABCDEF01,
+            item_index: 1000,
+            current_dura: 30,
+            max_dura: 30,
+            count: 1,
+            soul_bound_id: -1,
+            identified: true,
+            cursed: false,
+            slots: Vec::new(),
+            gem_count: 0,
+            added_stats: StatsMap { entries: vec![] },
+            awake: AwakeData {
+                awake_type: 0,
+                values: Vec::new(),
+            },
+            refined_value: 0,
+            refine_added: 0,
+            refine_success_chance: 0,
+            wedding_ring: -1,
+            expire_info: None,
+            rental_information: None,
+            is_shop_item: false,
+            sealed_info: None,
+            gm_made: false,
+        }
+    }
+
     fn apply_step(&mut self, direction: u8, distance: i32) {
         let cmd = match distance {
             0 => world::WorldCommand::Turn {
@@ -111,7 +148,10 @@ impl LoginConnection {
             _ => return,
         };
 
-        let events = self.world.handle_command(cmd);
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(cmd)
+        };
         for event in events {
             if let world::WorldEvent::UserLocation {
                 x,
@@ -460,13 +500,16 @@ impl ConnectionHandler for LoginConnection {
                         }
 
                         // Initialize world state for this session.
-                        let events = self.world.handle_command(world::WorldCommand::StartGame {
-                            session_id: self.session_id,
-                            map_index: map_info_core.index,
-                            x: spawn_x,
-                            y: spawn_y,
-                            direction: 0,
-                        });
+                        let events = {
+                            let mut world = self.world.lock().unwrap();
+                            world.handle_command(world::WorldCommand::StartGame {
+                                session_id: self.session_id,
+                                map_index: map_info_core.index,
+                                x: spawn_x,
+                                y: spawn_y,
+                                direction: 0,
+                            })
+                        };
                         for event in events {
                             if let world::WorldEvent::UserLocation {
                                 x,
@@ -606,6 +649,14 @@ impl ConnectionHandler for LoginConnection {
                         let gold = SGainedGold { gold: 5_000 };
                         if let Ok(raw) = gold.encode() {
                             out.push(Self::encode_raw(raw));
+                        }
+
+                        // Give the player a demo item so we can observe it in the client inventory.
+                        let demo_item = Self::demo_user_item();
+                        if let Ok(pkt) = SGainedItem::from_user_item(&demo_item) {
+                            if let Ok(raw) = pkt.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
                         }
 
                         let npc = SObjectNpc {
@@ -883,17 +934,30 @@ impl ConnectionHandler for LoginConnection {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let addr: SocketAddr = "0.0.0.0:7000".parse().expect("invalid listen address");
+    let cfg = config::load_server_config("server.toml")
+        .expect("failed to load server configuration");
+
+    let filter = tracing_subscriber::EnvFilter::new(
+        cfg.log_filter
+            .as_deref()
+            .unwrap_or("info"),
+    );
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .init();
+
+    let addr: SocketAddr = cfg.listen_addr;
     let store: Arc<dyn AccountStore> = Arc::new(
-        FileAccountStore::open("./data/accounts.json")
-            .expect("failed to open accounts database"),
+        SqliteAccountStore::open(&cfg.accounts_db_path)
+            .expect("failed to open accounts sqlite database"),
     );
 
     // Load MapInfoList from the C# Server.MirDB database so we can use
     // real map metadata to drive map loading and packets. This keeps
     // compatibility with the existing C# server's database format.
     let mut world_db = WorldDatabase::new();
-    match world::map::load_map_infos_from_mirdb("./Server.MirDB") {
+    match world::map::load_map_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(maps) => {
             println!(
                 "[core] Loaded {} MapInfo entries from Server.MirDB",
@@ -908,26 +972,71 @@ async fn main() -> io::Result<()> {
             );
         }
     }
+
+    // Load MonsterInfoList from the same Server.MirDB so combat logic can
+    // access real monster definitions. For now this is only stored in
+    // WorldDatabase and not yet wired into spawn logic.
+    match world::map::load_monster_infos_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(monsters) => {
+            println!(
+                "[core] Loaded {} MonsterInfo entries from Server.MirDB",
+                monsters.len()
+            );
+            world_db.monster_infos = monsters;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (MonsterInfoList): {} (continuing without Monster DB)",
+                e
+            );
+        }
+    }
+
+    // Load NPCInfoList from the same Server.MirDB so world logic can access
+    // real NPC definitions. For now this is only stored in WorldDatabase and
+    // not yet wired into scene packets.
+    match world::map::load_npc_infos_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(npcs) => {
+            println!(
+                "[core] Loaded {} NPCInfo entries from Server.MirDB",
+                npcs.len()
+            );
+            world_db.npc_infos = npcs;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (NPCInfoList): {} (continuing without NPC DB)",
+                e
+            );
+        }
+    }
     let world_db = Arc::new(world_db);
 
-    // For now, use a relative ./Maps directory for .map files.
-    // You can point this to your actual MapPath (e.g. from C# Settings.MapPath).
-    let world_config = WorldConfig::new("./Maps");
+    // Map directory comes from configuration (maps_path), mirroring C# Settings.MapPath.
+    let world_config = WorldConfig::new(&cfg.maps_path);
+
+    // Global world instance shared by all connections, mirroring the single-world
+    // design of the original C# server. For now this is used synchronously; later
+    // we can introduce a dedicated world tick loop and message queues.
+    let world = world::World::new((*world_db).clone(), world_config.clone());
+    let world = Arc::new(Mutex::new(world));
 
     let factory: HandlerFactory = Arc::new({
         let store = Arc::clone(&store);
         let world_db = Arc::clone(&world_db);
         let world_config = world_config.clone();
+        let world = Arc::clone(&world);
         move || {
             Box::new(LoginConnection::new(
                 Arc::clone(&store),
                 Arc::clone(&world_db),
                 world_config.clone(),
+                Arc::clone(&world),
             )) as Box<dyn ConnectionHandler>
         }
     });
 
-    println!("Rust Crystal stub server listening on {}", addr);
+    tracing::info!("Rust Crystal stub server listening on {}", addr);
 
     run_server(addr, factory).await
 }

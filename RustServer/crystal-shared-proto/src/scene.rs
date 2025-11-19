@@ -42,6 +42,12 @@ pub use crate::user::{
     SObjectDeco,
     SObjectSneaking,
     SObjectLevelEffects,
+    SSetConcentration,
+    SSetElemental,
+    SMountUpdate,
+    STransformUpdate,
+    SEquipSlotItem,
+    SFishingUpdate,
     SSetBindingShot,
     SSwitchGroup,
     SDeleteGroup,
@@ -57,6 +63,8 @@ pub use crate::user::{
     SObjectWalk,
     SPushed,
     SObjectPushed,
+    SObjectSitDown,
+    SInTrapRock,
     SUserBackStep,
     SObjectBackStep,
     SUserDash,
@@ -113,4 +121,16 @@ pub use crate::stats::{SBaseStatsInfo, SHeroBaseStatsInfo, SUserName};
 pub use crate::social::{
     SDivorceRequest, SMarriageRequest, SMentorRequest, STradeAccept, STradeCancel,
     STradeConfirm, STradeGold, STradeItem, STradeRequest,
+};
+pub use crate::hero::{
+    SChangeHero,
+    SHeroCreateRequest,
+    SHeroInformation,
+    SManageHeroes,
+    SNewHero,
+    SSetAutoPotItem,
+    SSetAutoPotValue,
+    SSetHeroBehaviour,
+    SUnlockHeroAutoPot,
+    SUpdateHeroSpawnState,
 };
