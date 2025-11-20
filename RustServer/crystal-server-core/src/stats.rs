@@ -94,6 +94,10 @@ impl Stats {
             self.set(*stat, current + value);
         }
     }
+
+    pub fn clear(&mut self) {
+        self.values.clear();
+    }
 }
 
 impl Stat {

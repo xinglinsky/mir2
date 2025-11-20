@@ -83,14 +83,7 @@ impl LoginConnection {
         // Monsters in view.
         let monsters_in_view = {
             let world = self.world.lock().unwrap();
-            world
-                .monsters_for_map(map_index)
-                .into_iter()
-                .filter(|m| {
-                    (m.x - self.current_x).abs() <= range
-                        && (m.y - self.current_y).abs() <= range
-                })
-                .collect::<Vec<_>>()
+            world.monsters_in_view_for_map(map_index, self.current_x, self.current_y, range)
         };
 
         let mut visible_monster_ids: HashSet<u64> = HashSet::new();
@@ -198,22 +191,13 @@ impl LoginConnection {
         // Players in view.
         let players_in_view: Vec<(world::SessionId, i32, i32, u8)> = {
             let world = self.world.lock().unwrap();
-            world
-                .players
-                .iter()
-                .filter_map(|(&sid, p)| {
-                    if sid == self.session_id {
-                        return None;
-                    }
-                    if p.map_index != map_index {
-                        return None;
-                    }
-                    if (p.x - self.current_x).abs() > range || (p.y - self.current_y).abs() > range {
-                        return None;
-                    }
-                    Some((sid, p.x, p.y, p.direction))
-                })
-                .collect()
+            world.players_in_view_for_map(
+                map_index,
+                self.current_x,
+                self.current_y,
+                range,
+                Some(self.session_id),
+            )
         };
 
         let mut visible_player_ids: HashSet<world::SessionId> = HashSet::new();

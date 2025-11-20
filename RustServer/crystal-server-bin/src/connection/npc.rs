@@ -4,7 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
-use crystal_shared_proto::item_types::UserItemData;
+use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 
 use super::LoginConnection;
 
@@ -17,14 +17,36 @@ impl LoginConnection {
         if !s.starts_with('@') {
             s = format!("@{}", s);
         }
-        if s == "@MAIN" {
-            "@MAIN-1".to_string()
-        } else {
-            s
-        }
+        s
     }
 
     pub(crate) fn find_npc_script_path(root: &Path, file_name: &str) -> Option<PathBuf> {
+        // In the original C# server, NpcInfo.FileName stores a path relative to the
+        // Envir/NPCs folder, for example "BichonProvince\\BichonWall\\BookStore".
+        // First try interpreting the value as such a relative path (with or without
+        // ".txt" extension). If that fails, fall back to a recursive search by
+        // basename as before.
+
+        // Normalise separators to forward slashes for portability.
+        let rel = file_name.replace('\\', "/");
+        let rel_path = Path::new(&rel);
+
+        // Candidate 1: root / rel_path (as-is).
+        let candidate1 = root.join(rel_path);
+        if candidate1.is_file() {
+            return Some(candidate1);
+        }
+
+        // Candidate 2: ensure .txt extension.
+        let mut candidate2 = candidate1.clone();
+        if candidate2.extension().is_none() {
+            candidate2.set_extension("txt");
+        }
+        if candidate2.is_file() {
+            return Some(candidate2);
+        }
+
+        // Fallback: recursive search by basename + .txt (legacy behaviour).
         let target = format!("{}.txt", file_name).to_lowercase();
         let mut stack = vec![root.to_path_buf()];
 
@@ -252,5 +274,90 @@ impl LoginConnection {
         write_bool(&mut buf, hide_added_stats)?;
 
         Ok(buf)
+    }
+
+    /// Parse [Trade] sections from an NPC script file, returning (ItemName, Count)
+    /// pairs similar to C# NPCScript.ParseGoods.
+    pub(crate) fn load_npc_trade_goods_from_file(
+        path: &Path,
+    ) -> io::Result<Vec<(String, u16)>> {
+        let text = fs::read_to_string(path)?;
+        let lines: Vec<&str> = text.lines().collect();
+        let mut goods: Vec<(String, u16)> = Vec::new();
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let trimmed = lines[i].trim();
+            if trimmed.to_ascii_uppercase().starts_with("[TRADE]") {
+                i += 1;
+                while i < lines.len() {
+                    let line = lines[i];
+                    let t = line.trim();
+                    if t.starts_with('[') {
+                        break;
+                    }
+                    if t.is_empty() {
+                        i += 1;
+                        continue;
+                    }
+
+                    let parts: Vec<&str> = t.split_whitespace().collect();
+                    if parts.is_empty() {
+                        i += 1;
+                        continue;
+                    }
+
+                    let name = parts[0].to_string();
+                    let mut count: u16 = 1;
+                    if parts.len() >= 2 {
+                        if let Ok(v) = parts[1].parse::<u16>() {
+                            count = v;
+                        }
+                    }
+
+                    goods.push((name, count));
+                    i += 1;
+                }
+                continue;
+            }
+            i += 1;
+        }
+
+        Ok(goods)
+    }
+
+    /// Build a minimal UserItemData for a shop item from ItemInfoData, mimicking
+    /// the core behaviour of C# Envir.CreateShopItem.
+    pub(crate) fn make_shop_user_item(
+        info: &ItemInfoData,
+        unique_id: u64,
+        count: u16,
+    ) -> UserItemData {
+        UserItemData {
+            unique_id,
+            item_index: info.index,
+            current_dura: info.durability,
+            max_dura: info.durability,
+            count,
+            soul_bound_id: 0,
+            identified: !info.need_identify,
+            cursed: false,
+            slots: Vec::new(),
+            gem_count: 0,
+            added_stats: StatsMap { entries: Vec::new() },
+            awake: AwakeData {
+                awake_type: 0,
+                values: Vec::new(),
+            },
+            refined_value: 0,
+            refine_added: 0,
+            refine_success_chance: 0,
+            wedding_ring: 0,
+            expire_info: None,
+            rental_information: None,
+            is_shop_item: true,
+            sealed_info: None,
+            gm_made: false,
+        }
     }
 }

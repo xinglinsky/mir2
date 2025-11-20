@@ -714,6 +714,14 @@ impl ConnectionHandler for LoginConnection {
                             .iter()
                             .find(|n| n.index as u32 == msg.object_id && n.map_index == self.current_map_index)
                         {
+                            // Debug: show which NPC and script name we are resolving for this CallNPC.
+                            tracing::debug!(
+                                "CallNPC: map={} npc_index={} file_name='{}' key='{}'",
+                                self.current_map_index,
+                                npc.index,
+                                npc.file_name,
+                                msg.key,
+                            );
                             let dx = npc.location_x - self.current_x;
                             let dy = npc.location_y - self.current_y;
 
@@ -722,33 +730,80 @@ impl ConnectionHandler for LoginConnection {
                                 let key_upper = key.as_str();
 
                                 // Shop-related keys: mirror C# NPCScript.Call behaviour for
-                                // Buy/BuySell/Sell/Craft entries by sending an NPCGoods
-                                // packet (and optionally an NPCSell packet) instead of a
-                                // normal NPC dialog page.
+                                // Buy/BuySell/Sell entries. For buy-style pages we send an
+                                // NPCGoods packet (and optionally an NPCSell packet); for
+                                // pure sell pages we only send NPCSell.
                                 let is_buy_panel = matches!(
                                     key_upper,
                                     "@BUY" | "@BUYNEW" | "@BUYBACK" | "@BUYUSED" | "@PEARLBUY" | "@BUYSELL" | "@BUYSELLNEW"
                                 );
-                                let wants_sell_panel = matches!(key_upper, "@BUYSELL" | "@BUYSELLNEW");
                                 let is_sell_only = key_upper == "@SELL";
 
-                                if is_buy_panel || is_sell_only {
-                                    // For now we use an empty goods list but a byte layout
-                                    // that exactly matches C# ServerPackets.NPCGoods.
-                                    // PanelType.Buy = 0, PanelType.Sell = 3, PanelType.Craft = 2.
-                                    let panel_type: u8 = 0; // Buy panel for now.
-                                    let rate: f32 = 1.0; // Placeholder for PriceRate(player).
-                                    let goods: Vec<_> = Vec::new();
+                                if is_sell_only {
+                                    let sell = SNpcSell;
+                                    let raw = sell.encode();
+                                    out.push(Self::encode_raw(raw));
+                                    return out;
+                                }
 
-                                    if let Ok(bytes) =
-                                        Self::build_npc_goods_bytes(&goods, rate, panel_type, false)
-                                    {
+                                if is_buy_panel {
+                                    // Build goods list from the NPC script's [Trade] section
+                                    // and the ItemInfoList loaded from Server.MirDB.
+                                    let mut goods_items = Vec::new();
+                                    let root_deploy = Path::new("./deploy/Envir/NPCs");
+                                    let root_plain = Path::new("./Envir/NPCs");
+                                    let root = if root_deploy.exists() { root_deploy } else { root_plain };
+                                    if root.exists() {
+                                        if let Some(script_path) =
+                                            Self::find_npc_script_path(root, &npc.file_name)
+                                        {
+                                            tracing::debug!(
+                                                "CallNPC shop: using script path {:?} for npc_index={}",
+                                                script_path,
+                                                npc.index,
+                                            );
+                                            if let Ok(specs) =
+                                                Self::load_npc_trade_goods_from_file(&script_path)
+                                            {
+                                                let base_uid = (npc.index as u64) << 32;
+                                                for (idx, (name, count)) in specs.iter().enumerate()
+                                                {
+                                                    if let Some(info) = self
+                                                        .world_db
+                                                        .item_infos
+                                                        .iter()
+                                                        .find(|i| i.name.eq_ignore_ascii_case(name))
+                                                    {
+                                                        let unique_id = base_uid + idx as u64 + 1;
+                                                        let item = Self::make_shop_user_item(
+                                                            info,
+                                                            unique_id,
+                                                            *count,
+                                                        );
+                                                        goods_items.push(item);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // PanelType.Buy = 0; for now we always open the buy panel
+                                    // and ignore pearl/craft panels.
+                                    let panel_type: u8 = 0;
+                                    let rate: f32 = 1.0; // Placeholder for PriceRate(player).
+
+                                    if let Ok(bytes) = Self::build_npc_goods_bytes(
+                                        &goods_items,
+                                        rate,
+                                        panel_type,
+                                        false,
+                                    ) {
                                         let pkt = SNpcGoods { goods_bytes: bytes };
                                         let raw = pkt.encode();
                                         out.push(Self::encode_raw(raw));
                                     }
 
-                                    if wants_sell_panel || is_sell_only {
+                                    if matches!(key_upper, "@BUYSELL" | "@BUYSELLNEW") {
                                         let sell = SNpcSell;
                                         let raw = sell.encode();
                                         out.push(Self::encode_raw(raw));
@@ -757,11 +812,18 @@ impl ConnectionHandler for LoginConnection {
                                     return out;
                                 }
 
-                                let root = Path::new("./deploy/Envir/NPCs");
+                                let root_deploy = Path::new("./deploy/Envir/NPCs");
+                                let root_plain = Path::new("./Envir/NPCs");
+                                let root = if root_deploy.exists() { root_deploy } else { root_plain };
                                 let mut maybe_page: Option<Vec<String>> = None;
 
                                 if root.exists() {
                                     if let Some(script_path) = Self::find_npc_script_path(root, &npc.file_name) {
+                                        tracing::debug!(
+                                            "CallNPC dialog: using script path {:?} for npc_index={}",
+                                            script_path,
+                                            npc.index,
+                                        );
                                         if let Ok((pages, moves)) = Self::load_npc_script_from_file(&script_path) {
                                             let paid = Self::extract_paid_teleport_info(&script_path, &key);
 

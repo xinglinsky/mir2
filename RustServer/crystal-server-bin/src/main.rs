@@ -60,6 +60,24 @@ async fn main() -> io::Result<()> {
         }
     }
 
+    // Load ItemInfoList so that systems like NPC shops can construct
+    // concrete UserItemData payloads for goods, mirroring C# Envir.ItemInfoList.
+    match world::map::load_item_infos_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(items) => {
+            println!(
+                "[core] Loaded {} ItemInfo entries from Server.MirDB",
+                items.len()
+            );
+            world_db.item_infos = items;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (ItemInfoList): {} (continuing without Item DB)",
+                e
+            );
+        }
+    }
+
     // Load MonsterInfoList from the same Server.MirDB so combat logic can
     // access real monster definitions. For now this is only stored in
     // WorldDatabase and not yet wired into spawn logic.

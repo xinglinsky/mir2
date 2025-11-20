@@ -7,6 +7,7 @@ use crate::stats::{Stat, Stats};
 use crate::world::magic::MagicInfo;
 use crate::world::monster::MonsterInfo;
 use crate::world::npc::NpcInfo;
+use crystal_shared_proto::item_types::ItemInfoData;
 
 /// Load MapInfo records directly from a C# Server.MirDB database file.
 ///
@@ -55,6 +56,66 @@ pub fn load_map_infos_from_mirdb<P: AsRef<Path>>(path: P) -> io::Result<Vec<MapI
     }
 
     Ok(map_infos)
+}
+
+/// Load ItemInfo records directly from a C# Server.MirDB database file.
+///
+/// This mirrors the layout produced by Envir.SaveDB and ItemInfo.Save in the
+/// original C# server. The function walks past the MapInfoList section and
+/// then materialises the ItemInfoList section as Rust ItemInfoData values.
+pub fn load_item_infos_from_mirdb<P: AsRef<Path>>(path: P) -> io::Result<Vec<ItemInfoData>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+
+    // Header written by Envir.SaveDB
+    let version = read_i32(&mut reader)?;
+    let _custom_version = read_i32(&mut reader)?;
+
+    // Various index counters (max indices), currently ignored.
+    let _map_index = read_i32(&mut reader)?;
+    let _item_index = read_i32(&mut reader)?;
+    let _monster_index = read_i32(&mut reader)?;
+    let _npc_index = read_i32(&mut reader)?;
+    let _quest_index = read_i32(&mut reader)?;
+    let _gameshop_index = read_i32(&mut reader)?;
+    let _conquest_index = read_i32(&mut reader)?;
+    let _respawn_index = read_i32(&mut reader)?;
+
+    if version < 60 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported Server.MirDB version {} (expected >= 60)", version),
+        ));
+    }
+
+    // MapInfoList – walked to keep the stream in sync.
+    let map_count = read_i32(&mut reader)?;
+    if map_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MapInfo count {} in Server.MirDB", map_count),
+        ));
+    }
+    for _ in 0..map_count {
+        let _ = read_map_info(&mut reader)?;
+    }
+
+    // ItemInfoList – materialised as ItemInfoData values.
+    let item_count = read_i32(&mut reader)?;
+    if item_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ItemInfo count {} in Server.MirDB", item_count),
+        ));
+    }
+
+    let mut item_infos = Vec::with_capacity(item_count as usize);
+    for _ in 0..item_count {
+        let item = ItemInfoData::decode(&mut reader)?;
+        item_infos.push(item);
+    }
+
+    Ok(item_infos)
 }
 
 /// Load MonsterInfo records from a C# Server.MirDB file.

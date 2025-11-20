@@ -1,6 +1,6 @@
 // NPC-related packets (ObjectNpc, NPCResponse) compatible with the C# Crystal implementation.
 
-use std::io::{self, Cursor, Read};
+use std::io::{self, Cursor, Read, Write};
 
 use crate::io::{
     read_bool, read_f32_le, read_i32_le, read_string, read_u16_le, read_u32_le, read_u64_le, write_bool,
@@ -8,6 +8,8 @@ use crate::io::{
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 #[derive(Clone, Debug)]
 pub struct SObjectNpc {
@@ -142,9 +144,19 @@ pub struct SNpcGoods {
 
 impl SNpcGoods {
     pub fn encode(&self) -> RawPacket {
+        // C# marks NPCGoods as Compressed => true, which means the inner payload
+        // written by NPCGoods.WritePacket is GZip-compressed before framing.
+        // To stay compatible with the official client, we mirror that here.
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        // Ignore compression errors and fall back to raw payload if needed.
+        let payload = match encoder.write_all(&self.goods_bytes).and_then(|_| encoder.finish()) {
+            Ok(bytes) => bytes,
+            Err(_) => self.goods_bytes.clone(),
+        };
+
         RawPacket {
             id: ServerPacketId::NpcGoods as i16,
-            payload: self.goods_bytes.clone(),
+            payload,
         }
     }
 
