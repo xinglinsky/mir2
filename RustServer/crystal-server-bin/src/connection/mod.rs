@@ -1,0 +1,54 @@
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+
+use crystal_server_core::account::{AccountStore, CharacterStats};
+use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
+use crystal_shared_proto::select::SelectInfo;
+
+pub mod session;
+pub mod visibility;
+pub mod npc;
+pub mod movement;
+pub mod handler;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Stage {
+    Connected,
+    VersionChecked,
+    Select,
+    InGame,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PlayerVisual {
+    pub(crate) name: String,
+    pub(crate) guild_name: String,
+    pub(crate) guild_rank_name: String,
+    pub(crate) name_colour_argb: i32,
+    pub(crate) class: u8,
+    pub(crate) gender: u8,
+    pub(crate) level: u16,
+    pub(crate) hair: u8,
+}
+
+pub(crate) struct LoginConnection {
+    pub(crate) stage: Stage,
+    pub(crate) session_id: world::SessionId,
+    pub(crate) account_id: Option<String>,
+    pub(crate) characters: Vec<SelectInfo>,
+    pub(crate) store: Arc<dyn AccountStore>,
+    pub(crate) world_db: Arc<WorldDatabase>,
+    pub(crate) world_config: WorldConfig,
+    pub(crate) world: Arc<Mutex<world::World<WorldDatabase>>>,
+    pub(crate) exp_table: Arc<Vec<i64>>,
+    pub(crate) current_map_index: i32,
+    pub(crate) current_x: i32,
+    pub(crate) current_y: i32,
+    pub(crate) direction: u8,
+    pub(crate) current_char_index: Option<i32>,
+    pub(crate) current_stats: Option<CharacterStats>,
+    pub(crate) known_monsters: HashSet<u64>,
+    pub(crate) known_npcs: HashSet<i32>,
+    pub(crate) known_players: HashSet<world::SessionId>,
+    pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
+}

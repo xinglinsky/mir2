@@ -205,6 +205,7 @@ name = "crystal-server-bin"
 version = "0.1.0"
 dependencies = [
  "crystal-server-core",
+ "crystal-server-db",
  "crystal-server-net",
  "crystal-shared-proto",
  "serde",
@@ -221,10 +222,20 @@ dependencies = [
  "chrono",
  "crystal-shared-proto",
  "hex",
+ "serde",
+ "sha2",
+ "tracing",
+]
+
+[[package]]
+name = "crystal-server-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crystal-server-core",
  "rusqlite",
  "serde",
  "serde_json",
- "sha2",
  "tracing",
 ]
 

@@ -25,6 +25,7 @@ pub enum ClientPacketId {
     Chat = 13,
     /// Basic melee/magic attack. Matches ClientPackets.Attack in C#.
     Attack = 44,
+    CallNPC = 47,
 }
 
 impl ClientPacketId {
@@ -45,6 +46,7 @@ impl ClientPacketId {
             12 => Some(ClientPacketId::Run),
             13 => Some(ClientPacketId::Chat),
             44 => Some(ClientPacketId::Attack),
+            47 => Some(ClientPacketId::CallNPC),
             _ => None,
         }
     }
@@ -604,6 +606,31 @@ impl CAttack {
             direction: payload[0],
             spell: payload[1],
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCallNPC {
+    pub object_id: u32,
+    pub key: String,
+}
+
+impl CCallNPC {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        crate::io::write_u32_le(&mut buf, self.object_id)?;
+        write_string(&mut buf, &self.key)?;
+        Ok(RawPacket {
+            id: ClientPacketId::CallNPC as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = crate::io::read_u32_le(&mut c)?;
+        let key = read_string(&mut c)?;
+        Ok(CCallNPC { object_id, key })
     }
 }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use tracing::debug;
+use crate::stats::Stat;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self, CellAttribute, RespawnInfo};
 use crate::world::monster::MonsterInstance;
@@ -8,6 +9,8 @@ use crate::world::provider::WorldProvider;
 use crate::world::magic::UserMagic;
 
 pub type SessionId = u32;
+
+const SPELL_FATAL_SWORD: u8 = 91;
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
@@ -41,6 +44,17 @@ pub enum WorldCommand {
         session_id: SessionId,
         direction: u8,
     },
+    Attack {
+        session_id: SessionId,
+        direction: u8,
+        spell: u8,
+    },
+    Teleport {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +72,16 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
         direction: u8,
+    },
+    ObjectAttack {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        spell: u8,
+        level: u8,
+        attack_type: u8,
     },
 }
 
@@ -348,24 +372,56 @@ impl<P: WorldProvider> World<P> {
     fn create_monsters_from_respawn(&mut self, map: &map::Map, respawn: &RespawnInfo) -> Vec<MonsterInstance> {
         let mut result = Vec::new();
 
-        for _ in 0..respawn.count {
-            let x = respawn.location_x;
-            let y = respawn.location_y;
+        // Strictly mirror the C# logic:
+        //   info.WalkableCells = WalkableCells.Where(x =>
+        //       x.X <= Info.Location.X + Info.Spread &&
+        //       x.X >= Info.Location.X - Info.Spread &&
+        //       x.Y <= Info.Location.Y + Info.Spread &&
+        //       x.Y >= Info.Location.Y - Info.Spread).ToList();
+        //
+        // and then MonsterObject.Spawn(MapRespawn) picks a random point from
+        // Respawn.WalkableCells for each spawned monster. Here we build the
+        // candidate list from map.walkable_cells and then distribute Count
+        // monsters across those cells in a deterministic but equivalent way.
 
-            if x < 0 || y < 0 {
-                continue;
+        let spread = respawn.spread as i32;
+        let mut candidates: Vec<(i32, i32)> = Vec::new();
+
+        for &(wx, wy) in &map.walkable_cells {
+            let x = wx as i32;
+            let y = wy as i32;
+            if x <= respawn.location_x + spread
+                && x >= respawn.location_x - spread
+                && y <= respawn.location_y + spread
+                && y >= respawn.location_y - spread
+            {
+                candidates.push((x, y));
             }
+        }
 
-            let ux = x as u16;
-            let uy = y as u16;
+        // If there are no walkable cells in range, C# 的 MapRespawn 会得到
+        // 一个空的 WalkableCells 列表，MonsterObject.Spawn 返回 false，
+        // 该 Respawn 点不会刷怪，这里也保持相同行为：直接返回空列表。
+        if candidates.is_empty() {
+            return result;
+        }
 
-            let Some(cell) = map.cell(ux, uy) else {
-                continue;
-            };
+        let needed = respawn.count as usize;
+        let len = candidates.len();
+        if len == 0 || needed == 0 {
+            return result;
+        }
 
-            if !matches!(cell.attribute, CellAttribute::Walk) {
-                continue;
-            }
+        // Determine base HP for this monster type from MonsterInfo stats.
+        let base_hp: i32 = self
+            .provider
+            .get_monster_info(respawn.monster_index)
+            .map(|info| info.stats.get(Stat::HP))
+            .unwrap_or(1)
+            .max(1);
+
+        for i in 0..needed {
+            let (x, y) = candidates[i % len];
 
             self.next_monster_id = self.next_monster_id.wrapping_add(1);
 
@@ -376,11 +432,34 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction: respawn.direction,
+                hp: base_hp,
                 respawn_index: respawn.respawn_index,
             });
         }
 
         result
+    }
+
+    /// Placeholder for attack permission checks, mirroring the C# CanAttack
+    /// gate in HumanObject.Attack. For now this always returns true; the
+    /// detailed cooldown / state logic will be wired later.
+    fn can_attack(_player: &PlayerState) -> bool {
+        true
+    }
+
+    /// Normalize the requested spell to an effective spell/level pair based on
+    /// the player's learned magics. If the player does not know the requested
+    /// spell, this returns (0, 0) which mirrors Spell.None behaviour in C#.
+    fn resolve_attack_spell_and_level(player: &PlayerState, requested_spell: u8) -> (u8, u8) {
+        if requested_spell == 0 {
+            return (0, 0);
+        }
+
+        if let Some(magic) = player.magics.iter().find(|m| m.spell == requested_spell) {
+            (requested_spell, magic.level)
+        } else {
+            (0, 0)
+        }
     }
 
     /// Get a cloned list of learned magics for the given player session.
@@ -636,6 +715,141 @@ impl<P: WorldProvider> World<P> {
                         });
                         self.players.insert(session_id, p);
                     }
+                }
+            }
+            WorldCommand::Attack {
+                session_id,
+                direction,
+                spell,
+            } => {
+
+                let (map_index, x, y, direction, effective_spell, level, has_fatal_sword) =
+                    match self.players.get_mut(&session_id) {
+                        Some(p) => {
+                            if !Self::can_attack(p) {
+                                return events;
+                            }
+
+                            p.direction = direction;
+                            let (effective_spell, level) =
+                                Self::resolve_attack_spell_and_level(p, spell);
+                            let has_fatal_sword =
+                                p.magics.iter().any(|m| m.spell == SPELL_FATAL_SWORD);
+
+                            (
+                                p.map_index,
+                                p.x,
+                                p.y,
+                                p.direction,
+                                effective_spell,
+                                level,
+                                has_fatal_sword,
+                            )
+                        }
+                        None => {
+                            return events;
+                        }
+                    };
+
+                let mut damage_base: i32 = 1_000_000;
+                let mut damage_final: i32 = damage_base;
+
+                if has_fatal_sword {
+                }
+
+                let (dx, dy) = match direction {
+                    0 => (0, -1),
+                    1 => (1, -1),
+                    2 => (1, 0),
+                    3 => (1, 1),
+                    4 => (0, 1),
+                    5 => (-1, 1),
+                    6 => (-1, 0),
+                    7 => (-1, -1),
+                    _ => (0, 0),
+                };
+                let target_x = x + dx;
+                let target_y = y + dy;
+
+                let target_info = match self.monsters.get(&map_index) {
+                    Some(monsters) => monsters
+                        .iter()
+                        .find(|m| m.x == target_x && m.y == target_y)
+                        .map(|m| (m.id, m.monster_index)),
+                    None => None,
+                };
+                if let Some((id, monster_index)) = target_info {
+                    let mut dead = false;
+
+                    let undead = self
+                        .provider
+                        .get_monster_info(monster_index)
+                        .map(|info| info.undead)
+                        .unwrap_or(false);
+
+                    if undead {
+                        let holy_bonus: i32 = 0;
+                        damage_base = damage_base.saturating_add(holy_bonus);
+                        damage_final = damage_base;
+                    }
+
+                    if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                        if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                            if damage_final > 0 {
+                                m.hp = m.hp.saturating_sub(damage_final);
+                                if m.hp <= 0 {
+                                    dead = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if dead {
+                        self.mark_monster_dead(map_index, id);
+                    }
+                }
+
+                events.push(WorldEvent::UserLocation {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                });
+
+                events.push(WorldEvent::ObjectAttack {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    spell: effective_spell,
+                    level,
+                    attack_type: 0,
+                });
+            }
+            WorldCommand::Teleport {
+                session_id,
+                map_index,
+                x,
+                y,
+            } => {
+                if let Some(map) = self.get_or_load_map(map_index) {
+                    self.spawn_monsters_for_map(map_index, &map);
+                }
+
+                if let Some(p) = self.players.get_mut(&session_id) {
+                    p.map_index = map_index;
+                    p.x = x;
+                    p.y = y;
+
+                    events.push(WorldEvent::MapChanged {
+                        session_id: p.session_id,
+                        map_index: p.map_index,
+                        x: p.x,
+                        y: p.y,
+                        direction: p.direction,
+                    });
                 }
             }
         }
