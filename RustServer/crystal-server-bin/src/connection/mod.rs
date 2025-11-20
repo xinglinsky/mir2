@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use crystal_server_core::account::{AccountStore, CharacterStats};
-use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
+use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider};
 use crystal_shared_proto::select::SelectInfo;
 
 pub mod session;

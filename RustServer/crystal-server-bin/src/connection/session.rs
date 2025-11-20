@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use crystal_server_core::account::AccountStore;
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
+use crystal_server_core::world::WorldProvider;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
 use crystal_shared_proto::io::write_bool;
 use crystal_shared_proto::packet::RawPacket;

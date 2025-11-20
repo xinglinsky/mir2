@@ -1,4 +1,5 @@
 use crystal_server_core::world;
+use crystal_server_core::world::WorldProvider;
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::user::{SObjectAttack, SUserLocation};
 

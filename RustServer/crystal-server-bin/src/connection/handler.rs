@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crystal_server_core::account::{CharacterPosition, CharacterStats, CharacterSummary};
 use crystal_server_core::world::{self};
+use crystal_server_core::world::WorldProvider;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
 use crystal_server_net::ConnectionHandler;
 use crystal_shared_proto::io::read_string;
@@ -292,7 +293,7 @@ impl ConnectionHandler for LoginConnection {
                                 } else if let Some(info) = map_infos.first() {
                                     info.clone()
                                 } else {
-                                    world::map::MapInfo::default()
+                                    stub_map_info()
                                 }
                             } else if let Some(pos) = &bind_pos {
                                 if let Some(info) = map_infos.iter().find(|m| m.index == pos.map_index) {
@@ -305,7 +306,7 @@ impl ConnectionHandler for LoginConnection {
                                 } else if let Some(info) = map_infos.first() {
                                     info.clone()
                                 } else {
-                                    world::map::MapInfo::default()
+                                    stub_map_info()
                                 }
                             } else if let Some(info) = map_infos
                                 .iter()
@@ -315,7 +316,7 @@ impl ConnectionHandler for LoginConnection {
                             } else if let Some(info) = map_infos.first() {
                                 info.clone()
                             } else {
-                                world::map::MapInfo::default()
+                                stub_map_info()
                             }
                         };
 
@@ -888,5 +889,48 @@ impl ConnectionHandler for LoginConnection {
             let mut map = self.player_summaries.lock().unwrap();
             map.remove(&self.session_id);
         }
+    }
+}
+
+fn stub_map_info() -> world::map::MapInfo {
+    world::map::MapInfo {
+        index: 0,
+        file_name: "3".to_string(),
+        title: "StubMap".to_string(),
+        mini_map: 0,
+        big_map: 0,
+        light: 0,
+        map_dark_light: 0,
+        music: 0,
+        weather_particles: 0,
+        no_teleport: false,
+        no_reconnect: false,
+        no_random: false,
+        no_escape: false,
+        no_recall: false,
+        no_drug: false,
+        no_position: false,
+        no_throw_item: false,
+        no_drop_player: false,
+        no_drop_monster: false,
+        no_names: false,
+        no_mount: false,
+        need_bridle: false,
+        no_fight: false,
+        fight: false,
+        fire: false,
+        fire_damage: 0,
+        lightning: false,
+        lightning_damage: 0,
+        no_town_teleport: false,
+        no_reincarnation: false,
+        no_reconnect_map: String::new(),
+        mine_zones: Vec::new(),
+        mine_index: 0,
+        gt: false,
+        gt_index: 0,
+        safe_zones: Vec::new(),
+        respawns: Vec::new(),
+        movements: Vec::new(),
     }
 }
