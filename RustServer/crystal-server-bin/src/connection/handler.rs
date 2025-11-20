@@ -40,6 +40,7 @@ use crystal_shared_proto::scene::{
     SObjectTeleportOut,
     STeleportIn,
 };
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell};
 use crystal_shared_proto::select::{
     SelectInfo,
     SLogOutFailed,
@@ -434,6 +435,7 @@ impl ConnectionHandler for LoginConnection {
                                 x: spawn_x,
                                 y: spawn_y,
                                 direction: initial_direction,
+                                level: ch.level,
                                 magics: user_magics,
                             })
                         };
@@ -717,6 +719,44 @@ impl ConnectionHandler for LoginConnection {
 
                             if dx.abs() <= Self::DATA_RANGE && dy.abs() <= Self::DATA_RANGE {
                                 let key = Self::normalize_npc_key(&msg.key);
+                                let key_upper = key.as_str();
+
+                                // Shop-related keys: mirror C# NPCScript.Call behaviour for
+                                // Buy/BuySell/Sell/Craft entries by sending an NPCGoods
+                                // packet (and optionally an NPCSell packet) instead of a
+                                // normal NPC dialog page.
+                                let is_buy_panel = matches!(
+                                    key_upper,
+                                    "@BUY" | "@BUYNEW" | "@BUYBACK" | "@BUYUSED" | "@PEARLBUY" | "@BUYSELL" | "@BUYSELLNEW"
+                                );
+                                let wants_sell_panel = matches!(key_upper, "@BUYSELL" | "@BUYSELLNEW");
+                                let is_sell_only = key_upper == "@SELL";
+
+                                if is_buy_panel || is_sell_only {
+                                    // For now we use an empty goods list but a byte layout
+                                    // that exactly matches C# ServerPackets.NPCGoods.
+                                    // PanelType.Buy = 0, PanelType.Sell = 3, PanelType.Craft = 2.
+                                    let panel_type: u8 = 0; // Buy panel for now.
+                                    let rate: f32 = 1.0; // Placeholder for PriceRate(player).
+                                    let goods: Vec<_> = Vec::new();
+
+                                    if let Ok(bytes) =
+                                        Self::build_npc_goods_bytes(&goods, rate, panel_type, false)
+                                    {
+                                        let pkt = SNpcGoods { goods_bytes: bytes };
+                                        let raw = pkt.encode();
+                                        out.push(Self::encode_raw(raw));
+                                    }
+
+                                    if wants_sell_panel || is_sell_only {
+                                        let sell = SNpcSell;
+                                        let raw = sell.encode();
+                                        out.push(Self::encode_raw(raw));
+                                    }
+
+                                    return out;
+                                }
+
                                 let root = Path::new("./deploy/Envir/NPCs");
                                 let mut maybe_page: Option<Vec<String>> = None;
 

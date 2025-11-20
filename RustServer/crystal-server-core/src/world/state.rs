@@ -6,11 +6,11 @@ use crate::world::config::WorldConfig;
 use crate::world::map::{self, CellAttribute, RespawnInfo};
 use crate::world::monster::MonsterInstance;
 use crate::world::provider::WorldProvider;
-use crate::world::magic::UserMagic;
+use crate::world::magic::{UserMagic, magic_damage};
 
 pub type SessionId = u32;
 
-const SPELL_FATAL_SWORD: u8 = 91;
+const SPELL_FATAL_SWORD: u8 = crate::world::Spell::FatalSword as u8;
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
@@ -19,6 +19,7 @@ pub struct PlayerState {
     pub x: i32,
     pub y: i32,
     pub direction: u8,
+    pub level: u16,
     pub magics: Vec<UserMagic>,
 }
 
@@ -30,6 +31,7 @@ pub enum WorldCommand {
         x: i32,
         y: i32,
         direction: u8,
+        level: u16,
         magics: Vec<UserMagic>,
     },
     Turn {
@@ -82,6 +84,17 @@ pub enum WorldEvent {
         spell: u8,
         level: u8,
         attack_type: u8,
+    },
+    ObjectStruck {
+        attacker_id: SessionId,
+        target_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        damage: i32,
+        damage_type: u8,
+        health_percent: u8,
     },
 }
 
@@ -138,6 +151,7 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
         direction: u8,
+        level: u16,
         magics: Vec<UserMagic>,
     ) -> &PlayerState {
         self.players
@@ -147,6 +161,7 @@ impl<P: WorldProvider> World<P> {
                 p.x = x;
                 p.y = y;
                 p.direction = direction;
+                p.level = level;
             })
             .or_insert(PlayerState {
                 session_id,
@@ -154,6 +169,7 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction,
+                level,
                 magics,
             });
 
@@ -440,16 +456,21 @@ impl<P: WorldProvider> World<P> {
         result
     }
 
-    /// Placeholder for attack permission checks, mirroring the C# CanAttack
-    /// gate in HumanObject.Attack. For now this always returns true; the
-    /// detailed cooldown / state logic will be wired later.
     fn can_attack(_player: &PlayerState) -> bool {
         true
     }
 
-    /// Normalize the requested spell to an effective spell/level pair based on
-    /// the player's learned magics. If the player does not know the requested
-    /// spell, this returns (0, 0) which mirrors Spell.None behaviour in C#.
+    fn compute_physical_damage_base(player_level: u16) -> i32 {
+        let lvl = player_level.max(1) as i32;
+        let min_dc = 1 + lvl / 2;
+        let max_dc = 2 + lvl;
+        if max_dc <= min_dc {
+            min_dc.max(1)
+        } else {
+            (min_dc + max_dc) / 2
+        }
+    }
+
     fn resolve_attack_spell_and_level(player: &PlayerState, requested_spell: u8) -> (u8, u8) {
         if requested_spell == 0 {
             return (0, 0);
@@ -642,12 +663,13 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction,
+                level,
                 magics,
             } => {
                 if let Some(map) = self.get_or_load_map(map_index) {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
-                let p = self.upsert_player(session_id, map_index, x, y, direction, magics);
+                let p = self.upsert_player(session_id, map_index, x, y, direction, level, magics);
                 events.push(WorldEvent::UserLocation {
                     session_id: p.session_id,
                     map_index: p.map_index,
@@ -723,7 +745,7 @@ impl<P: WorldProvider> World<P> {
                 spell,
             } => {
 
-                let (map_index, x, y, direction, effective_spell, level, has_fatal_sword) =
+                let (map_index, x, y, direction, effective_spell, level, fatal_level, player_level) =
                     match self.players.get_mut(&session_id) {
                         Some(p) => {
                             if !Self::can_attack(p) {
@@ -733,8 +755,12 @@ impl<P: WorldProvider> World<P> {
                             p.direction = direction;
                             let (effective_spell, level) =
                                 Self::resolve_attack_spell_and_level(p, spell);
-                            let has_fatal_sword =
-                                p.magics.iter().any(|m| m.spell == SPELL_FATAL_SWORD);
+                            let fatal_level = p
+                                .magics
+                                .iter()
+                                .find(|m| m.spell == SPELL_FATAL_SWORD)
+                                .map(|m| m.level);
+                            let player_level = p.level;
 
                             (
                                 p.map_index,
@@ -743,7 +769,8 @@ impl<P: WorldProvider> World<P> {
                                 p.direction,
                                 effective_spell,
                                 level,
-                                has_fatal_sword,
+                                fatal_level,
+                                player_level,
                             )
                         }
                         None => {
@@ -751,10 +778,15 @@ impl<P: WorldProvider> World<P> {
                         }
                     };
 
-                let mut damage_base: i32 = 1_000_000;
+                let mut damage_base: i32 = Self::compute_physical_damage_base(player_level);
                 let mut damage_final: i32 = damage_base;
 
-                if has_fatal_sword {
+                if let Some(fatal_level) = fatal_level {
+                    if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
+                        let mut rng = rand::thread_rng();
+                        damage_base = magic_damage(info, fatal_level, damage_base, &mut rng);
+                        damage_final = damage_base;
+                    }
                 }
 
                 let (dx, dy) = match direction {
@@ -781,11 +813,14 @@ impl<P: WorldProvider> World<P> {
                 if let Some((id, monster_index)) = target_info {
                     let mut dead = false;
 
-                    let undead = self
+                    let (undead, max_hp) = self
                         .provider
                         .get_monster_info(monster_index)
-                        .map(|info| info.undead)
-                        .unwrap_or(false);
+                        .map(|info| {
+                            let max_hp = info.stats.get(Stat::HP).max(1);
+                            (info.undead, max_hp)
+                        })
+                        .unwrap_or((false, 1));
 
                     if undead {
                         let holy_bonus: i32 = 0;
@@ -793,15 +828,52 @@ impl<P: WorldProvider> World<P> {
                         damage_final = damage_base;
                     }
 
+                    let mut strike_x = target_x;
+                    let mut strike_y = target_y;
+                    let mut strike_dir = direction;
+                    let mut damage_done: i32 = 0;
+                    let mut health_percent: u8 = 100;
+
                     if let Some(monsters) = self.monsters.get_mut(&map_index) {
                         if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                            strike_x = m.x;
+                            strike_y = m.y;
+                            strike_dir = m.direction;
+
                             if damage_final > 0 {
-                                m.hp = m.hp.saturating_sub(damage_final);
-                                if m.hp <= 0 {
+                                damage_done = damage_final;
+
+                                if damage_final >= m.hp {
+                                    m.hp = 0;
                                     dead = true;
+                                } else {
+                                    m.hp -= damage_final;
+                                }
+
+                                let remaining_hp = if dead { 0 } else { m.hp.max(0) };
+                                if max_hp > 0 {
+                                    let pct = (remaining_hp as i64 * 100 / max_hp as i64)
+                                        .clamp(0, 100) as u8;
+                                    health_percent = pct;
+                                } else {
+                                    health_percent = 0;
                                 }
                             }
                         }
+                    }
+
+                    if damage_done > 0 {
+                        events.push(WorldEvent::ObjectStruck {
+                            attacker_id: session_id,
+                            target_id: id,
+                            map_index,
+                            x: strike_x,
+                            y: strike_y,
+                            direction: strike_dir,
+                            damage: damage_done,
+                            damage_type: 0,
+                            health_percent,
+                        });
                     }
 
                     if dead {

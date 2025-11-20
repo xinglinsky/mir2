@@ -10,3 +10,4 @@ sha2 = "0.10"
 hex = "0.4"
 tracing = "0.1"
 crystal-shared-proto = { path = "../crystal-shared-proto" }
+rand = "0.8"

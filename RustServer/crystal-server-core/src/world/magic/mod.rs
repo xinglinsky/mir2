@@ -1,5 +1,6 @@
 use std::io;
 
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use crystal_shared_proto::io::{write_i64_le, write_string, write_u16_le};
 
@@ -53,6 +54,59 @@ impl UserMagic {
             cast_time: 0,
         }
     }
+}
+
+/// Compute the damage multiplier for a magic at the given level, mirroring the
+/// C# UserMagic.GetMultiplier implementation.
+pub fn magic_multiplier(info: &MagicInfo, level: u8) -> f32 {
+    info.multiplier_base + (level as f32 * info.multiplier_bonus)
+}
+
+/// Compute the MPower component for a magic, mirroring the C# MPower method.
+pub fn magic_mpower<R: Rng + ?Sized>(info: &MagicInfo, rng: &mut R) -> i32 {
+    if info.mpower_bonus > 0 {
+        let base = info.mpower_base as i32;
+        let bonus = info.mpower_bonus as i32;
+        rng.gen_range(base..=base + bonus)
+    } else {
+        info.mpower_base as i32
+    }
+}
+
+/// Compute the DefPower component for a magic, mirroring the C# DefPower
+/// method.
+pub fn magic_def_power<R: Rng + ?Sized>(info: &MagicInfo, rng: &mut R) -> i32 {
+    if info.power_bonus > 0 {
+        let base = info.power_base as i32;
+        let bonus = info.power_bonus as i32;
+        rng.gen_range(base..=base + bonus)
+    } else {
+        info.power_base as i32
+    }
+}
+
+/// Compute the base power added by a magic at the given level, mirroring the
+/// C# UserMagic.GetPower implementation.
+pub fn magic_power<R: Rng + ?Sized>(info: &MagicInfo, level: u8, rng: &mut R) -> i32 {
+    let mpower = magic_mpower(info, rng) as f32;
+    let def_power = magic_def_power(info, rng) as f32;
+    ((mpower / 4.0) * (level as f32 + 1.0) + def_power).round() as i32
+}
+
+/// Compute final damage for a magic given a base physical DamageBase, mirroring
+/// the C# UserMagic.GetDamage implementation:
+///   (DamageBase + GetPower()) * GetMultiplier()
+pub fn magic_damage<R: Rng + ?Sized>(
+    info: &MagicInfo,
+    level: u8,
+    damage_base: i32,
+    rng: &mut R,
+) -> i32 {
+    let power = magic_power(info, level, rng);
+    let mult = magic_multiplier(info, level);
+    let sum = damage_base.saturating_add(power).max(0) as f32;
+    let raw = (sum * mult).round();
+    raw.clamp(i32::MIN as f32, i32::MAX as f32) as i32
 }
 
 /// Encode the exact payload of ClientMagic.Save(writer) given the static MagicInfo

@@ -3,6 +3,9 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
+use crystal_shared_proto::item_types::UserItemData;
+
 use super::LoginConnection;
 
 impl LoginConnection {
@@ -222,5 +225,32 @@ impl LoginConnection {
         } else {
             None
         }
+    }
+
+    /// Build the raw goods_bytes payload for an SNpcGoods packet, mirroring the
+    /// C# ServerPackets.NPCGoods.WritePacket layout:
+    ///   count (i32)
+    ///   repeated UserItem.Save(writer) blobs
+    ///   Rate (f32)
+    ///   Type (PanelType as byte)
+    ///   HideAddedStats (bool)
+    pub(crate) fn build_npc_goods_bytes(
+        goods: &[UserItemData],
+        rate: f32,
+        panel_type: u8,
+        hide_added_stats: bool,
+    ) -> io::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+
+        write_i32_le(&mut buf, goods.len() as i32)?;
+        for item in goods {
+            item.encode(&mut buf)?;
+        }
+
+        write_f32_le(&mut buf, rate)?;
+        buf.push(panel_type);
+        write_bool(&mut buf, hide_added_stats)?;
+
+        Ok(buf)
     }
 }
