@@ -40,7 +40,7 @@ use crystal_shared_proto::scene::{
     SObjectTeleportOut,
     STeleportIn,
 };
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
 use crystal_shared_proto::select::{
     SelectInfo,
     SLogOutFailed,
@@ -427,6 +427,7 @@ impl ConnectionHandler for LoginConnection {
                             .as_ref()
                             .map(|p| p.direction)
                             .unwrap_or(0);
+                        let job = world::Job::from_u8(ch.class).unwrap_or(world::Job::Warrior);
                         let events = {
                             let mut world = self.world.lock().unwrap();
                             world.handle_command(world::WorldCommand::StartGame {
@@ -435,6 +436,7 @@ impl ConnectionHandler for LoginConnection {
                                 x: spawn_x,
                                 y: spawn_y,
                                 direction: initial_direction,
+                                job,
                                 level: ch.level,
                                 magics: user_magics,
                             })
@@ -470,13 +472,31 @@ impl ConnectionHandler for LoginConnection {
                             }
                         };
 
-                        let stats = stats_opt.unwrap_or(CharacterStats {
+                        let raw_stats = stats_opt.unwrap_or(CharacterStats {
                             hp: 100,
                             mp: 50,
                             experience: 0,
                             gold: 0,
                             credit: 0,
                         });
+
+                        let (max_hp, max_mp) = {
+                            let world = self.world.lock().unwrap();
+                            world
+                                .player_max_hp_mp(self.session_id)
+                                .unwrap_or((raw_stats.hp.max(0), raw_stats.mp.max(0)))
+                        };
+
+                        let clamped_hp = raw_stats.hp.clamp(0, max_hp.max(0));
+                        let clamped_mp = raw_stats.mp.clamp(0, max_mp.max(0));
+
+                        let stats = CharacterStats {
+                            hp: clamped_hp,
+                            mp: clamped_mp,
+                            experience: raw_stats.experience,
+                            gold: raw_stats.gold,
+                            credit: raw_stats.credit,
+                        };
 
                         self.current_stats = Some(stats.clone());
 
@@ -735,7 +755,7 @@ impl ConnectionHandler for LoginConnection {
                                 // pure sell pages we only send NPCSell.
                                 let is_buy_panel = matches!(
                                     key_upper,
-                                    "@BUY" | "@BUYNEW" | "@BUYBACK" | "@BUYUSED" | "@PEARLBUY" | "@BUYSELL" | "@BUYSELLNEW"
+                                    "@BUY" | "@BUYNEW" | "@BUYSELL" | "@BUYSELLNEW"
                                 );
                                 let is_sell_only = key_upper == "@SELL";
 
@@ -790,7 +810,9 @@ impl ConnectionHandler for LoginConnection {
                                     // PanelType.Buy = 0; for now we always open the buy panel
                                     // and ignore pearl/craft panels.
                                     let panel_type: u8 = 0;
-                                    let rate: f32 = 1.0; // Placeholder for PriceRate(player).
+                                    // Approximate C# NPCScript.PriceRate: use NPCInfo.Rate / 100f
+                                    // and ignore conquest/guild adjustments for now.
+                                    let rate: f32 = (npc.rate as f32) / 100.0;
 
                                     if let Ok(bytes) = Self::build_npc_goods_bytes(
                                         &goods_items,
@@ -806,6 +828,47 @@ impl ConnectionHandler for LoginConnection {
                                     if matches!(key_upper, "@BUYSELL" | "@BUYSELLNEW") {
                                         let sell = SNpcSell;
                                         let raw = sell.encode();
+                                        out.push(Self::encode_raw(raw));
+                                    }
+
+                                    return out;
+                                }
+
+                                // Open BuyBack / UsedGoods panels with empty lists for now so
+                                // the client UI matches C# behaviour, even before we implement
+                                // full per-player BuyBack / UsedGoods tracking.
+                                if key_upper == "@BUYBACK" {
+                                    let goods_items: Vec<UserItemData> = Vec::new();
+                                    let panel_type: u8 = 0; // PanelType.Buy
+                                    let rate: f32 = (npc.rate as f32) / 100.0;
+
+                                    if let Ok(bytes) = Self::build_npc_goods_bytes(
+                                        &goods_items,
+                                        rate,
+                                        panel_type,
+                                        false,
+                                    ) {
+                                        let pkt = SNpcGoods { goods_bytes: bytes };
+                                        let raw = pkt.encode();
+                                        out.push(Self::encode_raw(raw));
+                                    }
+
+                                    return out;
+                                }
+
+                                if key_upper == "@BUYUSED" {
+                                    let goods_items: Vec<UserItemData> = Vec::new();
+                                    let panel_type: u8 = 1; // PanelType.BuySub
+                                    let rate: f32 = (npc.rate as f32) / 100.0;
+
+                                    if let Ok(bytes) = Self::build_npc_goods_bytes(
+                                        &goods_items,
+                                        rate,
+                                        panel_type,
+                                        false,
+                                    ) {
+                                        let pkt = SNpcGoods { goods_bytes: bytes };
+                                        let raw = pkt.encode();
                                         out.push(Self::encode_raw(raw));
                                     }
 
@@ -924,7 +987,22 @@ impl ConnectionHandler for LoginConnection {
                                                 }
                                             }
 
-                                            maybe_page = pages.get(&key).cloned();
+                                            // Normal dialog resolution.
+                                            if key.eq_ignore_ascii_case("@MAIN") {
+                                                // Many official scripts use an [@MAIN] section that just
+                                                // #IF checks PK status and then GOTO @Main-1 for normal
+                                                // players. The visible menu usually lives in [@Main-1].
+                                                // The C# server evaluates conditions and follows GOTO;
+                                                // our simplified parser does not, so we approximate by
+                                                // preferring [@MAIN-1] when it exists.
+                                                if let Some(page_alt) = pages.get("@MAIN-1") {
+                                                    maybe_page = Some(page_alt.clone());
+                                                } else if let Some(page_main) = pages.get("@MAIN") {
+                                                    maybe_page = Some(page_main.clone());
+                                                }
+                                            } else {
+                                                maybe_page = pages.get(&key).cloned();
+                                            }
                                         }
                                     }
                                 }
@@ -933,6 +1011,22 @@ impl ConnectionHandler for LoginConnection {
                                 let resp = SNpcResponse { page };
                                 if let Ok(raw) = resp.encode() {
                                     out.push(Self::encode_raw(raw));
+                                }
+
+                                // Additional NPC actions triggered by page key, mirroring the
+                                // C# NPCScript.ProcessSpecial behaviour for repair pages.
+                                if key_upper == "@REPAIR" {
+                                    let rate: f32 = (npc.rate as f32) / 100.0;
+                                    let pkt = SNpcRepair { rate };
+                                    if let Ok(raw) = pkt.encode() {
+                                        out.push(Self::encode_raw(raw));
+                                    }
+                                } else if key_upper == "@SREPAIR" {
+                                    let rate: f32 = (npc.rate as f32) / 100.0;
+                                    let pkt = SNpcsRepair { rate };
+                                    if let Ok(raw) = pkt.encode() {
+                                        out.push(Self::encode_raw(raw));
+                                    }
                                 }
                             }
                         }
@@ -959,6 +1053,15 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Disconnect | ClientPacketId::KeepAlive => {}
         }
 
+        out
+    }
+
+    fn poll_outbound(&mut self) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        let mut outboxes = self.outboxes.lock().unwrap();
+        if let Some(mut queued) = outboxes.remove(&self.session_id) {
+            out.append(&mut queued);
+        }
         out
     }
 

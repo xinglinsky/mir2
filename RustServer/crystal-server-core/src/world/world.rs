@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use tracing::debug;
-use crate::stats::Stat;
+use super::Job;
 use crate::world::config::WorldConfig;
-use crate::world::map::{self, CellAttribute};
+use crate::world::map::{self};
 use crate::world::monster::MonsterInstance;
 use crate::world::provider::WorldProvider;
 use crate::world::magic::UserMagic;
@@ -20,6 +20,7 @@ pub enum WorldCommand {
         x: i32,
         y: i32,
         direction: u8,
+        job: Job,
         level: u16,
         magics: Vec<UserMagic>,
     },
@@ -137,13 +138,14 @@ impl<P: WorldProvider> World<P> {
                 x,
                 y,
                 direction,
+                job,
                 level,
                 magics,
             } => {
                 if let Some(map) = self.get_or_load_map(map_index) {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
-                let p = self.upsert_player(session_id, map_index, x, y, direction, level, magics);
+                let p = self.upsert_player(session_id, map_index, x, y, direction, job, level, magics);
                 events.push(WorldEvent::UserLocation {
                     session_id: p.session_id,
                     map_index: p.map_index,

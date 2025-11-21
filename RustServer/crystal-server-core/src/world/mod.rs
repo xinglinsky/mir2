@@ -10,7 +10,7 @@ pub mod provider;
 pub mod config;
 pub mod world;
 pub mod types;
-
+pub mod base_stats;
 pub mod player;
 pub mod player_stats;
 pub mod movement;

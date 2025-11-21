@@ -1,6 +1,7 @@
 use rand::thread_rng;
 
-use crate::stats::Stat;
+use crate::combat::compute_physical_damage;
+use crate::stats::{Stat, Stats};
 use crate::world::magic::magic_damage;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
@@ -44,7 +45,7 @@ impl<P: WorldProvider> World<P> {
         spell: u8,
         events: &mut Vec<WorldEvent>,
     ) {
-        let (map_index, x, y, direction, effective_spell, level, fatal_level, player_level) =
+        let (map_index, x, y, direction, effective_spell, level, fatal_level, attacker_stats) =
             match self.players.get_mut(&session_id) {
                 Some(p) => {
                     if !Self::can_attack(p) {
@@ -59,7 +60,7 @@ impl<P: WorldProvider> World<P> {
                         .iter()
                         .find(|m| m.spell == SPELL_FATAL_SWORD)
                         .map(|m| m.level);
-                    let player_level = p.level;
+                    let attacker_stats = p.stats.total.clone();
 
                     (
                         p.map_index,
@@ -69,24 +70,13 @@ impl<P: WorldProvider> World<P> {
                         effective_spell,
                         level,
                         fatal_level,
-                        player_level,
+                        attacker_stats,
                     )
                 }
                 None => {
                     return;
                 }
             };
-
-        let mut damage_base: i32 = Self::compute_physical_damage_base(player_level);
-        let mut damage_final: i32 = damage_base;
-
-        if let Some(fatal_level) = fatal_level {
-            if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
-                let mut rng = thread_rng();
-                damage_base = magic_damage(info, fatal_level, damage_base, &mut rng);
-                damage_final = damage_base;
-            }
-        }
 
         let (dx, dy) = match direction {
             0 => (0, -1),
@@ -112,14 +102,25 @@ impl<P: WorldProvider> World<P> {
         if let Some((id, monster_index)) = target_info {
             let mut dead = false;
 
-            let (undead, max_hp) = self
+            let (undead, max_hp, defender_stats): (bool, i32, Stats) = self
                 .provider
                 .get_monster_info(monster_index)
                 .map(|info| {
                     let max_hp = info.stats.get(Stat::HP).max(1);
-                    (info.undead, max_hp)
+                    (info.undead, max_hp, info.stats.clone())
                 })
-                .unwrap_or((false, 1));
+                .unwrap_or((false, 1, Stats::default()));
+
+            let mut damage_base: i32 = compute_physical_damage(&attacker_stats, &defender_stats);
+            let mut damage_final: i32 = damage_base;
+
+            if let Some(fatal_level) = fatal_level {
+                if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
+                    let mut rng = thread_rng();
+                    damage_base = magic_damage(info, fatal_level, damage_base, &mut rng);
+                    damage_final = damage_base;
+                }
+            }
 
             if undead {
                 let holy_bonus: i32 = 0;

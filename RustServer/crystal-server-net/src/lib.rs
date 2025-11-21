@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr, sync::Arc};
+use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
 use crystal_shared_proto::packet::RawPacket;
 use tokio::{
@@ -16,6 +16,13 @@ pub trait ConnectionHandler: Send + 'static {
     /// Consume an incoming packet and return zero or more raw responses
     /// that should be written back to the client immediately.
     fn handle_packet(&mut self, packet: RawPacket) -> Vec<Vec<u8>>;
+
+    /// Called regularly by the transport layer even when no packets are read,
+    /// so the handler can emit unsolicited responses (e.g. broadcasts or
+    /// world events) to the client.
+    fn poll_outbound(&mut self) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
 
     /// Called once when the TCP connection is closed (EOF or error) so the
     /// handler can perform any necessary cleanup or persistence. Any
@@ -56,40 +63,63 @@ async fn handle_connection(mut stream: TcpStream, factory: HandlerFactory) -> io
     let mut read_buf = [0u8; 4096];
 
     loop {
-        let n = match stream.read(&mut read_buf).await {
-            Ok(0) => {
+        // Try to read with a small timeout so that even if the client is idle
+        // we still get a chance to poll for outbound data to send.
+        let read_result =
+            tokio::time::timeout(Duration::from_millis(50), stream.read(&mut read_buf)).await;
+
+        match read_result {
+            Ok(Ok(0)) => {
                 // Clean EOF from the client: treat as a normal disconnect.
                 break;
             }
-            Ok(n) => n,
-            Err(e) => {
+            Ok(Ok(n)) => {
+                buf.extend_from_slice(&read_buf[..n]);
+
+                loop {
+                    match RawPacket::decode(&buf) {
+                        Some((packet, remaining)) => {
+                            let responses = handler.handle_packet(packet);
+                            for response in responses {
+                                if let Err(e) = stream.write_all(&response).await {
+                                    // Write error while sending a response; log and
+                                    // treat this as a disconnect. Call on_disconnect
+                                    // immediately so we don't lose any in-memory
+                                    // state for the active character.
+                                    eprintln!("[net] write error to client: {}", e);
+                                    handler.on_disconnect();
+                                    return Ok(());
+                                }
+                            }
+                            buf = remaining.to_vec();
+                        }
+                        None => break,
+                    }
+                }
+            }
+            Ok(Err(e)) => {
                 // Socket read error (e.g. connection reset by peer). Log and
                 // break so we can still call on_disconnect below instead of
                 // returning early and skipping persistence.
                 eprintln!("[net] read error from client: {}", e);
                 break;
             }
-        };
-        buf.extend_from_slice(&read_buf[..n]);
+            Err(_elapsed) => {
+                // Timed out waiting for client data; fall through to
+                // poll_outbound below.
+            }
+        }
 
-        loop {
-            match RawPacket::decode(&buf) {
-                Some((packet, remaining)) => {
-                    let responses = handler.handle_packet(packet);
-                    for response in responses {
-                        if let Err(e) = stream.write_all(&response).await {
-                            // Write error while sending a response; log and
-                            // treat this as a disconnect. Call on_disconnect
-                            // immediately so we don't lose any in-memory
-                            // state for the active character.
-                            eprintln!("[net] write error to client: {}", e);
-                            handler.on_disconnect();
-                            return Ok(());
-                        }
-                    }
-                    buf = remaining.to_vec();
-                }
-                None => break,
+        let outbound = handler.poll_outbound();
+        for response in outbound {
+            if let Err(e) = stream.write_all(&response).await {
+                // Write error while sending a response; log and
+                // treat this as a disconnect. Call on_disconnect
+                // immediately so we don't lose any in-memory
+                // state for the active character.
+                eprintln!("[net] write error to client: {}", e);
+                handler.on_disconnect();
+                return Ok(());
             }
         }
     }

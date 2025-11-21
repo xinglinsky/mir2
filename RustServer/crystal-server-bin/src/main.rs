@@ -192,6 +192,9 @@ async fn main() -> io::Result<()> {
     let player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    let outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
     let next_session_id = Arc::new(AtomicU32::new(1));
 
     let factory: HandlerFactory = Arc::new({
@@ -202,6 +205,7 @@ async fn main() -> io::Result<()> {
         let exp_table = Arc::clone(&exp_table);
         let player_summaries = Arc::clone(&player_summaries);
         let next_session_id = Arc::clone(&next_session_id);
+        let outboxes = Arc::clone(&outboxes);
         move || {
             let session_id = next_session_id.fetch_add(1, Ordering::Relaxed);
             Box::new(LoginConnection::new(
@@ -212,6 +216,7 @@ async fn main() -> io::Result<()> {
                 Arc::clone(&world),
                 Arc::clone(&exp_table),
                 Arc::clone(&player_summaries),
+                Arc::clone(&outboxes),
             )) as Box<dyn ConnectionHandler>
         }
     });

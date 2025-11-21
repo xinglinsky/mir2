@@ -22,6 +22,7 @@ impl LoginConnection {
         world: Arc<Mutex<world::World<WorldDatabase>>>,
         exp_table: Arc<Vec<i64>>,
         player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
+        outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
     ) -> Self {
         LoginConnection {
             stage: Stage::Connected,
@@ -43,6 +44,8 @@ impl LoginConnection {
             known_npcs: HashSet::new(),
             known_players: HashSet::new(),
             player_summaries,
+            outboxes,
+            last_move_kind: None,
         }
     }
 

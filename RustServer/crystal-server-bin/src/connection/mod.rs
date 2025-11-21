@@ -51,4 +51,6 @@ pub(crate) struct LoginConnection {
     pub(crate) known_npcs: HashSet<i32>,
     pub(crate) known_players: HashSet<world::SessionId>,
     pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
+    pub(crate) outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
+    pub(crate) last_move_kind: Option<u8>,
 }

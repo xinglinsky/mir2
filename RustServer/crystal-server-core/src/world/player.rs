@@ -1,7 +1,8 @@
+use crate::stats::Stat;
 use crate::world::magic::UserMagic;
 use crate::world::provider::WorldProvider;
 
-use super::{SessionId, World};
+use super::{Job, PlayerStats, SessionId, World};
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
@@ -11,7 +12,10 @@ pub struct PlayerState {
     pub y: i32,
     pub direction: u8,
     pub level: u16,
+    pub experience: i64,
+    pub job: Job,
     pub magics: Vec<UserMagic>,
+    pub stats: PlayerStats,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -22,7 +26,9 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
         direction: u8,
+        job: Job,
         level: u16,
+        experience: i64,
         magics: Vec<UserMagic>,
     ) -> &PlayerState {
         self.players
@@ -33,15 +39,28 @@ impl<P: WorldProvider> World<P> {
                 p.y = y;
                 p.direction = direction;
                 p.level = level;
+                p.experience = experience;
+                p.job = job;
+                p.stats.set_base_from_level(job, level);
+                p.stats.recalc_if_dirty_for_job(job);
             })
-            .or_insert(PlayerState {
-                session_id,
-                map_index,
-                x,
-                y,
-                direction,
-                level,
-                magics,
+            .or_insert_with(|| {
+                let mut stats = PlayerStats::default();
+                stats.set_base_from_level(job, level);
+                stats.recalc_if_dirty_for_job(job);
+
+                PlayerState {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    level,
+                    experience,
+                    job,
+                    magics,
+                    stats,
+                }
             });
 
         self.players.get(&session_id).unwrap()
@@ -115,6 +134,40 @@ impl<P: WorldProvider> World<P> {
                 Some((sid, p.x, p.y, p.direction))
             })
             .collect()
+    }
+
+    /// Query session IDs on a given map within a rectangular view range around
+    /// the provided centre. This is used by the connection layer to decide
+    /// which clients should receive broadcast events such as attacks.
+    pub fn sessions_in_range_for_map(
+        &self,
+        map_index: i32,
+        centre_x: i32,
+        centre_y: i32,
+        range: i32,
+    ) -> Vec<SessionId> {
+        self.players
+            .iter()
+            .filter_map(|(&sid, p)| {
+                if p.map_index != map_index {
+                    return None;
+                }
+
+                if (p.x - centre_x).abs() > range || (p.y - centre_y).abs() > range {
+                    return None;
+                }
+
+                Some(sid)
+            })
+            .collect()
+    }
+
+    pub fn player_max_hp_mp(&self, session_id: SessionId) -> Option<(i32, i32)> {
+        self.players.get(&session_id).map(|p| {
+            let hp = p.stats.total.get(Stat::HP).max(0);
+            let mp = p.stats.total.get(Stat::MP).max(0);
+            (hp, mp)
+        })
     }
 }
 
