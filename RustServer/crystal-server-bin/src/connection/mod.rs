@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use std::sync::atomic::AtomicU32;
 
 use crystal_server_core::account::{AccountStore, CharacterStats};
@@ -57,5 +58,8 @@ pub(crate) struct LoginConnection {
     pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
     pub(crate) outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
     pub(crate) active_connections: Arc<AtomicU32>,
+    pub(crate) last_active: Instant,
+    pub(crate) timeout_ms: u64,
+    pub(crate) closing: bool,
     pub(crate) last_move_kind: Option<u8>,
 }

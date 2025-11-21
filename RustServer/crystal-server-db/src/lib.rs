@@ -365,6 +365,21 @@ impl AccountStore for SqliteAccountStore {
         })
     }
 
+    fn update_character_level(
+        &self,
+        account_id: &str,
+        index: i32,
+        level: u16,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            let _rows = Self::map_sql_err(conn.execute(
+                "UPDATE characters SET level = ?3 WHERE account_id = ?1 AND idx = ?2",
+                (account_id, &(index as i64), &(level as i64)),
+            ))?;
+            Ok(())
+        })
+    }
+
     fn load_character_magics(
         &self,
         account_id: &str,

@@ -62,6 +62,7 @@ pub struct StoredAccount {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct AccountDb {
     accounts: Vec<StoredAccount>,
 }
@@ -147,6 +148,16 @@ pub trait AccountStore: Send + Sync {
         account_id: &str,
         index: i32,
         pos: &CharacterPosition,
+    ) -> Result<(), StoreError>;
+
+    /// Update the current level for a given character in the summary table,
+    /// mirroring the C# server's persistence of CharacterInfo.Level on
+    /// level-up or logout.
+    fn update_character_level(
+        &self,
+        account_id: &str,
+        index: i32,
+        level: u16,
     ) -> Result<(), StoreError>;
 }
 

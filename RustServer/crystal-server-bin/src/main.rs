@@ -15,7 +15,8 @@ use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider
 use crystal_server_core::account::AccountStore;
 use crystal_server_db::SqliteAccountStore;
 
-use serde::Serialize;
+use crystal_shared_proto::scene::SChat;
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod config;
@@ -41,6 +42,17 @@ struct AdminPlayerInfo {
     class: String,
     gender: String,
     map: String,
+}
+
+#[derive(Deserialize)]
+struct AdminBroadcast {
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct AdminWorldSettings {
+    spawn_multiplier: u16,
+    respawn_base_spawn_rate_minutes: u8,
 }
 
 
@@ -74,6 +86,7 @@ async fn main() -> io::Result<()> {
         .init();
 
     let addr: SocketAddr = cfg.listen_addr;
+    let timeout_ms = cfg.timeout_ms;
     let store: Arc<dyn AccountStore> = Arc::new(
         SqliteAccountStore::open(&cfg.accounts_db_path)
             .expect("failed to open accounts sqlite database"),
@@ -174,31 +187,82 @@ async fn main() -> io::Result<()> {
     }
     let world_db = Arc::new(world_db);
 
-    // Map directory comes from configuration (maps_path), mirroring C# Settings.MapPath.
-    let world_config = WorldConfig::new(&cfg.maps_path);
+    // Map directory and spawn settings come from configuration, mirroring
+    // C# Settings.MapPath and Envir.SpawnMultiplier / RespawnTick.BaseSpawnRate.
+    let world_config = WorldConfig::new(
+        &cfg.maps_path,
+        cfg.spawn_multiplier,
+        cfg.respawn_base_spawn_rate_minutes,
+    );
 
     // Global world instance shared by all connections, mirroring the single-world
-    // design of the original C# server. For now this is used synchronously; later
-    // we can introduce a dedicated world tick loop and message queues.
+    // design of the original C# server.
     let world = world::World::new((*world_db).clone(), world_config.clone());
     let world = Arc::new(Mutex::new(world));
 
-    // Simple world tick thread driving the World::update loop. For now this
-    // only advances time for future respawn/AI logic and does not emit any
-    // network events. The tick interval roughly mirrors the C# Envir.Process
-    // cadence (50–100ms range).
+    // Per-session outbound packet queues, shared by connection handlers and
+    // the world tick thread that emits monster movement and other events.
+    let outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    // Simple world tick thread driving the World::update loop. The tick
+    // interval roughly mirrors the C# Envir.Process cadence (50–100ms range)
+    // and also emits world events such as monster movement.
     {
         let world = Arc::clone(&world);
+        let outboxes_for_world_events = Arc::clone(&outboxes);
         thread::spawn(move || {
             let tick = Duration::from_millis(50);
             let start = Instant::now();
             loop {
                 let now_ms = start.elapsed().as_millis() as i64;
-                {
+                let events = {
                     let mut w = world.lock().unwrap();
-                    let _events = w.update(now_ms);
-                    // TODO: handle world events (monster movement, buffs, etc.).
+                    w.update(now_ms)
+                };
+
+                for event in events {
+                    if let world::WorldEvent::ObjectLocation {
+                        object_id,
+                        map_index,
+                        x,
+                        y,
+                        direction,
+                    } = event
+                    {
+                        let viewers = {
+                            let w = world.lock().unwrap();
+                            w.sessions_in_range_for_map(
+                                map_index,
+                                x,
+                                y,
+                                LoginConnection::DATA_RANGE,
+                            )
+                        };
+
+                        if viewers.is_empty() {
+                            continue;
+                        }
+
+                        let base = crystal_shared_proto::scene::SObjectTurnWalkRun {
+                            object_id: object_id as u32,
+                            location_x: x,
+                            location_y: y,
+                            direction,
+                        };
+
+                        if let Ok(pkt) =
+                            crystal_shared_proto::scene::SObjectWalk(base).encode()
+                        {
+                            let raw = pkt.encode();
+                            let mut outboxes = outboxes_for_world_events.lock().unwrap();
+                            for sid in viewers {
+                                outboxes.entry(sid).or_default().push(raw.clone());
+                            }
+                        }
+                    }
                 }
+
                 thread::sleep(tick);
             }
         });
@@ -229,9 +293,6 @@ async fn main() -> io::Result<()> {
     let player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
-    let outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
     let next_session_id = Arc::new(AtomicU32::new(1));
 
     let active_connections = Arc::new(AtomicU32::new(0));
@@ -246,6 +307,7 @@ async fn main() -> io::Result<()> {
         let next_session_id = Arc::clone(&next_session_id);
         let outboxes = Arc::clone(&outboxes);
         let active_connections = Arc::clone(&active_connections);
+        let timeout_ms = timeout_ms;
         move || {
             let session_id = next_session_id.fetch_add(1, Ordering::Relaxed);
             Box::new(LoginConnection::new(
@@ -258,6 +320,7 @@ async fn main() -> io::Result<()> {
                 Arc::clone(&player_summaries),
                 Arc::clone(&outboxes),
                 Arc::clone(&active_connections),
+                timeout_ms,
             )) as Box<dyn ConnectionHandler>
         }
     });
@@ -299,6 +362,40 @@ async fn main() -> io::Result<()> {
                 }
 
                 tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let world_for_settings = Arc::clone(&world);
+        let token = admin_cfg.admin_token.clone();
+        let world_settings_url = format!("{}/internal/world-settings", base);
+
+        tokio::spawn(async move {
+            loop {
+                let res = client
+                    .get(&world_settings_url)
+                    .header("X-Admin-Token", &token)
+                    .send()
+                    .await;
+
+                match res {
+                    Ok(resp) => {
+                        match resp.json::<AdminWorldSettings>().await {
+                            Ok(ws) => {
+                                let mut w = world_for_settings.lock().unwrap();
+                                w.set_spawn_config(ws.spawn_multiplier, ws.respawn_base_spawn_rate_minutes);
+                            }
+                            Err(e) => {
+                                tracing::debug!("failed to decode world settings from admin: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!("failed to fetch world settings from admin: {}", e);
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_secs(10)).await;
             }
         });
 
@@ -429,6 +526,80 @@ async fn main() -> io::Result<()> {
                 }
 
                 tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let world_for_broadcast = Arc::clone(&world);
+        let outboxes_for_broadcast = Arc::clone(&outboxes);
+        let token = admin_cfg.admin_token.clone();
+        let broadcasts_url = format!("{}/internal/broadcasts", base);
+
+        // ChatType.Shout2 from Shared/Enums.cs
+        const CHAT_TYPE_SHOUT2: u8 = 14;
+
+        tokio::spawn(async move {
+            loop {
+                let res = client
+                    .get(&broadcasts_url)
+                    .header("X-Admin-Token", &token)
+                    .send()
+                    .await;
+
+                let Ok(resp) = res else {
+                    if let Err(e) = res {
+                        tracing::debug!("failed to fetch broadcasts from admin: {}", e);
+                    }
+                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    continue;
+                };
+
+                let parsed = resp.json::<Vec<AdminBroadcast>>().await;
+                let broadcasts = match parsed {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::debug!("failed to decode broadcasts from admin: {}", e);
+                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        continue;
+                    }
+                };
+
+                if !broadcasts.is_empty() {
+                    let sessions: Vec<world::SessionId> = {
+                        let w = world_for_broadcast.lock().unwrap();
+                        w.snapshot_players()
+                            .into_iter()
+                            .map(|p| p.session_id)
+                            .collect()
+                    };
+
+                    if !sessions.is_empty() {
+                        for b in broadcasts {
+                            let msg = b.message.trim();
+                            if msg.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SChat {
+                                message: msg.to_string(),
+                                chat_type: CHAT_TYPE_SHOUT2,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes = outboxes_for_broadcast.lock().unwrap();
+                                for sid in &sessions {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_secs(3)).await;
             }
         });
     }

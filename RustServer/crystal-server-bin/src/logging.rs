@@ -57,6 +57,7 @@ impl LogBufferLayer {
         LogBufferLayer { shared }
     }
 
+    #[allow(dead_code)]
     pub fn shared_logs(&self) -> SharedLogs {
         self.shared.clone()
     }

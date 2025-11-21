@@ -7,8 +7,8 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_bool, read_i32_le, read_string, read_u32_le, read_u16_le, write_bool, write_i32_le,
-    write_string, write_u32_le, write_u16_le,
+    read_bool, read_i32_le, read_u32_le, write_bool, write_i32_le,
+    write_u32_le,
 };
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;

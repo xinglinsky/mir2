@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::io::{
-    read_bool, read_i32_le, read_u16_le, read_u64_le, write_bool, write_i32_le, write_u16_le,
+    read_i32_le, read_u16_le, read_u64_le, write_bool, write_i32_le, write_u16_le,
     write_u64_le,
 };
 use crate::login::ServerPacketId;

@@ -28,6 +28,12 @@ struct Metrics {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+struct WorldSettings {
+    spawn_multiplier: u16,
+    respawn_base_spawn_rate_minutes: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 struct LogEntry {
     message: String,
 }
@@ -47,7 +53,7 @@ struct ControlResponse {
     ok: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct BroadcastRequest {
     message: String,
 }
@@ -69,10 +75,12 @@ fn is_authorized(headers: &HeaderMap, cfg: &config::AdminConfig) -> bool {
 #[derive(Clone)]
 struct InnerState {
     metrics: Metrics,
+    world_settings: WorldSettings,
     logs: Vec<LogEntry>,
     debug_logs: Vec<LogEntry>,
     chat_logs: Vec<LogEntry>,
     players: Vec<PlayerInfo>,
+    pending_broadcasts: Vec<String>,
 }
 
 struct AppSharedState {
@@ -93,6 +101,10 @@ impl InnerState {
                 uptime_seconds: 0,
                 cycle_delay_ms: 0,
             },
+            world_settings: WorldSettings {
+                spawn_multiplier: 1,
+                respawn_base_spawn_rate_minutes: 20,
+            },
             logs: vec![LogEntry {
                 message: String::from("log stub"),
             }],
@@ -110,6 +122,7 @@ impl InnerState {
                 gender: String::from("Male"),
                 map: String::from("StubMap"),
             }],
+            pending_broadcasts: Vec::new(),
         }
     }
 }
@@ -127,6 +140,30 @@ async fn metrics(
     }
     let inner = state.inner.read().await;
     Ok(Json(inner.metrics.clone()))
+}
+
+async fn world_settings_get(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<WorldSettings>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.world_settings.clone()))
+}
+
+async fn world_settings_set(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<WorldSettings>,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let mut inner = state.inner.write().await;
+    inner.world_settings = payload;
+    Ok(Json(ControlResponse { ok: true }))
 }
 
 async fn logs(
@@ -258,7 +295,17 @@ async fn broadcast(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("broadcast: {}", req.message);
+    let msg = req.message.trim();
+    if msg.len() < 5 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    {
+        let mut inner = state.inner.write().await;
+        inner.pending_broadcasts.push(msg.to_string());
+    }
+
+    println!("broadcast: {}", msg);
     Ok(Json(BroadcastResponse { ok: true }))
 }
 
@@ -327,6 +374,25 @@ async fn set_players(
     Ok(Json(ControlResponse { ok: true }))
 }
 
+async fn take_broadcasts(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<BroadcastRequest>>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let mut inner = state.inner.write().await;
+    let mut out = Vec::new();
+    for msg in inner.pending_broadcasts.drain(..) {
+        out.push(BroadcastRequest {
+            message: msg,
+        });
+    }
+
+    Ok(Json(out))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = config::load_admin_config("admin.toml")?;
@@ -343,6 +409,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
+        .route("/world/settings", get(world_settings_get).post(world_settings_set))
         .route("/logs", get(logs))
         .route("/debug-logs", get(debug_logs))
         .route("/chat-logs", get(chat_logs))
@@ -360,6 +427,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/internal/debug-logs", post(set_debug_logs))
         .route("/internal/chat-logs", post(set_chat_logs))
         .route("/internal/players", post(set_players))
+        .route("/internal/world-settings", get(world_settings_get))
+        .route("/internal/broadcasts", get(take_broadcasts))
         .nest_service("/", static_service)
         .with_state(state);
     println!("Crystal admin web console listening on {}", addr);

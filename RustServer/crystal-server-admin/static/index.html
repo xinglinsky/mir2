@@ -131,6 +131,20 @@
             <button class="btn" data-action="reload-line-messages">Reload Line Messages</button>
           </div>
           <div class="status-bar" id="control-status"></div>
+          <div style="margin-top:1rem; max-width:420px;">
+            <h3 style="margin:0 0 0.5rem; font-size:0.95rem;">World Spawn Settings</h3>
+            <p style="color:#9ca3af;font-size:0.8rem;">调整刷怪倍率和 RespawnTick 基础间隔（分钟），当前仅作用于 Rust 端逻辑。</p>
+            <div class="form-field">
+              <label for="spawn-multiplier-input">Spawn multiplier</label>
+              <input id="spawn-multiplier-input" type="number" min="1" class="token-input" />
+            </div>
+            <div class="form-field">
+              <label for="respawn-rate-input">Respawn tick base (minutes)</label>
+              <input id="respawn-rate-input" type="number" min="1" class="token-input" />
+            </div>
+            <button class="btn success" id="spawn-settings-apply">Apply</button>
+            <div class="status-bar" id="spawn-settings-status"></div>
+          </div>
         </section>
 
         <section id="section-broadcast" class="section">
@@ -303,6 +317,59 @@
       btn.addEventListener('click', () => callControl(action));
     });
 
+    async function loadWorldSettings() {
+      const status = document.getElementById('spawn-settings-status');
+      const multInput = document.getElementById('spawn-multiplier-input');
+      const rateInput = document.getElementById('respawn-rate-input');
+      if (!multInput || !rateInput) return;
+      try {
+        const data = await fetchJson('/world/settings');
+        if (typeof data.spawn_multiplier === 'number') {
+          multInput.value = String(data.spawn_multiplier);
+        }
+        if (typeof data.respawn_base_spawn_rate_minutes === 'number') {
+          rateInput.value = String(data.respawn_base_spawn_rate_minutes);
+        }
+        if (status) status.textContent = '';
+      } catch {
+        if (status) status.textContent = 'Failed to load world settings.';
+      }
+    }
+
+    async function applyWorldSettings() {
+      const status = document.getElementById('spawn-settings-status');
+      const multInput = document.getElementById('spawn-multiplier-input');
+      const rateInput = document.getElementById('respawn-rate-input');
+      if (!multInput || !rateInput) return;
+
+      const mult = parseInt(multInput.value, 10);
+      const rate = parseInt(rateInput.value, 10);
+      if (!Number.isFinite(mult) || mult <= 0 || !Number.isFinite(rate) || rate <= 0) {
+        if (status) status.textContent = '请输入有效的数值（>= 1）。';
+        return;
+      }
+
+      if (status) status.textContent = 'Saving world settings...';
+      try {
+        await fetchJson('/world/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            spawn_multiplier: mult,
+            respawn_base_spawn_rate_minutes: rate
+          })
+        });
+        if (status) status.textContent = 'World settings updated (stub).';
+      } catch {
+        if (status) status.textContent = 'Failed to update world settings.';
+      }
+    }
+
+    const spawnBtn = document.getElementById('spawn-settings-apply');
+    if (spawnBtn) {
+      spawnBtn.addEventListener('click', applyWorldSettings);
+    }
+
     async function sendBroadcast() {
       const textarea = document.getElementById('broadcast-message');
       const status = document.getElementById('broadcast-status');
@@ -360,6 +427,7 @@
     initAdminToken();
     loadHealth();
     loadMetrics();
+    loadWorldSettings();
     loadLogs('/logs', 'logs-list');
     loadLogs('/debug-logs', 'debug-logs-list');
     loadLogs('/chat-logs', 'chat-logs-list');

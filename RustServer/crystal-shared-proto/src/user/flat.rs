@@ -50,11 +50,131 @@ pub struct SUserInformation {
     pub observer: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct SUserSlotsRefresh {
+    pub inventory: Vec<Option<UserItemData>>,
+    pub equipment: Vec<Option<UserItemData>>,
+}
+
+impl SUserSlotsRefresh {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+
+        write_bool(&mut buf, true)?;
+        let inv_len: i32 = self
+            .inventory
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many inventory slots"))?;
+        write_i32_le(&mut buf, inv_len)?;
+        for slot in &self.inventory {
+            match slot {
+                None => write_bool(&mut buf, false)?,
+                Some(item) => {
+                    write_bool(&mut buf, true)?;
+                    item.encode(&mut buf)?;
+                }
+            }
+        }
+
+        write_bool(&mut buf, true)?;
+        let eq_len: i32 = self
+            .equipment
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many equipment slots"))?;
+        write_i32_le(&mut buf, eq_len)?;
+        for slot in &self.equipment {
+            match slot {
+                None => write_bool(&mut buf, false)?,
+                Some(item) => {
+                    write_bool(&mut buf, true)?;
+                    item.encode(&mut buf)?;
+                }
+            }
+        }
+
+        Ok(RawPacket {
+            id: ServerPacketId::UserSlotsRefresh as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+
+        let has_inventory = read_bool(&mut c)?;
+        let inventory = if has_inventory {
+            let inv_len = read_i32_le(&mut c)?;
+            if inv_len < 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "negative inventory length",
+                ));
+            }
+            let mut slots = Vec::with_capacity(inv_len as usize);
+            for _ in 0..inv_len {
+                let has_item = read_bool(&mut c)?;
+                if has_item {
+                    let item = UserItemData::decode(&mut c)?;
+                    slots.push(Some(item));
+                } else {
+                    slots.push(None);
+                }
+            }
+            slots
+        } else {
+            Vec::new()
+        };
+
+        let has_equipment = read_bool(&mut c)?;
+        let equipment = if has_equipment {
+            let eq_len = read_i32_le(&mut c)?;
+            if eq_len < 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "negative equipment length",
+                ));
+            }
+            let mut slots = Vec::with_capacity(eq_len as usize);
+            for _ in 0..eq_len {
+                let has_item = read_bool(&mut c)?;
+                if has_item {
+                    let item = UserItemData::decode(&mut c)?;
+                    slots.push(Some(item));
+                } else {
+                    slots.push(None);
+                }
+            }
+            slots
+        } else {
+            Vec::new()
+        };
+
+        Ok(SUserSlotsRefresh {
+            inventory,
+            equipment,
+        })
+    }
+}
+
 impl SUserInformation {
     /// Encode using the exact layout of C# ServerPackets.UserInformation, but with
     /// Inventory/Equipment/QuestInventory all treated as null, and with empty Magics
     /// and IntelligentCreatures lists.
     pub fn encode(&self) -> io::Result<RawPacket> {
+        let empty_inv: Vec<Option<UserItemData>> = Vec::new();
+        let empty_eq: Vec<Option<UserItemData>> = Vec::new();
+        let empty_quest: Vec<Option<UserItemData>> = Vec::new();
+        self.encode_with_items(&empty_inv, &empty_eq, &empty_quest)
+    }
+
+    pub fn encode_with_items(
+        &self,
+        inventory: &[Option<UserItemData>],
+        equipment: &[Option<UserItemData>],
+        quest_inventory: &[Option<UserItemData>],
+    ) -> io::Result<RawPacket> {
         let mut buf = Vec::new();
 
         // Header fields
@@ -81,25 +201,86 @@ impl SUserInformation {
         write_bool(&mut buf, self.has_hero)?;
         buf.push(self.hero_behaviour);
 
-        // Inventory: present with fixed length 46, all slots empty.
+        // Inventory: present with fixed length 46.
         write_bool(&mut buf, true)?; // Inventory != null
-        write_i32_le(&mut buf, 46)?; // Inventory.Length
-        for _ in 0..46 {
-            write_bool(&mut buf, false)?; // slot is null
+        let inv_len = if inventory.is_empty() { 46 } else { inventory.len() };
+        write_i32_le(&mut buf, inv_len as i32)?;
+        if inventory.is_empty() {
+            for _ in 0..inv_len {
+                write_bool(&mut buf, false)?;
+            }
+        } else {
+            if inv_len != 46 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "SUserInformation inventory length must be 46",
+                ));
+            }
+            for slot in inventory {
+                match slot {
+                    None => write_bool(&mut buf, false)?,
+                    Some(item) => {
+                        write_bool(&mut buf, true)?;
+                        item.encode(&mut buf)?;
+                    }
+                }
+            }
         }
 
-        // Equipment: present with fixed length 14, all slots empty.
+        // Equipment: present with fixed length 14.
         write_bool(&mut buf, true)?; // Equipment != null
-        write_i32_le(&mut buf, 14)?; // Equipment.Length
-        for _ in 0..14 {
-            write_bool(&mut buf, false)?;
+        let eq_len = if equipment.is_empty() { 14 } else { equipment.len() };
+        write_i32_le(&mut buf, eq_len as i32)?;
+        if equipment.is_empty() {
+            for _ in 0..eq_len {
+                write_bool(&mut buf, false)?;
+            }
+        } else {
+            if eq_len != 14 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "SUserInformation equipment length must be 14",
+                ));
+            }
+            for slot in equipment {
+                match slot {
+                    None => write_bool(&mut buf, false)?,
+                    Some(item) => {
+                        write_bool(&mut buf, true)?;
+                        item.encode(&mut buf)?;
+                    }
+                }
+            }
         }
 
-        // QuestInventory: present with fixed length 40, all slots empty.
+        // QuestInventory: present with fixed length 40.
         write_bool(&mut buf, true)?; // QuestInventory != null
-        write_i32_le(&mut buf, 40)?; // QuestInventory.Length
-        for _ in 0..40 {
-            write_bool(&mut buf, false)?;
+        let quest_len = if quest_inventory.is_empty() {
+            40
+        } else {
+            quest_inventory.len()
+        };
+        write_i32_le(&mut buf, quest_len as i32)?;
+        if quest_inventory.is_empty() {
+            for _ in 0..quest_len {
+                write_bool(&mut buf, false)?;
+            }
+        } else {
+            if quest_len != 40 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "SUserInformation quest inventory length must be 40",
+                ));
+            }
+            for slot in quest_inventory {
+                match slot {
+                    None => write_bool(&mut buf, false)?,
+                    Some(item) => {
+                        write_bool(&mut buf, true)?;
+                        item.encode(&mut buf)?;
+                    }
+                }
+            }
         }
 
         write_u32_le(&mut buf, self.gold)?;
@@ -187,10 +368,7 @@ impl SUserInformation {
         for _ in 0..inv_len {
             let has_item = read_bool(&mut c)?;
             if has_item {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "SUserInformation decode only supports empty inventory",
-                ));
+                let _ = UserItemData::decode(&mut c)?;
             }
         }
 
@@ -212,10 +390,7 @@ impl SUserInformation {
         for _ in 0..eq_len {
             let has_item = read_bool(&mut c)?;
             if has_item {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "SUserInformation decode only supports empty equipment",
-                ));
+                let _ = UserItemData::decode(&mut c)?;
             }
         }
 
@@ -237,10 +412,7 @@ impl SUserInformation {
         for _ in 0..quest_len {
             let has_item = read_bool(&mut c)?;
             if has_item {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "SUserInformation decode only supports empty quest inventory",
-                ));
+                let _ = UserItemData::decode(&mut c)?;
             }
         }
 

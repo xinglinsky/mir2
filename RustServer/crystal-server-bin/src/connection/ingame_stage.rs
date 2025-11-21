@@ -10,6 +10,7 @@ use crystal_shared_proto::login::{
     CRun,
     CTurn,
     CWalk,
+    SDisconnect,
     SKeepAlive,
 };
 use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
@@ -33,6 +34,12 @@ impl LoginConnection {
                     .store
                     .save_character_magics(account_id, char_idx, &magics);
 
+                if let Some(ref stats) = self.current_stats {
+                    let _ = self
+                        .store
+                        .save_character_stats(account_id, char_idx, stats);
+                }
+
                 let pos = CharacterPosition {
                     map_index: self.current_map_index,
                     x: self.current_x,
@@ -42,6 +49,16 @@ impl LoginConnection {
                 let _ = self
                     .store
                     .save_character_position(account_id, char_idx, &pos);
+
+                if let Some(ch) = self
+                    .characters
+                    .iter()
+                    .find(|c| c.index == char_idx)
+                {
+                    let _ = self
+                        .store
+                        .update_character_level(account_id, char_idx, ch.level);
+                }
             }
         }
 
@@ -124,6 +141,18 @@ impl LoginConnection {
         }
 
         let trimmed = message.trim();
+
+        // Mirror C# MirConnection.Chat: if the message exceeds Globals.MaxChatLength,
+        // immediately disconnect the client with reason=2 (Packet Error).
+        // The exact MaxChatLength is defined in the C# Globals; here we
+        // conservatively treat anything over 255 characters as invalid.
+        if trimmed.chars().count() > 255 {
+            let pkt = SDisconnect { reason: 2 };
+            let raw = pkt.encode();
+            out.push(Self::encode_raw(raw));
+            self.closing = true;
+            return;
+        }
         if !trimmed.is_empty() {
             tracing::info!(
                 target = "chat",
@@ -135,7 +164,7 @@ impl LoginConnection {
         }
 
         if trimmed.eq_ignore_ascii_case("/kill") {
-            let killed_id = {
+            let killed = {
                 let mut world = self.world.lock().unwrap();
                 world.kill_nearest_monster(
                     self.current_map_index,
@@ -144,13 +173,21 @@ impl LoginConnection {
                 )
             };
 
-            if let Some(id) = killed_id {
+            if let Some((id, monster_exp)) = killed {
                 self.known_monsters.remove(&id);
                 let pkt = SObjectRemove {
                     object_id: id as u32,
                 };
                 if let Ok(raw) = pkt.encode() {
                     out.push(Self::encode_raw(raw));
+                }
+
+                if monster_exp > 0 {
+                    let events = vec![world::WorldEvent::GainExperience {
+                        session_id: self.session_id,
+                        amount: monster_exp,
+                    }];
+                    let _ = self.handle_world_events(events, out);
                 }
             }
         }
@@ -161,7 +198,13 @@ impl LoginConnection {
             return;
         }
 
-        if msg.key.len() > 64 {
+        // Mirror C# MirConnection.CallNPC: if the key is unreasonably long,
+        // treat it as a malformed packet and disconnect with reason=2.
+        if msg.key.chars().count() > 30 {
+            let pkt = SDisconnect { reason: 2 };
+            let raw = pkt.encode();
+            out.push(Self::encode_raw(raw));
+            self.closing = true;
             return;
         }
 

@@ -1,6 +1,7 @@
 use crystal_server_core::account::{CharacterPosition, CharacterStats};
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
+use crystal_server_core::item::{Equipment, Inventory};
 use crystal_shared_proto::login::{
     CDeleteCharacter,
     CNewCharacter,
@@ -11,13 +12,14 @@ use crystal_shared_proto::login::{
     SStartGame,
 };
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
+use crystal_shared_proto::item::SNewItemInfo;
 use crystal_shared_proto::scene::{
     SObjectTeleportIn,
     SObjectTeleportOut,
     STeleportIn,
 };
 use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
-use crystal_shared_proto::user::{SUserInformation, SUserLocation};
+use crystal_shared_proto::user::{SUserInformation, SUserLocation, SUserSlotsRefresh};
 
 use super::{LoginConnection, Stage};
 
@@ -120,6 +122,16 @@ impl LoginConnection {
             let ok = SStartGame { result: 4, resolution: 1024 };
             if let Ok(raw) = ok.encode() {
                 out.push(Self::encode_raw(raw));
+            }
+
+            // Send ItemInfo definitions (equivalent to C# PlayerObject.GetItemInfo),
+            // so the client can decode any UserItem instances we may send later.
+            for info in &self.world_db.item_infos {
+                if let Ok(pkt) = SNewItemInfo::from_item_info(info) {
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
             }
 
             let stored_pos = if let Some(ref account_id) = self.account_id {
@@ -310,6 +322,7 @@ impl LoginConnection {
                     y: spawn_y,
                     direction: initial_direction,
                     job,
+                    gender: ch.gender,
                     level: ch.level,
                     experience: experience_for_world,
                     magics: user_magics,
@@ -406,6 +419,44 @@ impl LoginConnection {
                 observer: false,
             };
             if let Ok(raw) = user.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let (mut inventory_slots, mut equipment_slots) = {
+                let world = self.world.lock().unwrap();
+                if let Some((inv, eq)) = world.player_items(self.session_id) {
+                    (inv.slots, eq.slots)
+                } else {
+                    (
+                        Inventory::new_default().slots,
+                        Equipment::new_default().slots,
+                    )
+                }
+            };
+
+            // For now, ensure all items start in the bag (inventory), not auto-equipped.
+            // If any items are present in equipment slots (e.g. from future logic),
+            // move them into the first available inventory slots before sending.
+            for slot_item in equipment_slots.iter_mut() {
+                if let Some(item) = slot_item.take() {
+                    if let Some(inv_slot) = inventory_slots
+                        .iter_mut()
+                        .skip(6)
+                        .find(|s| s.is_none())
+                    {
+                        *inv_slot = Some(item);
+                    } else {
+                        // No inventory space: put it back into equipment to avoid losing items.
+                        *slot_item = Some(item);
+                    }
+                }
+            }
+
+            let slots_refresh = SUserSlotsRefresh {
+                inventory: inventory_slots,
+                equipment: equipment_slots,
+            };
+            if let Ok(raw) = slots_refresh.encode() {
                 out.push(Self::encode_raw(raw));
             }
 

@@ -15,6 +15,7 @@ impl<P: WorldProvider> World<P> {
         true
     }
 
+    #[allow(dead_code)]
     fn compute_physical_damage_base(player_level: u16) -> i32 {
         let lvl = player_level.max(1) as i32;
         let min_dc = 1 + lvl / 2;

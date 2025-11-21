@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use tracing::debug;
 use super::Job;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
@@ -41,6 +40,7 @@ pub enum WorldCommand {
         y: i32,
         direction: u8,
         job: Job,
+        gender: u8,
         level: u16,
         experience: i64,
         magics: Vec<UserMagic>,
@@ -86,6 +86,13 @@ pub enum WorldEvent {
         y: i32,
         direction: u8,
     },
+    ObjectLocation {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
     GainExperience {
         session_id: SessionId,
         amount: u32,
@@ -125,10 +132,16 @@ pub struct World<P: WorldProvider> {
     pub(crate) next_monster_id: u64,
     /// Per-map respawn runtime state, mirroring C# MapRespawn in a simplified form.
     pub(crate) respawns: HashMap<i32, Vec<RespawnRuntime>>,
+    pub(crate) respawn_tick_counter: u64,
+    pub(crate) respawn_last_tick_ms: i64,
+    pub(crate) respawn_base_spawn_rate_minutes: u8,
+    pub(crate) spawn_multiplier: u16,
 }
 
 impl<P: WorldProvider> World<P> {
     pub fn new(provider: P, config: WorldConfig) -> Self {
+        let spawn_multiplier = config.spawn_multiplier;
+        let respawn_base_spawn_rate_minutes = config.respawn_base_spawn_rate_minutes;
         World {
             provider,
             config,
@@ -138,6 +151,10 @@ impl<P: WorldProvider> World<P> {
             monsters: HashMap::new(),
             next_monster_id: 0,
             respawns: HashMap::new(),
+            respawn_tick_counter: 0,
+            respawn_last_tick_ms: 0,
+            respawn_base_spawn_rate_minutes,
+            spawn_multiplier,
         }
     }
 
@@ -182,6 +199,11 @@ impl<P: WorldProvider> World<P> {
             .collect()
     }
 
+    pub fn set_spawn_config(&mut self, spawn_multiplier: u16, respawn_base_spawn_rate_minutes: u8) {
+        self.spawn_multiplier = spawn_multiplier.max(1);
+        self.respawn_base_spawn_rate_minutes = respawn_base_spawn_rate_minutes.max(1);
+    }
+
     pub(crate) fn get_or_load_map(&self, map_index: i32) -> Option<map::Map> {
         let mut maps = self.maps.lock().unwrap();
         if let Some(m) = maps.get(&map_index) {
@@ -207,10 +229,12 @@ impl<P: WorldProvider> World<P> {
                 y,
                 direction,
                 job,
+                gender,
                 level,
                 experience,
                 magics,
             } => {
+                self.players.remove(&session_id);
                 if let Some(map) = self.get_or_load_map(map_index) {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
@@ -221,6 +245,7 @@ impl<P: WorldProvider> World<P> {
                     y,
                     direction,
                     job,
+                    gender,
                     level,
                     experience,
                     magics,

@@ -315,6 +315,28 @@ impl CClientVersion {
 }
 
 #[derive(Clone, Debug)]
+pub struct CDisconnect;
+
+impl CDisconnect {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::Disconnect as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CDisconnect payload must be empty",
+            ));
+        }
+        Ok(CDisconnect)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CKeepAlive {
     pub time: i64,
 }
@@ -704,6 +726,34 @@ impl SConnected {
             ));
         }
         Ok(SConnected)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SDisconnect {
+    pub reason: u8,
+}
+
+impl SDisconnect {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.reason);
+        RawPacket {
+            id: ServerPacketId::Disconnect as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SDisconnect payload must be exactly 1 byte",
+            ));
+        }
+        Ok(SDisconnect {
+            reason: payload[0],
+        })
     }
 }
 

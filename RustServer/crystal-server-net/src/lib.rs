@@ -24,6 +24,10 @@ pub trait ConnectionHandler: Send + 'static {
         Vec::new()
     }
 
+    fn should_close(&self) -> bool {
+        false
+    }
+
     /// Called once when the TCP connection is closed (EOF or error) so the
     /// handler can perform any necessary cleanup or persistence. Any
     /// responses returned here are ignored by the transport layer.
@@ -121,6 +125,10 @@ async fn handle_connection(mut stream: TcpStream, factory: HandlerFactory) -> io
                 handler.on_disconnect();
                 return Ok(());
             }
+        }
+
+        if handler.should_close() {
+            break;
         }
     }
 

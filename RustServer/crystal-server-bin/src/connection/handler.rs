@@ -1,5 +1,6 @@
 use std::io::{self, Cursor};
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
@@ -37,6 +38,8 @@ impl ConnectionHandler for LoginConnection {
         let Some(pid) = ClientPacketId::from_i16(packet.id) else {
             return out;
         };
+
+        self.last_active = Instant::now();
 
         match pid {
             ClientPacketId::NewAccount => {
@@ -116,7 +119,9 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_keep_alive(msg, &mut out);
                 }
             }
-            ClientPacketId::Disconnect => {}
+            ClientPacketId::Disconnect => {
+                self.closing = true;
+            }
         }
 
         out
@@ -128,6 +133,14 @@ impl ConnectionHandler for LoginConnection {
         if let Some(mut queued) = outboxes.remove(&self.session_id) {
             out.append(&mut queued);
         }
+
+        if !self.closing {
+            let elapsed = self.last_active.elapsed();
+            if elapsed.as_millis() as u64 > self.timeout_ms {
+                self.closing = true;
+            }
+        }
+
         out
     }
 
@@ -162,5 +175,9 @@ impl ConnectionHandler for LoginConnection {
         }
 
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    fn should_close(&self) -> bool {
+        self.closing
     }
 }

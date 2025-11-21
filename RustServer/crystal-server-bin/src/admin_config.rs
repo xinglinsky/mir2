@@ -10,6 +10,7 @@ pub struct AdminConfig {
     pub admin_listen_addr: SocketAddr,
     pub admin_token: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub admin_trusted_ip: Option<String>,
 }
 

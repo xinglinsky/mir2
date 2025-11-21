@@ -2,4 +2,6 @@ listen_addr = "0.0.0.0:7000"
 accounts_db_path = "./data/accounts.sqlite3"
 server_mirdb_path = "./Server.MirDB"
 maps_path = "./Maps"
+spawn_multiplier = 1
+respawn_base_spawn_rate_minutes = 20
 log_filter = "info"

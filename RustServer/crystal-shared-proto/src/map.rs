@@ -3,7 +3,7 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
-    read_i32_le, read_string, read_u16_le, read_u32_le, write_bool, write_i16_le, write_i32_le,
+    read_i32_le, read_string, read_u16_le, read_u32_le, write_i32_le,
     write_string, write_u16_le, write_u32_le,
 };
 use crate::map_types::{ClientMapInfoData, WorldMapSetupData};

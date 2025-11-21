@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicU32;
+use std::time::Instant;
 
 use crystal_server_core::account::AccountStore;
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
@@ -25,6 +26,7 @@ impl LoginConnection {
         player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
         outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
         active_connections: Arc<AtomicU32>,
+        timeout_ms: u64,
     ) -> Self {
         LoginConnection {
             stage: Stage::Connected,
@@ -48,6 +50,9 @@ impl LoginConnection {
             player_summaries,
             outboxes,
             active_connections,
+            last_active: Instant::now(),
+            timeout_ms,
+            closing: false,
             last_move_kind: None,
         }
     }
@@ -59,6 +64,7 @@ impl LoginConnection {
     /// Send a NewMagic packet for the given learned magic, mirroring the
     /// C# SendMagicInfo(UserMagic) flow. This builds ClientMagic.Save(writer)
     /// bytes from MagicInfo + UserMagic and appends the Hero bool (false).
+    #[allow(dead_code)]
     pub(crate) fn send_new_magic(&self, magic: &WorldUserMagic, out: &mut Vec<Vec<u8>>) {
         if let Some(info) = self.world_db.get_magic_info(magic.spell) {
             if let Ok(mut bytes) = encode_client_magic_bytes(info, magic, 0) {
@@ -74,6 +80,7 @@ impl LoginConnection {
 
     /// Send a MagicLeveled packet to notify the client that a magic's level
     /// and experience have changed, mirroring C# HumanObject.MagicLeveled.
+    #[allow(dead_code)]
     pub(crate) fn send_magic_leveled(
         &self,
         spell: u8,

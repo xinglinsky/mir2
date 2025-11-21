@@ -26,6 +26,14 @@ pub struct MonsterInfo {
     pub stats: Stats,
 }
 
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum MonsterAiState {
+    Idle,
+    Roam,
+    Chase,
+    Attack,
+}
+
 #[derive(Clone, Debug)]
 pub struct MonsterInstance {
     pub id: u64,
@@ -38,4 +46,10 @@ pub struct MonsterInstance {
     /// Respawn index from RespawnInfo, used to update runtime respawn counts
     /// when the monster dies or despawns.
     pub respawn_index: i32,
+    /// Simple runtime AI state for this monster. More detailed behaviour
+    /// (timers, pathing, etc.) will be layered on top of this enum.
+    pub ai_state: MonsterAiState,
+    /// Currently selected player target (session id) if any.
+    pub target_session_id: Option<u32>,
+    pub next_move_time_ms: i64,
 }

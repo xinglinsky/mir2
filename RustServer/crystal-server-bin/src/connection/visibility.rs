@@ -12,6 +12,7 @@ use crystal_shared_proto::user::SObjectPlayer;
 use super::LoginConnection;
 
 impl LoginConnection {
+    #[allow(dead_code)]
     pub(crate) fn send_monsters_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
         let monsters = {
             let world = self.world.lock().unwrap();
@@ -48,6 +49,7 @@ impl LoginConnection {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn send_npcs_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
         for npc in self
             .world_db

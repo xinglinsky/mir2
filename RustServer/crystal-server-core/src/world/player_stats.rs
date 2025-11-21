@@ -159,6 +159,74 @@ impl PlayerStats {
     }
 
     fn apply_caps_and_clamps(&mut self, job: Job) {
+        // Apply rate-percent modifiers in the same way as C# HumanObject.RefreshStats,
+        // so that derived caps such as HP/MP and Max* correctly reflect any
+        // HPRatePercent/MPRatePercent and related stats supplied by equipment or
+        // buffs.
+        let base_hp = self.total.get(Stat::HP);
+        let hp_rate = self.total.get(Stat::HPRatePercent);
+        if base_hp != 0 && hp_rate != 0 {
+            let delta = (base_hp * hp_rate) / 100;
+            self.total.set(Stat::HP, base_hp.saturating_add(delta));
+        }
+
+        let base_mp = self.total.get(Stat::MP);
+        let mp_rate = self.total.get(Stat::MPRatePercent);
+        if base_mp != 0 && mp_rate != 0 {
+            let delta = (base_mp * mp_rate) / 100;
+            self.total.set(Stat::MP, base_mp.saturating_add(delta));
+        }
+
+        let base_max_ac = self.total.get(Stat::MaxAC);
+        let max_ac_rate = self.total.get(Stat::MaxACRatePercent);
+        if base_max_ac != 0 && max_ac_rate != 0 {
+            let delta = (base_max_ac * max_ac_rate) / 100;
+            self.total
+                .set(Stat::MaxAC, base_max_ac.saturating_add(delta));
+        }
+
+        let base_max_mac = self.total.get(Stat::MaxMAC);
+        let max_mac_rate = self.total.get(Stat::MaxMACRatePercent);
+        if base_max_mac != 0 && max_mac_rate != 0 {
+            let delta = (base_max_mac * max_mac_rate) / 100;
+            self.total
+                .set(Stat::MaxMAC, base_max_mac.saturating_add(delta));
+        }
+
+        let base_max_dc = self.total.get(Stat::MaxDC);
+        let max_dc_rate = self.total.get(Stat::MaxDCRatePercent);
+        if base_max_dc != 0 && max_dc_rate != 0 {
+            let delta = (base_max_dc * max_dc_rate) / 100;
+            self.total
+                .set(Stat::MaxDC, base_max_dc.saturating_add(delta));
+        }
+
+        let base_max_mc = self.total.get(Stat::MaxMC);
+        let max_mc_rate = self.total.get(Stat::MaxMCRatePercent);
+        if base_max_mc != 0 && max_mc_rate != 0 {
+            let delta = (base_max_mc * max_mc_rate) / 100;
+            self.total
+                .set(Stat::MaxMC, base_max_mc.saturating_add(delta));
+        }
+
+        let base_max_sc = self.total.get(Stat::MaxSC);
+        let max_sc_rate = self.total.get(Stat::MaxSCRatePercent);
+        if base_max_sc != 0 && max_sc_rate != 0 {
+            let delta = (base_max_sc * max_sc_rate) / 100;
+            self.total
+                .set(Stat::MaxSC, base_max_sc.saturating_add(delta));
+        }
+
+        let base_as = self.total.get(Stat::AttackSpeed);
+        let as_rate = self.total.get(Stat::AttackSpeedRatePercent);
+        if base_as != 0 && as_rate != 0 {
+            let delta = (base_as * as_rate) / 100;
+            self.total
+                .set(Stat::AttackSpeed, base_as.saturating_add(delta));
+        }
+
+        // Apply caps for certain stats (e.g. resistances, recovery) based on
+        // job-specific configuration.
         let caps = base_stats::base_caps_for_job(job);
         for (stat, cap_val) in &caps.values {
             let current = self.total.get(*stat);
