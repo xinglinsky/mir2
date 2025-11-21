@@ -19,7 +19,7 @@ pub mod combat;
 
 pub use provider::{WorldDatabase, WorldProvider};
 pub use config::WorldConfig;
-pub use world::{SessionId, World, WorldCommand, WorldEvent};
+pub use world::{SessionId, World, WorldCommand, WorldEvent, CoreMetrics, CorePlayerInfo};
 pub use player::PlayerState;
 pub use player_stats::PlayerStats;
 pub use types::{Job, ActorKind, Spell, BuffType, BuffProperty, BuffStackType};

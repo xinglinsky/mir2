@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicU32;
 
 use crystal_server_core::account::{AccountStore, CharacterStats};
-use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider};
+use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
 use crystal_shared_proto::select::SelectInfo;
 
 pub mod session;
@@ -10,6 +11,9 @@ pub mod visibility;
 pub mod npc;
 pub mod movement;
 pub mod handler;
+pub mod login_stage;
+pub mod select_stage;
+pub mod ingame_stage;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -52,5 +56,6 @@ pub(crate) struct LoginConnection {
     pub(crate) known_players: HashSet<world::SessionId>,
     pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
     pub(crate) outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
+    pub(crate) active_connections: Arc<AtomicU32>,
     pub(crate) last_move_kind: Option<u8>,
 }

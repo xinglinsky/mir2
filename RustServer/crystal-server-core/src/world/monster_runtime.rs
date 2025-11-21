@@ -117,6 +117,8 @@ impl<P: WorldProvider> World<P> {
     /// based respawn scheduler mirroring the C# Map.ProcessRespawns logic,
     /// but without yet wiring spawn multipliers or death/despawn updates.
     pub fn update(&mut self, now_ms: i64) -> Vec<WorldEvent> {
+        self.time_ms = now_ms;
+
         // First pass: decide for each respawn runtime whether it should
         // attempt to spawn this tick, and when its next spawn time should be.
         // We only handle time-based respawns (respawn_ticks == 0) here.

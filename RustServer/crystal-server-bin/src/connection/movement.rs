@@ -10,6 +10,7 @@ use crystal_shared_proto::scene::{
     SObjectWalk,
     SDamageIndicator,
     SObjectHealth,
+    SGainExperience,
 };
 use crystal_shared_proto::user::SUserLocation;
 
@@ -242,6 +243,25 @@ impl LoginConnection {
                         let raw = Self::encode_raw(pkt);
                         out.push(raw.clone());
                         self.enqueue_for_viewers(map_index, x, y, raw);
+                    }
+                }
+                world::WorldEvent::GainExperience {
+                    session_id,
+                    amount,
+                } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    if let Some(stats) = self.current_stats.as_mut() {
+                        stats.experience = stats
+                            .experience
+                            .saturating_add(amount as i64);
+                    }
+
+                    let pkt = SGainExperience { amount };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
                     }
                 }
             }

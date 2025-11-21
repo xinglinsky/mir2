@@ -102,14 +102,13 @@ impl<P: WorldProvider> World<P> {
         if let Some((id, monster_index)) = target_info {
             let mut dead = false;
 
-            let (undead, max_hp, defender_stats): (bool, i32, Stats) = self
-                .provider
-                .get_monster_info(monster_index)
-                .map(|info| {
+            let (monster_exp, undead, max_hp, defender_stats): (u32, bool, i32, Stats) =
+                if let Some(info) = self.provider.get_monster_info(monster_index) {
                     let max_hp = info.stats.get(Stat::HP).max(1);
-                    (info.undead, max_hp, info.stats.clone())
-                })
-                .unwrap_or((false, 1, Stats::default()));
+                    (info.experience, info.undead, max_hp, info.stats.clone())
+                } else {
+                    (0, false, 1, Stats::default())
+                };
 
             let mut damage_base: i32 = compute_physical_damage(&attacker_stats, &defender_stats);
             let mut damage_final: i32 = damage_base;
@@ -178,6 +177,19 @@ impl<P: WorldProvider> World<P> {
 
             if dead {
                 self.mark_monster_dead(map_index, id);
+
+                if monster_exp > 0 {
+                    if let Some(p) = self.players.get_mut(&session_id) {
+                        p.experience = p
+                            .experience
+                            .saturating_add(monster_exp as i64);
+                    }
+
+                    events.push(WorldEvent::GainExperience {
+                        session_id,
+                        amount: monster_exp,
+                    });
+                }
             }
         }
 

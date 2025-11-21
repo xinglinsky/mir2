@@ -9,7 +9,7 @@ use crystal_shared_proto::scene::{
 };
 use crystal_shared_proto::user::SObjectPlayer;
 
-use super::{LoginConnection, PlayerVisual};
+use super::LoginConnection;
 
 impl LoginConnection {
     pub(crate) fn send_monsters_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {

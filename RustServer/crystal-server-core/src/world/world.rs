@@ -13,6 +13,26 @@ use crate::world::player::PlayerState;
 pub type SessionId = u32;
 
 #[derive(Clone, Debug)]
+pub struct CoreMetrics {
+    pub players: u32,
+    pub monsters: u32,
+    pub connections: u32,
+    pub blocked_ips: u32,
+    pub uptime_seconds: u64,
+    pub cycle_delay_ms: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct CorePlayerInfo {
+    pub session_id: SessionId,
+    pub map_index: i32,
+    pub x: i32,
+    pub y: i32,
+    pub level: u16,
+    pub job: Job,
+}
+
+#[derive(Clone, Debug)]
 pub enum WorldCommand {
     StartGame {
         session_id: SessionId,
@@ -22,6 +42,7 @@ pub enum WorldCommand {
         direction: u8,
         job: Job,
         level: u16,
+        experience: i64,
         magics: Vec<UserMagic>,
     },
     Turn {
@@ -65,6 +86,10 @@ pub enum WorldEvent {
         y: i32,
         direction: u8,
     },
+    GainExperience {
+        session_id: SessionId,
+        amount: u32,
+    },
     ObjectAttack {
         session_id: SessionId,
         map_index: i32,
@@ -92,6 +117,7 @@ pub enum WorldEvent {
 pub struct World<P: WorldProvider> {
     pub(crate) provider: P,
     pub(crate) config: WorldConfig,
+    pub(crate) time_ms: i64,
     pub(crate) players: HashMap<SessionId, PlayerState>,
     pub(crate) maps: std::sync::Arc<std::sync::Mutex<HashMap<i32, map::Map>>>,
     /// Spawned monsters keyed by map_index.
@@ -106,12 +132,54 @@ impl<P: WorldProvider> World<P> {
         World {
             provider,
             config,
+            time_ms: 0,
             players: HashMap::new(),
             maps: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             monsters: HashMap::new(),
             next_monster_id: 0,
             respawns: HashMap::new(),
         }
+    }
+
+    pub fn snapshot_metrics(&self, connections: u32) -> CoreMetrics {
+        let players = self.players.len() as u32;
+        let monsters = self
+            .monsters
+            .values()
+            .map(|v| v.len() as u32)
+            .fold(0_u32, |acc, v| acc.saturating_add(v));
+
+        let uptime_seconds = if self.time_ms <= 0 {
+            0_u64
+        } else {
+            (self.time_ms.max(0) as u64) / 1000_u64
+        };
+
+        let cycle_delay_ms = 50_u32;
+
+        CoreMetrics {
+            players,
+            monsters,
+            connections,
+            blocked_ips: 0,
+            uptime_seconds,
+            cycle_delay_ms,
+        }
+    }
+
+    pub fn snapshot_players(&self) -> Vec<CorePlayerInfo> {
+        self
+            .players
+            .values()
+            .map(|p| CorePlayerInfo {
+                session_id: p.session_id,
+                map_index: p.map_index,
+                x: p.x,
+                y: p.y,
+                level: p.level,
+                job: p.job,
+            })
+            .collect()
     }
 
     pub(crate) fn get_or_load_map(&self, map_index: i32) -> Option<map::Map> {
@@ -140,12 +208,23 @@ impl<P: WorldProvider> World<P> {
                 direction,
                 job,
                 level,
+                experience,
                 magics,
             } => {
                 if let Some(map) = self.get_or_load_map(map_index) {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
-                let p = self.upsert_player(session_id, map_index, x, y, direction, job, level, magics);
+                let p = self.upsert_player(
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    job,
+                    level,
+                    experience,
+                    magics,
+                );
                 events.push(WorldEvent::UserLocation {
                     session_id: p.session_id,
                     map_index: p.map_index,

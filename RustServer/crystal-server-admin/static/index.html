@@ -43,6 +43,7 @@
     .form-field textarea { width:100%; min-height:80px; resize:vertical; border-radius:0.375rem; border:1px solid #1f2937; background:#020617; color:#e5e7eb; padding:0.4rem 0.5rem; font-family:inherit; font-size:0.85rem; }
     .status-bar { margin-top:0.5rem; font-size:0.75rem; color:#9ca3af; }
     .status-bar span { margin-right:0.75rem; }
+    .token-input { border-radius:0.375rem; border:1px solid #1f2937; background:#020617; color:#e5e7eb; padding:0.25rem 0.5rem; font-size:0.8rem; min-width:140px; }
     @media (max-width: 768px) { main { grid-template-columns: 1fr; } nav { border-right:none; border-bottom:1px solid #1e293b; display:flex; overflow-x:auto; } .nav-group-title { display:none; } }
   </style>
 </head>
@@ -53,7 +54,11 @@
         <h1>Crystal Admin Console</h1>
         <span>Rust · Web 控制台 · Stub 接入 A–E</span>
       </div>
-      <div class="pill" id="health-pill">Health: unknown</div>
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <input id="admin-token-input" class="token-input" type="password" placeholder="Admin token" />
+        <button class="btn" id="admin-token-apply">Set</button>
+        <div class="pill" id="health-pill">Health: unknown</div>
+      </div>
     </header>
     <main>
       <nav>
@@ -160,9 +165,18 @@
       });
     });
 
+    const ADMIN_TOKEN_STORAGE_KEY = 'crystal_admin_token';
+    let adminToken = '';
+
     async function fetchJson(url, options) {
       try {
-        const res = await fetch(url, options);
+        const opts = options ? { ...options } : {};
+        const headers = opts.headers ? { ...opts.headers } : {};
+        if (adminToken) {
+          headers['X-Admin-Token'] = adminToken;
+        }
+        opts.headers = headers;
+        const res = await fetch(url, opts);
         if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
         return await res.json();
       } catch (err) {
@@ -313,7 +327,37 @@
 
     document.getElementById('broadcast-send').addEventListener('click', sendBroadcast);
 
+    function initAdminToken() {
+      try {
+        const stored = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+        if (stored) {
+          adminToken = stored;
+        }
+      } catch (e) {
+        console.warn('failed to read admin token from localStorage', e);
+      }
+
+      const input = document.getElementById('admin-token-input');
+      if (input && adminToken) {
+        input.value = adminToken;
+      }
+
+      const btn = document.getElementById('admin-token-apply');
+      if (btn && input) {
+        btn.addEventListener('click', () => {
+          const value = input.value.trim();
+          adminToken = value;
+          try {
+            window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, value);
+          } catch (e) {
+            console.warn('failed to persist admin token', e);
+          }
+        });
+      }
+    }
+
     // Initial load
+    initAdminToken();
     loadHealth();
     loadMetrics();
     loadLogs('/logs', 'logs-list');

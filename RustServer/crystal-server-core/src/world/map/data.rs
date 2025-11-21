@@ -74,6 +74,20 @@ impl Map {
     pub fn cell(&self, x: u16, y: u16) -> Option<&MapCell> {
         self.index_of(x, y).and_then(|idx| self.cells.get(idx))
     }
+
+    #[inline]
+    pub fn is_walkable(&self, x: u16, y: u16) -> bool {
+        match self.cell(x, y) {
+            Some(cell) => matches!(cell.attribute, CellAttribute::Walk),
+            None => false,
+        }
+    }
+
+    #[inline]
+    pub fn can_move(&self, from_x: u16, from_y: u16, to_x: u16, to_y: u16) -> bool {
+        let _ = (from_x, from_y);
+        self.is_walkable(to_x, to_y)
+    }
 }
 
 #[derive(Clone, Debug)]

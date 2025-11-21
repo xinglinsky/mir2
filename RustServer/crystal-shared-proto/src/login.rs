@@ -315,6 +315,34 @@ impl CClientVersion {
 }
 
 #[derive(Clone, Debug)]
+pub struct CKeepAlive {
+    pub time: i64,
+}
+
+impl CKeepAlive {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        crate::io::write_i64_le(&mut buf, self.time)?;
+        Ok(RawPacket {
+            id: ClientPacketId::KeepAlive as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 8 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CKeepAlive payload must be exactly 8 bytes",
+            ));
+        }
+        let mut c = Cursor::new(payload);
+        let time = crate::io::read_i64_le(&mut c)?;
+        Ok(CKeepAlive { time })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CNewAccount {
     pub account_id: String,
     pub password: String,
@@ -676,6 +704,34 @@ impl SConnected {
             ));
         }
         Ok(SConnected)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SKeepAlive {
+    pub time: i64,
+}
+
+impl SKeepAlive {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        crate::io::write_i64_le(&mut buf, self.time)?;
+        Ok(RawPacket {
+            id: ServerPacketId::KeepAlive as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 8 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SKeepAlive payload must be exactly 8 bytes",
+            ));
+        }
+        let mut c = Cursor::new(payload);
+        let time = crate::io::read_i64_le(&mut c)?;
+        Ok(SKeepAlive { time })
     }
 }
 

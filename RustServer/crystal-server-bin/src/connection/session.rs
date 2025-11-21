@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicU32;
 
 use crystal_server_core::account::AccountStore;
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
@@ -23,6 +24,7 @@ impl LoginConnection {
         exp_table: Arc<Vec<i64>>,
         player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
         outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
+        active_connections: Arc<AtomicU32>,
     ) -> Self {
         LoginConnection {
             stage: Stage::Connected,
@@ -45,6 +47,7 @@ impl LoginConnection {
             known_players: HashSet::new(),
             player_summaries,
             outboxes,
+            active_connections,
             last_move_kind: None,
         }
     }

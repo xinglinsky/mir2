@@ -1,14 +1,16 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
-    routing::{get, post},
     extract::State,
     http::{HeaderMap, StatusCode},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::services::ServeDir;
+
+mod config;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -56,11 +58,10 @@ struct BroadcastResponse {
 }
 
 const ADMIN_TOKEN_HEADER: &str = "X-Admin-Token";
-const ADMIN_TOKEN_VALUE: &str = "change-me";
 
-fn is_authorized(headers: &HeaderMap) -> bool {
+fn is_authorized(headers: &HeaderMap, cfg: &config::AdminConfig) -> bool {
     match headers.get(ADMIN_TOKEN_HEADER) {
-        Some(value) => value == ADMIN_TOKEN_VALUE,
+        Some(value) => value == cfg.admin_token.as_str(),
         None => false,
     }
 }
@@ -74,7 +75,12 @@ struct InnerState {
     players: Vec<PlayerInfo>,
 }
 
-type AppState = Arc<RwLock<InnerState>>;
+struct AppSharedState {
+    inner: RwLock<InnerState>,
+    config: config::AdminConfig,
+}
+
+type AppState = Arc<AppSharedState>;
 
 impl InnerState {
     fn new() -> Self {
@@ -112,69 +118,148 @@ async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-async fn metrics(State(state): State<AppState>) -> Json<Metrics> {
-    let inner = state.read().await;
-    Json(inner.metrics.clone())
+async fn metrics(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Metrics>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.metrics.clone()))
 }
 
-async fn logs(State(state): State<AppState>) -> Json<Vec<LogEntry>> {
-    let inner = state.read().await;
-    Json(inner.logs.clone())
+async fn logs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<LogEntry>>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.logs.clone()))
 }
 
-async fn debug_logs(State(state): State<AppState>) -> Json<Vec<LogEntry>> {
-    let inner = state.read().await;
-    Json(inner.debug_logs.clone())
+async fn debug_logs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<LogEntry>>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.debug_logs.clone()))
 }
 
-async fn chat_logs(State(state): State<AppState>) -> Json<Vec<LogEntry>> {
-    let inner = state.read().await;
-    Json(inner.chat_logs.clone())
+async fn chat_logs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<LogEntry>>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.chat_logs.clone()))
 }
 
-async fn players(State(state): State<AppState>) -> Json<Vec<PlayerInfo>> {
-    let inner = state.read().await;
-    Json(inner.players.clone())
+async fn players(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<PlayerInfo>>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let inner = state.inner.read().await;
+    Ok(Json(inner.players.clone()))
 }
 
-async fn control_start() -> Json<ControlResponse> {
+async fn control_start(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("control: start server");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn control_stop() -> Json<ControlResponse> {
+async fn control_stop(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("control: stop server");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn control_reboot() -> Json<ControlResponse> {
+async fn control_reboot(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("control: reboot server");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn control_clear_blocked_ips() -> Json<ControlResponse> {
+async fn control_clear_blocked_ips(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("control: clear blocked IPs");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn reload_npcs() -> Json<ControlResponse> {
+async fn reload_npcs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("reload: NPCs");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn reload_drops() -> Json<ControlResponse> {
+async fn reload_drops(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("reload: drops");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn reload_line_messages() -> Json<ControlResponse> {
+async fn reload_line_messages(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ControlResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("reload: line messages");
-    Json(ControlResponse { ok: true })
+    Ok(Json(ControlResponse { ok: true }))
 }
 
-async fn broadcast(Json(req): Json<BroadcastRequest>) -> Json<BroadcastResponse> {
+async fn broadcast(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<BroadcastRequest>,
+) -> Result<Json<BroadcastResponse>, StatusCode> {
+    if !is_authorized(&headers, &state.config) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     println!("broadcast: {}", req.message);
-    Json(BroadcastResponse { ok: true })
+    Ok(Json(BroadcastResponse { ok: true }))
 }
 
 async fn set_metrics(
@@ -182,10 +267,10 @@ async fn set_metrics(
     headers: HeaderMap,
     Json(payload): Json<Metrics>,
 ) -> Result<Json<ControlResponse>, StatusCode> {
-    if !is_authorized(&headers) {
+    if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let mut inner = state.write().await;
+    let mut inner = state.inner.write().await;
     inner.metrics = payload;
     Ok(Json(ControlResponse { ok: true }))
 }
@@ -195,10 +280,10 @@ async fn set_logs(
     headers: HeaderMap,
     Json(payload): Json<Vec<LogEntry>>,
 ) -> Result<Json<ControlResponse>, StatusCode> {
-    if !is_authorized(&headers) {
+    if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let mut inner = state.write().await;
+    let mut inner = state.inner.write().await;
     inner.logs = payload;
     Ok(Json(ControlResponse { ok: true }))
 }
@@ -208,10 +293,10 @@ async fn set_debug_logs(
     headers: HeaderMap,
     Json(payload): Json<Vec<LogEntry>>,
 ) -> Result<Json<ControlResponse>, StatusCode> {
-    if !is_authorized(&headers) {
+    if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let mut inner = state.write().await;
+    let mut inner = state.inner.write().await;
     inner.debug_logs = payload;
     Ok(Json(ControlResponse { ok: true }))
 }
@@ -221,10 +306,10 @@ async fn set_chat_logs(
     headers: HeaderMap,
     Json(payload): Json<Vec<LogEntry>>,
 ) -> Result<Json<ControlResponse>, StatusCode> {
-    if !is_authorized(&headers) {
+    if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let mut inner = state.write().await;
+    let mut inner = state.inner.write().await;
     inner.chat_logs = payload;
     Ok(Json(ControlResponse { ok: true }))
 }
@@ -234,17 +319,26 @@ async fn set_players(
     headers: HeaderMap,
     Json(payload): Json<Vec<PlayerInfo>>,
 ) -> Result<Json<ControlResponse>, StatusCode> {
-    if !is_authorized(&headers) {
+    if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    let mut inner = state.write().await;
+    let mut inner = state.inner.write().await;
     inner.players = payload;
     Ok(Json(ControlResponse { ok: true }))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let state: AppState = Arc::new(RwLock::new(InnerState::new()));
+    let cfg = config::load_admin_config("admin.toml")?;
+    let addr: SocketAddr = cfg.admin_listen_addr;
+
+    let state: AppState = Arc::new(AppSharedState {
+        inner: RwLock::new(InnerState::new()),
+        config: cfg,
+    });
+
+    let static_dir = format!("{}/static", env!("CARGO_MANIFEST_DIR"));
+    let static_service = ServeDir::new(static_dir).append_index_html_on_directories(true);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -266,10 +360,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/internal/debug-logs", post(set_debug_logs))
         .route("/internal/chat-logs", post(set_chat_logs))
         .route("/internal/players", post(set_players))
-        .nest_service("/", ServeDir::new("static"))
+        .nest_service("/", static_service)
         .with_state(state);
-
-    let addr: SocketAddr = "0.0.0.0:7001".parse()?;
     println!("Crystal admin web console listening on {}", addr);
 
     let listener = TcpListener::bind(addr).await?;

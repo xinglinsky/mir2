@@ -52,7 +52,7 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
-    pub(super) fn apply_step(player: &mut PlayerState, _map: Option<map::Map>, direction: u8, distance: i32) {
+    pub(super) fn apply_step(player: &mut PlayerState, map: Option<map::Map>, direction: u8, distance: i32) {
         let (dx, dy) = match direction {
             0 => (0, -1),
             1 => (1, -1),
@@ -85,31 +85,21 @@ impl<P: WorldProvider> World<P> {
                 break;
             }
 
-            // TEMP: ignore map cell attributes and treat everything within bounds as walkable.
-            // Once map loading and cell attributes are fully validated, restore the map-based
-            // collision checks below.
-            // if let Some(ref m) = map {
-            //     let ux = tx as u16;
-            //     let uy = ty as u16;
+            if let Some(ref m) = map {
+                let ux = tx as u16;
+                let uy = ty as u16;
 
-            //     match m.cell(ux, uy) {
-            //         Some(cell) if matches!(cell.attribute, CellAttribute::Walk) => {
-            //             new_x = tx;
-            //             new_y = ty;
-            //         }
-            //         Some(_) => {
-            //             debug!("Move blocked: non-walkable cell at ({}, {})", tx, ty);
-            //             break;
-            //         }
-            //         None => {
-            //             debug!("Move blocked: no cell data at ({}, {})", tx, ty);
-            //             break;
-            //         }
-            //     }
-            // } else {
+                if m.is_walkable(ux, uy) {
+                    new_x = tx;
+                    new_y = ty;
+                } else {
+                    debug!("Move blocked: non-walkable cell at ({}, {})", tx, ty);
+                    break;
+                }
+            } else {
                 new_x = tx;
                 new_y = ty;
-            // }
+            }
         }
 
         player.x = new_x;
