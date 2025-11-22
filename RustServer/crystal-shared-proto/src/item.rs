@@ -13,6 +13,9 @@ use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 use crate::item_types::{ItemInfoData, UserItemData};
 
+mod client;
+pub use client::*;
+
 #[derive(Clone, Debug)]
 pub struct SNewItemInfo {
     /// Raw bytes representing the serialized ItemInfo (as written by C# ItemInfo.Save).
@@ -30,6 +33,120 @@ impl SNewItemInfo {
     pub fn decode(payload: &[u8]) -> io::Result<Self> {
         Ok(SNewItemInfo {
             info_bytes: payload.to_vec(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SMoveItem {
+    pub grid: u8,
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SMoveItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::MoveItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SMoveItem {
+            grid,
+            from,
+            to,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SEquipItem {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SEquipItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::EquipItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SEquipItem {
+            grid,
+            unique_id,
+            to,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRemoveItem {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SRemoveItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RemoveItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SRemoveItem {
+            grid,
+            unique_id,
+            to,
+            success,
         })
     }
 }

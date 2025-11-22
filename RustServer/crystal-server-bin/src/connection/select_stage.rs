@@ -14,6 +14,7 @@ use crystal_shared_proto::login::{
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
 use crystal_shared_proto::item::SNewItemInfo;
 use crystal_shared_proto::scene::{
+    SBaseStatsInfo,
     SObjectTeleportIn,
     SObjectTeleportOut,
     STeleportIn,
@@ -99,6 +100,23 @@ impl LoginConnection {
             .find(|c| c.index == msg.character_index)
             .cloned()
         {
+            let (guild_name, guild_rank_name) = if let Some(ref account_id) = self.account_id {
+                if let Ok(Some((name, rank_idx))) =
+                    self.store.load_character_guild(account_id, ch.index)
+                {
+                    let rank = if rank_idx == 0 {
+                        "Leader".to_string()
+                    } else {
+                        "Member".to_string()
+                    };
+                    (name, rank)
+                } else {
+                    (String::new(), String::new())
+                }
+            } else {
+                (String::new(), String::new())
+            };
+
             self.stage = Stage::InGame;
             self.current_char_index = Some(ch.index);
 
@@ -108,8 +126,8 @@ impl LoginConnection {
                     self.session_id,
                     super::PlayerVisual {
                         name: ch.name.clone(),
-                        guild_name: String::new(),
-                        guild_rank_name: String::new(),
+                        guild_name: guild_name.clone(),
+                        guild_rank_name: guild_rank_name.clone(),
                         name_colour_argb: -1,
                         class: ch.class,
                         gender: ch.gender,
@@ -313,10 +331,13 @@ impl LoginConnection {
                 .map(|p| p.direction)
                 .unwrap_or(0);
             let job = world::Job::from_u8(ch.class).unwrap_or(world::Job::Warrior);
+
+            // Initialise / update player in world first.
             let events = {
                 let mut world = self.world.lock().unwrap();
                 world.handle_command(world::WorldCommand::StartGame {
                     session_id: self.session_id,
+                    character_index: ch.index,
                     map_index: map_info_core.index,
                     x: spawn_x,
                     y: spawn_y,
@@ -329,6 +350,23 @@ impl LoginConnection {
                 })
             };
             self.handle_world_events(events, out);
+
+            // Send BaseStatsInfo so the client has the same core stat
+            // formulas (HP/MP, weights, etc.) as the server for this class.
+            let base_stats_bytes = world::base_stats::encode_base_stats_for_job(job);
+            let base_stats_pkt = SBaseStatsInfo {
+                stats_bytes: base_stats_bytes,
+            };
+            out.push(Self::encode_raw(base_stats_pkt.encode()));
+
+            if let Some(ref account_id) = self.account_id {
+                if let Ok(Some((inv, eq))) =
+                    self.store.load_character_items(account_id, ch.index)
+                {
+                    let mut world = self.world.lock().unwrap();
+                    world.set_player_items(self.session_id, inv, eq);
+                }
+            }
 
             let map = SMapInformation {
                 map_index: map_info_core.index,
@@ -391,8 +429,8 @@ impl LoginConnection {
                 object_id: self.session_id,
                 real_id: self.session_id,
                 name: ch.name,
-                guild_name: String::new(),
-                guild_rank: String::new(),
+                guild_name,
+                guild_rank: guild_rank_name,
                 name_colour_argb: -1,
                 class: ch.class,
                 gender: ch.gender,
@@ -422,39 +460,18 @@ impl LoginConnection {
                 out.push(Self::encode_raw(raw));
             }
 
-            let (mut inventory_slots, mut equipment_slots) = {
+            let slots_refresh = {
                 let world = self.world.lock().unwrap();
-                if let Some((inv, eq)) = world.player_items(self.session_id) {
-                    (inv.slots, eq.slots)
-                } else {
-                    (
-                        Inventory::new_default().slots,
-                        Equipment::new_default().slots,
-                    )
+                let (inv, eq) = world
+                    .player_items(self.session_id)
+                    .unwrap_or((
+                        Inventory::new_default(),
+                        Equipment::new_default(),
+                    ));
+                SUserSlotsRefresh {
+                    inventory: inv.slots,
+                    equipment: eq.slots,
                 }
-            };
-
-            // For now, ensure all items start in the bag (inventory), not auto-equipped.
-            // If any items are present in equipment slots (e.g. from future logic),
-            // move them into the first available inventory slots before sending.
-            for slot_item in equipment_slots.iter_mut() {
-                if let Some(item) = slot_item.take() {
-                    if let Some(inv_slot) = inventory_slots
-                        .iter_mut()
-                        .skip(6)
-                        .find(|s| s.is_none())
-                    {
-                        *inv_slot = Some(item);
-                    } else {
-                        // No inventory space: put it back into equipment to avoid losing items.
-                        *slot_item = Some(item);
-                    }
-                }
-            }
-
-            let slots_refresh = SUserSlotsRefresh {
-                inventory: inventory_slots,
-                equipment: equipment_slots,
             };
             if let Ok(raw) = slots_refresh.encode() {
                 out.push(Self::encode_raw(raw));

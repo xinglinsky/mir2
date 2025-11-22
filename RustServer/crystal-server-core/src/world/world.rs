@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::Job;
+use crate::guild::{GuildInfo, GuildManager};
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
 use crate::world::monster::MonsterInstance;
@@ -35,6 +36,7 @@ pub struct CorePlayerInfo {
 pub enum WorldCommand {
     StartGame {
         session_id: SessionId,
+        character_index: i32,
         map_index: i32,
         x: i32,
         y: i32,
@@ -118,6 +120,24 @@ pub enum WorldEvent {
         damage_type: u8,
         health_percent: u8,
     },
+    MonsterDied {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    MonsterHitPlayer {
+        attacker_monster_id: u64,
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        damage: i32,
+        damage_type: u8,
+        health_percent: u8,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +156,7 @@ pub struct World<P: WorldProvider> {
     pub(crate) respawn_last_tick_ms: i64,
     pub(crate) respawn_base_spawn_rate_minutes: u8,
     pub(crate) spawn_multiplier: u16,
+    pub(crate) guilds: GuildManager,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -155,6 +176,7 @@ impl<P: WorldProvider> World<P> {
             respawn_last_tick_ms: 0,
             respawn_base_spawn_rate_minutes,
             spawn_multiplier,
+            guilds: GuildManager::new(),
         }
     }
 
@@ -199,6 +221,37 @@ impl<P: WorldProvider> World<P> {
             .collect()
     }
 
+    /// Look up the latest known position and facing of a monster on the given
+    /// map. This is used by the connection layer when emitting visual attack
+    /// packets (SObjectAttack) for monster melee swings.
+    pub fn monster_position(&self, map_index: i32, monster_id: u64) -> Option<(i32, i32, u8)> {
+        let monsters = self.monsters.get(&map_index)?;
+        monsters
+            .iter()
+            .find(|m| m.id == monster_id)
+            .map(|m| (m.x, m.y, m.direction))
+    }
+
+    /// Create a new guild with the given name if no existing guild uses the
+    /// same name (case-insensitive). Returns a cloned GuildInfo on success.
+    pub fn create_guild(&mut self, name: &str) -> Option<GuildInfo> {
+        let exists = self
+            .guilds
+            .guilds()
+            .any(|g| g.name.eq_ignore_ascii_case(name));
+
+        if exists {
+            return None;
+        }
+
+        let info = self.guilds.create_guild(name.to_string());
+        Some(info.clone())
+    }
+
+    pub fn init_guilds_from_db(&mut self, guilds: Vec<GuildInfo>) {
+        self.guilds = GuildManager::from_guilds(guilds);
+    }
+
     pub fn set_spawn_config(&mut self, spawn_multiplier: u16, respawn_base_spawn_rate_minutes: u8) {
         self.spawn_multiplier = spawn_multiplier.max(1);
         self.respawn_base_spawn_rate_minutes = respawn_base_spawn_rate_minutes.max(1);
@@ -224,6 +277,7 @@ impl<P: WorldProvider> World<P> {
         match cmd {
             WorldCommand::StartGame {
                 session_id,
+                character_index,
                 map_index,
                 x,
                 y,
@@ -240,6 +294,7 @@ impl<P: WorldProvider> World<P> {
                 }
                 let p = self.upsert_player(
                     session_id,
+                    character_index,
                     map_index,
                     x,
                     y,

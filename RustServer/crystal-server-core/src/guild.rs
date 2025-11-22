@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use crate::world::Job;
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GuildId(pub i32);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildMember {
     pub id: i32,
     pub name: String,
@@ -15,7 +16,7 @@ pub struct GuildMember {
     pub online: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildRank {
     pub index: u8,
     pub name: String,
@@ -23,19 +24,19 @@ pub struct GuildRank {
     pub members: Vec<GuildMember>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildBuff {
     pub id: i32,
     pub active: bool,
     pub active_time_remaining: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildStorageItem {
     pub item_id: i64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildInfo {
     pub id: GuildId,
     pub name: String,
@@ -66,7 +67,7 @@ impl GuildInfo {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct GuildManager {
     next_id: i32,
     guilds: HashMap<GuildId, GuildInfo>,
@@ -75,6 +76,21 @@ pub struct GuildManager {
 impl GuildManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn from_guilds(guilds: Vec<GuildInfo>) -> Self {
+        let mut map = HashMap::new();
+        let mut max_id = 0;
+
+        for g in guilds {
+            max_id = max_id.max(g.id.0);
+            map.insert(g.id, g);
+        }
+
+        GuildManager {
+            next_id: max_id,
+            guilds: map,
+        }
     }
 
     pub fn next_id_hint(&self) -> i32 {

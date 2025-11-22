@@ -1,4 +1,5 @@
 use crate::item::{Equipment, Inventory};
+use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 use crate::stats::Stat;
 use crate::stats_util::aggregate_equipment_stats;
 use crate::world::magic::UserMagic;
@@ -9,6 +10,7 @@ use super::{Job, PlayerStats, SessionId, World};
 #[derive(Clone, Debug)]
 pub struct PlayerState {
     pub session_id: SessionId,
+    pub character_index: i32,
     pub map_index: i32,
     pub x: i32,
     pub y: i32,
@@ -19,6 +21,9 @@ pub struct PlayerState {
     pub gender: u8,
     pub magics: Vec<UserMagic>,
     pub stats: PlayerStats,
+    pub hp: i32,
+    pub mp: i32,
+    pub dead: bool,
     pub inventory: Inventory,
     pub equipment: Equipment,
 }
@@ -27,6 +32,7 @@ impl<P: WorldProvider> World<P> {
     pub(super) fn upsert_player(
         &mut self,
         session_id: SessionId,
+        character_index: i32,
         map_index: i32,
         x: i32,
         y: i32,
@@ -48,6 +54,7 @@ impl<P: WorldProvider> World<P> {
         self.players
             .entry(session_id)
             .and_modify(|p| {
+                p.character_index = character_index;
                 p.map_index = map_index;
                 p.x = x;
                 p.y = y;
@@ -56,6 +63,7 @@ impl<P: WorldProvider> World<P> {
                 p.experience = experience;
                 p.job = job;
                 p.gender = gender;
+                p.dead = false;
                 p.stats.set_base_from_level(job, level);
                 p.stats.recalc_if_dirty_for_job(job);
             })
@@ -64,11 +72,15 @@ impl<P: WorldProvider> World<P> {
                 stats.set_base_from_level(job, level);
                 stats.recalc_if_dirty_for_job(job);
 
+                let max_hp = stats.total.get(Stat::HP).max(1);
+                let max_mp = stats.total.get(Stat::MP).max(0);
+
                 let inventory = start_inventory.unwrap_or_else(Inventory::new_default);
                 let equipment = Equipment::new_default();
 
                 PlayerState {
                     session_id,
+                    character_index,
                     map_index,
                     x,
                     y,
@@ -79,6 +91,9 @@ impl<P: WorldProvider> World<P> {
                     gender,
                     magics,
                     stats,
+                    hp: max_hp,
+                    mp: max_mp,
+                    dead: false,
                     inventory,
                     equipment,
                 }
@@ -99,6 +114,16 @@ impl<P: WorldProvider> World<P> {
         let job = player.job;
         player.stats.set_base_from_level(job, level);
         player.stats.recalc_if_dirty_for_job(job);
+
+        // After recalculating stats for the new level, reset the world-side
+        // current HP/MP to the new maxima. This mirrors the C# LevelUp
+        // behaviour where RefreshStats is followed by SetHP(Stats[HP]) and
+        // SetMP(Stats[MP]), ensuring that subsequent monster damage and
+        // SHealthChanged packets operate on the correct post-level values.
+        let max_hp = player.stats.total.get(Stat::HP).max(1);
+        let max_mp = player.stats.total.get(Stat::MP).max(0);
+        player.hp = max_hp;
+        player.mp = max_mp;
         Some(())
     }
 
@@ -229,10 +254,437 @@ impl<P: WorldProvider> World<P> {
         })
     }
 
+    pub fn player_current_hp_mp(&self, session_id: SessionId) -> Option<(i32, i32)> {
+        self.players.get(&session_id).map(|p| (p.hp, p.mp))
+    }
+
+    /// Revive a dead player at their current map/x/y/direction without
+    /// changing position. Returns the new location and HP/MP.
+    pub fn revive_player_in_place(
+        &mut self,
+        session_id: SessionId,
+    ) -> Option<(i32, i32, i32, u8, i32, i32)> {
+        let (map_index, x, y, direction) = {
+            let player = self.players.get(&session_id)?;
+            (player.map_index, player.x, player.y, player.direction)
+        };
+
+        self.revive_player_to_position(session_id, map_index, x, y, direction)
+    }
+
+    /// Revive a dead player and move them to a specific map and location,
+    /// resetting HP/MP to their maximum values and clearing the dead flag.
+    pub fn revive_player_to_position(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    ) -> Option<(i32, i32, i32, u8, i32, i32)> {
+        let player = self.players.get_mut(&session_id)?;
+
+        if !player.dead && player.hp > 0 {
+            return None;
+        }
+
+        player.map_index = map_index;
+        player.x = x;
+        player.y = y;
+        player.direction = direction;
+
+        let max_hp = player.stats.total.get(Stat::HP).max(1);
+        let max_mp = player.stats.total.get(Stat::MP).max(0);
+
+        player.hp = max_hp;
+        player.mp = max_mp;
+        player.dead = false;
+
+        Some((
+            player.map_index,
+            player.x,
+            player.y,
+            player.direction,
+            player.hp,
+            player.mp,
+        ))
+    }
+
     pub fn player_items(&self, session_id: SessionId) -> Option<(Inventory, Equipment)> {
         self.players
             .get(&session_id)
             .map(|p| (p.inventory.clone(), p.equipment.clone()))
+    }
+
+    pub fn set_player_items(
+        &mut self,
+        session_id: SessionId,
+        inventory: Inventory,
+        equipment: Equipment,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.inventory = inventory;
+            player.equipment = equipment;
+            self.recalc_player_equipment_stats(session_id);
+        }
+    }
+
+    pub fn move_item_in_grid(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        from: i32,
+        to: i32,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if grid != 1 {
+            return false;
+        }
+
+        if from < 0 || to < 0 {
+            return false;
+        }
+        let from = from as usize;
+        let to = to as usize;
+
+        if from >= player.inventory.len() || to >= player.inventory.len() {
+            return false;
+        }
+
+        if player.inventory.slots[from].is_none() {
+            return false;
+        }
+
+        player.inventory.slots.swap(from, to);
+        true
+    }
+
+    pub fn equip_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        unique_id: u64,
+        to: i32,
+    ) -> bool {
+        if grid != 1 {
+            return false;
+        }
+
+        if to < 0 {
+            return false;
+        }
+        let slot = to as usize;
+
+        if !self.can_equip_item_for_player_by_uid(session_id, unique_id, slot) {
+            return false;
+        }
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if slot >= player.equipment.len() {
+            return false;
+        }
+
+        let from_index = match player
+            .inventory
+            .slots
+            .iter()
+            .position(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let from_item = player.inventory.slots[from_index].take();
+        let to_item = player.equipment.slots[slot].take();
+        player.equipment.slots[slot] = from_item;
+        player.inventory.slots[from_index] = to_item;
+
+        if let Some(equipped) = player.equipment.slots[slot].as_mut() {
+            if let Some(info) = self.provider.get_item_info(equipped.item_index) {
+                if info.need_identify && !equipped.identified {
+                    equipped.identified = true;
+                }
+
+                // BindOnEquip: if the item is not yet soul-bound (<= 0), bind it to this character.
+                if (info.bind & 0x0200i16) != 0 && equipped.soul_bound_id <= 0 {
+                    equipped.soul_bound_id = player.character_index;
+                }
+            }
+        }
+
+        self.recalc_player_equipment_stats(session_id);
+        true
+    }
+
+    pub fn remove_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        unique_id: u64,
+        to: i32,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if grid != 1 {
+            return false;
+        }
+
+        if to < 0 {
+            return false;
+        }
+        let to = to as usize;
+        if to >= player.inventory.len() {
+            return false;
+        }
+
+        if player.inventory.slots[to].is_some() {
+            return false;
+        }
+
+        let from_index = match player
+            .equipment
+            .slots
+            .iter()
+            .position(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let from_item = player.equipment.slots[from_index].take();
+        if from_item.is_none() {
+            return false;
+        }
+
+        player.inventory.slots[to] = from_item;
+
+        self.recalc_player_equipment_stats(session_id);
+        true
+    }
+
+    fn can_equip_item_for_player_by_uid(
+        &self,
+        session_id: SessionId,
+        unique_id: u64,
+        slot: usize,
+    ) -> bool {
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let item = match player
+            .inventory
+            .slots
+            .iter()
+            .find(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+        {
+            Some(Some(i)) => i,
+            _ => return false,
+        };
+
+        // SoulBound check: if the item is already bound to a different character,
+        // it cannot be equipped by this player. Treat non-positive IDs as unbound
+        // for compatibility with existing data.
+        if item.soul_bound_id > 0 && item.soul_bound_id != player.character_index {
+            return false;
+        }
+
+        if let Some(dest) = player.equipment.get(slot) {
+            if dest.cursed {
+                return false;
+            }
+
+            if dest.wedding_ring != -1 {
+                return false;
+            }
+
+            if let Some(info) = self.provider.get_item_info(dest.item_index) {
+                if (info.bind & 0x0008i16) != 0 {
+                    return false;
+                }
+            }
+        }
+
+        self.can_equip_item_for_player(player, item, slot)
+    }
+
+    fn can_equip_item_for_player(
+        &self,
+        player: &PlayerState,
+        item: &UserItemData,
+        slot: usize,
+    ) -> bool {
+        let info = match self.provider.get_item_info(item.item_index) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        if !Self::equipment_slot_matches_item(slot, &info) {
+            return false;
+        }
+
+        let gender_ok = match player.gender {
+            0 => (info.required_gender & 1) != 0,
+            1 => (info.required_gender & 2) != 0,
+            _ => true,
+        };
+        if !gender_ok {
+            return false;
+        }
+
+        let class_bit = match player.job {
+            Job::Warrior => 1,
+            Job::Wizard => 2,
+            Job::Taoist => 4,
+            Job::Assassin => 8,
+            Job::Archer => 16,
+        };
+        if (info.required_class & class_bit) == 0 {
+            return false;
+        }
+
+        let req_amt = info.required_amount as i32;
+        match info.required_type {
+            0 => {
+                if (player.level as i32) < req_amt {
+                    return false;
+                }
+            }
+            1 => {
+                if player.stats.total.get(Stat::MaxAC) < req_amt {
+                    return false;
+                }
+            }
+            2 => {
+                if player.stats.total.get(Stat::MaxMAC) < req_amt {
+                    return false;
+                }
+            }
+            3 => {
+                if player.stats.total.get(Stat::MaxDC) < req_amt {
+                    return false;
+                }
+            }
+            4 => {
+                if player.stats.total.get(Stat::MaxMC) < req_amt {
+                    return false;
+                }
+            }
+            5 => {
+                if player.stats.total.get(Stat::MaxSC) < req_amt {
+                    return false;
+                }
+            }
+            6 => {
+                if (player.level as i32) > req_amt {
+                    return false;
+                }
+            }
+            7 => {
+                if player.stats.total.get(Stat::MinAC) < req_amt {
+                    return false;
+                }
+            }
+            8 => {
+                if player.stats.total.get(Stat::MinMAC) < req_amt {
+                    return false;
+                }
+            }
+            9 => {
+                if player.stats.total.get(Stat::MinDC) < req_amt {
+                    return false;
+                }
+            }
+            10 => {
+                if player.stats.total.get(Stat::MinMC) < req_amt {
+                    return false;
+                }
+            }
+            11 => {
+                if player.stats.total.get(Stat::MinSC) < req_amt {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+
+        let (mut hand_weight, mut wear_weight) = self.current_equipment_weights(player);
+
+        if let Some(current) = player.equipment.get(slot) {
+            if let Some(curr_info) = self.provider.get_item_info(current.item_index) {
+                if Self::is_hand_item(&curr_info) {
+                    hand_weight -= curr_info.weight as i32;
+                } else {
+                    wear_weight -= curr_info.weight as i32;
+                }
+            }
+        }
+
+        if Self::is_hand_item(&info) {
+            hand_weight += info.weight as i32;
+            if hand_weight > player.stats.total.get(Stat::HandWeight) {
+                return false;
+            }
+        } else {
+            wear_weight += info.weight as i32;
+            if wear_weight > player.stats.total.get(Stat::WearWeight) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn current_equipment_weights(&self, player: &PlayerState) -> (i32, i32) {
+        let mut hand = 0i32;
+        let mut wear = 0i32;
+        for slot in &player.equipment.slots {
+            if let Some(item) = slot {
+                if let Some(info) = self.provider.get_item_info(item.item_index) {
+                    if Self::is_hand_item(&info) {
+                        hand += info.weight as i32;
+                    } else {
+                        wear += info.weight as i32;
+                    }
+                }
+            }
+        }
+        (hand, wear)
+    }
+
+    fn is_hand_item(info: &ItemInfoData) -> bool {
+        info.item_type == 1 || info.item_type == 12
+    }
+
+    fn equipment_slot_matches_item(slot: usize, info: &ItemInfoData) -> bool {
+        match slot {
+            0 => info.item_type == 1,
+            1 => info.item_type == 2,
+            2 => info.item_type == 4,
+            3 => info.item_type == 12,
+            4 => info.item_type == 5,
+            5 => info.item_type == 6,
+            6 => info.item_type == 6 || info.item_type == 8,
+            7 | 8 => info.item_type == 7,
+            9 => info.item_type == 8,
+            10 => info.item_type == 9,
+            11 => info.item_type == 10,
+            12 => info.item_type == 11,
+            13 => info.item_type == 19,
+            _ => false,
+        }
     }
 
     fn build_start_inventory(&self, job: Job, gender: u8) -> Inventory {
@@ -252,13 +704,13 @@ impl<P: WorldProvider> World<P> {
             _ => 1 | 2,
         };
 
-        println!(
-            "[world] build_start_inventory: job={} gender={} class_bit={} gender_bit={}",
-            job.as_u8(),
-            gender,
-            class_bit,
-            gender_bit
-        );
+        // println!(
+        //     "[world] build_start_inventory: job={} gender={} class_bit={} gender_bit={}",
+        //     job.as_u8(),
+        //     gender,
+        //     class_bit,
+        //     gender_bit
+        // );
 
         let mut counter: u64 = 0;
 
@@ -266,18 +718,18 @@ impl<P: WorldProvider> World<P> {
             let matches_class = (info.required_class & class_bit) != 0;
             let matches_gender = (info.required_gender & gender_bit) != 0;
 
-            if info.start_item {
-                println!(
-                    "[world]  candidate idx={} name={} start_item={} req_class={} req_gender={} matches_class={} matches_gender={}",
-                    info.index,
-                    info.name,
-                    info.start_item,
-                    info.required_class,
-                    info.required_gender,
-                    matches_class,
-                    matches_gender
-                );
-            }
+            // if info.start_item {
+            //     println!(
+            //         "[world]  candidate idx={} name={} start_item={} req_class={} req_gender={} matches_class={} matches_gender={}",
+            //         info.index,
+            //         info.name,
+            //         info.start_item,
+            //         info.required_class,
+            //         info.required_gender,
+            //         matches_class,
+            //         matches_gender
+            //     );
+            // }
 
             if !info.start_item {
                 continue;

@@ -13,13 +13,14 @@ use crystal_shared_proto::scene::{
     SGainExperience,
     SLevelChanged,
     SObjectLeveled,
+    SObjectDied,
 };
 use crystal_shared_proto::user::{SUserLocation, SHealthChanged};
 
 use super::LoginConnection;
 
 impl LoginConnection {
-    fn enqueue_for_viewers(
+    pub(crate) fn enqueue_for_viewers(
         &self,
         map_index: i32,
         x: i32,
@@ -248,6 +249,7 @@ impl LoginConnection {
                     }
                 }
                 world::WorldEvent::ObjectLocation { .. } => {}
+                world::WorldEvent::MonsterHitPlayer { .. } => {}
                 world::WorldEvent::GainExperience {
                     session_id,
                     amount,
@@ -413,6 +415,31 @@ impl LoginConnection {
                             self.current_y,
                             raw,
                         );
+                    }
+                }
+                world::WorldEvent::MonsterDied {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                } => {
+                    // Monster is now dead; stop tracking it as a "known" live
+                    // monster so that update_visibility does not immediately
+                    // send SObjectRemove and erase the corpse.
+                    self.known_monsters.remove(&object_id);
+
+                    let pkt = SObjectDied {
+                        object_id: object_id as u32,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                        death_type: 0,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let encoded = Self::encode_raw(raw);
+                        out.push(encoded.clone());
+                        self.enqueue_for_viewers(map_index, x, y, encoded);
                     }
                 }
             }

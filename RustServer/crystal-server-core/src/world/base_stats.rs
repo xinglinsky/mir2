@@ -553,3 +553,47 @@ pub fn base_caps_for_job(_job: Job) -> Stats {
 
     caps
 }
+
+pub fn encode_base_stats_for_job(job: Job) -> Vec<u8> {
+    let mut buf = Vec::new();
+
+    // Job byte (MirClass).
+    buf.push(job.as_u8());
+
+    // BaseStats.Stats count.
+    let configs = configs_for_job(job);
+    let count: i32 = configs.len() as i32;
+    buf.extend_from_slice(&count.to_le_bytes());
+
+    // Serialize each BaseStat entry in the same layout as C# BaseStat.Save.
+    for cfg in configs {
+        // Stat type.
+        buf.push(cfg.stat as u8);
+
+        // StatFormula as byte.
+        let formula_id = match cfg.formula {
+            StatFormula::Health => 0u8,
+            StatFormula::Mana => 1u8,
+            StatFormula::Weight => 2u8,
+            StatFormula::Stat => 3u8,
+        };
+        buf.push(formula_id);
+
+        // Base / Gain / GainRate / Max.
+        buf.extend_from_slice(&cfg.base.to_le_bytes());
+        buf.extend_from_slice(&cfg.gain.to_le_bytes());
+        buf.extend_from_slice(&cfg.gain_rate.to_le_bytes());
+        buf.extend_from_slice(&cfg.max.to_le_bytes());
+    }
+
+    // Caps: serialize Stats in the same way as C# Stats.Save.
+    let caps = base_caps_for_job(job);
+    let caps_count: i32 = caps.values.len() as i32;
+    buf.extend_from_slice(&caps_count.to_le_bytes());
+    for (stat, value) in &caps.values {
+        buf.push(*stat as u8);
+        buf.extend_from_slice(&value.to_le_bytes());
+    }
+
+    buf
+}

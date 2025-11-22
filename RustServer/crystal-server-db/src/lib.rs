@@ -12,12 +12,21 @@ use crystal_server_core::account::{
     hash_password,
     verify_password_hash,
 };
+use crystal_server_core::guild::GuildInfo;
+use crystal_server_core::item::{decode_item_slots, encode_item_slots, Inventory, Equipment};
 use crystal_server_core::world::magic::UserMagic;
 use rusqlite::{self, Connection};
+use serde::{Deserialize, Serialize};
 use serde_json;
 
 pub struct SqliteAccountStore {
     path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredItems {
+    inventory: Vec<Option<Vec<u8>>>,
+    equipment: Vec<Option<Vec<u8>>>,
 }
 
 impl SqliteAccountStore {
@@ -177,6 +186,29 @@ impl SqliteAccountStore {
                     credit       INTEGER NOT NULL,
                     PRIMARY KEY(account_id, idx),
                     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_items (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    items_json   TEXT NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_guilds (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    guild_name   TEXT NOT NULL,
+                    rank_index   INTEGER NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS guilds (
+                    id          INTEGER PRIMARY KEY,
+                    name        TEXT NOT NULL UNIQUE,
+                    data_json   TEXT NOT NULL
                 );
                 "#,
             ))?;
@@ -344,6 +376,14 @@ impl AccountStore for SqliteAccountStore {
             ))?;
             Self::map_sql_err(conn.execute(
                 "DELETE FROM character_stats WHERE account_id = ?1 AND idx = ?2",
+                (account_id, &(index as i64)),
+            ))?;
+            Self::map_sql_err(conn.execute(
+                "DELETE FROM character_items WHERE account_id = ?1 AND idx = ?2",
+                (account_id, &(index as i64)),
+            ))?;
+            Self::map_sql_err(conn.execute(
+                "DELETE FROM character_guilds WHERE account_id = ?1 AND idx = ?2",
                 (account_id, &(index as i64)),
             ))?;
             let rows = Self::map_sql_err(conn.execute(
@@ -584,6 +624,155 @@ impl AccountStore for SqliteAccountStore {
                     &pos.y,
                     &(pos.direction as i64),
                 ),
+            ))?;
+            Ok(())
+        })
+    }
+
+    fn load_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(Inventory, Equipment)>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT items_json FROM character_items WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query((account_id, index)))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let stored: StoredItems = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+                let inv_slots = decode_item_slots(stored.inventory)
+                    .map_err(StoreError::Io)?;
+                let eq_slots = decode_item_slots(stored.equipment)
+                    .map_err(StoreError::Io)?;
+
+                Ok(Some((
+                    Inventory { slots: inv_slots },
+                    Equipment { slots: eq_slots },
+                )))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+        inventory: &Inventory,
+        equipment: &Equipment,
+    ) -> Result<(), StoreError> {
+        let stored = StoredItems {
+            inventory: encode_item_slots(&inventory.slots)
+                .map_err(StoreError::Io)?,
+            equipment: encode_item_slots(&equipment.slots)
+                .map_err(StoreError::Io)?,
+        };
+
+        let json = serde_json::to_string(&stored)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO character_items (account_id, idx, items_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET items_json = excluded.items_json",
+                (account_id, &index, &json),
+            ))?;
+            Ok(())
+        })
+    }
+
+    fn load_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(String, u8)>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT guild_name, rank_index FROM character_guilds WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query((account_id, index)))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let guild_name: String = Self::map_sql_err(row.get(0))?;
+                let rank_index: i64 = Self::map_sql_err(row.get(1))?;
+                Ok(Some((guild_name, rank_index as u8)))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+        guild_name: &str,
+        rank_index: u8,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            if guild_name.is_empty() {
+                Self::map_sql_err(conn.execute(
+                    "DELETE FROM character_guilds WHERE account_id = ?1 AND idx = ?2",
+                    (account_id, &index),
+                ))?;
+                Ok(())
+            } else {
+                Self::map_sql_err(conn.execute(
+                    "INSERT INTO character_guilds (account_id, idx, guild_name, rank_index)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(account_id, idx) DO UPDATE SET guild_name = excluded.guild_name, rank_index = excluded.rank_index",
+                    (account_id, &index, &guild_name, &(rank_index as i64)),
+                ))?;
+                Ok(())
+            }
+        })
+    }
+
+    fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT data_json FROM guilds",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query([]))?;
+            let mut guilds = Vec::new();
+
+            while let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let guild: GuildInfo = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+                guilds.push(guild);
+            }
+
+            Ok(guilds)
+        })
+    }
+
+    fn save_guild(&self, guild: &GuildInfo) -> Result<(), StoreError> {
+        let json = serde_json::to_string(guild)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO guilds (id, name, data_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET
+                     name = excluded.name,
+                     data_json = excluded.data_json",
+                (&guild.id.0, &guild.name, &json),
+            ))?;
+            Ok(())
+        })
+    }
+
+    fn delete_guild(&self, id: i32) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "DELETE FROM guilds WHERE id = ?1",
+                (&id,),
             ))?;
             Ok(())
         })

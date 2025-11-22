@@ -40,6 +40,7 @@ pub(crate) struct LoginConnection {
     pub(crate) stage: Stage,
     pub(crate) session_id: world::SessionId,
     pub(crate) account_id: Option<String>,
+    pub(crate) online_accounts: Arc<Mutex<HashMap<String, world::SessionId>>>,
     pub(crate) characters: Vec<SelectInfo>,
     pub(crate) store: Arc<dyn AccountStore>,
     pub(crate) world_db: Arc<WorldDatabase>,
@@ -62,4 +63,6 @@ pub(crate) struct LoginConnection {
     pub(crate) timeout_ms: u64,
     pub(crate) closing: bool,
     pub(crate) last_move_kind: Option<u8>,
+    pub(crate) can_create_guild: bool,
+    pub(crate) pending_guild_invite: Option<String>,
 }

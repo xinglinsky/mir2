@@ -1,6 +1,6 @@
 use rand::thread_rng;
 
-use crate::combat::compute_physical_damage;
+use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
 use crate::world::magic::magic_damage;
 use crate::world::player::PlayerState;
@@ -111,21 +111,29 @@ impl<P: WorldProvider> World<P> {
                     (0, false, 1, Stats::default())
                 };
 
-            let mut damage_base: i32 = compute_physical_damage(&attacker_stats, &defender_stats);
-            let mut damage_final: i32 = damage_base;
+            // Use the unified C#-style physical melee model (including
+            // Accuracy/Agility, AC/DR and crit) for player -> monster hits.
+            let (hit, mut raw_damage, mut damage_type) =
+                compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
 
-            if let Some(fatal_level) = fatal_level {
-                if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
-                    let mut rng = thread_rng();
-                    damage_base = magic_damage(info, fatal_level, damage_base, &mut rng);
-                    damage_final = damage_base;
+            // Apply FatalSword as an additional scalar on top of the physical
+            // hit if present. This approximates C# UserMagic.GetDamage where
+            // the magic modifies the base physical damage.
+            if hit && raw_damage > 0 {
+                if let Some(fatal_level) = fatal_level {
+                    if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
+                        let mut rng = thread_rng();
+                        let boosted = magic_damage(info, fatal_level, raw_damage, &mut rng);
+                        if boosted > 0 {
+                            raw_damage = boosted;
+                        }
+                    }
                 }
-            }
 
-            if undead {
-                let holy_bonus: i32 = 0;
-                damage_base = damage_base.saturating_add(holy_bonus);
-                damage_final = damage_base;
+                if undead {
+                    let holy_bonus: i32 = 0;
+                    raw_damage = raw_damage.saturating_add(holy_bonus);
+                }
             }
 
             let mut strike_x = target_x;
@@ -140,29 +148,51 @@ impl<P: WorldProvider> World<P> {
                     strike_y = m.y;
                     strike_dir = m.direction;
 
-                    if damage_final > 0 {
-                        damage_done = damage_final;
+                    let old_hp = m.hp.max(0);
+                    let mut new_hp = old_hp;
 
-                        if damage_final >= m.hp {
+                    if hit && raw_damage > 0 {
+                        damage_done = raw_damage;
+
+                        if raw_damage >= m.hp {
                             m.hp = 0;
                             dead = true;
                         } else {
-                            m.hp -= damage_final;
+                            m.hp -= raw_damage;
                         }
 
-                        let remaining_hp = if dead { 0 } else { m.hp.max(0) };
-                        if max_hp > 0 {
-                            let pct = (remaining_hp as i64 * 100 / max_hp as i64)
-                                .clamp(0, 100) as u8;
-                            health_percent = pct;
-                        } else {
-                            health_percent = 0;
-                        }
+                        new_hp = if dead { 0 } else { m.hp.max(0) };
+                    }
+
+                    if max_hp > 0 {
+                        let pct = (new_hp as i64 * 100 / max_hp as i64)
+                            .clamp(0, 100) as u8;
+                        health_percent = pct;
+                    } else {
+                        health_percent = 0;
                     }
                 }
             }
 
-            if damage_done > 0 {
+            // Emit an ObjectStruck-style event for both hits and misses so the
+            // client can render Hit/Miss/Crit indicators. For misses we keep
+            // damage at 0 and HP unchanged but pass through the damage_type
+            // from the helper (1 = Miss).
+            if hit {
+                if damage_done > 0 {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: id,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: damage_done,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+            } else {
                 events.push(WorldEvent::ObjectStruck {
                     attacker_id: session_id,
                     target_id: id,
@@ -170,14 +200,22 @@ impl<P: WorldProvider> World<P> {
                     x: strike_x,
                     y: strike_y,
                     direction: strike_dir,
-                    damage: damage_done,
-                    damage_type: 0,
+                    damage: 0,
+                    damage_type,
                     health_percent,
                 });
             }
 
             if dead {
                 self.mark_monster_dead(map_index, id);
+
+                events.push(WorldEvent::MonsterDied {
+                    object_id: id,
+                    map_index,
+                    x: strike_x,
+                    y: strike_y,
+                    direction: strike_dir,
+                });
 
                 if monster_exp > 0 {
                     if let Some(p) = self.players.get_mut(&session_id) {

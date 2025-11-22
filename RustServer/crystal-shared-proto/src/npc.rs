@@ -11,6 +11,9 @@ use crate::packet::RawPacket;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
+mod client;
+pub use client::*;
+
 #[derive(Clone, Debug)]
 pub struct SObjectNpc {
     pub object_id: u32,

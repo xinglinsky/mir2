@@ -2,6 +2,8 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 use crate::world::magic::UserMagic;
+use crate::item::{Inventory, Equipment};
+use crate::guild::GuildInfo;
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -159,6 +161,44 @@ pub trait AccountStore: Send + Sync {
         index: i32,
         level: u16,
     ) -> Result<(), StoreError>;
+
+    /// Load the full item state (inventory + equipment) for a given
+    /// character. Returns Ok(None) if no items have been stored yet.
+    fn load_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(Inventory, Equipment)>, StoreError>;
+
+    /// Persist the full item state (inventory + equipment) for a given
+    /// character.
+    fn save_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+        inventory: &Inventory,
+        equipment: &Equipment,
+    ) -> Result<(), StoreError>;
+
+    fn load_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(String, u8)>, StoreError>;
+
+    fn save_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+        guild_name: &str,
+        rank_index: u8,
+    ) -> Result<(), StoreError>;
+
+    fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError>;
+
+    fn save_guild(&self, guild: &GuildInfo) -> Result<(), StoreError>;
+
+    fn delete_guild(&self, id: i32) -> Result<(), StoreError>;
 }
 
 pub fn hash_password(password: &str) -> String {

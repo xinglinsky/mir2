@@ -15,7 +15,8 @@ use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider
 use crystal_server_core::account::AccountStore;
 use crystal_server_db::SqliteAccountStore;
 
-use crystal_shared_proto::scene::SChat;
+use crystal_shared_proto::scene::{SChat, SDeath, SObjectAttack, SObjectDied, SStruck};
+use crystal_shared_proto::user::SHealthChanged;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -196,8 +197,12 @@ async fn main() -> io::Result<()> {
     );
 
     // Global world instance shared by all connections, mirroring the single-world
-    // design of the original C# server.
-    let world = world::World::new((*world_db).clone(), world_config.clone());
+    // design of the original C# server. After construction, load any persisted
+    // guild definitions from the account store so that guilds survive restarts.
+    let mut world = world::World::new((*world_db).clone(), world_config.clone());
+    if let Ok(guilds) = store.load_all_guilds() {
+        world.init_guilds_from_db(guilds);
+    }
     let world = Arc::new(Mutex::new(world));
 
     // Per-session outbound packet queues, shared by connection handlers and
@@ -205,61 +210,316 @@ async fn main() -> io::Result<()> {
     let outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    // Track which account_id is currently bound to which session_id so we can
+    // mirror the C# behaviour where a second login for the same account
+    // disconnects the previous session.
+    let online_accounts: Arc<Mutex<HashMap<String, world::SessionId>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
     // Simple world tick thread driving the World::update loop. The tick
     // interval roughly mirrors the C# Envir.Process cadence (50–100ms range)
     // and also emits world events such as monster movement.
     {
-        let world = Arc::clone(&world);
-        let outboxes_for_world_events = Arc::clone(&outboxes);
+        let world_for_tick = Arc::clone(&world);
+        let outboxes_for_world_events: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
+            Arc::clone(&outboxes);
         thread::spawn(move || {
             let tick = Duration::from_millis(50);
             let start = Instant::now();
             loop {
                 let now_ms = start.elapsed().as_millis() as i64;
                 let events = {
-                    let mut w = world.lock().unwrap();
+                    let mut w = world_for_tick.lock().unwrap();
                     w.update(now_ms)
                 };
 
                 for event in events {
-                    if let world::WorldEvent::ObjectLocation {
-                        object_id,
-                        map_index,
-                        x,
-                        y,
-                        direction,
-                    } = event
-                    {
-                        let viewers = {
-                            let w = world.lock().unwrap();
-                            w.sessions_in_range_for_map(
-                                map_index,
-                                x,
-                                y,
-                                LoginConnection::DATA_RANGE,
-                            )
-                        };
-
-                        if viewers.is_empty() {
-                            continue;
-                        }
-
-                        let base = crystal_shared_proto::scene::SObjectTurnWalkRun {
-                            object_id: object_id as u32,
-                            location_x: x,
-                            location_y: y,
+                    match event {
+                        world::WorldEvent::ObjectLocation {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
                             direction,
-                        };
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
 
-                        if let Ok(pkt) =
-                            crystal_shared_proto::scene::SObjectWalk(base).encode()
-                        {
-                            let raw = pkt.encode();
-                            let mut outboxes = outboxes_for_world_events.lock().unwrap();
-                            for sid in viewers {
-                                outboxes.entry(sid).or_default().push(raw.clone());
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let base =
+                                crystal_shared_proto::scene::SObjectTurnWalkRun {
+                                    object_id: object_id as u32,
+                                    location_x: x,
+                                    location_y: y,
+                                    direction,
+                                };
+
+                            if let Ok(pkt) =
+                                crystal_shared_proto::scene::SObjectWalk(base).encode()
+                            {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in viewers {
+                                    outboxes.entry(sid).or_default().push(raw.clone());
+                                }
                             }
                         }
+                        world::WorldEvent::MonsterDied {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let died_pkt = SObjectDied {
+                                object_id: object_id as u32,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                                death_type: 0,
+                            };
+                            if let Ok(raw) = died_pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::MonsterHitPlayer {
+                            attacker_monster_id,
+                            session_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                            damage,
+                            damage_type,
+                            health_percent,
+                        } => {
+                            let (mut viewers, hp_mp, attacker_pos) = {
+                                let w = world_for_tick.lock().unwrap();
+                                let viewers = w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                );
+                                let hp_mp = w.player_current_hp_mp(session_id);
+                                let attacker_pos =
+                                    w.monster_position(map_index, attacker_monster_id);
+                                (viewers, hp_mp, attacker_pos)
+                            };
+
+                            // Before we remove the struck player from the
+                            // broadcast list, capture the full viewer set for
+                            // the monster's attack animation.
+                            let viewers_for_attack = viewers.clone();
+
+                            // If we can locate the attacking monster's
+                            // position and facing, emit an SObjectAttack so
+                            // that both the struck player and observers see
+                            // the monster swing animation and hear its attack
+                            // sound, mirroring the C# server behaviour.
+                            if let Some((ax, ay, adir)) = attacker_pos {
+                                let atk_pkt = SObjectAttack {
+                                    object_id: attacker_monster_id as u32,
+                                    location_x: ax,
+                                    location_y: ay,
+                                    direction: adir,
+                                    spell: 0,
+                                    level: 0,
+                                    attack_type: 0,
+                                };
+                                if let Ok(pkt) = atk_pkt.encode() {
+                                    let raw = pkt.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    for sid in &viewers_for_attack {
+                                        outboxes
+                                            .entry(*sid)
+                                            .or_default()
+                                            .push(raw.clone());
+                                    }
+                                }
+                            }
+
+                            // Ensure the struck player always receives their own
+                            // SStruck packet locally for hit animation.
+                            let struck = SStruck {
+                                attacker_id: attacker_monster_id as u32,
+                            };
+                            if let Ok(pkt) = struck.encode() {
+                                let encoded = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(encoded);
+                            }
+
+                            // Broadcast-oriented viewers should not include the
+                            // struck player; they already receive dedicated
+                            // self-targeted packets.
+                            if let Some(pos) = viewers.iter().position(|sid| *sid == session_id) {
+                                viewers.swap_remove(pos);
+                            }
+
+                            let object_id = session_id;
+
+                            if !viewers.is_empty() {
+                                let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
+                                    object_id,
+                                    attacker_id: attacker_monster_id as u32,
+                                    location_x: x,
+                                    location_y: y,
+                                    direction,
+                                };
+                                if let Ok(pkt) = struck_pkt.encode() {
+                                    let raw = pkt.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    for sid in &viewers {
+                                        outboxes.entry(*sid).or_default().push(raw.clone());
+                                    }
+                                }
+
+                                let dmg_pkt = crystal_shared_proto::scene::SDamageIndicator {
+                                    damage,
+                                    damage_type,
+                                    object_id,
+                                };
+                                if let Ok(pkt) = dmg_pkt.encode() {
+                                    let raw = pkt.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    for sid in &viewers {
+                                        outboxes.entry(*sid).or_default().push(raw.clone());
+                                    }
+                                }
+                            }
+
+                            // Always send ObjectHealth for the struck player so
+                            // the client can render their head HP bar, and also
+                            // broadcast it to any nearby viewers.
+                            let health_pkt = crystal_shared_proto::scene::SObjectHealth {
+                                object_id,
+                                percent: health_percent,
+                                expire: 2,
+                            };
+                            if let Ok(pkt) = health_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes.entry(*sid).or_default().push(raw.clone());
+                                }
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(raw);
+                            }
+
+                            // Always show damage numbers to the struck player,
+                            // even if there are no other viewers.
+                            let self_dmg_pkt = crystal_shared_proto::scene::SDamageIndicator {
+                                damage,
+                                damage_type,
+                                object_id,
+                            };
+                            if let Ok(pkt) = self_dmg_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(raw);
+                            }
+
+                            // Also update the struck player's own HP/MP bar via SHealthChanged.
+                            if let Some((hp, mp)) = hp_mp {
+                                let hc_pkt = SHealthChanged { hp, mp };
+                                if let Ok(raw) = hc_pkt.encode() {
+                                    let encoded = raw.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    outboxes
+                                        .entry(session_id)
+                                        .or_default()
+                                        .push(encoded);
+                                }
+
+                                if hp <= 0 {
+                                    if !viewers.is_empty() {
+                                        let died_pkt = SObjectDied {
+                                            object_id,
+                                            location_x: x,
+                                            location_y: y,
+                                            direction,
+                                            death_type: 0,
+                                        };
+                                        if let Ok(raw) = died_pkt.encode() {
+                                            let encoded = raw.encode();
+                                            let mut outboxes =
+                                                outboxes_for_world_events.lock().unwrap();
+                                            for sid in &viewers {
+                                                outboxes
+                                                    .entry(*sid)
+                                                    .or_default()
+                                                    .push(encoded.clone());
+                                            }
+                                        }
+                                    }
+
+                                    let self_death = SDeath {
+                                        location_x: x,
+                                        location_y: y,
+                                        direction,
+                                    };
+                                    if let Ok(raw) = self_death.encode() {
+                                        let encoded = raw.encode();
+                                        let mut outboxes =
+                                            outboxes_for_world_events.lock().unwrap();
+                                        outboxes
+                                            .entry(session_id)
+                                            .or_default()
+                                            .push(encoded);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
@@ -306,6 +566,7 @@ async fn main() -> io::Result<()> {
         let player_summaries = Arc::clone(&player_summaries);
         let next_session_id = Arc::clone(&next_session_id);
         let outboxes = Arc::clone(&outboxes);
+        let online_accounts = Arc::clone(&online_accounts);
         let active_connections = Arc::clone(&active_connections);
         let timeout_ms = timeout_ms;
         move || {
@@ -319,6 +580,7 @@ async fn main() -> io::Result<()> {
                 Arc::clone(&exp_table),
                 Arc::clone(&player_summaries),
                 Arc::clone(&outboxes),
+                Arc::clone(&online_accounts),
                 Arc::clone(&active_connections),
                 timeout_ms,
             )) as Box<dyn ConnectionHandler>

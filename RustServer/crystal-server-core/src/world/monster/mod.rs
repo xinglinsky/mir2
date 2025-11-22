@@ -51,5 +51,28 @@ pub struct MonsterInstance {
     pub ai_state: MonsterAiState,
     /// Currently selected player target (session id) if any.
     pub target_session_id: Option<u32>,
+    /// Next time (ms since epoch in world time) when this monster is
+    /// allowed to perform a movement step towards its target.
     pub next_move_time_ms: i64,
+    /// Next time (ms since epoch in world time) when this monster is
+    /// allowed to perform a melee attack, mirroring C# MonsterObject.
+    /// AttackTime / AttackSpeed.
+    pub next_attack_time_ms: i64,
+    /// Next time (ms since epoch in world time) when this monster should
+    /// re-run its target search logic, mirroring C# MonsterObject.SearchTime
+    /// and SearchDelay.
+    pub search_time_ms: i64,
+    /// Next time (ms since epoch in world time) when this monster is allowed
+    /// to perform a random roam step if it has no target, mirroring C#
+    /// MonsterObject.RoamTime and RoamDelay.
+    pub roam_time_ms: i64,
+    /// Whether this monster considers itself "alone" (no players nearby).
+    /// Mirrors C# MonsterObject.Alone, which is used together with
+    /// CheckAlone/AloneDelay to optionally skip AI processing when the map
+    /// has no nearby players.
+    pub alone: bool,
+    /// Next time (ms since epoch in world time) when this monster should
+    /// re-run its "alone" check, mirroring C# MonsterObject.AloneTime and
+    /// AloneDelay.
+    pub alone_time_ms: i64,
 }

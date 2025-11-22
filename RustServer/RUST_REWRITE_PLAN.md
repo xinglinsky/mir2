@@ -30,6 +30,12 @@
 - 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
 - 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
 
+**当前进度概览**
+- 登录 / 注册 / 改密 / 角色列表 / 新建 / 删除 / StartGame / LogOut 等基础流转已在 `crystal-server-bin/src/connection` 中实现（`handler.rs` + `login_stage.rs` + `select_stage.rs` + `ingame_stage.rs` + `movement.rs`）。
+- `ClientPacketId` / `RawPacket` 解码和大部分核心 C* / S* 包已在 `crystal-shared-proto` 中实现。
+- 世界命令对接（StartGame / Turn / Walk / Run / Attack 等）已通过 `world::WorldCommand` 与 `World::handle_command` 路由打通。
+- 仍待补齐：IP 封禁策略、所有剩余 `ClientPacketIds` 的处理分支（例如交易/行会/拍卖等高级玩法），以及与 C# 对比调整错误码和边界情况。
+
 ### 主要涉及代码
 
 - **C# 参考**
@@ -93,6 +99,12 @@
   - 多种 map 文件格式识别与解析（参考 C# `Map.FindType` 等）。
   - 可行走/阻挡判定在相同地图与坐标下与 C# 保持一致。
 
+**当前进度概览**
+- `world::World` 已具备玩家哈希表、地图缓存、怪物与 respawn 状态，以及 `WorldCommand` / `WorldEvent` 架构，能够处理 StartGame / Turn / Walk / Run / Attack / Teleport 等命令。
+- `world::map::load_map_from_file` / `Map::is_walkable` / `Map::can_move` 已实现，并预先计算了 `walkable_cells`，用于生成出生点和移动判定。
+- 已提供 `snapshot_metrics` / `snapshot_players` 接口，可用于 Admin dashboard。
+- 仍待实现：基于 `time_ms` 的世界主循环 `tick`、Respawn 定时 & 刷怪策略，以及与 C# `Envir` 在时间推进和刷怪频率上的完整对齐。
+
 ### 主要涉及代码
 
 - **C# 参考**
@@ -152,6 +164,13 @@
   - 移动/转向/近战攻击/简单远程攻击，伤害与经验计算对齐 C#。
 - 回填子计划1 中各类 ClientPacketIds 分支，使玩家可以基本“进游戏 → 移动 → 打怪 → 拾取 → 升级”。
 
+**当前进度概览**
+- `PlayerState` 及 `World::upsert_player` 已实现，能够根据等级/职业/性别初始化玩家属性与 HP/MP，并在切图或 StartGame 时更新状态。
+- 已实现初始背包构建（`build_start_inventory`），基于 MirDB 中 `start_item`、职业/性别/需求属性生成开局装备。
+- 已实现物品移动与穿脱：`move_item_in_grid` / `equip_item_for_player` / `remove_item_for_player`，包含职业/性别/属性需求、重量、绑定、鉴定等约束逻辑。
+- 连接层的移动/攻击/物品操作（Turn / Walk / Run / Attack / MoveItem / EquipItem / RemoveItem）已经通过 `WorldCommand` 与 `world` 对接并能驱动基础战斗/广播流程。
+- 仍待实现或补全：掉落与拾取（地图物品对象）、死亡/复活流程、更复杂的技能/魔法逻辑、组队/交易/英雄等高级玩法，以及与 C# 在所有 buff/状态效果上的细节对齐。
+
 ### 主要涉及代码
 
 - **C# 参考**
@@ -210,6 +229,12 @@
 - 让 Rust 的 `crystal-server-admin` Web 控制台具备与 C# HttpServer 相当的运维功能：
   - 查看状态/在线玩家/日志。
   - 控制服务器启动/停止/重载脚本等。
+
+**当前进度概览**
+- `crystal-server-admin` 已实现基础的 HTTP 服务与路由（health / metrics / logs / players / control / reload / broadcast / internal 等），当前多数仍为 stub 或内存假数据。
+- 游戏服 world 已提供 `snapshot_metrics` / `snapshot_players` 能力，可用于接入 Admin dashboard。
+- 高级玩法系统（行会 / 攻城 / 任务 / 排行榜等）尚未迁移，Admin 与这些系统的联动也尚未实现。
+- 详细的 Admin & dashboard 分阶段实施方案已单独整理在 `ADMIN_CONSOLE_PLAN.md`，本子计划只跟踪总体里程碑与对齐方向。
 
 ### 主要涉及代码
 
@@ -290,7 +315,9 @@
  
  #### 7.3.1 `crystal-server-bin/src/connection/handler.rs`
  
- **关联子计划**：子计划 1（协议 & 连接层重写）、子计划 3（玩家 / 基础战斗）。
+**当前状态**：`handler.rs` 已按阶段拆分为 `login_stage.rs` / `select_stage.rs` / `ingame_stage.rs` / `movement.rs` 等子模块，本小节的拆分方案已基本完成，保留作为结构说明及后续演进参考。
+ 
+**关联子计划**：子计划 1（协议 & 连接层重写）、子计划 3（玩家 / 基础战斗）。
  
  **现状简述**：
  

@@ -1,7 +1,8 @@
 use rand::Rng;
 use rand::thread_rng;
 use tracing::debug;
-use crate::stats::Stat;
+use crate::combat::compute_physical_melee_with_crit;
+use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
@@ -261,8 +262,13 @@ impl<P: WorldProvider> World<P> {
         let player_positions: Vec<(u32, i32, i32, i32, u8)> = self
             .players
             .iter()
+            .filter(|(_, p)| !p.dead && p.hp > 0)
             .map(|(&sid, p)| (sid, p.map_index, p.x, p.y, p.direction))
             .collect();
+
+        let mut pending_attacks: Vec<(u64, i32, u32, i32)> = Vec::new();
+
+        let mut rng = thread_rng();
 
         for (map_index, monsters) in self.monsters.iter_mut() {
             let map_index = *map_index;
@@ -274,6 +280,15 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 };
 
+                let ai = info.ai;
+                if matches!(ai, 6 | 57 | 58 | 102 | 103 | 104 | 105 | 113) {
+                    monster.ai_state = MonsterAiState::Idle;
+                    monster.target_session_id = None;
+                    continue;
+                }
+
+                // Use the monster's configured view range to decide when to
+                // start chasing nearby players.
                 let view_range = info.view_range as i32;
                 if view_range <= 0 {
                     monster.ai_state = MonsterAiState::Idle;
@@ -281,50 +296,168 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
 
-                // Pick nearest player in view on the same map.
-                let mut best: Option<(i32, u32)> = None;
-                for (sid, p_map, px, py, _dir) in player_positions.iter().copied() {
-                    if p_map != map_index {
-                        continue;
-                    }
+                // -----------------------------
+                // CheckAlone: periodically determine whether this monster has
+                // any players nearby on its map. Mirrors C#
+                // MonsterObject.CheckAlone, which uses AloneTime/AloneDelay and
+                // Globals.DataRange * 2 to decide if the monster should
+                // consider itself "alone" and potentially skip AI work when no
+                // players are around.
+                // -----------------------------
+                const ALONE_DELAY_MS: i64 = 3_000; // C# AloneDelay
+                const ALONE_RANGE: i32 = 32; // Globals.DataRange (16) * 2
 
-                    let dx = px - monster.x;
-                    let dy = py - monster.y;
-                    if dx.abs() > view_range || dy.abs() > view_range {
-                        continue;
-                    }
+                if now_ms >= monster.alone_time_ms {
+                    monster.alone_time_ms = now_ms.saturating_add(ALONE_DELAY_MS);
 
-                    let dist = dx.abs() + dy.abs();
-                    match best {
-                        None => best = Some((dist, sid)),
-                        Some((best_dist, _)) if dist < best_dist => {
-                            best = Some((dist, sid));
+                    let mut has_player_on_map = false;
+                    let mut near_player = false;
+                    for (_sid, p_map, px, py, _dir) in player_positions.iter().copied() {
+                        if p_map != map_index {
+                            continue;
                         }
-                        _ => {}
+
+                        has_player_on_map = true;
+                        let dx = px - monster.x;
+                        let dy = py - monster.y;
+                        if dx.abs() <= ALONE_RANGE && dy.abs() <= ALONE_RANGE {
+                            near_player = true;
+                            break;
+                        }
+                    }
+
+                    if !has_player_on_map {
+                        monster.alone = true;
+                    } else {
+                        monster.alone = !near_player;
                     }
                 }
 
-                if let Some((_dist, sid)) = best {
-                    monster.ai_state = MonsterAiState::Chase;
-                    monster.target_session_id = Some(sid);
-                } else {
-                    monster.ai_state = MonsterAiState::Idle;
-                    monster.target_session_id = None;
+                // In C#: ProcessAI only runs ProcessSearch/ProcessRoam/ProcessTarget
+                // when !Alone or Settings.MonsterProcessWhenAlone. We currently
+                // treat MonsterProcessWhenAlone as false, so skip AI when alone
+                // to match default behaviour.
+                if monster.alone {
                     continue;
                 }
 
-                if monster.ai_state != MonsterAiState::Chase {
+                // -----------------------------
+                // ProcessSearch: periodically (SearchDelay) try to acquire or
+                // refresh a target, mirroring C# MonsterObject.ProcessSearch.
+                // -----------------------------
+                if now_ms >= monster.search_time_ms {
+                    monster.search_time_ms = now_ms.saturating_add(3_000);
+
+                    let should_search = monster.target_session_id.is_none()
+                        || rng.gen_range(0..3) == 0;
+
+                    if should_search {
+                        // Pick nearest player in view on the same map. We use a
+                        // Chebyshev distance (max(|dx|, |dy|)) to mirror the C#
+                        // Functions.InRange/MaxDistance semantics that drive
+                        // MonsterObject.FindTarget.
+                        let mut best: Option<(i32, u32)> = None;
+                        for (sid, p_map, px, py, _dir) in player_positions.iter().copied() {
+                            if p_map != map_index {
+                                continue;
+                            }
+
+                            let dx = px - monster.x;
+                            let dy = py - monster.y;
+                            if dx.abs() > view_range || dy.abs() > view_range {
+                                continue;
+                            }
+
+                            let dist = dx.abs().max(dy.abs());
+                            match best {
+                                None => best = Some((dist, sid)),
+                                Some((best_dist, _)) if dist < best_dist => {
+                                    best = Some((dist, sid));
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let Some((_dist, sid)) = best {
+                            monster.ai_state = MonsterAiState::Chase;
+                            monster.target_session_id = Some(sid);
+                        } else {
+                            monster.ai_state = MonsterAiState::Idle;
+                            monster.target_session_id = None;
+                        }
+                    }
+                }
+
+                // -----------------------------
+                // ProcessRoam: when no target, occasionally perform a random
+                // turn or step, mirroring C# MonsterObject.ProcessRoam.
+                // -----------------------------
+                if monster.target_session_id.is_none() {
+                    if now_ms >= monster.roam_time_ms {
+                        monster.roam_time_ms = now_ms.saturating_add(1_000);
+
+                        // Only roam 1/10 of the time when the timer fires.
+                        if rng.gen_range(0..10) == 0 {
+                            let choice = rng.gen_range(0..3);
+                            if choice == 0 {
+                                // Turn to a random direction without moving.
+                                monster.direction = rng.gen_range(0..8);
+                            } else {
+                                // Walk one step in the current direction.
+                                let (step_x, step_y) = match monster.direction {
+                                    0 => (0, -1),
+                                    1 => (1, -1),
+                                    2 => (1, 0),
+                                    3 => (1, 1),
+                                    4 => (0, 1),
+                                    5 => (-1, 1),
+                                    6 => (-1, 0),
+                                    7 => (-1, -1),
+                                    _ => (0, 0),
+                                };
+
+                                if step_x != 0 || step_y != 0 {
+                                    let new_x = monster.x.saturating_add(step_x);
+                                    let new_y = monster.y.saturating_add(step_y);
+                                    if new_x >= 0
+                                        && new_y >= 0
+                                        && new_x <= i32::from(u16::MAX)
+                                        && new_y <= i32::from(u16::MAX)
+                                    {
+                                        monster.x = new_x;
+                                        monster.y = new_y;
+
+                                        let delay_ms =
+                                            Self::compute_monster_move_delay_ms(info.move_speed);
+                                        monster.next_move_time_ms =
+                                            now_ms.saturating_add(delay_ms);
+
+                                        events.push(WorldEvent::ObjectLocation {
+                                            object_id: monster.id,
+                                            map_index,
+                                            x: monster.x,
+                                            y: monster.y,
+                                            direction: monster.direction,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // No target to chase this tick.
                     continue;
                 }
 
+                // -----------------------------
+                // ProcessTarget: chase and melee attack logic when a target is
+                // present, mirroring C# MonsterObject.ProcessTarget and
+                // InAttackRange/MoveTo behaviour.
+                // -----------------------------
                 let target_sid = match monster.target_session_id {
                     Some(sid) => sid,
                     None => continue,
                 };
-
-                if monster.next_move_time_ms != 0 && now_ms < monster.next_move_time_ms {
-                    continue;
-                }
 
                 // Find the latest position of the current target.
                 let mut target_pos: Option<(i32, i32)> = None;
@@ -344,9 +477,43 @@ impl<P: WorldProvider> World<P> {
                     }
                 };
 
+                let dx_full = tx - monster.x;
+                let dy_full = ty - monster.y;
+                let dist_full = dx_full.abs().max(dy_full.abs());
+
+                // If in melee range (adjacent tile, not same cell), schedule an
+                // attack instead of moving. This mirrors C#
+                // MonsterObject.InAttackRange which checks
+                //   Target.CurrentLocation != CurrentLocation &&
+                //   Functions.InRange(CurrentLocation, Target.CurrentLocation, 1)
+                // where InRange uses a Chebyshev distance. Attacks are gated by
+                // a separate attack cooldown derived from MonsterInfo.AttackSpeed.
+                if dist_full == 1 {
+                    if now_ms >= monster.next_attack_time_ms {
+                        pending_attacks.push((
+                            monster.id,
+                            map_index,
+                            target_sid,
+                            monster.monster_index,
+                        ));
+
+                        let delay_ms = Self::compute_monster_attack_delay_ms(info.attack_speed);
+                        monster.next_attack_time_ms = now_ms.saturating_add(delay_ms);
+                    }
+
+                    // When already in attack range we do not move this tick.
+                    continue;
+                }
+
+                // Step at most one tile towards the target (8-directional),
+                // respecting the per-monster movement cooldown.
+                if monster.next_move_time_ms != 0 && now_ms < monster.next_move_time_ms {
+                    continue;
+                }
+
                 // Step at most one tile towards the target (8-directional).
-                let step_x = (tx - monster.x).clamp(-1, 1);
-                let step_y = (ty - monster.y).clamp(-1, 1);
+                let step_x = dx_full.clamp(-1, 1);
+                let step_y = dy_full.clamp(-1, 1);
                 if step_x == 0 && step_y == 0 {
                     continue;
                 }
@@ -388,6 +555,76 @@ impl<P: WorldProvider> World<P> {
                     direction: monster.direction,
                 });
             }
+        }
+        // Resolve pending monster attacks against players after we finish
+        // iterating over the monsters map to avoid borrow conflicts.
+        for (monster_id, map_index, target_sid, monster_index) in pending_attacks {
+            let Some(player) = self.players.get_mut(&target_sid) else {
+                continue;
+            };
+
+            if player.dead || player.hp <= 0 {
+                continue;
+            }
+
+            let defender_stats: Stats = player.stats.total.clone();
+            let max_hp = defender_stats.get(Stat::HP).max(1);
+            if max_hp <= 0 {
+                continue;
+            }
+
+            let Some(info) = self.provider.get_monster_info(monster_index) else {
+                continue;
+            };
+            let attacker_stats: Stats = info.stats.clone();
+            let (hit, raw_damage, raw_damage_type) =
+                compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+
+            // Translate the helper's result into a concrete outcome.
+            //
+            // - When `hit` is false (Accuracy/Agility check failed) we emit a
+            //   Miss (damage_type = 1, damage = 0) without changing the
+            //   player's HP, mirroring C#'s BroadcastDamageIndicator(Miss).
+            // - When `hit` is true but raw_damage <= 0 (e.g. very high AC/DR)
+            //   we treat it as a fully absorbed hit and skip emitting any
+            //   event.
+            let (damage, damage_type, new_hp) = if !hit {
+                let old_hp = player.hp.max(0);
+                (0, 1_u8, old_hp)
+            } else {
+                if raw_damage <= 0 {
+                    continue;
+                }
+
+                let damage = raw_damage;
+                let old_hp = player.hp.max(0);
+                let new_hp = old_hp.saturating_sub(damage).max(0);
+                if new_hp == old_hp {
+                    continue;
+                }
+
+                player.hp = new_hp;
+                if new_hp <= 0 {
+                    player.dead = true;
+                }
+
+                (damage, raw_damage_type, new_hp)
+            };
+
+            let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
+                .clamp(0, 100) as u8;
+
+            events.push(WorldEvent::MonsterHitPlayer {
+                attacker_monster_id: monster_id,
+                session_id: target_sid,
+                map_index,
+                x: player.x,
+                y: player.y,
+                direction: player.direction,
+                damage,
+                damage_type,
+                health_percent,
+            });
         }
     }
 
@@ -450,6 +687,17 @@ impl<P: WorldProvider> World<P> {
     fn compute_monster_move_delay_ms(move_speed: u16) -> i64 {
         let speed = move_speed.max(1) as i64;
         speed.saturating_mul(10)
+    }
+
+    fn compute_monster_attack_delay_ms(attack_speed: u16) -> i64 {
+        // AttackSpeed in C# is in milliseconds and clamped to a minimum of
+        // 400. We mirror that behaviour here.
+        let speed = i64::from(attack_speed.max(400));
+        if speed <= 0 {
+            400
+        } else {
+            speed
+        }
     }
 
     fn create_monsters_from_respawn(&mut self, map: &map::Map, respawn: &RespawnInfo) -> Vec<MonsterInstance> {
@@ -528,6 +776,11 @@ impl<P: WorldProvider> World<P> {
                 ai_state: MonsterAiState::Idle,
                 target_session_id: None,
                 next_move_time_ms: 0,
+                next_attack_time_ms: 0,
+                search_time_ms: 0,
+                roam_time_ms: 0,
+                alone: false,
+                alone_time_ms: 0,
             });
         }
 
@@ -595,4 +848,5 @@ impl<P: WorldProvider> World<P> {
         }
     }
 }
+
 

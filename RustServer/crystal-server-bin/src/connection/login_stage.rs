@@ -6,6 +6,7 @@ use crystal_shared_proto::login::{
     CNewAccount,
     SChangePassword,
     SClientVersion,
+    SDisconnect,
     SLogin,
     SNewAccount,
 };
@@ -56,7 +57,27 @@ impl LoginConnection {
 
         match self.store.verify_password(&msg.account_id, &msg.password) {
             Ok(true) => {
-                self.account_id = Some(msg.account_id.clone());
+                // Mirror C# behaviour: if this account is already logged in
+                // elsewhere, disconnect the previous session.
+                let account_id = msg.account_id.clone();
+                if !account_id.is_empty() {
+                    if let Some(old_session) = {
+                        let mut map = self.online_accounts.lock().unwrap();
+                        map.insert(account_id.clone(), self.session_id)
+                    } {
+                        if old_session != self.session_id {
+                            let pkt = SDisconnect { reason: 1 };
+                            let raw = pkt.encode();
+                            let mut outboxes = self.outboxes.lock().unwrap();
+                            outboxes
+                                .entry(old_session)
+                                .or_default()
+                                .push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+
+                self.account_id = Some(account_id);
                 self.stage = Stage::Select;
 
                 let chars: Vec<SelectInfo> = self

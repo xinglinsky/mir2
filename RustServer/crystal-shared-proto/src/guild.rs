@@ -9,6 +9,9 @@ use crate::io::{
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
+mod client;
+pub use client::*;
+
 #[derive(Clone, Debug)]
 pub struct SGuildNoticeChange {
     pub update: i32,

@@ -25,6 +25,7 @@ impl LoginConnection {
         exp_table: Arc<Vec<i64>>,
         player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
         outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
+        online_accounts: Arc<Mutex<HashMap<String, world::SessionId>>>,
         active_connections: Arc<AtomicU32>,
         timeout_ms: u64,
     ) -> Self {
@@ -32,6 +33,7 @@ impl LoginConnection {
             stage: Stage::Connected,
             session_id,
             account_id: None,
+            online_accounts,
             characters: Vec::new(),
             store,
             world_db,
@@ -54,6 +56,8 @@ impl LoginConnection {
             timeout_ms,
             closing: false,
             last_move_kind: None,
+            can_create_guild: false,
+            pending_guild_invite: None,
         }
     }
 

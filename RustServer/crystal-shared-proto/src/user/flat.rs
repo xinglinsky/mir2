@@ -16,7 +16,7 @@ use crate::packet::RawPacket;
 use crate::item_types::UserItemData;
 
 #[derive(Clone, Debug)]
-pub struct SUserInformation {
+struct SUserInformation {
     pub object_id: u32,
     pub real_id: u32,
     pub name: String,
@@ -51,7 +51,7 @@ pub struct SUserInformation {
 }
 
 #[derive(Clone, Debug)]
-pub struct SUserSlotsRefresh {
+struct SUserSlotsRefresh {
     pub inventory: Vec<Option<UserItemData>>,
     pub equipment: Vec<Option<UserItemData>>,
 }
@@ -479,7 +479,7 @@ impl SUserInformation {
 }
 
 #[derive(Clone, Debug)]
-pub struct SUserLocation {
+struct SUserLocation {
     pub location_x: i32,
     pub location_y: i32,
     pub direction: u8,

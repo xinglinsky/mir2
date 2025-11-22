@@ -9,16 +9,22 @@ use crystal_shared_proto::login::{
     CAttack,
     CCallNPC,
     CChangePassword,
+    CEquipItem,
     CKeepAlive,
     CClientVersion,
     CDeleteCharacter,
     CLogin,
+    CMoveItem,
     CNewAccount,
     CNewCharacter,
+    CRemoveItem,
     CRun,
     CStartGame,
+    CTownRevive,
     CTurn,
     CWalk,
+    CGuildInvite,
+    CGuildNameReturn,
     ClientPacketId,
     SConnected,
 };
@@ -104,6 +110,21 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_chat(message, &mut out);
                 }
             }
+            ClientPacketId::MoveItem => {
+                if let Ok(msg) = CMoveItem::decode(&packet.payload) {
+                    self.handle_move_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::EquipItem => {
+                if let Ok(msg) = CEquipItem::decode(&packet.payload) {
+                    self.handle_equip_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::RemoveItem => {
+                if let Ok(msg) = CRemoveItem::decode(&packet.payload) {
+                    self.handle_remove_item(msg, &mut out);
+                }
+            }
             ClientPacketId::CallNPC => {
                 if let Ok(msg) = CCallNPC::decode(&packet.payload) {
                     self.handle_call_npc(msg, &mut out);
@@ -112,6 +133,21 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Attack => {
                 if let Ok(msg) = CAttack::decode(&packet.payload) {
                     self.handle_attack(msg, &mut out);
+                }
+            }
+            ClientPacketId::TownRevive => {
+                if let Ok(msg) = CTownRevive::decode(&packet.payload) {
+                    self.handle_town_revive(msg, &mut out);
+                }
+            }
+            ClientPacketId::GuildInvite => {
+                if let Ok(msg) = CGuildInvite::decode(&packet.payload) {
+                    self.handle_guild_invite(msg, &mut out);
+                }
+            }
+            ClientPacketId::GuildNameReturn => {
+                if let Ok(msg) = CGuildNameReturn::decode(&packet.payload) {
+                    self.handle_guild_name_return(msg, &mut out);
                 }
             }
             ClientPacketId::KeepAlive => {
@@ -166,6 +202,15 @@ impl ConnectionHandler for LoginConnection {
                 let _ = self
                     .store
                     .save_character_position(account_id, char_idx, &pos);
+            }
+        }
+
+        if let Some(ref account_id) = self.account_id {
+            let mut map = self.online_accounts.lock().unwrap();
+            if let Some(cur) = map.get(account_id) {
+                if *cur == self.session_id {
+                    map.remove(account_id);
+                }
             }
         }
 
