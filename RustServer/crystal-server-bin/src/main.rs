@@ -15,7 +15,15 @@ use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider
 use crystal_server_core::account::AccountStore;
 use crystal_server_db::SqliteAccountStore;
 
-use crystal_shared_proto::scene::{SChat, SDeath, SObjectAttack, SObjectDied, SStruck};
+use crystal_shared_proto::scene::{
+    SChat,
+    SDeath,
+    SObjectAttack,
+    SObjectDied,
+    SObjectGold,
+    SObjectItem,
+    SStruck,
+};
 use crystal_shared_proto::user::SHealthChanged;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -54,6 +62,7 @@ struct AdminBroadcast {
 struct AdminWorldSettings {
     spawn_multiplier: u16,
     respawn_base_spawn_rate_minutes: u8,
+    drop_rate: f32,
 }
 
 
@@ -141,6 +150,47 @@ async fn main() -> io::Result<()> {
                 monsters.len()
             );
             world_db.monster_infos = monsters;
+
+            // Load monster drop tables from text files, mirroring the C#
+            // behaviour where MonsterInfo.DropPath points to Envir/Drops
+            // entries and falls back to the monster Name when DropPath is
+            // empty.
+            let drops_root = &cfg.drops_path;
+            let item_infos = world_db.item_infos.clone();
+            let item_lookup = move |name: &str| {
+                item_infos
+                    .iter()
+                    .find(|i| i.name.eq_ignore_ascii_case(name))
+                    .map(|item| item.index)
+            };
+
+            for m in &mut world_db.monster_infos {
+                let file_name = if m.drop_path.is_empty() {
+                    if m.name.is_empty() {
+                        continue;
+                    }
+                    format!("{}.txt", m.name)
+                } else {
+                    format!("{}.txt", m.drop_path)
+                };
+
+                let full_path = drops_root.join(&file_name);
+
+                let drops = match world::drop::load_drop_file(&full_path, 0, &item_lookup) {
+                    Ok(list) => list,
+                    Err(e) => {
+                        println!(
+                            "[core] Failed to load drops for monster {} from {}: {}",
+                            m.name,
+                            full_path.display(),
+                            e
+                        );
+                        Vec::new()
+                    }
+                };
+
+                m.drops = drops;
+            }
         }
         Err(e) => {
             println!(
@@ -194,6 +244,7 @@ async fn main() -> io::Result<()> {
         &cfg.maps_path,
         cfg.spawn_multiplier,
         cfg.respawn_base_spawn_rate_minutes,
+        cfg.drop_rate,
     );
 
     // Global world instance shared by all connections, mirroring the single-world
@@ -221,6 +272,7 @@ async fn main() -> io::Result<()> {
     // and also emits world events such as monster movement.
     {
         let world_for_tick = Arc::clone(&world);
+        let world_db_for_items = Arc::clone(&world_db);
         let outboxes_for_world_events: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
             Arc::clone(&outboxes);
         thread::spawn(move || {
@@ -272,6 +324,99 @@ async fn main() -> io::Result<()> {
                                     outboxes_for_world_events.lock().unwrap();
                                 for sid in viewers {
                                     outboxes.entry(sid).or_default().push(raw.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::ItemDropped {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            item_index,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let maybe_item = {
+                                let db = world_db_for_items.as_ref();
+                                db.get_item_info(item_index).cloned()
+                            };
+
+                            let info = match maybe_item {
+                                Some(i) => i,
+                                None => continue,
+                            };
+
+                            let pkt = SObjectItem {
+                                object_id: object_id as u32,
+                                name: info.name.clone(),
+                                name_colour_argb: 0,
+                                location_x: x,
+                                location_y: y,
+                                image: info.image,
+                                grade: info.grade,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::GoldDropped {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            gold,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() || gold == 0 {
+                                continue;
+                            }
+
+                            let pkt = SObjectGold {
+                                object_id: object_id as u32,
+                                gold,
+                                location_x: x,
+                                location_y: y,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
                                 }
                             }
                         }
@@ -645,7 +790,11 @@ async fn main() -> io::Result<()> {
                         match resp.json::<AdminWorldSettings>().await {
                             Ok(ws) => {
                                 let mut w = world_for_settings.lock().unwrap();
-                                w.set_spawn_config(ws.spawn_multiplier, ws.respawn_base_spawn_rate_minutes);
+                                w.set_spawn_config(
+                                    ws.spawn_multiplier,
+                                    ws.respawn_base_spawn_rate_minutes,
+                                    ws.drop_rate,
+                                );
                             }
                             Err(e) => {
                                 tracing::debug!("failed to decode world settings from admin: {}", e);

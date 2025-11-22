@@ -42,6 +42,17 @@ impl LoginConnection {
     }
 
     pub(crate) fn apply_step(&mut self, direction: u8, distance: i32, out: &mut Vec<Vec<u8>>) -> bool {
+        println!(
+            "[conn] apply_step: session={} dir={} dist={} stage={:?} map={} pos=({}, {})",
+            self.session_id,
+            direction,
+            distance,
+            self.stage,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+
         let cmd = match distance {
             0 => world::WorldCommand::Turn {
                 session_id: self.session_id,
@@ -441,6 +452,9 @@ impl LoginConnection {
                         out.push(encoded.clone());
                         self.enqueue_for_viewers(map_index, x, y, encoded);
                     }
+                }
+                world::WorldEvent::ItemDropped { .. }
+                | world::WorldEvent::GoldDropped { .. } => {
                 }
             }
         }

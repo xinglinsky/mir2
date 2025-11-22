@@ -1,5 +1,3 @@
-use tracing::debug;
-
 use crate::world::map;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
@@ -23,6 +21,17 @@ impl<P: WorldProvider> World<P> {
             else {
                 return;
             };
+            println!(
+                "[move] check_map_movement: from map {} at ({}, {}) using movement source=({}, {}) -> dest map {} at ({}, {})",
+                current_map_index,
+                player.x,
+                player.y,
+                movement.source_x,
+                movement.source_y,
+                movement.dest_map_index,
+                movement.dest_x,
+                movement.dest_y,
+            );
 
             (movement.dest_map_index, movement.dest_x, movement.dest_y)
         };
@@ -35,6 +44,14 @@ impl<P: WorldProvider> World<P> {
                 player.x = dest_x;
                 player.y = dest_y;
 
+                println!(
+                    "[move] Map movement success: session {} now on map {} at ({}, {})",
+                    player.session_id,
+                    player.map_index,
+                    player.x,
+                    player.y,
+                );
+
                 events.push(WorldEvent::MapChanged {
                     session_id: player.session_id,
                     map_index: player.map_index,
@@ -44,8 +61,8 @@ impl<P: WorldProvider> World<P> {
                 });
             }
             None => {
-                debug!(
-                    "Map movement failed: could not load destination map {} from ({}, {})",
+                println!(
+                    "[move] Map movement failed: could not load destination map {} from ({}, {})",
                     dest_map_index, player.x, player.y
                 );
             }
@@ -81,7 +98,7 @@ impl<P: WorldProvider> World<P> {
             let ty = new_y + dy;
 
             if tx < 0 || ty < 0 || tx > u16::MAX as i32 || ty > u16::MAX as i32 {
-                debug!("Move blocked: out of bounds ({}, {})", tx, ty);
+                println!("[move] blocked: out of bounds ({}, {})", tx, ty);
                 break;
             }
 
@@ -93,7 +110,16 @@ impl<P: WorldProvider> World<P> {
                     new_x = tx;
                     new_y = ty;
                 } else {
-                    debug!("Move blocked: non-walkable cell at ({}, {})", tx, ty);
+                    let attr = m.cell(ux, uy).map(|c| &c.attribute);
+                    println!(
+                        "[move] blocked on map {} from ({}, {}) to ({}, {}), attr={:?}",
+                        player.map_index,
+                        new_x,
+                        new_y,
+                        tx,
+                        ty,
+                        attr,
+                    );
                     break;
                 }
             } else {
@@ -102,8 +128,18 @@ impl<P: WorldProvider> World<P> {
             }
         }
 
+        println!(
+            "[move] apply_step: map {} dir {} dist {} from ({}, {}) to ({}, {})",
+            player.map_index,
+            direction,
+            distance,
+            player.x,
+            player.y,
+            new_x,
+            new_y,
+        );
+
         player.x = new_x;
         player.y = new_y;
     }
 }
-

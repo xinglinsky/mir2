@@ -31,6 +31,7 @@ struct Metrics {
 struct WorldSettings {
     spawn_multiplier: u16,
     respawn_base_spawn_rate_minutes: u8,
+    drop_rate: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -104,6 +105,7 @@ impl InnerState {
             world_settings: WorldSettings {
                 spawn_multiplier: 1,
                 respawn_base_spawn_rate_minutes: 20,
+                drop_rate: 1.0,
             },
             logs: vec![LogEntry {
                 message: String::from("log stub"),

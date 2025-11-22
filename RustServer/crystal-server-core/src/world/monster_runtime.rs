@@ -270,8 +270,21 @@ impl<P: WorldProvider> World<P> {
 
         let mut rng = thread_rng();
 
-        for (map_index, monsters) in self.monsters.iter_mut() {
-            let map_index = *map_index;
+        // Clone map indices so we can load maps (&self) before borrowing
+        // the monsters vector mutably for each map.
+        let map_indices: Vec<i32> = self.monsters.keys().cloned().collect();
+
+        for map_index in map_indices {
+            // Load the map for this index so that movement checks can respect
+            // walkability and bounds, mirroring the player movement logic.
+            let map = match self.get_or_load_map(map_index) {
+                Some(m) => m,
+                None => continue,
+            };
+
+            let Some(monsters) = self.monsters.get_mut(&map_index) else {
+                continue;
+            };
 
             for monster in monsters.iter_mut() {
                 let Some(info) = self.provider.get_monster_info(monster.monster_index) else {
@@ -403,7 +416,9 @@ impl<P: WorldProvider> World<P> {
                                 // Turn to a random direction without moving.
                                 monster.direction = rng.gen_range(0..8);
                             } else {
-                                // Walk one step in the current direction.
+                                // Walk one step in the current direction, but
+                                // only if the destination tile is walkable on
+                                // the current map, mirroring player movement.
                                 let (step_x, step_y) = match monster.direction {
                                     0 => (0, -1),
                                     1 => (1, -1),
@@ -419,27 +434,46 @@ impl<P: WorldProvider> World<P> {
                                 if step_x != 0 || step_y != 0 {
                                     let new_x = monster.x.saturating_add(step_x);
                                     let new_y = monster.y.saturating_add(step_y);
-                                    if new_x >= 0
-                                        && new_y >= 0
-                                        && new_x <= i32::from(u16::MAX)
-                                        && new_y <= i32::from(u16::MAX)
-                                    {
-                                        monster.x = new_x;
-                                        monster.y = new_y;
 
-                                        let delay_ms =
-                                            Self::compute_monster_move_delay_ms(info.move_speed);
-                                        monster.next_move_time_ms =
-                                            now_ms.saturating_add(delay_ms);
-
-                                        events.push(WorldEvent::ObjectLocation {
-                                            object_id: monster.id,
-                                            map_index,
-                                            x: monster.x,
-                                            y: monster.y,
-                                            direction: monster.direction,
-                                        });
+                                    // Reject moves that go outside the map
+                                    // bounds. Monster positions are expected
+                                    // to remain within 0..width/height.
+                                    if new_x < 0 || new_y < 0 {
+                                        continue;
                                     }
+
+                                    if monster.x < 0 || monster.y < 0 {
+                                        continue;
+                                    }
+
+                                    let from_x = monster.x as u16;
+                                    let from_y = monster.y as u16;
+                                    let to_x = new_x as u16;
+                                    let to_y = new_y as u16;
+
+                                    if to_x >= map.width || to_y >= map.height {
+                                        continue;
+                                    }
+
+                                    if !map.can_move(from_x, from_y, to_x, to_y) {
+                                        continue;
+                                    }
+
+                                    monster.x = new_x;
+                                    monster.y = new_y;
+
+                                    let delay_ms =
+                                        Self::compute_monster_move_delay_ms(info.move_speed);
+                                    monster.next_move_time_ms =
+                                        now_ms.saturating_add(delay_ms);
+
+                                    events.push(WorldEvent::ObjectLocation {
+                                        object_id: monster.id,
+                                        map_index,
+                                        x: monster.x,
+                                        y: monster.y,
+                                        direction: monster.direction,
+                                    });
                                 }
                             }
                         }
@@ -536,7 +570,20 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
 
-                if new_x > i32::from(u16::MAX) || new_y > i32::from(u16::MAX) {
+                if monster.x < 0 || monster.y < 0 {
+                    continue;
+                }
+
+                let from_x = monster.x as u16;
+                let from_y = monster.y as u16;
+                let to_x = new_x as u16;
+                let to_y = new_y as u16;
+
+                if to_x >= map.width || to_y >= map.height {
+                    continue;
+                }
+
+                if !map.can_move(from_x, from_y, to_x, to_y) {
                     continue;
                 }
 

@@ -280,6 +280,43 @@ impl LoginConnection {
                         }
                     }
 
+                    // Validate the final spawn position against the loaded map, mirroring
+                    // C# PlayerObject.StartGame's ValidPoint check. If a stored/bind
+                    // position is out of bounds or non-walkable (e.g. inside a shop
+                    // wall tile), fall back to the nearest walkable cell around the
+                    // SafeZone StartPoint (or map centre when no SafeZone exists).
+                    let spawn_out_of_bounds = spawn_x < 0
+                        || spawn_y < 0
+                        || spawn_x >= loaded_map.width as i32
+                        || spawn_y >= loaded_map.height as i32;
+                    let spawn_not_walkable = !spawn_out_of_bounds
+                        && !loaded_map.is_walkable(spawn_x as u16, spawn_y as u16);
+
+                    if spawn_out_of_bounds || spawn_not_walkable {
+                        println!(
+                            "[core] spawn position ({}, {}) on map {} not walkable; falling back to SafeZone centre",
+                            spawn_x,
+                            spawn_y,
+                            loaded_map.info.index,
+                        );
+
+                        if let Some(&(wx, wy)) = loaded_map
+                            .walkable_cells
+                            .iter()
+                            .min_by_key(|(x, y)| {
+                                let dx = *x as i32 - center_x;
+                                let dy = *y as i32 - center_y;
+                                dx.abs() + dy.abs()
+                            })
+                        {
+                            spawn_x = wx as i32;
+                            spawn_y = wy as i32;
+                        } else {
+                            spawn_x = center_x;
+                            spawn_y = center_y;
+                        }
+                    }
+
                     if stored_pos.is_none() && bind_pos.is_none() {
                         if let Some(ref account_id) = self.account_id {
                             let bind = CharacterPosition {

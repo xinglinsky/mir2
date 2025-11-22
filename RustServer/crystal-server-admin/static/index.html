@@ -142,6 +142,10 @@
               <label for="respawn-rate-input">Respawn tick base (minutes)</label>
               <input id="respawn-rate-input" type="number" min="1" class="token-input" />
             </div>
+            <div class="form-field">
+              <label for="drop-rate-input">Drop rate</label>
+              <input id="drop-rate-input" type="number" min="0.01" step="0.01" class="token-input" />
+            </div>
             <button class="btn success" id="spawn-settings-apply">Apply</button>
             <div class="status-bar" id="spawn-settings-status"></div>
           </div>
@@ -321,7 +325,8 @@
       const status = document.getElementById('spawn-settings-status');
       const multInput = document.getElementById('spawn-multiplier-input');
       const rateInput = document.getElementById('respawn-rate-input');
-      if (!multInput || !rateInput) return;
+      const dropInput = document.getElementById('drop-rate-input');
+      if (!multInput || !rateInput || !dropInput) return;
       try {
         const data = await fetchJson('/world/settings');
         if (typeof data.spawn_multiplier === 'number') {
@@ -329,6 +334,9 @@
         }
         if (typeof data.respawn_base_spawn_rate_minutes === 'number') {
           rateInput.value = String(data.respawn_base_spawn_rate_minutes);
+        }
+        if (typeof data.drop_rate === 'number') {
+          dropInput.value = String(data.drop_rate);
         }
         if (status) status.textContent = '';
       } catch {
@@ -340,12 +348,14 @@
       const status = document.getElementById('spawn-settings-status');
       const multInput = document.getElementById('spawn-multiplier-input');
       const rateInput = document.getElementById('respawn-rate-input');
-      if (!multInput || !rateInput) return;
+      const dropInput = document.getElementById('drop-rate-input');
+      if (!multInput || !rateInput || !dropInput) return;
 
       const mult = parseInt(multInput.value, 10);
       const rate = parseInt(rateInput.value, 10);
-      if (!Number.isFinite(mult) || mult <= 0 || !Number.isFinite(rate) || rate <= 0) {
-        if (status) status.textContent = '请输入有效的数值（>= 1）。';
+      const drop = parseFloat(dropInput.value);
+      if (!Number.isFinite(mult) || mult <= 0 || !Number.isFinite(rate) || rate <= 0 || !Number.isFinite(drop) || drop <= 0) {
+        if (status) status.textContent = '请输入有效的数值（Spawn/Respawn >= 1，DropRate > 0）。';
         return;
       }
 
@@ -356,7 +366,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             spawn_multiplier: mult,
-            respawn_base_spawn_rate_minutes: rate
+            respawn_base_spawn_rate_minutes: rate,
+            drop_rate: drop
           })
         });
         if (status) status.textContent = 'World settings updated (stub).';

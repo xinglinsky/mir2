@@ -5,6 +5,8 @@ pub mod magic;
 
 pub mod drop;
 
+pub mod map_item;
+
 pub mod provider;
 
 pub mod config;

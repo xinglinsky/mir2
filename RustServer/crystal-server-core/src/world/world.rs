@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::Job;
+use crate::world::map_item::MapItem;
 use crate::guild::{GuildInfo, GuildManager};
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
@@ -138,6 +139,20 @@ pub enum WorldEvent {
         damage_type: u8,
         health_percent: u8,
     },
+    ItemDropped {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        item_index: i32,
+    },
+    GoldDropped {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        gold: u32,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -150,12 +165,16 @@ pub struct World<P: WorldProvider> {
     /// Spawned monsters keyed by map_index.
     pub(crate) monsters: HashMap<i32, Vec<MonsterInstance>>,
     pub(crate) next_monster_id: u64,
+    /// Items and gold currently present on maps, keyed by map_index.
+    pub(crate) map_items: HashMap<i32, Vec<MapItem>>,
+    pub(crate) next_map_item_id: u64,
     /// Per-map respawn runtime state, mirroring C# MapRespawn in a simplified form.
     pub(crate) respawns: HashMap<i32, Vec<RespawnRuntime>>,
     pub(crate) respawn_tick_counter: u64,
     pub(crate) respawn_last_tick_ms: i64,
     pub(crate) respawn_base_spawn_rate_minutes: u8,
     pub(crate) spawn_multiplier: u16,
+    pub(crate) drop_rate: f32,
     pub(crate) guilds: GuildManager,
 }
 
@@ -163,6 +182,7 @@ impl<P: WorldProvider> World<P> {
     pub fn new(provider: P, config: WorldConfig) -> Self {
         let spawn_multiplier = config.spawn_multiplier;
         let respawn_base_spawn_rate_minutes = config.respawn_base_spawn_rate_minutes;
+        let drop_rate = config.drop_rate;
         World {
             provider,
             config,
@@ -171,11 +191,14 @@ impl<P: WorldProvider> World<P> {
             maps: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             monsters: HashMap::new(),
             next_monster_id: 0,
+            map_items: HashMap::new(),
+            next_map_item_id: 1,
             respawns: HashMap::new(),
             respawn_tick_counter: 0,
             respawn_last_tick_ms: 0,
             respawn_base_spawn_rate_minutes,
             spawn_multiplier,
+            drop_rate,
             guilds: GuildManager::new(),
         }
     }
@@ -252,9 +275,21 @@ impl<P: WorldProvider> World<P> {
         self.guilds = GuildManager::from_guilds(guilds);
     }
 
-    pub fn set_spawn_config(&mut self, spawn_multiplier: u16, respawn_base_spawn_rate_minutes: u8) {
+    pub fn set_spawn_config(
+        &mut self,
+        spawn_multiplier: u16,
+        respawn_base_spawn_rate_minutes: u8,
+        drop_rate: f32,
+    ) {
         self.spawn_multiplier = spawn_multiplier.max(1);
         self.respawn_base_spawn_rate_minutes = respawn_base_spawn_rate_minutes.max(1);
+        // Clamp drop_rate to a small positive value to avoid division by zero
+        self.drop_rate = if drop_rate <= 0.0 { 0.0001 } else { drop_rate };
+
+        // Keep config snapshot in sync for any callers that inspect it.
+        self.config.spawn_multiplier = self.spawn_multiplier;
+        self.config.respawn_base_spawn_rate_minutes = self.respawn_base_spawn_rate_minutes;
+        self.config.drop_rate = self.drop_rate;
     }
 
     pub(crate) fn get_or_load_map(&self, map_index: i32) -> Option<map::Map> {
@@ -317,6 +352,7 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
+                println!("[world] Turn command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -336,6 +372,7 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
+                println!("[world] Walk command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -357,6 +394,7 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
+                println!("[world] Run command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);

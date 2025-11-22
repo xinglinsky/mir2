@@ -128,6 +128,15 @@ impl LoginConnection {
             return;
         }
 
+        println!(
+            "[ingame] handle_turn: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+
         let _ = self.apply_step(msg.direction, 0, out);
     }
 
@@ -135,6 +144,15 @@ impl LoginConnection {
         if self.stage != Stage::InGame {
             return;
         }
+
+        println!(
+            "[ingame] handle_walk: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
 
         let map_changed = self.apply_step(msg.direction, 1, out);
 
@@ -150,6 +168,15 @@ impl LoginConnection {
         if self.stage != Stage::InGame {
             return;
         }
+
+        println!(
+            "[ingame] handle_run: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
 
         let map_changed = self.apply_step(msg.direction, 2, out);
 

@@ -103,17 +103,28 @@ impl<P: WorldProvider> World<P> {
         if let Some((id, monster_index)) = target_info {
             let mut dead = false;
 
-            let (monster_exp, undead, max_hp, defender_stats): (u32, bool, i32, Stats) =
-                if let Some(info) = self.provider.get_monster_info(monster_index) {
-                    let max_hp = info.stats.get(Stat::HP).max(1);
-                    (info.experience, info.undead, max_hp, info.stats.clone())
-                } else {
-                    (0, false, 1, Stats::default())
-                };
+            let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
+                u32,
+                bool,
+                i32,
+                Stats,
+                Vec<crate::world::drop::DropInfo>,
+            ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
+                let max_hp = info.stats.get(Stat::HP).max(1);
+                (
+                    info.experience,
+                    info.undead,
+                    max_hp,
+                    info.stats.clone(),
+                    info.drops.clone(),
+                )
+            } else {
+                (0, false, 1, Stats::default(), Vec::new())
+            };
 
             // Use the unified C#-style physical melee model (including
             // Accuracy/Agility, AC/DR and crit) for player -> monster hits.
-            let (hit, mut raw_damage, mut damage_type) =
+            let (hit, mut raw_damage, damage_type) =
                 compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
 
             // Apply FatalSword as an additional scalar on top of the physical
@@ -208,6 +219,75 @@ impl<P: WorldProvider> World<P> {
 
             if dead {
                 self.mark_monster_dead(map_index, id);
+
+                if !monster_drops.is_empty() {
+                    let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
+                    let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
+                    let mut rng = thread_rng();
+                    let mut total = crate::world::drop::DropRewardInfo {
+                        items: Vec::new(),
+                        gold: 0,
+                    };
+                    for d in &monster_drops {
+                        if let Some(r) = d.attempt_drop(
+                            self.drop_rate,
+                            item_offset,
+                            gold_offset,
+                            &mut rng,
+                        ) {
+                            total.gold = total.gold.saturating_add(r.gold);
+                            if !r.items.is_empty() {
+                                total.items.extend(r.items);
+                            }
+                        }
+                    }
+
+                    if total.gold > 0 || !total.items.is_empty() {
+                        let entry = self.map_items.entry(map_index).or_default();
+
+                        if total.gold > 0 {
+                            let item_id = self.next_map_item_id;
+                            self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: None,
+                                gold: total.gold,
+                            });
+
+                            events.push(WorldEvent::GoldDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                gold: total.gold,
+                            });
+                        }
+
+                        for item_index in total.items {
+                            let item_id = self.next_map_item_id;
+                            self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: Some(item_index),
+                                gold: 0,
+                            });
+
+                            events.push(WorldEvent::ItemDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index,
+                            });
+                        }
+                    }
+                }
 
                 events.push(WorldEvent::MonsterDied {
                     object_id: id,
