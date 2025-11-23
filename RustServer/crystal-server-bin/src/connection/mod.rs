@@ -15,6 +15,7 @@ pub mod handler;
 pub mod login_stage;
 pub mod select_stage;
 pub mod ingame_stage;
+pub mod gm_commands;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -67,4 +68,8 @@ pub(crate) struct LoginConnection {
     pub(crate) is_gm: bool,
     pub(crate) gm_login: bool,
     pub(crate) pending_guild_invite: Option<String>,
+    /// Whether SWorldMapSetupInfo has been sent to this client.
+    pub(crate) world_map_setup_sent: bool,
+    /// Set of map indices for which SNewMapInfo has already been sent.
+    pub(crate) sent_map_infos: HashSet<i32>,
 }

@@ -258,6 +258,42 @@ impl ItemInfoData {
         let mut c = std::io::Cursor::new(bytes);
         Self::decode(&mut c)
     }
+
+    pub fn friendly_name(&self) -> String {
+        let raw = self.name.as_str();
+
+        let mut end = raw.len();
+        for (idx, ch) in raw.char_indices().rev() {
+            if ch.is_ascii_digit() {
+                end = idx;
+            } else {
+                break;
+            }
+        }
+        let without_digits = &raw[..end];
+
+        let mut result = String::with_capacity(without_digits.len());
+        let mut in_brackets = false;
+        for ch in without_digits.chars() {
+            match ch {
+                '[' => in_brackets = true,
+                ']' => {
+                    if in_brackets {
+                        in_brackets = false;
+                    } else {
+                        result.push(ch);
+                    }
+                }
+                _ => {
+                    if !in_brackets {
+                        result.push(ch);
+                    }
+                }
+            }
+        }
+
+        result.trim().to_string()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

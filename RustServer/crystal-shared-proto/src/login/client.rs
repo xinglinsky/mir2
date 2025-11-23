@@ -3,8 +3,10 @@ use std::io::{self, Cursor, Read};
 use crate::io::{
     read_i32_le,
     read_string,
+    read_u32_le,
     write_i32_le,
     write_string,
+    write_u32_le,
 };
 use crate::packet::RawPacket;
 
@@ -434,7 +436,6 @@ impl CPickUp {
         Ok(CPickUp)
     }
 }
-
 #[derive(Clone, Debug)]
 pub struct CStartGame {
     pub character_index: i32,
@@ -454,5 +455,71 @@ impl CStartGame {
         let mut c = Cursor::new(payload);
         let character_index = read_i32_le(&mut c)?;
         Ok(CStartGame { character_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRequestMapInfo {
+    pub map_index: i32,
+}
+
+impl CRequestMapInfo {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.map_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RequestMapInfo as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let map_index = read_i32_le(&mut c)?;
+        Ok(CRequestMapInfo { map_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTeleportToNPC {
+    pub object_id: u32,
+}
+
+impl CTeleportToNPC {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::TeleportToNPC as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        Ok(CTeleportToNPC { object_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSearchMap {
+    pub text: String,
+}
+
+impl CSearchMap {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.text)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SearchMap as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let text = read_string(&mut c)?;
+        Ok(CSearchMap { text })
     }
 }

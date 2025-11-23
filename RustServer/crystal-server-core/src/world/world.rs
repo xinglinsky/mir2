@@ -67,6 +67,11 @@ pub enum WorldCommand {
         direction: u8,
         spell: u8,
     },
+    DropItem {
+        session_id: SessionId,
+        unique_id: u64,
+        count: u16,
+    },
     PickUp {
         session_id: SessionId,
     },
@@ -437,6 +442,80 @@ impl<P: WorldProvider> World<P> {
                 spell,
             } => {
                 self.handle_attack_command(session_id, direction, spell, &mut events);
+            }
+            WorldCommand::DropItem {
+                session_id,
+                unique_id,
+                count,
+            } => {
+                if count == 0 {
+                    return events;
+                }
+
+                let (map_index, px, py) = match self.players.get(&session_id) {
+                    Some(p) => (p.map_index, p.x, p.y),
+                    None => return events,
+                };
+
+                let player = match self.players.get_mut(&session_id) {
+                    Some(p) => p,
+                    None => return events,
+                };
+
+                let inv_index = match player
+                    .inventory
+                    .slots
+                    .iter()
+                    .position(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+                {
+                    Some(idx) => idx,
+                    None => return events,
+                };
+
+                let mut item = match player.inventory.slots[inv_index].clone() {
+                    Some(it) => it,
+                    None => return events,
+                };
+
+                if count as u32 > item.count as u32 {
+                    return events;
+                }
+
+                // Look up the ItemInfo so we can obtain the base index.
+                let info = match self.provider.get_item_info(item.item_index) {
+                    Some(i) => i,
+                    None => return events,
+                };
+
+                // Adjust inventory stack.
+                if count as u16 == item.count {
+                    player.inventory.slots[inv_index] = None;
+                } else {
+                    item.count = item.count.saturating_sub(count);
+                    player.inventory.slots[inv_index] = Some(item.clone());
+                }
+
+                // Create a new MapItem representing the dropped stack.
+                let entry = self.map_items.entry(map_index).or_default();
+                let map_item_id = self.next_map_item_id;
+                self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+
+                entry.push(MapItem {
+                    id: map_item_id,
+                    map_index,
+                    x: px,
+                    y: py,
+                    item_index: Some(info.index),
+                    gold: 0,
+                });
+
+                events.push(WorldEvent::ItemDropped {
+                    object_id: map_item_id,
+                    map_index,
+                    x: px,
+                    y: py,
+                    item_index: info.index,
+                });
             }
             WorldCommand::PickUp { session_id } => {
                 if let Some(player) = self.players.get(&session_id).cloned() {

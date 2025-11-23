@@ -19,6 +19,8 @@ pub struct ServerConfig {
     pub respawn_base_spawn_rate_minutes: u8,
     #[serde(default = "default_drop_rate")]
     pub drop_rate: f32,
+    #[serde(default = "default_teleport_to_npc_cost")]
+    pub teleport_to_npc_cost: i32,
     #[serde(default)]
     pub log_filter: Option<String>,
     #[serde(default = "default_timeout_ms")]
@@ -43,6 +45,10 @@ fn default_drops_path() -> PathBuf {
 
 fn default_drop_rate() -> f32 {
     1.0
+}
+
+fn default_teleport_to_npc_cost() -> i32 {
+    3000
 }
 
 pub fn load_server_config<P: AsRef<Path>>(path: P) -> io::Result<ServerConfig> {

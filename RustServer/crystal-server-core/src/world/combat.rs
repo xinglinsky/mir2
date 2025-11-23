@@ -238,7 +238,19 @@ impl<P: WorldProvider> World<P> {
                         items: Vec::new(),
                         gold: 0,
                     };
+
                     for d in &monster_drops {
+                        // Mirror C# MonsterObject.Drop: quest-required drops
+                        // (lines with trailing "Q" in the drop files) are not
+                        // placed on the ground as normal map items when a
+                        // monster dies. They are handled via quest / harvest
+                        // flows instead. Here we skip such entries so that
+                        // DeerMeat and similar quest items do not appear as
+                        // ordinary drops.
+                        if d.quest_required {
+                            continue;
+                        }
+
                         if let Some(r) = d.attempt_drop(
                             self.drop_rate,
                             item_offset,

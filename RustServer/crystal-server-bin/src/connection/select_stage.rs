@@ -18,6 +18,7 @@ use crystal_shared_proto::scene::{
     SObjectTeleportIn,
     SObjectTeleportOut,
     STeleportIn,
+    SDefaultNpc,
 };
 use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
 use crystal_shared_proto::user::{SUserInformation, SUserLocation, SUserSlotsRefresh};
@@ -538,6 +539,13 @@ impl LoginConnection {
                 weather: 0,
             };
             if let Ok(raw) = map_changed.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let default_npc = SDefaultNpc {
+                object_id: super::LoginConnection::DEFAULT_NPC_ID,
+            };
+            if let Ok(raw) = default_npc.encode() {
                 out.push(Self::encode_raw(raw));
             }
 

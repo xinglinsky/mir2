@@ -7,6 +7,6 @@ mod server;
 pub use ids::{ClientPacketId, ServerPacketId};
 pub use client::*;
 pub use server::*;
-pub use crate::item::{CBuyItem, CSellItem, CMoveItem, CEquipItem, CRemoveItem, CUseItem};
+pub use crate::item::{CBuyItem, CSellItem, CMoveItem, CEquipItem, CRemoveItem, CUseItem, CDropItem};
 pub use crate::npc::CCallNPC;
 pub use crate::guild::{CGuildInvite, CGuildNameReturn};

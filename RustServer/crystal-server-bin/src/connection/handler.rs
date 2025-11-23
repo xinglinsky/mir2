@@ -5,7 +5,7 @@ use std::time::Instant;
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
 use crystal_shared_proto::io::read_string;
-use crystal_shared_proto::item::CBuyItem;
+use crystal_shared_proto::item::{CBuyItem, CDropItem};
 use crystal_shared_proto::login::{
     CAttack,
     CCallNPC,
@@ -26,6 +26,9 @@ use crystal_shared_proto::login::{
     CTurn,
     CUseItem,
     CWalk,
+    CRequestMapInfo,
+    CTeleportToNPC,
+    CSearchMap,
     CGuildInvite,
     CGuildNameReturn,
     ClientPacketId,
@@ -141,6 +144,16 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_move_item(msg, &mut out);
                 }
             }
+            ClientPacketId::UseItem => {
+                if let Ok(msg) = CUseItem::decode(&packet.payload) {
+                    self.handle_use_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::DropItem => {
+                if let Ok(msg) = CDropItem::decode(&packet.payload) {
+                    self.handle_drop_item(msg, &mut out);
+                }
+            }
             ClientPacketId::BuyItem => {
                 println!(
                     "[ingame] dispatch BuyItem: id={} payload_len={}",
@@ -200,11 +213,6 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_remove_item(msg, &mut out);
                 }
             }
-            ClientPacketId::UseItem => {
-                if let Ok(msg) = CUseItem::decode(&packet.payload) {
-                    self.handle_use_item(msg, &mut out);
-                }
-            }
             ClientPacketId::CallNPC => {
                 if let Ok(msg) = CCallNPC::decode(&packet.payload) {
                     self.handle_call_npc(msg, &mut out);
@@ -218,6 +226,21 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::PickUp => {
                 if let Ok(msg) = CPickUp::decode(&packet.payload) {
                     self.handle_pick_up(msg, &mut out);
+                }
+            }
+            ClientPacketId::RequestMapInfo => {
+                if let Ok(msg) = CRequestMapInfo::decode(&packet.payload) {
+                    self.handle_request_map_info(msg, &mut out);
+                }
+            }
+            ClientPacketId::TeleportToNPC => {
+                if let Ok(msg) = CTeleportToNPC::decode(&packet.payload) {
+                    self.handle_teleport_to_npc(msg, &mut out);
+                }
+            }
+            ClientPacketId::SearchMap => {
+                if let Ok(msg) = CSearchMap::decode(&packet.payload) {
+                    self.handle_search_map(msg, &mut out);
                 }
             }
             ClientPacketId::TownRevive => {

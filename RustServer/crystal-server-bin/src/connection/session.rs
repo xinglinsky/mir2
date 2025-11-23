@@ -15,6 +15,11 @@ use super::{LoginConnection, PlayerVisual, Stage};
 
 impl LoginConnection {
     pub(crate) const DATA_RANGE: i32 = 16;
+    /// Synthetic object id used for the Default NPC script (00Default.txt).
+    /// The client learns this id from an SDefaultNpc packet and will use it
+    /// in subsequent CCallNPC requests for DefaultNPCType.UseItem,
+    /// TownScroll/DungeonScroll, etc.
+    pub(crate) const DEFAULT_NPC_ID: u32 = 1_500_000;
 
     pub(crate) fn new(
         session_id: world::SessionId,
@@ -60,6 +65,8 @@ impl LoginConnection {
             is_gm: false,
             gm_login: false,
             pending_guild_invite: None,
+            world_map_setup_sent: false,
+            sent_map_infos: HashSet::new(),
         }
     }
 

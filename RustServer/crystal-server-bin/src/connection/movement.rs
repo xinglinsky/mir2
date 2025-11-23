@@ -25,6 +25,16 @@ use crystal_shared_proto::user::{SUserLocation, SHealthChanged};
 use super::LoginConnection;
 
 impl LoginConnection {
+    fn item_name_colour_for_grade(grade: u8) -> i32 {
+        match grade {
+            2 => 0xFF00BFFFu32 as i32,
+            3 => 0xFFFF8C00u32 as i32,
+            4 => 0xFFDDA0DDu32 as i32,
+            5 => 0xFFFF0000u32 as i32,
+            _ => 0xFFFFFFFFu32 as i32,
+        }
+    }
+
     pub(crate) fn enqueue_for_viewers(
         &self,
         map_index: i32,
@@ -468,8 +478,8 @@ impl LoginConnection {
                     if let Some(info) = self.world_db.get_item_info(item_index) {
                         let pkt = SObjectItem {
                             object_id: object_id as u32,
-                            name: info.name.clone(),
-                            name_colour_argb: 0,
+                            name: info.friendly_name(),
+                            name_colour_argb: Self::item_name_colour_for_grade(info.grade),
                             location_x: x,
                             location_y: y,
                             image: info.image,

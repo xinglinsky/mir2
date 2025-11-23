@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crystal_server_core::account::{CharacterPosition, CharacterSummary};
-use crystal_server_core::world::{self};
+use crystal_server_core::world::{self, WorldProvider};
 use crystal_shared_proto::guild::SGuildStatus;
 use crystal_shared_proto::item::{CBuyItem, CSellItem, SEquipItem, SMoveItem, SRemoveItem, SSellItem, SUseItem};
 use crystal_shared_proto::item_types::UserItemData;
@@ -20,10 +20,25 @@ use crystal_shared_proto::login::{
     CPickUp,
     CTurn,
     CWalk,
+    CRequestMapInfo,
+    CTeleportToNPC,
+    CSearchMap,
     SDisconnect,
     SKeepAlive,
 };
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
+use crystal_shared_proto::map::{
+    SMapEffect,
+    SMapInformation,
+    SWorldMapSetupInfo,
+    SNewMapInfo,
+    SSearchMapResult,
+};
+use crystal_shared_proto::map_types::{
+    ClientMapInfoData,
+    ClientMovementInfoData,
+    ClientNpcInfoData,
+};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair, SNpcUpdate};
 use crystal_shared_proto::scene::{
     SChat,
     SNpcResponse,
@@ -31,11 +46,18 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
     SRevived,
     SObjectRevived,
+    SLevelChanged,
+    SObjectLeveled,
+    SObjectTeleportOut,
+    SObjectTeleportIn,
+    STeleportIn,
 };
 use crystal_shared_proto::select::{SelectInfo, SLogOutFailed, SLogOutSuccess};
 use crystal_shared_proto::user::{SGainedGold, SLoseGold, SUserSlotsRefresh, SHealthChanged};
 
 use super::{LoginConnection, Stage};
+
+const MIN_SEARCH_TEXT_LEN: usize = 3;
 
 impl LoginConnection {
     pub(crate) fn handle_log_out(&mut self, out: &mut Vec<Vec<u8>>) {
@@ -218,89 +240,9 @@ impl LoginConnection {
             );
         }
 
-        // Simple GM toggle command: `/gm` or `/gm on` enables GM mode for this
-        // session; `/gm off` disables it. This mirrors the C# behaviour where
-        // IsGM gates access to powerful commands, but here we keep the
-        // authentication model simple for the Rust server.
-        if let Some(rest) = trimmed.strip_prefix("/gm") {
-            let arg = rest.trim();
-            if arg.eq_ignore_ascii_case("off") {
-                self.is_gm = false;
-                self.send_system_chat("GM mode disabled.", out);
-            } else {
-                self.is_gm = true;
-                self.send_system_chat("GM mode enabled.", out);
-            }
+        // Delegate all GM/admin commands to the gm_commands module.
+        if self.handle_gm_chat(trimmed, out) {
             return;
-        }
-
-        if let Some(rest) = trimmed.strip_prefix("/createguild ") {
-            self.handle_create_guild_command(rest, out);
-            return;
-        }
-
-        if let Some(rest) = trimmed.strip_prefix("/showmemoney ") {
-            if !self.is_gm {
-                self.send_system_chat("GM only command.", out);
-                return;
-            }
-            if let Ok(delta) = rest.trim().parse::<i64>() {
-                if delta > 0 {
-                    if let Some(mut stats) = self.current_stats.clone() {
-                        let new_gold = stats.gold.saturating_add(delta);
-                        stats.gold = new_gold;
-                        if let (Some(ref account_id), Some(char_idx)) =
-                            (self.account_id.as_ref(), self.current_char_index)
-                        {
-                            let _ = self
-                                .store
-                                .save_character_stats(account_id, char_idx, &stats);
-                        }
-                        self.current_stats = Some(stats.clone());
-
-                        let gained = SGainedGold {
-                            gold: delta as u32,
-                        };
-                        if let Ok(raw) = gained.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-                    }
-                }
-            }
-            return;
-        }
-
-        if trimmed.eq_ignore_ascii_case("/kill") {
-            if !self.is_gm {
-                self.send_system_chat("GM only command.", out);
-                return;
-            }
-            let killed = {
-                let mut world = self.world.lock().unwrap();
-                world.kill_nearest_monster(
-                    self.current_map_index,
-                    self.current_x,
-                    self.current_y,
-                )
-            };
-
-            if let Some((id, monster_exp)) = killed {
-                self.known_monsters.remove(&id);
-                let pkt = SObjectRemove {
-                    object_id: id as u32,
-                };
-                if let Ok(raw) = pkt.encode() {
-                    out.push(Self::encode_raw(raw));
-                }
-
-                if monster_exp > 0 {
-                    let events = vec![world::WorldEvent::GainExperience {
-                        session_id: self.session_id,
-                        amount: monster_exp,
-                    }];
-                    let _ = self.handle_world_events(events, out);
-                }
-            }
         }
     }
 
@@ -408,6 +350,305 @@ impl LoginConnection {
             }
         };
 
+        if info.item_type == 21 {
+            let shape = info.shape;
+            if shape == 3 || shape == 4 {
+                let opened = self.open_default_useitem_page(shape, out);
+                if !opened {
+                    let pkt = SUseItem {
+                        unique_id: msg.unique_id,
+                        success: false,
+                        grid: msg.grid,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                    return;
+                }
+
+                if item.count <= 1 {
+                    inv.slots[idx] = None;
+                } else {
+                    let mut updated = item.clone();
+                    updated.count = updated.count.saturating_sub(1);
+                    inv.slots[idx] = Some(updated);
+                }
+
+                {
+                    let mut world = self.world.lock().unwrap();
+                    world.set_player_items(self.session_id, inv.clone(), eq.clone());
+                }
+
+                let pkt = SUseItem {
+                    unique_id: msg.unique_id,
+                    success: true,
+                    grid: msg.grid,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
+                let refresh = SUserSlotsRefresh {
+                    inventory: inv.slots,
+                    equipment: eq.slots,
+                };
+                if let Ok(raw) = refresh.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
+                return;
+            } else {
+                let pkt = SUseItem {
+                    unique_id: msg.unique_id,
+                    success: false,
+                    grid: msg.grid,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        }
+
+        // Handle scroll items (ItemType::Scroll == 17) with a minimal
+        // teleport behaviour mirroring the C# PlayerObject.UseItem scroll
+        // cases for shapes 0 (DungeonEscape), 1 (TownTeleport), and 2
+        // (RandomTeleport). All other shapes fall through as unsupported
+        // for now.
+        if info.item_type == 17 {
+            let mut teleported = false;
+
+            match info.shape {
+                // Shape 0: Dungeon Escape -> teleport near bind location on
+                // the bind map using a simple random offset.
+                0 => {
+                    let (dest_map, dest_x, dest_y, _dest_dir) = if let (
+                        Some(ref account_id),
+                        Some(char_idx),
+                    ) = (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        if let Ok(Some(pos)) = self.store.load_character_bind(account_id, char_idx)
+                        {
+                            (pos.map_index, pos.x, pos.y, pos.direction)
+                        } else {
+                            (
+                                self.current_map_index,
+                                self.current_x,
+                                self.current_y,
+                                self.direction,
+                            )
+                        }
+                    } else {
+                        (
+                            self.current_map_index,
+                            self.current_x,
+                            self.current_y,
+                            self.direction,
+                        )
+                    };
+
+                    let radius: i32 = 100;
+                    let span = radius * 2 + 1;
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .subsec_nanos() as i32;
+                    let dx = if span > 0 { now % span - radius } else { 0 };
+                    let dy = if span > 0 { (now / span) % span - radius } else { 0 };
+                    let tx = (dest_x + dx).max(0);
+                    let ty = (dest_y + dy).max(0);
+
+                    let events = {
+                        let mut world = self.world.lock().unwrap();
+                        world.handle_command(world::WorldCommand::Teleport {
+                            session_id: self.session_id,
+                            map_index: dest_map,
+                            x: tx,
+                            y: ty,
+                        })
+                    };
+
+                    let map_changed = self.handle_world_events(events, out);
+                    if map_changed {
+                        self.known_monsters.clear();
+                        self.known_npcs.clear();
+                        self.update_visibility(out);
+                    }
+
+                    teleported = true;
+                }
+                // Shape 1: Town Teleport -> teleport directly to bind
+                // location.
+                1 => {
+                    let (dest_map, dest_x, dest_y, _dest_dir) = if let (
+                        Some(ref account_id),
+                        Some(char_idx),
+                    ) = (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        if let Ok(Some(pos)) = self.store.load_character_bind(account_id, char_idx)
+                        {
+                            (pos.map_index, pos.x, pos.y, pos.direction)
+                        } else {
+                            (
+                                self.current_map_index,
+                                self.current_x,
+                                self.current_y,
+                                self.direction,
+                            )
+                        }
+                    } else {
+                        (
+                            self.current_map_index,
+                            self.current_x,
+                            self.current_y,
+                            self.direction,
+                        )
+                    };
+
+                    let events = {
+                        let mut world = self.world.lock().unwrap();
+                        world.handle_command(world::WorldCommand::Teleport {
+                            session_id: self.session_id,
+                            map_index: dest_map,
+                            x: dest_x,
+                            y: dest_y,
+                        })
+                    };
+
+                    let map_changed = self.handle_world_events(events, out);
+                    if map_changed {
+                        self.known_monsters.clear();
+                        self.known_npcs.clear();
+                        self.update_visibility(out);
+                    }
+
+                    teleported = true;
+                }
+                // Shape 2: Random Teleport -> teleport to a random walkable
+                // location on the current map. This mirrors the C#
+                // MapObject.TeleportRandom implementation, which samples
+                // from Map.WalkableCells to ensure the destination is
+                // always a valid, walkable tile.
+                2 => {
+                    if let Some(map_info) = self.world_db.get_map_info(self.current_map_index) {
+                        let info = map_info.clone();
+                        let dir = &self.world_config.map_path;
+
+                        match crystal_server_core::world::map::load_map_from_file(info, dir.as_path()) {
+                            Ok(map) => {
+                                if map.walkable_cells.is_empty() {
+                                    // No known walkable cells; treat as a
+                                    // failure and let the outer logic send
+                                    // a failed SUseItem without consuming
+                                    // the scroll.
+                                } else {
+                                    let now = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .subsec_nanos() as usize;
+                                    let idx = now % map.walkable_cells.len();
+                                    let (tx, ty) = map.walkable_cells[idx];
+
+                                    let events = {
+                                        let mut world = self.world.lock().unwrap();
+                                        world.handle_command(world::WorldCommand::Teleport {
+                                            session_id: self.session_id,
+                                            map_index: self.current_map_index,
+                                            x: tx as i32,
+                                            y: ty as i32,
+                                        })
+                                    };
+
+                                    let map_changed = self.handle_world_events(events, out);
+                                    if map_changed {
+                                        self.known_monsters.clear();
+                                        self.known_npcs.clear();
+                                        self.update_visibility(out);
+                                    }
+
+                                    teleported = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "RandomTeleport: failed to load map {}: {:?}",
+                                    self.current_map_index,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            if !teleported {
+                let pkt = SUseItem {
+                    unique_id: msg.unique_id,
+                    success: false,
+                    grid: msg.grid,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+
+            let tele_out = SObjectTeleportOut {
+                object_id: self.session_id,
+                teleport_type: 0,
+            };
+            if let Ok(raw) = tele_out.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let tele_in = STeleportIn;
+            out.push(Self::encode_raw(tele_in.encode()));
+
+            let obj_tele_in = SObjectTeleportIn {
+                object_id: self.session_id,
+                teleport_type: 0,
+            };
+            if let Ok(raw) = obj_tele_in.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            // Scroll teleport succeeded: consume the item, update inventory,
+            // and notify the client. HP/MP are unchanged so we skip the
+            // potion-specific health delta logic below.
+            if item.count <= 1 {
+                inv.slots[idx] = None;
+            } else {
+                let mut updated = item.clone();
+                updated.count = updated.count.saturating_sub(1);
+                inv.slots[idx] = Some(updated);
+            }
+
+            {
+                let mut world = self.world.lock().unwrap();
+                world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            }
+
+            let pkt = SUseItem {
+                unique_id: msg.unique_id,
+                success: true,
+                grid: msg.grid,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let refresh = SUserSlotsRefresh {
+                inventory: inv.slots,
+                equipment: eq.slots,
+            };
+            if let Ok(raw) = refresh.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            return;
+        }
+
         let (hp_delta, mp_delta) = if info.item_type == 13 {
             let base_stats = crystal_server_core::stats_util::stats_from_map(&info.stats);
             let hp = base_stats.get(crystal_server_core::stats::Stat::HP);
@@ -430,7 +671,7 @@ impl LoginConnection {
 
             (hp, mp)
         } else {
-            // Unsupported item type (scrolls, scripts, etc.) for now: indicate
+            // Unsupported item type (scripts, etc.) for now: indicate
             // failure and do not consume the item.
             let pkt = SUseItem {
                 unique_id: msg.unique_id,
@@ -504,6 +745,160 @@ impl LoginConnection {
         }
     }
 
+    fn open_default_useitem_page(&mut self, shape: i16, out: &mut Vec<Vec<u8>>) -> bool {
+        let root_deploy = Path::new("./deploy/Envir/SystemScripts/00Default");
+        let root_plain = Path::new("./Envir/SystemScripts/00Default");
+        let root = if root_deploy.exists() { root_deploy } else { root_plain };
+        if !root.exists() {
+            return false;
+        }
+
+        let script_name = match shape {
+            3 => "TownScroll.txt",
+            4 => "DungeonScroll.txt",
+            _ => return false,
+        };
+
+        let script_path = root.join(script_name);
+        if !script_path.is_file() {
+            return false;
+        }
+
+        let (pages, _) = match Self::load_npc_script_from_file(&script_path) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+
+        let key = format!("@_USEITEM({})", shape);
+        let page = match pages.get(&key) {
+            Some(p) => p.clone(),
+            None => return false,
+        };
+
+        let upd = SNpcUpdate {
+            npc_id: super::LoginConnection::DEFAULT_NPC_ID,
+        };
+        if let Ok(raw) = upd.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        let resp = SNpcResponse { page };
+        if let Ok(raw) = resp.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        true
+    }
+
+    pub(crate) fn handle_drop_item(
+        &mut self,
+        msg: crystal_shared_proto::item::CDropItem,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // For now we only support dropping from the main inventory, and we
+        // ignore hero_inventory semantics.
+        if msg.count == 0 {
+            return;
+        }
+
+        let (mut inv, eq) = {
+            let mut world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        let mut found_index: Option<usize> = None;
+        for (idx, slot) in inv.slots.iter().enumerate() {
+            if let Some(item) = slot {
+                if item.unique_id == msg.unique_id {
+                    found_index = Some(idx);
+                    break;
+                }
+            }
+        }
+
+        let idx = match found_index {
+            Some(i) => i,
+            None => {
+                // Nothing to drop; just refresh client view of slots.
+                let refresh = SUserSlotsRefresh {
+                    inventory: inv.slots,
+                    equipment: eq.slots,
+                };
+                if let Ok(raw) = refresh.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        let mut item = match inv.slots[idx].clone() {
+            Some(it) => it,
+            None => {
+                let refresh = SUserSlotsRefresh {
+                    inventory: inv.slots,
+                    equipment: eq.slots,
+                };
+                if let Ok(raw) = refresh.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if msg.count as u32 > item.count as u32 {
+            let refresh = SUserSlotsRefresh {
+                inventory: inv.slots,
+                equipment: eq.slots,
+            };
+            if let Ok(raw) = refresh.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Apply the world-side drop command so that map_items and
+        // WorldEvent::ItemDropped are created. The world implementation will
+        // adjust its own copy of the inventory; we keep the connection-side
+        // view in sync by cloning back from world after the command.
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::DropItem {
+                session_id: self.session_id,
+                unique_id: msg.unique_id,
+                count: msg.count,
+            })
+        };
+
+        let _ = self.handle_world_events(events, out);
+
+        let (inv_after, eq_after) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        let refresh = SUserSlotsRefresh {
+            inventory: inv_after.slots,
+            equipment: eq_after.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
     fn guild_member_exists_for_session(&self) -> bool {
         let map = self.player_summaries.lock().unwrap();
         if let Some(v) = map.get(&self.session_id) {
@@ -513,7 +908,7 @@ impl LoginConnection {
         }
     }
 
-    fn send_system_chat(&self, text: &str, out: &mut Vec<Vec<u8>>) {
+    pub(crate) fn send_system_chat(&self, text: &str, out: &mut Vec<Vec<u8>>) {
         let pkt = SChat {
             message: text.to_string(),
             chat_type: 2,
@@ -673,6 +1068,11 @@ impl LoginConnection {
             let raw = pkt.encode();
             out.push(Self::encode_raw(raw));
             self.closing = true;
+            return;
+        }
+
+        if msg.object_id == super::LoginConnection::DEFAULT_NPC_ID {
+            self.handle_default_npc_call(msg.key, out);
             return;
         }
 
@@ -938,6 +1338,101 @@ impl LoginConnection {
         }
     }
 
+    fn handle_default_npc_call(&mut self, raw_key: String, out: &mut Vec<Vec<u8>>) {
+        let key = Self::normalize_npc_key(&raw_key);
+        let root_deploy = Path::new("./deploy/Envir/SystemScripts/00Default");
+        let root_plain = Path::new("./Envir/SystemScripts/00Default");
+        let root = if root_deploy.exists() { root_deploy } else { root_plain };
+        if !root.exists() {
+            return;
+        }
+
+        let scripts = ["TownScroll.txt", "DungeonScroll.txt"];
+
+        for name in &scripts {
+            let script_path = root.join(name);
+            if !script_path.is_file() {
+                continue;
+            }
+
+            let (pages, moves) = match Self::load_npc_script_from_file(&script_path) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            if let Some((map_name, tx, ty)) = moves.get(&key) {
+                let mut dest_index: Option<i32> = None;
+
+                if let Ok(idx) = map_name.parse::<i32>() {
+                    if self
+                        .world_db
+                        .map_infos
+                        .iter()
+                        .any(|m| m.index == idx)
+                    {
+                        dest_index = Some(idx);
+                    }
+                }
+
+                if dest_index.is_none() {
+                    if let Some(info) = self
+                        .world_db
+                        .map_infos
+                        .iter()
+                        .find(|m| m.file_name.eq_ignore_ascii_case(map_name))
+                    {
+                        dest_index = Some(info.index);
+                    }
+                }
+
+                if let Some(map_index) = dest_index {
+                    let x = *tx;
+                    let y = *ty;
+
+                    let events = {
+                        let mut world = self.world.lock().unwrap();
+                        world.handle_command(world::WorldCommand::Teleport {
+                            session_id: self.session_id,
+                            map_index,
+                            x,
+                            y,
+                        })
+                    };
+
+                    let map_changed = self.handle_world_events(events, out);
+                    if map_changed {
+                        self.known_monsters.clear();
+                        self.known_npcs.clear();
+                        self.update_visibility(out);
+                    }
+
+                    return;
+                }
+            }
+
+            let mut maybe_page: Option<Vec<String>> = None;
+            if key.eq_ignore_ascii_case("@MAIN") {
+                if let Some(page_alt) = pages.get("@MAIN-1") {
+                    maybe_page = Some(page_alt.clone());
+                } else if let Some(page_main) = pages.get("@MAIN") {
+                    maybe_page = Some(page_main.clone());
+                }
+            } else {
+                if let Some(page) = pages.get(&key) {
+                    maybe_page = Some(page.clone());
+                }
+            }
+
+            if let Some(page) = maybe_page {
+                let resp = SNpcResponse { page };
+                if let Ok(raw) = resp.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        }
+    }
+
     pub(crate) fn handle_attack(&mut self, msg: CAttack, out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
             return;
@@ -979,8 +1474,10 @@ impl LoginConnection {
         // Determine the bind location for this character (equivalent to C#
         // BindMapIndex/BindLocation). If none is stored, fall back to the
         // current map/position.
-        let (dest_map, dest_x, dest_y, dest_dir) = if let (Some(ref account_id), Some(char_idx)) =
-            (self.account_id.as_ref(), self.current_char_index)
+        let (dest_map, dest_x, dest_y, dest_dir) = if let (
+            Some(ref account_id),
+            Some(char_idx),
+        ) = (self.account_id.as_ref(), self.current_char_index)
         {
             if let Ok(Some(pos)) = self.store.load_character_bind(account_id, char_idx) {
                 (pos.map_index, pos.x, pos.y, pos.direction)
@@ -1150,7 +1647,7 @@ impl LoginConnection {
 
         // Load the player's current items from the world.
         let (mut inv, eq) = {
-            let mut world = self.world.lock().unwrap();
+            let world = self.world.lock().unwrap();
             world
                 .player_items(self.session_id)
                 .unwrap_or((
@@ -1251,8 +1748,9 @@ impl LoginConnection {
         if msg.count as u16 == item.count {
             inv.slots[idx] = None;
         } else {
-            item.count = item.count.saturating_sub(msg.count);
-            inv.slots[idx] = Some(item.clone());
+            let mut updated = item.clone();
+            updated.count = updated.count.saturating_sub(msg.count);
+            inv.slots[idx] = Some(updated);
         }
 
         // Persist updated items to the world.
@@ -1318,10 +1816,7 @@ impl LoginConnection {
         );
 
         if self.stage != Stage::InGame {
-            tracing::debug!(
-                "BuyItem: early-return, not in-game stage stage={:?}",
-                self.stage
-            );
+            tracing::debug!("BuyItem: early-return, not in-game stage");
             return;
         }
 
@@ -1533,7 +2028,7 @@ impl LoginConnection {
 
         // Insert the purchased item into the first empty inventory slot.
         let (mut inv, eq) = {
-            let mut world = self.world.lock().unwrap();
+            let world = self.world.lock().unwrap();
             world
                 .player_items(self.session_id)
                 .unwrap_or((crystal_server_core::item::Inventory::new_default(), crystal_server_core::item::Equipment::new_default()))
@@ -1647,10 +2142,7 @@ impl LoginConnection {
                 let world = self.world.lock().unwrap();
                 world
                     .player_items(self.session_id)
-                    .unwrap_or((
-                        crystal_server_core::item::Inventory::new_default(),
-                        crystal_server_core::item::Equipment::new_default(),
-                    ))
+                    .unwrap_or((crystal_server_core::item::Inventory::new_default(), crystal_server_core::item::Equipment::new_default()))
             };
 
             let refresh = SUserSlotsRefresh {
@@ -1688,10 +2180,7 @@ impl LoginConnection {
                 let world = self.world.lock().unwrap();
                 world
                     .player_items(self.session_id)
-                    .unwrap_or((
-                        crystal_server_core::item::Inventory::new_default(),
-                        crystal_server_core::item::Equipment::new_default(),
-                    ))
+                    .unwrap_or((crystal_server_core::item::Inventory::new_default(), crystal_server_core::item::Equipment::new_default()))
             };
 
             let refresh = SUserSlotsRefresh {
@@ -1701,6 +2190,300 @@ impl LoginConnection {
             if let Ok(raw) = refresh.encode() {
                 out.push(Self::encode_raw(raw));
             }
+        }
+    }
+
+    fn send_world_map_setup_if_needed(&mut self, out: &mut Vec<Vec<u8>>) {
+        if self.world_map_setup_sent {
+            return;
+        }
+
+        if let Ok(pkt) = SWorldMapSetupInfo::from_world_map_setup(
+            &self.world_config.world_map_setup,
+            self.world_config.teleport_to_npc_cost,
+        ) {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+                self.world_map_setup_sent = true;
+            }
+        }
+    }
+
+    fn send_map_info_if_needed(&mut self, map_index: i32, out: &mut Vec<Vec<u8>>) {
+        if self.sent_map_infos.contains(&map_index) {
+            return;
+        }
+
+        let map_info = match self.world_db.get_map_info(map_index) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let (width, height) = {
+            let info = map_info.clone();
+            let dir = &self.world_config.map_path;
+            match crystal_server_core::world::map::load_map_from_file(info, dir.as_path()) {
+                Ok(m) => (m.width as i32, m.height as i32),
+                Err(e) => {
+                    tracing::warn!("failed to load map {} for big-map info: {:?}", map_index, e);
+                    (0, 0)
+                }
+            }
+        };
+
+        if width <= 0 || height <= 0 {
+            return;
+        }
+
+        let mut movements: Vec<ClientMovementInfoData> = Vec::new();
+        for m in map_info.movements.iter().filter(|m| m.show_on_big_map) {
+            let dest_index = m.map_index;
+            let title = self
+                .world_db
+                .get_map_info(dest_index)
+                .map(|mi| mi.title.clone())
+                .unwrap_or_default();
+
+            movements.push(ClientMovementInfoData {
+                destination: dest_index,
+                title,
+                location_x: m.source_x,
+                location_y: m.source_y,
+                icon: m.icon,
+            });
+        }
+
+        let mut npcs: Vec<_> = self
+            .world_db
+            .npc_infos
+            .iter()
+            .filter(|n| n.map_index == map_index && n.show_on_big_map)
+            .collect();
+        npcs.sort_by_key(|n| n.big_map_icon);
+
+        let npc_infos: Vec<ClientNpcInfoData> = npcs
+            .into_iter()
+            .map(|n| ClientNpcInfoData {
+                object_id: n.index as u32,
+                name: n.name.clone(),
+                location_x: n.location_x,
+                location_y: n.location_y,
+                icon: n.big_map_icon,
+                can_teleport_to: n.can_teleport_to,
+            })
+            .collect();
+
+        let info = ClientMapInfoData {
+            width,
+            height,
+            big_map: map_info.big_map as i32,
+            title: map_info.title.clone(),
+            movements,
+            npcs: npc_infos,
+        };
+
+        if let Ok(pkt) = SNewMapInfo::from_map_info(map_index, &info) {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+                self.sent_map_infos.insert(map_index);
+            }
+        }
+    }
+
+    pub(crate) fn handle_request_map_info(
+        &mut self,
+        msg: CRequestMapInfo,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        self.send_world_map_setup_if_needed(out);
+        self.send_map_info_if_needed(msg.map_index, out);
+    }
+
+    pub(crate) fn handle_search_map(&mut self, msg: CSearchMap, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let text = msg.text.trim();
+        if text.chars().count() < MIN_SEARCH_TEXT_LEN {
+            return;
+        }
+
+        let query = text.to_lowercase();
+        let mut map_index_opt: Option<i32> = None;
+        let mut npc_index_opt: Option<u32> = None;
+
+        {
+            if let Some(map) = self
+                .world_db
+                .map_infos
+                .iter()
+                .find(|m| m.big_map > 0 && m.title.to_lowercase().starts_with(&query))
+            {
+                map_index_opt = Some(map.index);
+            } else if let Some(npc) = self
+                .world_db
+                .npc_infos
+                .iter()
+                .find(|n| n.show_on_big_map && n.name.to_lowercase().starts_with(&query))
+            {
+                map_index_opt = Some(npc.map_index);
+                npc_index_opt = Some(npc.index as u32);
+            }
+        }
+
+        let (map_index, npc_index) = if let Some(map_index) = map_index_opt {
+            // When we have a match, mirror C# behaviour by ensuring the
+            // client has current big-map data for that map index.
+            self.send_world_map_setup_if_needed(out);
+            self.send_map_info_if_needed(map_index, out);
+
+            (map_index, npc_index_opt.unwrap_or(0))
+        } else {
+            // No map or NPC matched; send a default result with both fields
+            // zero, just like C# PlayerObject.SearchMap does.
+            (0, 0)
+        };
+
+        let result = SSearchMapResult {
+            map_index,
+            npc_index,
+        };
+
+        if let Ok(raw) = result.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_teleport_to_npc(
+        &mut self,
+        msg: CTeleportToNPC,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let stats = match self.current_stats.clone() {
+            Some(s) => s,
+            None => return,
+        };
+
+        let npc = match self
+            .world_db
+            .npc_infos
+            .iter()
+            .find(|n| {
+                n.index as u32 == msg.object_id
+                    && n.map_index == self.current_map_index
+                    && n.can_teleport_to
+            })
+        {
+            Some(n) => n,
+            None => return,
+        };
+
+        let cost_i64 = self.world_config.teleport_to_npc_cost as i64;
+        if stats.gold < cost_i64 {
+            return;
+        }
+
+        let mut new_stats = stats.clone();
+        new_stats.gold = new_stats.gold.saturating_sub(cost_i64);
+
+        if let (Some(ref account_id), Some(char_idx)) =
+            (self.account_id.as_ref(), self.current_char_index)
+        {
+            let _ = self
+                .store
+                .save_character_stats(account_id, char_idx, &new_stats);
+        }
+
+        self.current_stats = Some(new_stats.clone());
+
+        let lose = SLoseGold {
+            gold: self.world_config.teleport_to_npc_cost as u32,
+        };
+        if let Ok(raw) = lose.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Choose a walkable destination near the NPC, approximating the C#
+        // NPC.Front/ValidPoint behaviour by preferring the NPC's tile if
+        // walkable and otherwise falling back to the closest walkable cell
+        // within a small radius.
+        let (dest_x, dest_y) = {
+            let default_pos = (npc.location_x, npc.location_y);
+
+            if let Some(info) = self.world_db.get_map_info(npc.map_index).cloned() {
+                let dir = &self.world_config.map_path;
+                match crystal_server_core::world::map::load_map_from_file(info, dir.as_path()) {
+                    Ok(map) => {
+                        let nx = npc.location_x.max(0) as u16;
+                        let ny = npc.location_y.max(0) as u16;
+
+                        if map.is_walkable(nx, ny) {
+                            (nx as i32, ny as i32)
+                        } else {
+                            let mut best: Option<(i32, i32, i32)> = None;
+                            let max_dist2: i32 = 25; // radius 5
+
+                            for &(wx, wy) in &map.walkable_cells {
+                                let dx = wx as i32 - npc.location_x;
+                                let dy = wy as i32 - npc.location_y;
+                                let dist2 = dx * dx + dy * dy;
+                                if dist2 > max_dist2 {
+                                    continue;
+                                }
+
+                                match best {
+                                    Some((_, _, best_d2)) if dist2 >= best_d2 => {}
+                                    _ => {
+                                        best = Some((wx as i32, wy as i32, dist2));
+                                    }
+                                }
+                            }
+
+                            if let Some((bx, by, _)) = best {
+                                (bx, by)
+                            } else {
+                                default_pos
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "TeleportToNPC: failed to load map {}: {:?}",
+                            npc.map_index,
+                            e
+                        );
+                        default_pos
+                    }
+                }
+            } else {
+                default_pos
+            }
+        };
+
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::Teleport {
+                session_id: self.session_id,
+                map_index: npc.map_index,
+                x: dest_x,
+                y: dest_y,
+            })
+        };
+
+        let map_changed = self.handle_world_events(events, out);
+        if map_changed {
+            self.known_monsters.clear();
+            self.known_npcs.clear();
+            self.update_visibility(out);
         }
     }
 

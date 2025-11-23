@@ -21,10 +21,10 @@ use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectDied,
     SObjectGold,
-    SObjectItem,
     SStruck,
 };
 use crystal_shared_proto::user::SHealthChanged;
+use crystal_shared_proto::map_types::{WorldMapSetupData, WorldMapIconData};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -65,6 +65,95 @@ struct AdminWorldSettings {
     drop_rate: f32,
 }
 
+fn load_world_map_setup() -> WorldMapSetupData {
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    let path = Path::new("./Configs/WorldMap.ini");
+    let text = match fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(
+                "WorldMap.ini not found or unreadable at {:?}: {:?}; world map will be disabled",
+                path,
+                e
+            );
+            return WorldMapSetupData {
+                enabled: false,
+                icons: Vec::new(),
+            };
+        }
+    };
+
+    let mut sections: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut current_section = String::new();
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty()
+            || line.starts_with('#')
+            || line.starts_with("//")
+            || line.starts_with(';')
+        {
+            continue;
+        }
+
+        if line.starts_with('[') && line.ends_with(']') {
+            current_section = line[1..line.len() - 1].trim().to_string();
+            continue;
+        }
+
+        if let Some(eq) = line.find('=') {
+            let (k, v) = line.split_at(eq);
+            let key = k.trim().to_string();
+            let val = v[1..].trim().to_string();
+            sections
+                .entry(current_section.clone())
+                .or_default()
+                .insert(key, val);
+        }
+    }
+
+    let get = |section: &str, key: &str| -> Option<String> {
+        sections
+            .get(section)
+            .and_then(|m| m.get(key))
+            .cloned()
+    };
+
+    let enabled = get("Setup", "Enabled")
+        .map(|s| {
+            let lower = s.to_ascii_lowercase();
+            matches!(lower.as_str(), "true" | "1" | "yes" | "on")
+        })
+        .unwrap_or(false);
+
+    let mut icons: Vec<WorldMapIconData> = Vec::new();
+    for idx in 0.. {
+        let image_key = format!("Button{}ImageIndex", idx);
+        let image_str = match get("Layout", &image_key) {
+            Some(s) => s,
+            None => break,
+        };
+        let image_index: i32 = match image_str.parse() {
+            Ok(v) => v,
+            Err(_) => break,
+        };
+
+        let title = get("Layout", &format!("Button{}Title", idx)).unwrap_or_default();
+        let map_index: i32 = get("Layout", &format!("Button{}MapIndex", idx))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+
+        icons.push(WorldMapIconData {
+            image_index,
+            title,
+            map_index,
+        });
+    }
+
+    WorldMapSetupData { enabled, icons }
+}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -238,6 +327,8 @@ async fn main() -> io::Result<()> {
     }
     let world_db = Arc::new(world_db);
 
+    let world_map_setup = load_world_map_setup();
+
     // Map directory and spawn settings come from configuration, mirroring
     // C# Settings.MapPath and Envir.SpawnMultiplier / RespawnTick.BaseSpawnRate.
     let world_config = WorldConfig::new(
@@ -245,6 +336,8 @@ async fn main() -> io::Result<()> {
         cfg.spawn_multiplier,
         cfg.respawn_base_spawn_rate_minutes,
         cfg.drop_rate,
+        cfg.teleport_to_npc_cost,
+        world_map_setup,
     );
 
     // Global world instance shared by all connections, mirroring the single-world
@@ -327,58 +420,10 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
-                        world::WorldEvent::ItemDropped {
-                            object_id,
-                            map_index,
-                            x,
-                            y,
-                            item_index,
-                        } => {
-                            let viewers = {
-                                let w = world_for_tick.lock().unwrap();
-                                w.sessions_in_range_for_map(
-                                    map_index,
-                                    x,
-                                    y,
-                                    LoginConnection::DATA_RANGE,
-                                )
-                            };
-
-                            if viewers.is_empty() {
-                                continue;
-                            }
-
-                            let maybe_item = {
-                                let db = world_db_for_items.as_ref();
-                                db.get_item_info(item_index).cloned()
-                            };
-
-                            let info = match maybe_item {
-                                Some(i) => i,
-                                None => continue,
-                            };
-
-                            let pkt = SObjectItem {
-                                object_id: object_id as u32,
-                                name: info.name.clone(),
-                                name_colour_argb: 0,
-                                location_x: x,
-                                location_y: y,
-                                image: info.image,
-                                grade: info.grade,
-                            };
-
-                            if let Ok(raw) = pkt.encode() {
-                                let encoded = raw.encode();
-                                let mut outboxes =
-                                    outboxes_for_world_events.lock().unwrap();
-                                for sid in &viewers {
-                                    outboxes
-                                        .entry(*sid)
-                                        .or_default()
-                                        .push(encoded.clone());
-                                }
-                            }
+                        world::WorldEvent::ItemDropped { .. } => {
+                            // Item drop scene packets are emitted from the
+                            // connection layer (movement.rs) when handling
+                            // WorldEvent::ItemDropped for a given session.
                         }
                         world::WorldEvent::GoldDropped {
                             object_id,
@@ -430,45 +475,12 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
-                        world::WorldEvent::MonsterDied {
-                            object_id,
-                            map_index,
-                            x,
-                            y,
-                            direction,
-                        } => {
-                            let viewers = {
-                                let w = world_for_tick.lock().unwrap();
-                                w.sessions_in_range_for_map(
-                                    map_index,
-                                    x,
-                                    y,
-                                    LoginConnection::DATA_RANGE,
-                                )
-                            };
-
-                            if viewers.is_empty() {
-                                continue;
-                            }
-
-                            let died_pkt = SObjectDied {
-                                object_id: object_id as u32,
-                                location_x: x,
-                                location_y: y,
-                                direction,
-                                death_type: 0,
-                            };
-                            if let Ok(raw) = died_pkt.encode() {
-                                let encoded = raw.encode();
-                                let mut outboxes =
-                                    outboxes_for_world_events.lock().unwrap();
-                                for sid in &viewers {
-                                    outboxes
-                                        .entry(*sid)
-                                        .or_default()
-                                        .push(encoded.clone());
-                                }
-                            }
+                        world::WorldEvent::MonsterDied { .. } => {
+                            // Monster death broadcasting is handled per-connection
+                            // in LoginConnection::handle_world_events within
+                            // connection/movement.rs, where we emit SObjectDied to
+                            // the local player and nearby viewers. The tick
+                            // thread does not need to handle this event.
                         }
                         world::WorldEvent::MonsterHitPlayer {
                             attacker_monster_id,

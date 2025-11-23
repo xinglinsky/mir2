@@ -137,6 +137,38 @@ impl CUseItem {
 }
 
 #[derive(Clone, Debug)]
+pub struct CDropItem {
+    pub unique_id: u64,
+    pub count: u16,
+    pub hero_inventory: bool,
+}
+
+impl CDropItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        crate::io::write_bool(&mut buf, self.hero_inventory)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DropItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        let hero_inventory = crate::io::read_bool(&mut c)?;
+        Ok(CDropItem {
+            unique_id,
+            count,
+            hero_inventory,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CBuyItem {
     pub item_index: u64,
     pub count: u16,
