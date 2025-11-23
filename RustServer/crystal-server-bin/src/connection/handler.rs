@@ -5,6 +5,7 @@ use std::time::Instant;
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
 use crystal_shared_proto::io::read_string;
+use crystal_shared_proto::item::CBuyItem;
 use crystal_shared_proto::login::{
     CAttack,
     CCallNPC,
@@ -21,7 +22,9 @@ use crystal_shared_proto::login::{
     CRun,
     CStartGame,
     CTownRevive,
+    CPickUp,
     CTurn,
+    CUseItem,
     CWalk,
     CGuildInvite,
     CGuildNameReturn,
@@ -40,8 +43,31 @@ impl ConnectionHandler for LoginConnection {
 
     fn handle_packet(&mut self, packet: RawPacket) -> Vec<Vec<u8>> {
         let mut out = Vec::new();
+        // Temporary debug: see whether we ever receive raw Buy/Sell item
+        // packets from the client.
+        if packet.id == ClientPacketId::BuyItem as i16 {
+            println!(
+                "[ingame] raw BuyItem packet received: id={} payload_len={}",
+                packet.id,
+                packet.payload.len(),
+            );
+        } else if packet.id == ClientPacketId::SellItem as i16 {
+            println!(
+                "[ingame] raw SellItem packet received: id={} payload_len={}",
+                packet.id,
+                packet.payload.len(),
+            );
+        }
 
         let Some(pid) = ClientPacketId::from_i16(packet.id) else {
+            // Temporary debug: surface any packet IDs that are not mapped in
+            // ClientPacketId so we can see what the client is actually
+            // sending for operations like NPC Buy.
+            println!(
+                "[ingame] unknown client packet id={} payload_len={}",
+                packet.id,
+                packet.payload.len(),
+            );
             return out;
         };
 
@@ -115,6 +141,55 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_move_item(msg, &mut out);
                 }
             }
+            ClientPacketId::BuyItem => {
+                println!(
+                    "[ingame] dispatch BuyItem: id={} payload_len={}",
+                    packet.id,
+                    packet.payload.len(),
+                );
+                match CBuyItem::decode(&packet.payload) {
+                    Ok(msg) => {
+                        println!(
+                            "[ingame] decoded BuyItem: item_index={} count={} panel_type={}",
+                            msg.item_index,
+                            msg.count,
+                            msg.panel_type,
+                        );
+                        self.handle_buy_item(msg, &mut out);
+                    }
+                    Err(e) => {
+                        println!(
+                            "[ingame] failed to decode CBuyItem: {:?}, payload_len={}",
+                            e,
+                            packet.payload.len(),
+                        );
+                    }
+                }
+            }
+            ClientPacketId::SellItem => {
+                println!(
+                    "[ingame] dispatch SellItem: id={} payload_len={}",
+                    packet.id,
+                    packet.payload.len(),
+                );
+                match crystal_shared_proto::item::CSellItem::decode(&packet.payload) {
+                    Ok(msg) => {
+                        println!(
+                            "[ingame] decoded SellItem: unique_id={} count={}",
+                            msg.unique_id,
+                            msg.count,
+                        );
+                        self.handle_sell_item(msg, &mut out);
+                    }
+                    Err(e) => {
+                        println!(
+                            "[ingame] failed to decode CSellItem: {:?}, payload_len={}",
+                            e,
+                            packet.payload.len(),
+                        );
+                    }
+                }
+            }
             ClientPacketId::EquipItem => {
                 if let Ok(msg) = CEquipItem::decode(&packet.payload) {
                     self.handle_equip_item(msg, &mut out);
@@ -125,6 +200,11 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_remove_item(msg, &mut out);
                 }
             }
+            ClientPacketId::UseItem => {
+                if let Ok(msg) = CUseItem::decode(&packet.payload) {
+                    self.handle_use_item(msg, &mut out);
+                }
+            }
             ClientPacketId::CallNPC => {
                 if let Ok(msg) = CCallNPC::decode(&packet.payload) {
                     self.handle_call_npc(msg, &mut out);
@@ -133,6 +213,11 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Attack => {
                 if let Ok(msg) = CAttack::decode(&packet.payload) {
                     self.handle_attack(msg, &mut out);
+                }
+            }
+            ClientPacketId::PickUp => {
+                if let Ok(msg) = CPickUp::decode(&packet.payload) {
+                    self.handle_pick_up(msg, &mut out);
                 }
             }
             ClientPacketId::TownRevive => {

@@ -414,6 +414,28 @@ impl CTownRevive {
 }
 
 #[derive(Clone, Debug)]
+pub struct CPickUp;
+
+impl CPickUp {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::PickUp as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CPickUp payload must be empty",
+            ));
+        }
+        Ok(CPickUp)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CStartGame {
     pub character_index: i32,
 }

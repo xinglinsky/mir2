@@ -11,9 +11,14 @@ use crystal_shared_proto::scene::{
     SDamageIndicator,
     SObjectHealth,
     SGainExperience,
+    SGainedGold,
+    SGainedItem,
     SLevelChanged,
     SObjectLeveled,
     SObjectDied,
+    SObjectItem,
+    SObjectGold,
+    SObjectRemove,
 };
 use crystal_shared_proto::user::{SUserLocation, SHealthChanged};
 
@@ -453,8 +458,104 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, encoded);
                     }
                 }
-                world::WorldEvent::ItemDropped { .. }
-                | world::WorldEvent::GoldDropped { .. } => {
+                world::WorldEvent::ItemDropped {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    item_index,
+                } => {
+                    if let Some(info) = self.world_db.get_item_info(item_index) {
+                        let pkt = SObjectItem {
+                            object_id: object_id as u32,
+                            name: info.name.clone(),
+                            name_colour_argb: 0,
+                            location_x: x,
+                            location_y: y,
+                            image: info.image,
+                            grade: info.grade,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            let encoded = Self::encode_raw(raw);
+                            out.push(encoded.clone());
+                            self.enqueue_for_viewers(map_index, x, y, encoded);
+                        }
+                    }
+                }
+                world::WorldEvent::GoldDropped {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    gold,
+                } => {
+                    if gold == 0 {
+                        continue;
+                    }
+
+                    let pkt = SObjectGold {
+                        object_id: object_id as u32,
+                        gold,
+                        location_x: x,
+                        location_y: y,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let encoded = Self::encode_raw(raw);
+                        out.push(encoded.clone());
+                        self.enqueue_for_viewers(map_index, x, y, encoded);
+                    }
+                }
+                world::WorldEvent::PlayerGainedItem { session_id, item } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    if let Ok(pkt) = SGainedItem::from_user_item(&item) {
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+                world::WorldEvent::PlayerGainedGold { session_id, amount } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    if let Some(mut stats) = self.current_stats.clone() {
+                        let delta = amount as i64;
+                        let new_gold = stats.gold.saturating_add(delta);
+                        stats.gold = new_gold;
+
+                        if let (Some(ref account_id), Some(char_idx)) =
+                            (self.account_id.as_ref(), self.current_char_index)
+                        {
+                            let _ = self
+                                .store
+                                .save_character_stats(account_id, char_idx, &stats);
+                        }
+
+                        self.current_stats = Some(stats.clone());
+
+                        let gained = SGainedGold { gold: amount };
+                        if let Ok(raw) = gained.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+                world::WorldEvent::MapItemRemoved {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                } => {
+                    let pkt = SObjectRemove {
+                        object_id: object_id as u32,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let encoded = Self::encode_raw(raw);
+                        out.push(encoded.clone());
+                        self.enqueue_for_viewers(map_index, x, y, encoded);
+                    }
                 }
             }
         }

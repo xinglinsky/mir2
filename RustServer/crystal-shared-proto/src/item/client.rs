@@ -2,8 +2,10 @@ use std::io::{self, Cursor, Read};
 
 use crate::io::{
     read_i32_le,
+    read_u16_le,
     read_u64_le,
     write_i32_le,
+    write_u16_le,
     write_u64_le,
 };
 use crate::login::ClientPacketId;
@@ -104,5 +106,91 @@ impl CRemoveItem {
             unique_id,
             to,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CUseItem {
+    pub unique_id: u64,
+    pub grid: u8,
+}
+
+impl CUseItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        buf.push(self.grid);
+        Ok(RawPacket {
+            id: ClientPacketId::UseItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        Ok(CUseItem { unique_id, grid })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CBuyItem {
+    pub item_index: u64,
+    pub count: u16,
+    pub panel_type: u8,
+}
+
+impl CBuyItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.item_index)?;
+        write_u16_le(&mut buf, self.count)?;
+        buf.push(self.panel_type);
+        Ok(RawPacket {
+            id: ClientPacketId::BuyItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let item_index = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let panel_type = one[0];
+        Ok(CBuyItem {
+            item_index,
+            count,
+            panel_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSellItem {
+    pub unique_id: u64,
+    pub count: u16,
+}
+
+impl CSellItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SellItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        Ok(CSellItem { unique_id, count })
     }
 }

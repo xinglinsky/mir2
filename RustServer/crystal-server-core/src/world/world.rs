@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 
 use super::Job;
-use crate::world::map_item::MapItem;
 use crate::guild::{GuildInfo, GuildManager};
+use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
-use crate::world::monster::MonsterInstance;
-use crate::world::provider::WorldProvider;
+use crate::world::map_item::MapItem;
 use crate::world::magic::UserMagic;
+use crate::world::monster::MonsterInstance;
 use crate::world::monster_runtime::RespawnRuntime;
 use crate::world::player::PlayerState;
+use crate::world::provider::WorldProvider;
+use crystal_shared_proto::item_types::UserItemData;
 
 pub type SessionId = u32;
 
@@ -64,6 +66,9 @@ pub enum WorldCommand {
         session_id: SessionId,
         direction: u8,
         spell: u8,
+    },
+    PickUp {
+        session_id: SessionId,
     },
     Teleport {
         session_id: SessionId,
@@ -152,6 +157,20 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
         gold: u32,
+    },
+    PlayerGainedItem {
+        session_id: SessionId,
+        item: UserItemData,
+    },
+    PlayerGainedGold {
+        session_id: SessionId,
+        amount: u32,
+    },
+    MapItemRemoved {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
     },
 }
 
@@ -418,6 +437,90 @@ impl<P: WorldProvider> World<P> {
                 spell,
             } => {
                 self.handle_attack_command(session_id, direction, spell, &mut events);
+            }
+            WorldCommand::PickUp { session_id } => {
+                if let Some(player) = self.players.get(&session_id).cloned() {
+                    let map_index = player.map_index;
+                    let px = player.x;
+                    let py = player.y;
+
+                    let maybe_item = self
+                        .map_items
+                        .get(&map_index)
+                        .and_then(|items| {
+                            items
+                                .iter()
+                                .find(|mi| mi.x == px && mi.y == py)
+                                .cloned()
+                        });
+
+                    if let Some(map_item) = maybe_item {
+                        if map_item.gold > 0 && map_item.item_index.is_none() {
+                            if map_item.gold > 0 {
+                                events.push(WorldEvent::PlayerGainedGold {
+                                    session_id,
+                                    amount: map_item.gold,
+                                });
+                            }
+
+                            if let Some(items) = self.map_items.get_mut(&map_index) {
+                                if let Some(pos) =
+                                    items.iter().position(|mi| mi.id == map_item.id)
+                                {
+                                    items.swap_remove(pos);
+                                }
+                            }
+
+                            events.push(WorldEvent::MapItemRemoved {
+                                object_id: map_item.id,
+                                map_index,
+                                x: map_item.x,
+                                y: map_item.y,
+                            });
+                        } else if let Some(item_index) = map_item.item_index {
+                            if let Some(info) = self.provider.get_item_info(item_index) {
+                                if let Some(player_state) =
+                                    self.players.get_mut(&session_id)
+                                {
+                                    if let Some(slot) = player_state
+                                        .inventory
+                                        .slots
+                                        .iter()
+                                        .position(|s| s.is_none())
+                                    {
+                                        let unique_id =
+                                            ((session_id as u64) << 32) | (map_item.id & 0xFFFF_FFFF);
+                                        let user_item =
+                                            create_fresh_user_item(info, unique_id, 1);
+                                        player_state.inventory.slots[slot] = Some(user_item.clone());
+
+                                        if let Some(items) =
+                                            self.map_items.get_mut(&map_index)
+                                        {
+                                            if let Some(pos) = items
+                                                .iter()
+                                                .position(|mi| mi.id == map_item.id)
+                                            {
+                                                items.swap_remove(pos);
+                                            }
+                                        }
+
+                                        events.push(WorldEvent::PlayerGainedItem {
+                                            session_id,
+                                            item: user_item,
+                                        });
+                                        events.push(WorldEvent::MapItemRemoved {
+                                            object_id: map_item.id,
+                                            map_index,
+                                            x: map_item.x,
+                                            y: map_item.y,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             WorldCommand::Teleport {
                 session_id,

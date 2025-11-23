@@ -151,6 +151,72 @@ impl SRemoveItem {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SUseItem {
+    pub unique_id: u64,
+    pub success: bool,
+    pub grid: u8,
+}
+
+impl SUseItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_bool(&mut buf, self.success)?;
+        buf.push(self.grid);
+        Ok(RawPacket {
+            id: ServerPacketId::UseItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        Ok(SUseItem {
+            unique_id,
+            success,
+            grid,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSellItem {
+    pub unique_id: u64,
+    pub count: u16,
+    pub success: bool,
+}
+
+impl SSellItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SellItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SSellItem {
+            unique_id,
+            count,
+            success,
+        })
+    }
+}
+
 impl SNewItemInfo {
     pub fn decode_item_info(&self) -> io::Result<ItemInfoData> {
         ItemInfoData::decode_from_bytes(&self.info_bytes)

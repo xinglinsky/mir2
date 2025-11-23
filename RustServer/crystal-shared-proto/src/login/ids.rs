@@ -18,11 +18,26 @@ pub enum ClientPacketId {
     MoveItem = 14,
     EquipItem = 18,
     RemoveItem = 19,
+    UseItem = 22,
+    PickUp = 35,
     Attack = 44,
     CallNPC = 47,
+    // Values aligned with C# ClientPacketIds enum ordering:
+    //   Attack      = 44
+    //   RangeAttack = 45
+    //   Harvest     = 46
+    //   CallNPC     = 47
+    //   BuyItem     = 48
+    //   SellItem    = 49
+    //   ...
+    //   TownRevive  = 65
+    //   GuildInvite = 78
+    //   GuildNameReturn = 79
     TownRevive = 65,
-    GuildInvite = 1778,
-    GuildNameReturn = 1779,
+    BuyItem = 48,
+    SellItem = 49,
+    GuildInvite = 78,
+    GuildNameReturn = 79,
 }
 
 impl ClientPacketId {
@@ -45,11 +60,15 @@ impl ClientPacketId {
             14 => Some(ClientPacketId::MoveItem),
             18 => Some(ClientPacketId::EquipItem),
             19 => Some(ClientPacketId::RemoveItem),
+            22 => Some(ClientPacketId::UseItem),
+            35 => Some(ClientPacketId::PickUp),
             44 => Some(ClientPacketId::Attack),
             47 => Some(ClientPacketId::CallNPC),
+            48 => Some(ClientPacketId::BuyItem),
+            49 => Some(ClientPacketId::SellItem),
             65 => Some(ClientPacketId::TownRevive),
-            1778 => Some(ClientPacketId::GuildInvite),
-            1779 => Some(ClientPacketId::GuildNameReturn),
+            78 => Some(ClientPacketId::GuildInvite),
+            79 => Some(ClientPacketId::GuildNameReturn),
             _ => None,
         }
     }
@@ -162,6 +181,13 @@ pub enum ServerPacketId {
     NpcCheckRefine = 105,
     NpcCollectRefine = 106,
     NpcReplaceWedRing = 107,
+    NPCStorage = 108,
+    SellItem = 109,
+    CraftItem = 110,
+    RepairItem = 111,
+    ItemRepaired = 112,
+    ItemSlotSizeChanged = 113,
+    ItemSealChanged = 114,
     NewMagic = 115,
     RemoveMagic = 116,
     MagicLeveled = 117,

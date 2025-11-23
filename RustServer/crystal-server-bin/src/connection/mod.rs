@@ -64,5 +64,7 @@ pub(crate) struct LoginConnection {
     pub(crate) closing: bool,
     pub(crate) last_move_kind: Option<u8>,
     pub(crate) can_create_guild: bool,
+    pub(crate) is_gm: bool,
+    pub(crate) gm_login: bool,
     pub(crate) pending_guild_invite: Option<String>,
 }

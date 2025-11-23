@@ -220,6 +220,16 @@ impl<P: WorldProvider> World<P> {
             if dead {
                 self.mark_monster_dead(map_index, id);
 
+                if let Some(info) = self.provider.get_monster_info(monster_index) {
+                    println!(
+                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                        monster_index,
+                        info.name,
+                        info.drop_path,
+                        monster_drops.len(),
+                    );
+                }
+
                 if !monster_drops.is_empty() {
                     let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
                     let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
@@ -241,6 +251,13 @@ impl<P: WorldProvider> World<P> {
                             }
                         }
                     }
+
+                    println!(
+                        "[drop-total] monster_index={} gold={} items_len={}",
+                        monster_index,
+                        total.gold,
+                        total.items.len(),
+                    );
 
                     if total.gold > 0 || !total.items.is_empty() {
                         let entry = self.map_items.entry(map_index).or_default();

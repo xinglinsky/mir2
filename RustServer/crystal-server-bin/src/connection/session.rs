@@ -57,6 +57,8 @@ impl LoginConnection {
             closing: false,
             last_move_kind: None,
             can_create_guild: false,
+            is_gm: false,
+            gm_login: false,
             pending_guild_invite: None,
         }
     }

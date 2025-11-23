@@ -258,6 +258,26 @@ impl<P: WorldProvider> World<P> {
         self.players.get(&session_id).map(|p| (p.hp, p.mp))
     }
 
+    pub fn set_player_hp_mp(
+        &mut self,
+        session_id: SessionId,
+        hp: i32,
+        mp: i32,
+    ) -> Option<()> {
+        let player = self.players.get_mut(&session_id)?;
+
+        let max_hp = player.stats.total.get(Stat::HP).max(1);
+        let max_mp = player.stats.total.get(Stat::MP).max(0);
+
+        let new_hp = hp.max(0).min(max_hp);
+        let new_mp = mp.max(0).min(max_mp);
+
+        player.hp = new_hp;
+        player.mp = new_mp;
+        player.dead = new_hp <= 0;
+        Some(())
+    }
+
     /// Revive a dead player at their current map/x/y/direction without
     /// changing position. Returns the new location and HP/MP.
     pub fn revive_player_in_place(
@@ -518,6 +538,145 @@ impl<P: WorldProvider> World<P> {
         }
 
         self.can_equip_item_for_player(player, item, slot)
+    }
+
+    pub fn can_use_item_for_player(
+        &self,
+        session_id: SessionId,
+        item: &UserItemData,
+    ) -> bool {
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if player.dead {
+            return false;
+        }
+
+        let info = match self.provider.get_item_info(item.item_index) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        let gender_ok = match player.gender {
+            0 => (info.required_gender & 1) != 0,
+            1 => (info.required_gender & 2) != 0,
+            _ => true,
+        };
+        if !gender_ok {
+            return false;
+        }
+
+        let class_bit = match player.job {
+            Job::Warrior => 1,
+            Job::Wizard => 2,
+            Job::Taoist => 4,
+            Job::Assassin => 8,
+            Job::Archer => 16,
+        };
+        if info.required_class != 0 && (info.required_class & class_bit) == 0 {
+            return false;
+        }
+
+        let req_amt = info.required_amount as i32;
+        match info.required_type {
+            0 => {
+                if (player.level as i32) < req_amt {
+                    return false;
+                }
+            }
+            1 => {
+                if player.stats.total.get(Stat::MaxAC) < req_amt {
+                    return false;
+                }
+            }
+            2 => {
+                if player.stats.total.get(Stat::MaxMAC) < req_amt {
+                    return false;
+                }
+            }
+            3 => {
+                if player.stats.total.get(Stat::MaxDC) < req_amt {
+                    return false;
+                }
+            }
+            4 => {
+                if player.stats.total.get(Stat::MaxMC) < req_amt {
+                    return false;
+                }
+            }
+            5 => {
+                if player.stats.total.get(Stat::MaxSC) < req_amt {
+                    return false;
+                }
+            }
+            6 => {
+                if (player.level as i32) > req_amt {
+                    return false;
+                }
+            }
+            7 => {
+                if player.stats.total.get(Stat::MinAC) < req_amt {
+                    return false;
+                }
+            }
+            8 => {
+                if player.stats.total.get(Stat::MinMAC) < req_amt {
+                    return false;
+                }
+            }
+            9 => {
+                if player.stats.total.get(Stat::MinDC) < req_amt {
+                    return false;
+                }
+            }
+            10 => {
+                if player.stats.total.get(Stat::MinMC) < req_amt {
+                    return false;
+                }
+            }
+            11 => {
+                if player.stats.total.get(Stat::MinSC) < req_amt {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+
+        if let Some(map_info) = self.provider.get_map_info(player.map_index) {
+            if info.item_type == 13 {
+                if map_info.no_drug {
+                    return false;
+                }
+            } else if info.item_type == 17 {
+                match info.shape {
+                    0 => {
+                        if map_info.no_escape {
+                            return false;
+                        }
+                    }
+                    1 => {
+                        if map_info.no_town_teleport {
+                            return false;
+                        }
+                    }
+                    2 => {
+                        if map_info.no_random {
+                            return false;
+                        }
+                    }
+                    6 => {
+                        if map_info.no_reincarnation {
+                            return false;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        true
     }
 
     fn can_equip_item_for_player(
