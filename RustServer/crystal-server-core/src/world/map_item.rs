@@ -11,4 +11,7 @@ pub struct MapItem {
     /// given index. If None, this entry represents pure gold on the ground.
     pub item_index: Option<i32>,
     pub gold: u32,
+    /// Time (in milliseconds since Unix epoch) when this item should expire
+    /// and be removed from the map. This mirrors C# ItemObject.ExpireTime.
+    pub expire_time_ms: i64,
 }

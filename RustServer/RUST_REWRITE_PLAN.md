@@ -30,11 +30,18 @@
 - 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
 - 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
 
-**当前进度概览**
-- 登录 / 注册 / 改密 / 角色列表 / 新建 / 删除 / StartGame / LogOut 等基础流转已在 `crystal-server-bin/src/connection` 中实现（`handler.rs` + `login_stage.rs` + `select_stage.rs` + `ingame_stage.rs` + `movement.rs`）。
-- `ClientPacketId` / `RawPacket` 解码和大部分核心 C* / S* 包已在 `crystal-shared-proto` 中实现。
-- 世界命令对接（StartGame / Turn / Walk / Run / Attack 等）已通过 `world::WorldCommand` 与 `World::handle_command` 路由打通。
-- 仍待补齐：IP 封禁策略、所有剩余 `ClientPacketIds` 的处理分支（例如交易/行会/拍卖等高级玩法），以及与 C# 对比调整错误码和边界情况。
+**当前进度概览（2025-11-26 更新）**
+- **已完成**：
+  - 登录 / 注册 / 改密 / 角色列表 / 新建 / 删除 / StartGame / LogOut 等基础流转已在 `crystal-server-bin/src/connection` 中实现，并拆分为 `login_stage`, `select_stage` 以及按领域划分的子模块（`session`, `visibility`, `movement`, `npc`, `chat`, `gm_commands`, `guild`, `map`, `market`, `item` 等）；原 `ingame_stage.rs` 已拆空并删除。
+  - `ClientPacketId` / `RawPacket` 解码和大部分核心 C* / S* 包已在 `crystal-shared-proto` 中实现，ID 数值与 C# 完全一致。
+  - 世界命令对接（StartGame / Turn / Walk / Run / Attack / PickUp / DropItem 等）已通过 `world::WorldCommand` 与 `World::handle_command` 路由打通。
+  - 基础战斗命令（Attack）已连接到 `combat` 模块。
+  - `handler.rs` 大文件拆分已完成。
+
+- **待办事项**：
+  - **缺失的协议处理**：`Market` (拍卖行), `Trade` (交易), `Quest` (任务), `Mail` (邮件), `Harvest` (采集), `Group` (组队)。
+  - **IP 封禁策略**：尚未迁移 C# `Envir.UpdateIPBlock` 相关逻辑。
+  - **边界情况处理**：对照 C#完善错误码返回和异常流程保护。
 
 ### 主要涉及代码
 
@@ -44,47 +51,24 @@
   - ClientPackets/ServerPackets 定义（包 ID 与结构）
 
 - **Rust 目标位置（仅限 RustServer 目录）**
-  - `crystal-shared-proto`：
-    - 协议包 ID 与结构定义（使用 `#[repr(i16)]` 等保证数值一致）。
-  - `crystal-server-net`：
-    - 已提供 `ConnectionHandler` trait 与 `run_server`，必要时小范围增强（不改行为）。
-  - `crystal-server-bin/src/connection.rs`：
-    - 实现等价 `MirConnection` 的状态机和 `handle_packet` 分发逻辑。
-  - `crystal-server-core` 中视需要新增 `session`/`connection` 接口层（只作为世界接口，不放具体世界逻辑）。
+  - `crystal-shared-proto`：协议定义。
+  - `crystal-server-net`：传输层。
+  - `crystal-server-bin/src/connection/*.rs`：连接状态机与包分发。
 
 ### 执行步骤
 
-1. **协议 ID 与结构对齐**
-   - 从 C# ClientPackets / ServerPackets 中提取全部包 ID 与字段布局。
-   - 在 `crystal-shared-proto` 中：
-     - 使用 `#[repr(i16)]` 的 `enum` 或常量，确保 ID 数值与 C# 完全一致。
-     - 为关键登录相关包（ClientVersion, NewAccount, Login, NewCharacter, StartGame 等）实现编解码，配套单元测试。
+1. **协议 ID 与结构对齐（已完成）**
+   - ID 数值与结构布局已对齐。
 
-2. **连接状态机迁移**
-   - 在 `connection.rs` 中定义等价 `GameStage`：`Login / Select / Game / Observer / Disconnected`。
-   - 迁移构造逻辑：
-     - 记录 IP、更新 IP 封锁（对应 C# `Envir.UpdateIPBlock` 行为）。
-     - 设置超时（`TimeOutTime` 等）并发送初始 `S.Connected` 包。
-   - 对齐 `Disconnecting` 与超时处理逻辑。
+2. **连接状态机迁移（已完成）**
+   - `Login / Select / Game` 状态机已工作。
 
-3. **`handle_packet` 分发骨架**
-   - 优先实现登录/账号相关包分支：
-     - `ClientVersion`, `NewAccount`, `ChangePassword`, `Login`, `NewCharacter`, `DeleteCharacter`, `StartGame`, `LogOut` 等。
-   - 对于尚未迁移的战斗/物品类包：
-     - 在 `match` 中保留分支与 TODO 占位，先以“忽略请求或简单错误响应”的行为保持服务器稳定。
+3. **补全剩余协议分发（进行中）**
+   - 在 `connection` 子模块中（如 `movement.rs`, `npc.rs`, `chat.rs`, `guild.rs`, `item.rs`, `map.rs`, `market.rs` 等）逐步补齐 `Trade`, 全局 `Market`(拍卖行), `Quest`, `Group` 等高级玩法相关包的处理分支。
+   - 暂时可以使用 stub 实现（返回失败或未实现提示），确保协议解析层覆盖所有 ID。
 
-4. **与世界模块的接口设计**
-   - 在 `crystal-server-core` 中定义抽象接口（如 `WorldService` trait）：
-     - `login_account`, `create_character`, `enter_game` 等方法。
-   - 此计划只定义 trait 和调用，具体世界逻辑实现推迟到子计划2/3。
-
-### 与其他子计划的边界
-
-- 本子计划主要修改：
-  - `crystal-shared-proto`（协议定义）
-  - `crystal-server-net`（传输层小范围增强）
-  - `crystal-server-bin/src/connection.rs` 及紧邻模块
-- 不实现世界/地图/玩家/战斗逻辑，只通过 trait 与这些模块交互，避免与子计划2/3 冲突。
+4. **IP 封禁与安全策略**
+   - 实现 `IP` 封锁检查与自动封禁逻辑。
 
 ---
 
@@ -93,62 +77,38 @@
 ### 目标
 
 - 在 Rust 中实现等价 C# `Envir` 的世界时间与主循环：
-  - 使用单调毫秒时间，对齐 `Envir.Time = Stopwatch.ElapsedMilliseconds` 语义。
-  - 实现 tick 驱动的各种定时器（刷怪、清理、buff 等）的框架。
+  - 驱动定时器（刷怪、清理、buff 等）。
 - 完整迁移 `Map` 地图系统：
-  - 多种 map 文件格式识别与解析（参考 C# `Map.FindType` 等）。
-  - 可行走/阻挡判定在相同地图与坐标下与 C# 保持一致。
+  - 地图加载、判定、物品/怪物管理。
 
-**当前进度概览**
-- `world::World` 已具备玩家哈希表、地图缓存、怪物与 respawn 状态，以及 `WorldCommand` / `WorldEvent` 架构，能够处理 StartGame / Turn / Walk / Run / Attack / Teleport 等命令。
-- `world::map::load_map_from_file` / `Map::is_walkable` / `Map::can_move` 已实现，并预先计算了 `walkable_cells`，用于生成出生点和移动判定。
-- 已提供 `snapshot_metrics` / `snapshot_players` 接口，可用于 Admin dashboard。
-- 仍待实现：基于 `time_ms` 的世界主循环 `tick`、Respawn 定时 & 刷怪策略，以及与 C# `Envir` 在时间推进和刷怪频率上的完整对齐。
+**当前进度概览（2025-11-26 更新）**
+- **已完成**：
+  - `world::World` 具备玩家、地图、怪物、物品管理能力。
+  - `world::map::load_map_from_file` 实现地图加载与可行走判定。
+  - **主循环 Tick**：在 `crystal-server-core/src/world/monster_runtime.rs` 的 `update` 方法中实现了时间驱动、Respawn 计数更新、怪物 AI 驱动（Search/Roam/Chase/Attack）。
+  - 怪物刷新逻辑（Respawn）已移植，支持 `Delay`, `RandomDelay`, `RespawnTicks`。
+  - **MapItem 过期清理**：通过 `MapItem.expire_time_ms` 与 `World::process_map_items` 周期性移除过期掉落物，行为对齐 C#。
+
+- **待办事项**：
+  - **玩家/怪物 Buff 处理**：Buff 系统的 tick 驱动尚未实现。
+  - **环境更新**：天气/时间（Day/Night）更新逻辑。
+  - **安全区/生命恢复**：基于 tick 的 HP/MP 自然恢复逻辑。
 
 ### 主要涉及代码
 
-- **C# 参考**
-  - `Server/MirEnvir/Envir.cs`：
-    - 时间管理、主循环、地图/Respawn 管理、启动/停止网络（仅作行为参考）。
-  - `Server/MirEnvir/Map.cs`：
-    - 地图加载、类型识别、Cell/Doors/Mine 等结构与判定。
-  - `Server.MirDatabase` 中与 Map/Respawn 相关的数据结构与读写。
-
-- **Rust 目标位置（仅限 RustServer 目录）**
-  - `crystal-server-core::world`：
-    - 世界状态、时间字段、tick 主循环入口。
-  - `crystal-server-core::world::map`：
-    - 地图加载、格式识别、可行走/阻挡判定逻辑。
-  - 现有 `load_map_infos_from_mirdb` 等函数在此基础上扩展。
+- **Rust 目标位置**
+  - `crystal-server-core::world::monster_runtime.rs`：主循环与怪物运行时。
+  - `crystal-server-core::world::world.rs`：世界状态容器。
 
 ### 执行步骤
 
-1. **世界时间与主循环**
-   - 在 core 中定义 `World`/`Envir` 等价结构：
-     - 字段包含：当前毫秒时间、地图列表、定时器（刷怪/清理等）。
-     - 方法 `tick(now_ms: u64)`：复制 C# 中各类 `if (Time > NextX)` 判定与更新顺序。
-   - 在 `crystal-server-bin/main.rs` 中：
-     - 使用 Tokio 定时任务或 loop 驱动 `world.tick`，保持行为与 C# 主循环相似。
+1. **完善 World::update**
+   - 增加 `process_map_items()`：检查并移除过期物品。
+   - 增加 `process_buffs()`：驱动所有单位的 Buff 倒计时与效果（如中毒）。
+   - 增加 `process_regen()`：处理 HP/MP 恢复。
 
-2. **地图加载与格式识别**
-   - 迁移 `Map.FindType` 以及不同 map 格式对应的解析代码。
-   - 加载结果需保证：
-     - 地图宽高、障碍/可行走信息、门/矿等数据与 C# 完全一致。
-   - 提供接口：
-     - `is_walkable(map_id, x, y)`
-     - `can_move(map_id, from, to)`
-     - 用作玩家/怪物行为的基础判定。
-
-3. **Respawn 与时间驱动骨架**
-   - 定义 Respawn/刷怪配置结构，对应 C# 中相关字段。
-   - 在 `world.tick` 中挂上刷怪、地图周期事件的调用点：
-     - 暂时可以使用占位怪物/对象，详细怪物逻辑在子计划3中实现。
-
-### 与其他子计划的边界
-
-- 主要修改 `crystal-server-core::world` / `world::map` 以及 `crystal-server-bin/main.rs` 驱动部分。
-- 不直接修改连接层 `connection.rs`（只被调用）。
-- 不实现 Player/Monster 详细行为，仅提供地图与时间服务，避免与子计划3 冲突。
+2. **环境系统**
+   - 实现 `Day/Night` 切换通知。
 
 ---
 
@@ -156,68 +116,40 @@
 
 ### 目标
 
-- 迁移 C# `PlayerObject` 的核心逻辑：
-  - 属性、状态、位置、地图交互等。
-- 迁移物品系统与基础交互：
-  - 背包/仓库、装备、拾取/丢弃等。
-- 实现基础战斗闭环：
-  - 移动/转向/近战攻击/简单远程攻击，伤害与经验计算对齐 C#。
-- 回填子计划1 中各类 ClientPacketIds 分支，使玩家可以基本“进游戏 → 移动 → 打怪 → 拾取 → 升级”。
+- 迁移 C# `PlayerObject` 核心逻辑。
+- 物品系统与基础交互。
+- 战斗闭环（物理/魔法）。
 
-**当前进度概览**
-- `PlayerState` 及 `World::upsert_player` 已实现，能够根据等级/职业/性别初始化玩家属性与 HP/MP，并在切图或 StartGame 时更新状态。
-- 已实现初始背包构建（`build_start_inventory`），基于 MirDB 中 `start_item`、职业/性别/需求属性生成开局装备。
-- 已实现物品移动与穿脱：`move_item_in_grid` / `equip_item_for_player` / `remove_item_for_player`，包含职业/性别/属性需求、重量、绑定、鉴定等约束逻辑。
-- 连接层的移动/攻击/物品操作（Turn / Walk / Run / Attack / MoveItem / EquipItem / RemoveItem）已经通过 `WorldCommand` 与 `world` 对接并能驱动基础战斗/广播流程。
-- 仍待实现或补全：掉落与拾取（地图物品对象）、死亡/复活流程、更复杂的技能/魔法逻辑、组队/交易/英雄等高级玩法，以及与 C# 在所有 buff/状态效果上的细节对齐。
+**当前进度概览（2025-11-24 更新）**
+- **已完成**：
+  - `PlayerState` 及属性/背包/装备系统。
+  - 物品移动/穿脱/使用（药水/回城卷/随机卷）已实现。
+  - **掉落与拾取**：`DropItem` / `PickUp` 已实现，支持金币与物品。
+  - **基础战斗**：
+    - 物理攻击（Player vs Monster）已实现，包含命中/暴击/防御计算。
+    - 怪物反击（Monster vs Player）已实现。
+    - 死亡与经验获取已实现。
+    - `FatalSword` 技能逻辑已作为样例实现。
 
-### 主要涉及代码
-
-- **C# 参考**
-  - `Server/MirObjects/PlayerObject.cs` 及相关对象基类。
-  - 物品与背包逻辑：`ItemInfo`, `UserItem`, 仓库/装备等。
-  - `MirConnection.ProcessPacket` 中与移动/物品/战斗相关的包处理。
-
-- **Rust 目标位置（仅限 RustServer 目录）**
-  - `crystal-server-core::player`：
-    - 玩家属性、状态机、行为方法（移动、攻击、捡物等）。
-  - `crystal-server-core::item`：
-    - 物品数据结构、背包/仓库/装备栏逻辑。
-  - `crystal-server-core::combat`：
-    - 基础伤害/命中/经验算法，与 C# 对齐。
-  - 通过子计划1中定义的接口，连接到 `connection.rs` 的包分发中。
+- **待办事项**：
+  - **魔法/技能系统**：除 `FatalSword` 外的其他技能尚未实现（如火球术、治愈术等）。
+  - **玩家死亡与复活**：虽然有 `SDeath`，但完整的死亡惩罚（掉装备）、复活（原地/回城）流程需完善。
+  - **交易系统**：玩家间交易逻辑。
+  - **组队系统**：组队状态维护与经验共享。
 
 ### 执行步骤
 
-1. **Player 结构与生命周期**
-   - 在 core 中定义等价 `PlayerObject` 的结构体：
-     - 包含等价的属性字段（等级、职业、HP/MP、位置、buff 等）。
-   - 与 world/map 对接：
-     - 提供在地图上添加/移除玩家、广播位置/动作变化的接口。
+1. **技能系统框架**
+   - 扩展 `combat.rs` 或新建 `magic_runtime.rs`，支持多种技能效果（伤害、治疗、Buff、召唤）。
+   - 实现基础法师/道士技能。
 
-2. **物品系统迁移**
-   - 在已加载的 `ItemInfoList` 基础上，实现 `UserItem` 与：
-     - 背包/仓库/装备栏容量和索引策略。
-     - 基础操作：`MoveItem`, `StoreItem`, `SplitItem`, `EquipItem`, `RemoveItem`, `DropItem`, `PickUp` 等。
-   - 确保所有数值与约束（容量、重量、绑定状态等）与 C# 一致。
+2. **完善死亡流程**
+   - 实现红名/灰名机制（PK 值）。
+   - 实现死亡掉落装备/背包物品逻辑（对照 C# `PlayerObject.Die`）。
 
-3. **基础战斗逻辑**
-   - 迁移 C# 中最核心的近战/简单远程战斗：
-     - `Turn`, `Walk`, `Run`, `Attack`, `RangeAttack`。
-   - 对齐：
-     - 目标选择（前方格子/射线）、障碍判定（依赖 world::map）、
-     - 命中/伤害计算、经验分配、死亡与掉落触发点（掉落实现在可只搭建框架）。
-
-4. **回填网络处理**
-   - 在 `connection.rs` 内，将上述逻辑接线到各自的 ClientPacket 分支：
-     - 保持调用顺序与 C# 中 `ProcessPacket` 一致。
-   - 为关键操作增加日志，便于对照 C# 行为进行回归测试。
-
-### 与其他子计划的边界
-
-- 核心修改集中在 `crystal-server-core::player` / `item` / `combat`，
-  - 仅通过已定义接口操作 `world`、`map` 模块。
-- 在 `connection.rs` 中只增加对新模块的调用，不改动协议基础结构与通用状态机（减少与子计划1 冲突）。
+3. **交易与交互**
+   - 实现 `Trade` 相关协议处理。
+   - 实现 `Group` 相关逻辑。
 
 ---
 
@@ -225,41 +157,35 @@
 
 ### 目标
 
-- 将 C# 中的高级系统迁移到 Rust：行会、攻城战、任务、排行榜等。
-- 让 Rust 的 `crystal-server-admin` Web 控制台具备与 C# HttpServer 相当的运维功能：
-  - 查看状态/在线玩家/日志。
-  - 控制服务器启动/停止/重载脚本等。
+- 迁移行会、攻城战、任务、排行榜。
+- 完善 Admin 控制台。
 
 **当前进度概览**
-- `crystal-server-admin` 已实现基础的 HTTP 服务与路由（health / metrics / logs / players / control / reload / broadcast / internal 等），当前多数仍为 stub 或内存假数据。
-- 游戏服 world 已提供 `snapshot_metrics` / `snapshot_players` 能力，可用于接入 Admin dashboard。
-- 高级玩法系统（行会 / 攻城 / 任务 / 排行榜等）尚未迁移，Admin 与这些系统的联动也尚未实现。
-- 详细的 Admin & dashboard 分阶段实施方案已单独整理在 `ADMIN_CONSOLE_PLAN.md`，本子计划只跟踪总体里程碑与对齐方向。
+- **已完成**：
+  - Admin HTTP 服务框架与基础 Metrics 接口。
+  - 行会系统基础：`GuildManager`、创建行会、`CGuildInvite` 处理。
 
-### 主要涉及代码
-
-- **C# 参考**
-  - 行会/攻城：各类 `*Guild*`, `*Conquest*` 相关文件。
-  - 任务/龙/魔法信息等：`QuestInfoList`, `DragonInfo`, `MagicInfoList` 等。 
-  - HTTP/运维：C# `HttpServer`。
-
-- **Rust 目标位置（仅限 RustServer 目录）**
-  - `crystal-server-core` 新增模块：`guild`, `conquest`, `quest`, `ranking` 等。
-  - `crystal-server-admin`：
-    - 已存在路由（health/metrics/logs/players/control/reload/internal 等），
-    - 需补充调用 core/world 的具体实现。
+- **待办事项**：
+  - 完整的行会功能（成员管理、战争）。
+  - 攻城战系统。
+  - 任务系统（NPC 对话与任务状态）。
+  - 邮件系统。
+  - 市场/拍卖行。
 
 ### 执行步骤
 
-1. **高级系统结构迁移**
-   - 为行会、攻城、任务、排行榜等建立等价的 Rust 数据结构与状态机。
-   - 迁移相关 ClientPacketIds 与服务端逻辑到 core 的这些模块中。
+1. **任务系统**
+   - 实现 `QuestInfo` 解析与玩家任务状态（`PlayerQuest`）。
+   - 对接 NPC 对话中的任务指令。
 
-2. **Admin Web 控制台整合**
-   - 对齐 C# HttpServer 提供的管理能力：
-     - 获取服务器状态、在线玩家数量、关键统计与日志。
-     - 控制服务器：重启、清理 IP 封禁、重载 NPC/掉落/行消息等。
-   - 在 `crystal-server-admin` 中通过 HTTP API 调用 core/world 接口，实现上述功能。
+2. **完善行会与攻城**
+   - 移植行会战争与沙巴克攻城逻辑。
+
+3. **市场与邮件**
+   - 实现全局市场（拍卖行）数据结构。
+   - 实现邮件收发与附件提取。
+
+---
 
 ### 与其他子计划的边界
 

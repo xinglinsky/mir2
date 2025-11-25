@@ -365,3 +365,4 @@ FodyWeavers.xsd
 RustServer/target/
 RustServer/deploy/
 .windsurf/
+.cursor/

@@ -500,6 +500,9 @@ impl<P: WorldProvider> World<P> {
                 let map_item_id = self.next_map_item_id;
                 self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
 
+                // Set expire time: default 5 minutes (300000 ms) after drop,
+                // mirroring C# Settings.ItemTimeOut * Settings.Minute behavior.
+                let item_timeout_ms: i64 = 300_000; // 5 minutes
                 entry.push(MapItem {
                     id: map_item_id,
                     map_index,
@@ -507,6 +510,7 @@ impl<P: WorldProvider> World<P> {
                     y: py,
                     item_index: Some(info.index),
                     gold: 0,
+                    expire_time_ms: self.time_ms + item_timeout_ms,
                 });
 
                 events.push(WorldEvent::ItemDropped {

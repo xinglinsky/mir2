@@ -1,5 +1,13 @@
 use crystal_server_core::world;
 use crystal_server_core::world::WorldProvider;
+use crystal_shared_proto::login::{
+    CAttack,
+    CPickUp,
+    CTownRevive,
+    CTurn,
+    CWalk,
+    CRun,
+};
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::scene::{
     SObjectAttack,
@@ -19,12 +27,78 @@ use crystal_shared_proto::scene::{
     SObjectItem,
     SObjectGold,
     SObjectRemove,
+    SRevived,
+    SObjectRevived,
 };
 use crystal_shared_proto::user::{SUserLocation, SHealthChanged};
 
-use super::LoginConnection;
+use super::{LoginConnection, Stage};
 
 impl LoginConnection {
+    pub(crate) fn handle_turn(&mut self, msg: CTurn, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        println!(
+            "[ingame] handle_turn: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+
+        let _ = self.apply_step(msg.direction, 0, out);
+    }
+
+    pub(crate) fn handle_walk(&mut self, msg: CWalk, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        println!(
+            "[ingame] handle_walk: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+
+        let map_changed = self.apply_step(msg.direction, 1, out);
+
+        if map_changed {
+            self.known_monsters.clear();
+            self.known_npcs.clear();
+        }
+
+        self.update_visibility(out);
+    }
+
+    pub(crate) fn handle_run(&mut self, msg: CRun, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        println!(
+            "[ingame] handle_run: session={} dir={} map={} pos=({}, {})",
+            self.session_id,
+            msg.direction,
+            self.current_map_index,
+            self.current_x,
+            self.current_y,
+        );
+
+        let map_changed = self.apply_step(msg.direction, 2, out);
+
+        if map_changed {
+            self.known_monsters.clear();
+            self.known_npcs.clear();
+        }
+
+        self.update_visibility(out);
+    }
     fn item_name_colour_for_grade(grade: u8) -> i32 {
         match grade {
             2 => 0xFF00BFFFu32 as i32,
@@ -571,5 +645,132 @@ impl LoginConnection {
         }
 
         map_changed
+    }
+
+    pub(crate) fn handle_attack(&mut self, msg: CAttack, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::Attack {
+                session_id: self.session_id,
+                direction: msg.direction,
+                spell: msg.spell,
+            })
+        };
+
+        let _ = self.handle_world_events(events, out);
+        self.update_visibility(out);
+    }
+
+    pub(crate) fn handle_pick_up(&mut self, _msg: CPickUp, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::PickUp {
+                session_id: self.session_id,
+            })
+        };
+
+        let _ = self.handle_world_events(events, out);
+    }
+
+    pub(crate) fn handle_town_revive(&mut self, _msg: CTownRevive, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Determine the bind location for this character (equivalent to C#
+        // BindMapIndex/BindLocation). If none is stored, fall back to the
+        // current map/position.
+        let (dest_map, dest_x, dest_y, dest_dir) = if let (
+            Some(ref account_id),
+            Some(char_idx),
+        ) = (self.account_id.as_ref(), self.current_char_index)
+        {
+            if let Ok(Some(pos)) = self.store.load_character_bind(account_id, char_idx) {
+                (pos.map_index, pos.x, pos.y, pos.direction)
+            } else {
+                (
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                    self.direction,
+                )
+            }
+        } else {
+            (
+                self.current_map_index,
+                self.current_x,
+                self.current_y,
+                self.direction,
+            )
+        };
+
+        // Revive the player at the chosen bind location on the world side and
+        // then issue a Teleport command so that a MapChanged event is emitted,
+        // mirroring the C# TownRevive behaviour of reviving at town.
+        let (map_index, x, y, direction, hp, mp, events) = {
+            let mut world = self.world.lock().unwrap();
+            let Some((map_index, x, y, direction, hp, mp)) = world.revive_player_to_position(
+                self.session_id,
+                dest_map,
+                dest_x,
+                dest_y,
+                dest_dir,
+            ) else {
+                return;
+            };
+            let events = world.handle_command(world::WorldCommand::Teleport {
+                session_id: self.session_id,
+                map_index,
+                x,
+                y,
+            });
+            (map_index, x, y, direction, hp, mp, events)
+        };
+
+        // Let the shared world-event handler emit SMapChanged and update
+        // visibility state for the new town map.
+        let map_changed = self.handle_world_events(events, out);
+        if map_changed {
+            self.known_monsters.clear();
+            self.known_npcs.clear();
+            self.update_visibility(out);
+        }
+
+        self.current_map_index = map_index;
+        self.current_x = x;
+        self.current_y = y;
+        self.direction = direction;
+
+        if let Some(stats) = self.current_stats.as_mut() {
+            stats.hp = hp;
+            stats.mp = mp;
+        }
+
+        let hc = SHealthChanged { hp, mp };
+        if let Ok(raw) = hc.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        let revived = SRevived;
+        let raw = revived.encode();
+        out.push(Self::encode_raw(raw));
+
+        let obj_revived = SObjectRevived {
+            object_id: self.session_id,
+            effect: true,
+        };
+        if let Ok(pkt) = obj_revived.encode() {
+            let raw = Self::encode_raw(pkt);
+            out.push(raw.clone());
+            self.enqueue_for_viewers(map_index, x, y, raw);
+        }
     }
 }

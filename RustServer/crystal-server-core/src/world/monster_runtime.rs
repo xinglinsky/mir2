@@ -126,6 +126,10 @@ impl<P: WorldProvider> World<P> {
 
         let mut events: Vec<WorldEvent> = Vec::new();
 
+        // Process expired map items: remove items that have exceeded their
+        // expire_time_ms, mirroring C# ItemObject.Process() behavior.
+        self.process_map_items(now_ms, &mut events);
+
         let mut jobs: Vec<(i32, usize, u16)> = Vec::new();
         let mut total_spawned: u32 = 0;
         let mut total_jobs: u32 = 0;
@@ -890,6 +894,36 @@ impl<P: WorldProvider> World<P> {
                             rt.current_count -= 1;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Process map items: remove expired items and emit MapItemRemoved events.
+    /// This mirrors C# ItemObject.Process() behavior where items are removed
+    /// when Envir.Time > ExpireTime.
+    fn process_map_items(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        let map_indices: Vec<i32> = self.map_items.keys().cloned().collect();
+
+        for map_index in map_indices {
+            if let Some(items) = self.map_items.get_mut(&map_index) {
+                let mut to_remove: Vec<usize> = Vec::new();
+
+                for (idx, item) in items.iter().enumerate() {
+                    if now_ms > item.expire_time_ms {
+                        to_remove.push(idx);
+                    }
+                }
+
+                // Remove items in reverse order to maintain indices
+                for &idx in to_remove.iter().rev() {
+                    let removed = items.remove(idx);
+                    events.push(WorldEvent::MapItemRemoved {
+                        object_id: removed.id,
+                        map_index: removed.map_index,
+                        x: removed.x,
+                        y: removed.y,
+                    });
                 }
             }
         }

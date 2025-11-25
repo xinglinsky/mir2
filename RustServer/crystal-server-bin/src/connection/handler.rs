@@ -266,6 +266,94 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Disconnect => {
                 self.closing = true;
             }
+            // Harvest protocol (stub - not implemented yet)
+            ClientPacketId::Harvest => {
+                tracing::debug!("Harvest packet received but not implemented yet");
+                // TODO: Implement harvest logic
+            }
+            // Trade protocols (stub - not implemented yet)
+            ClientPacketId::TradeRequest => {
+                tracing::debug!("TradeRequest packet received but not implemented yet");
+                // TODO: Implement trade request logic
+            }
+            ClientPacketId::TradeReply => {
+                tracing::debug!("TradeReply packet received but not implemented yet");
+                // TODO: Implement trade reply logic
+            }
+            ClientPacketId::TradeGold => {
+                tracing::debug!("TradeGold packet received but not implemented yet");
+                // TODO: Implement trade gold logic
+            }
+            ClientPacketId::TradeConfirm => {
+                tracing::debug!("TradeConfirm packet received but not implemented yet");
+                // TODO: Implement trade confirm logic
+            }
+            ClientPacketId::TradeCancel => {
+                tracing::debug!("TradeCancel packet received but not implemented yet");
+                // TODO: Implement trade cancel logic
+            }
+            // Market protocols (stub - not implemented yet)
+            ClientPacketId::ConsignItem => {
+                tracing::debug!("ConsignItem packet received but not implemented yet");
+            }
+            ClientPacketId::MarketSearch => {
+                tracing::debug!("MarketSearch packet received but not implemented yet");
+                // TODO: Implement market search logic
+            }
+            ClientPacketId::MarketRefresh => {
+                tracing::debug!("MarketRefresh packet received but not implemented yet");
+                // TODO: Implement market refresh logic
+            }
+            ClientPacketId::MarketPage => {
+                tracing::debug!("MarketPage packet received but not implemented yet");
+                // TODO: Implement market page logic
+            }
+            ClientPacketId::MarketBuy => {
+                tracing::debug!("MarketBuy packet received but not implemented yet");
+                // TODO: Implement market buy logic
+            }
+            ClientPacketId::MarketGetBack => {
+                tracing::debug!("MarketGetBack packet received but not implemented yet");
+                // TODO: Implement market get back logic
+            }
+            ClientPacketId::MarketSellNow => {
+                tracing::debug!("MarketSellNow packet received but not implemented yet");
+                // TODO: Implement market sell now logic
+            }
+            // Quest protocols (stub - not implemented yet)
+            ClientPacketId::AcceptQuest => {
+                tracing::debug!("AcceptQuest packet received but not implemented yet");
+                // TODO: Implement accept quest logic
+            }
+            ClientPacketId::FinishQuest => {
+                tracing::debug!("FinishQuest packet received but not implemented yet");
+                // TODO: Implement finish quest logic
+            }
+            ClientPacketId::AbandonQuest => {
+                tracing::debug!("AbandonQuest packet received but not implemented yet");
+                // TODO: Implement abandon quest logic
+            }
+            ClientPacketId::ShareQuest => {
+                tracing::debug!("ShareQuest packet received but not implemented yet");
+                // TODO: Implement share quest logic
+            }
+            // Group protocols (stub - not implemented yet)
+            ClientPacketId::SwitchGroup => {
+                tracing::debug!("SwitchGroup packet received but not implemented yet");
+                // TODO: Implement switch group logic
+            }
+            ClientPacketId::AddMember => {
+                tracing::debug!("AddMember packet received but not implemented yet");
+                // TODO: Implement add member logic
+            }
+            ClientPacketId::DellMember => {
+                tracing::debug!("DellMember packet received but not implemented yet");
+                // TODO: Implement delete member logic
+            }
+            ClientPacketId::GroupInvite => {
+                tracing::debug!("GroupInvite packet received but not implemented yet");
+                // TODO: Implement group invite logic
+            }
         }
 
         out

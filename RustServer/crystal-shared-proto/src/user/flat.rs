@@ -4,6 +4,8 @@
 // quest inventory and no magics/creatures. This is sufficient for stub servers that
 // only need to send basic player state.
 
+#![allow(dead_code)]
+
 use std::io::{self, Cursor, Read};
 
 use crate::io::{

@@ -365,7 +365,6 @@ async fn main() -> io::Result<()> {
     // and also emits world events such as monster movement.
     {
         let world_for_tick = Arc::clone(&world);
-        let world_db_for_items = Arc::clone(&world_db);
         let outboxes_for_world_events: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
             Arc::clone(&outboxes);
         thread::spawn(move || {

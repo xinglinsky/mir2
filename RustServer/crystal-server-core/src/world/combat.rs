@@ -274,6 +274,12 @@ impl<P: WorldProvider> World<P> {
                     if total.gold > 0 || !total.items.is_empty() {
                         let entry = self.map_items.entry(map_index).or_default();
 
+                        // Set expire time for monster drops: default 5 minutes
+                        // (300000 ms) after the current world time, mirroring
+                        // the behaviour used for player-dropped items in
+                        // WorldCommand::DropItem.
+                        let item_timeout_ms: i64 = 300_000; // 5 minutes
+
                         if total.gold > 0 {
                             let item_id = self.next_map_item_id;
                             self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
@@ -284,6 +290,7 @@ impl<P: WorldProvider> World<P> {
                                 y: strike_y,
                                 item_index: None,
                                 gold: total.gold,
+                                expire_time_ms: self.time_ms + item_timeout_ms,
                             });
 
                             events.push(WorldEvent::GoldDropped {
@@ -305,6 +312,7 @@ impl<P: WorldProvider> World<P> {
                                 y: strike_y,
                                 item_index: Some(item_index),
                                 gold: 0,
+                                expire_time_ms: self.time_ms + item_timeout_ms,
                             });
 
                             events.push(WorldEvent::ItemDropped {

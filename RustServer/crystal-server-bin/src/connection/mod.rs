@@ -14,8 +14,12 @@ pub mod movement;
 pub mod handler;
 pub mod login_stage;
 pub mod select_stage;
-pub mod ingame_stage;
 pub mod gm_commands;
+pub mod map;
+pub mod market;
+pub mod chat;
+pub mod guild;
+pub mod item;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -64,8 +68,10 @@ pub(crate) struct LoginConnection {
     pub(crate) timeout_ms: u64,
     pub(crate) closing: bool,
     pub(crate) last_move_kind: Option<u8>,
+    #[allow(dead_code)]
     pub(crate) can_create_guild: bool,
     pub(crate) is_gm: bool,
+    #[allow(dead_code)]
     pub(crate) gm_login: bool,
     pub(crate) pending_guild_invite: Option<String>,
     /// Whether SWorldMapSetupInfo has been sent to this client.
