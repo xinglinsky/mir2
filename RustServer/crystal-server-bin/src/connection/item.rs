@@ -574,7 +574,7 @@ impl LoginConnection {
             return;
         }
 
-        let (mut inv, eq) = {
+        let (inv, eq) = {
             let world = self.world.lock().unwrap();
             world
                 .player_items(self.session_id)
