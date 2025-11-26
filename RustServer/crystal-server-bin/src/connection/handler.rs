@@ -29,6 +29,7 @@ use crystal_shared_proto::login::{
     CRequestMapInfo,
     CTeleportToNPC,
     CSearchMap,
+    CMagicKey,
     CGuildInvite,
     CGuildNameReturn,
     ClientPacketId,
@@ -218,6 +219,22 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_call_npc(msg, &mut out);
                 }
             }
+            ClientPacketId::MagicKey => {
+                if let Ok(msg) = CMagicKey::decode(&packet.payload) {
+                    self.handle_magic_key(msg, &mut out);
+                }
+            }
+            ClientPacketId::Magic => {
+                // Magic casting packets (C.Magic in the C# client) are not yet
+                // implemented in this Rust server. For now we ignore them,
+                // which matches the previous behaviour when this packet ID
+                // was unmapped in ClientPacketId::from_i16.
+                tracing::debug!(
+                    "Magic packet received but not implemented yet: id={} payload_len={}",
+                    packet.id,
+                    packet.payload.len(),
+                );
+            }
             ClientPacketId::Attack => {
                 if let Ok(msg) = CAttack::decode(&packet.payload) {
                     self.handle_attack(msg, &mut out);
@@ -389,6 +406,16 @@ impl ConnectionHandler for LoginConnection {
                     .store
                     .save_character_magics(account_id, char_idx, &magics);
 
+                let (inventory, equipment) = {
+                    let world = self.world.lock().unwrap();
+                    world
+                        .player_items(self.session_id)
+                        .unwrap_or((crystal_server_core::item::Inventory::new_default(), crystal_server_core::item::Equipment::new_default()))
+                };
+                let _ = self
+                    .store
+                    .save_character_items(account_id, char_idx, &inventory, &equipment);
+
                 let pos = CharacterPosition {
                     map_index: self.current_map_index,
                     x: self.current_x,
@@ -398,6 +425,16 @@ impl ConnectionHandler for LoginConnection {
                 let _ = self
                     .store
                     .save_character_position(account_id, char_idx, &pos);
+
+                if let Some(ch) = self
+                    .characters
+                    .iter()
+                    .find(|c| c.index == char_idx)
+                {
+                    let _ = self
+                        .store
+                        .update_character_level(account_id, char_idx, ch.level);
+                }
             }
         }
 

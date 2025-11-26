@@ -1,4 +1,5 @@
 use crystal_server_core::world::{self, WorldProvider};
+use crystal_server_core::world::skills::class_owns_spell;
 use crystal_shared_proto::scene::{SObjectRemove, SLevelChanged, SObjectLeveled};
 use crystal_shared_proto::user::{SGainedGold, SHealthChanged};
 
@@ -203,22 +204,6 @@ impl LoginConnection {
                 0
             };
 
-            let is_spell_for_class = |spell: u8, class: u8| -> bool {
-                match class {
-                    // Warrior spells: 1..=17
-                    0 => (1..=17).contains(&spell),
-                    // Wizard spells: 31..=55
-                    1 => (31..=55).contains(&spell),
-                    // Taoist spells: 61..=86
-                    2 => (61..=86).contains(&spell),
-                    // Assassin spells: 91..=107
-                    3 => (91..=107).contains(&spell),
-                    // Archer spells: 121..=141
-                    4 => (121..=141).contains(&spell),
-                    _ => false,
-                }
-            };
-
             let arg = rest.trim();
             let mut learned_count: usize = 0;
 
@@ -229,7 +214,7 @@ impl LoginConnection {
                     .magic_infos()
                     .iter()
                     .map(|mi| mi.spell)
-                    .filter(|&s| s != 0 && is_spell_for_class(s, class_id))
+                    .filter(|&s| s != 0 && class_owns_spell(class_id, s))
                     .collect();
 
                 let mut world = self.world.lock().unwrap();
@@ -255,7 +240,7 @@ impl LoginConnection {
                     return true;
                 };
 
-                if !is_spell_for_class(spell_id, class_id) {
+                if !class_owns_spell(class_id, spell_id) {
                     self.send_system_chat("Skill does not belong to your class.", out);
                     return true;
                 }

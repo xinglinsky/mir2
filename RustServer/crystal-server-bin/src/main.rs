@@ -13,7 +13,7 @@ use crate::connection::{LoginConnection, PlayerVisual};
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider};
 use crystal_server_core::account::AccountStore;
-use crystal_server_db::SqliteAccountStore;
+use crystal_server_db::AsyncAccountStore;
 
 use crystal_shared_proto::scene::{
     SChat,
@@ -186,8 +186,13 @@ async fn main() -> io::Result<()> {
 
     let addr: SocketAddr = cfg.listen_addr;
     let timeout_ms = cfg.timeout_ms;
+    // Use an asynchronous account store that batches writes and flushes them
+    // periodically to reduce latency on the connection threads. Keep the
+    // interval relatively small so that logout/character-switch flows see
+    // the latest position/stats almost immediately on the next StartGame.
+    let flush_interval = Duration::from_millis(500);
     let store: Arc<dyn AccountStore> = Arc::new(
-        SqliteAccountStore::open(&cfg.accounts_db_path)
+        AsyncAccountStore::open(&cfg.accounts_db_path, flush_interval)
             .expect("failed to open accounts sqlite database"),
     );
 

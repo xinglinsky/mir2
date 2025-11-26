@@ -7,6 +7,7 @@ use crystal_shared_proto::login::{
     CTurn,
     CWalk,
     CRun,
+    CMagicKey,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::scene::{
@@ -74,6 +75,28 @@ impl LoginConnection {
         }
 
         self.update_visibility(out);
+    }
+
+    pub(crate) fn handle_magic_key(&mut self, msg: CMagicKey, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // For now we only support main-player keys (no hero separation).
+        let updated_magics = {
+            let mut world = self.world.lock().unwrap();
+            world.set_magic_key_for_player(self.session_id, msg.spell, msg.key)
+        };
+
+        if let (Some(magics), Some(ref account_id), Some(char_idx)) = (
+            updated_magics,
+            self.account_id.as_ref(),
+            self.current_char_index,
+        ) {
+            let _ = self
+                .store
+                .save_character_magics(account_id, char_idx, &magics);
+        }
     }
 
     pub(crate) fn handle_run(&mut self, msg: CRun, out: &mut Vec<Vec<u8>>) {
@@ -428,6 +451,18 @@ impl LoginConnection {
                     // Persist the remaining experience after any level-ups.
                     stats.experience = exp;
 
+                    // Always persist updated experience so that gaining
+                    // experience without leveling still survives logout or
+                    // disconnect. Level changes are handled below when
+                    // `leveled` is true.
+                    if let (Some(ref account_id), Some(char_idx)) =
+                        (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        let _ = self
+                            .store
+                            .save_character_stats(account_id, char_idx, &*stats);
+                    }
+
                     if !leveled {
                         continue;
                     }
@@ -478,6 +513,16 @@ impl LoginConnection {
                         {
                             ch.level = level;
                         }
+                    }
+
+                    // Persist the new level immediately so that returning to
+                    // character select or reconnecting uses the updated value.
+                    if let (Some(ref account_id), Some(char_idx)) =
+                        (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        let _ = self
+                            .store
+                            .update_character_level(account_id, char_idx, level);
                     }
 
                     // Compute MaxExperience for the new level using the same

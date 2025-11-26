@@ -18,6 +18,7 @@ pub mod player_stats;
 pub mod movement;
 pub mod monster_runtime;
 pub mod combat;
+pub mod skills;
 
 pub use provider::{WorldDatabase, WorldProvider};
 pub use config::WorldConfig;

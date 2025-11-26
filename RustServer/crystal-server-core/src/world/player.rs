@@ -156,6 +156,30 @@ impl<P: WorldProvider> World<P> {
         Some(magic.clone())
     }
 
+    /// Update the quickbar key binding for a magic on the given player.
+    /// This mirrors the C# MirConnection.MagicKey handler where a given
+    /// key index is unique per actor, so any existing magic using the
+    /// same key is cleared before assigning the new one.
+    pub fn set_magic_key_for_player(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+        key: u8,
+    ) -> Option<Vec<UserMagic>> {
+        let player = self.players.get_mut(&session_id)?;
+        for magic in &mut player.magics {
+            if magic.spell != spell {
+                if magic.key == key {
+                    magic.key = 0;
+                }
+                continue;
+            }
+
+            magic.key = key;
+        }
+        Some(player.magics.clone())
+    }
+
     /// Get a cloned list of learned magics for the given player session.
     pub fn player_magics(&self, session_id: SessionId) -> Vec<UserMagic> {
         self.players

@@ -523,3 +523,37 @@ impl CSearchMap {
         Ok(CSearchMap { text })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct CMagicKey {
+    pub spell: u8,
+    pub key: u8,
+    pub old_key: u8,
+}
+
+impl CMagicKey {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(3);
+        buf.push(self.spell);
+        buf.push(self.key);
+        buf.push(self.old_key);
+        RawPacket {
+            id: ClientPacketId::MagicKey as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 3 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CMagicKey payload must be exactly 3 bytes",
+            ));
+        }
+        Ok(CMagicKey {
+            spell: payload[0],
+            key: payload[1],
+            old_key: payload[2],
+        })
+    }
+}

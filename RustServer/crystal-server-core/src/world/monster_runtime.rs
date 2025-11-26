@@ -365,42 +365,40 @@ impl<P: WorldProvider> World<P> {
                 if now_ms >= monster.search_time_ms {
                     monster.search_time_ms = now_ms.saturating_add(3_000);
 
-                    let should_search = monster.target_session_id.is_none()
-                        || rng.gen_range(0..3) == 0;
+                    if !matches!(ai, 1 | 2 | 3) {
+                        let should_search = monster.target_session_id.is_none()
+                            || rng.gen_range(0..3) == 0;
 
-                    if should_search {
-                        // Pick nearest player in view on the same map. We use a
-                        // Chebyshev distance (max(|dx|, |dy|)) to mirror the C#
-                        // Functions.InRange/MaxDistance semantics that drive
-                        // MonsterObject.FindTarget.
-                        let mut best: Option<(i32, u32)> = None;
-                        for (sid, p_map, px, py, _dir) in player_positions.iter().copied() {
-                            if p_map != map_index {
-                                continue;
-                            }
-
-                            let dx = px - monster.x;
-                            let dy = py - monster.y;
-                            if dx.abs() > view_range || dy.abs() > view_range {
-                                continue;
-                            }
-
-                            let dist = dx.abs().max(dy.abs());
-                            match best {
-                                None => best = Some((dist, sid)),
-                                Some((best_dist, _)) if dist < best_dist => {
-                                    best = Some((dist, sid));
+                        if should_search {
+                            let mut best: Option<(i32, u32)> = None;
+                            for (sid, p_map, px, py, _dir) in player_positions.iter().copied() {
+                                if p_map != map_index {
+                                    continue;
                                 }
-                                _ => {}
-                            }
-                        }
 
-                        if let Some((_dist, sid)) = best {
-                            monster.ai_state = MonsterAiState::Chase;
-                            monster.target_session_id = Some(sid);
-                        } else {
-                            monster.ai_state = MonsterAiState::Idle;
-                            monster.target_session_id = None;
+                                let dx = px - monster.x;
+                                let dy = py - monster.y;
+                                if dx.abs() > view_range || dy.abs() > view_range {
+                                    continue;
+                                }
+
+                                let dist = dx.abs().max(dy.abs());
+                                match best {
+                                    None => best = Some((dist, sid)),
+                                    Some((best_dist, _)) if dist < best_dist => {
+                                        best = Some((dist, sid));
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            if let Some((_dist, sid)) = best {
+                                monster.ai_state = MonsterAiState::Chase;
+                                monster.target_session_id = Some(sid);
+                            } else {
+                                monster.ai_state = MonsterAiState::Idle;
+                                monster.target_session_id = None;
+                            }
                         }
                     }
                 }
@@ -528,6 +526,21 @@ impl<P: WorldProvider> World<P> {
                 // a separate attack cooldown derived from MonsterInfo.AttackSpeed.
                 if dist_full == 1 {
                     if now_ms >= monster.next_attack_time_ms {
+                        let sx = dx_full.clamp(-1, 1);
+                        let sy = dy_full.clamp(-1, 1);
+                        let dir = match (sx, sy) {
+                            (0, -1) => 0,
+                            (1, -1) => 1,
+                            (1, 0) => 2,
+                            (1, 1) => 3,
+                            (0, 1) => 4,
+                            (-1, 1) => 5,
+                            (-1, 0) => 6,
+                            (-1, -1) => 7,
+                            _ => monster.direction,
+                        };
+                        monster.direction = dir;
+
                         pending_attacks.push((
                             monster.id,
                             map_index,
@@ -736,8 +749,12 @@ impl<P: WorldProvider> World<P> {
     }
 
     fn compute_monster_move_delay_ms(move_speed: u16) -> i64 {
-        let speed = move_speed.max(1) as i64;
-        speed.saturating_mul(10)
+        let speed = i64::from(move_speed.max(400));
+        if speed <= 0 {
+            400
+        } else {
+            speed
+        }
     }
 
     fn compute_monster_attack_delay_ms(attack_speed: u16) -> i64 {
@@ -810,8 +827,11 @@ impl<P: WorldProvider> World<P> {
             .unwrap_or(1)
             .max(1);
 
-        for i in 0..needed {
-            let (x, y) = candidates[i % len];
+        let mut rng = thread_rng();
+
+        for _ in 0..needed {
+            let idx = rng.gen_range(0..len);
+            let (x, y) = candidates[idx];
 
             self.next_monster_id = self.next_monster_id.wrapping_add(1);
 

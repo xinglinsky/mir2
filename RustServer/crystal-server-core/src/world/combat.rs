@@ -2,13 +2,26 @@ use rand::thread_rng;
 
 use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
-use crate::world::magic::magic_damage;
+use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
+use crate::world::skills::{
+    apply_attack_spell_scaling,
+    apply_fatal_sword_and_undead,
+    compute_pure_magic_attack_damage,
+    fatal_sword_level_for_player,
+    is_pure_magic_attack,
+    resolve_attack_spell_and_level_for_player,
+};
+use crate::world::skills::warrior::{
+    compute_cross_half_moon_targets,
+    compute_half_moon_targets,
+    is_thrusting_spell,
+    thrusting_max_range,
+};
+use crate::world::Spell;
 
 use super::{SessionId, World, WorldEvent};
-
-const SPELL_FATAL_SWORD: u8 = crate::world::Spell::FatalSword as u8;
 
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
@@ -24,18 +37,6 @@ impl<P: WorldProvider> World<P> {
             min_dc.max(1)
         } else {
             (min_dc + max_dc) / 2
-        }
-    }
-
-    fn resolve_attack_spell_and_level(player: &PlayerState, requested_spell: u8) -> (u8, u8) {
-        if requested_spell == 0 {
-            return (0, 0);
-        }
-
-        if let Some(magic) = player.magics.iter().find(|m| m.spell == requested_spell) {
-            (requested_spell, magic.level)
-        } else {
-            (0, 0)
         }
     }
 
@@ -55,12 +56,8 @@ impl<P: WorldProvider> World<P> {
 
                     p.direction = direction;
                     let (effective_spell, level) =
-                        Self::resolve_attack_spell_and_level(p, spell);
-                    let fatal_level = p
-                        .magics
-                        .iter()
-                        .find(|m| m.spell == SPELL_FATAL_SWORD)
-                        .map(|m| m.level);
+                        resolve_attack_spell_and_level_for_player(p, spell);
+                    let fatal_level = fatal_sword_level_for_player(p);
                     let attacker_stats = p.stats.total.clone();
 
                     (
@@ -79,6 +76,79 @@ impl<P: WorldProvider> World<P> {
                 }
             };
 
+        let is_half_moon = effective_spell == Spell::HalfMoon as u8;
+        let is_cross_half_moon = effective_spell == Spell::CrossHalfMoon as u8;
+
+        if is_half_moon {
+            self.handle_half_moon_attack(
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+                level,
+                fatal_level,
+                &attacker_stats,
+                events,
+            );
+
+            events.push(WorldEvent::UserLocation {
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+            });
+
+            events.push(WorldEvent::ObjectAttack {
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+                spell: effective_spell,
+                level,
+                attack_type: 0,
+            });
+
+            return;
+        }
+
+        if is_cross_half_moon {
+            self.handle_cross_half_moon_attack(
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+                level,
+                fatal_level,
+                &attacker_stats,
+                events,
+            );
+
+            events.push(WorldEvent::UserLocation {
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+            });
+
+            events.push(WorldEvent::ObjectAttack {
+                session_id,
+                map_index,
+                x,
+                y,
+                direction,
+                spell: effective_spell,
+                level,
+                attack_type: 0,
+            });
+
+            return;
+        }
+
         let (dx, dy) = match direction {
             0 => (0, -1),
             1 => (1, -1),
@@ -90,14 +160,70 @@ impl<P: WorldProvider> World<P> {
             7 => (-1, -1),
             _ => (0, 0),
         };
-        let target_x = x + dx;
-        let target_y = y + dy;
+
+        // Default melee target: one tile in front of the player.
+        let mut target_x = x + dx;
+        let mut target_y = y + dy;
 
         let target_info = match self.monsters.get(&map_index) {
-            Some(monsters) => monsters
-                .iter()
-                .find(|m| m.x == target_x && m.y == target_y)
-                .map(|m| (m.id, m.monster_index)),
+            Some(monsters) => {
+                if is_pure_magic_attack(effective_spell) {
+                    // For pure magic attack spells (e.g. FireBall, SoulFireBall)
+                    // scan forward along the attack direction up to the spell
+                    // range and select the first monster encountered.
+                    let max_range: i32 = self
+                        .provider
+                        .get_magic_info(effective_spell)
+                        .map(|info| info.range as i32)
+                        .unwrap_or(1)
+                        .max(1);
+
+                    let mut found: Option<(u64, i32, i32, i32)> = None;
+                    for step in 1..=max_range {
+                        let tx = x + dx * step;
+                        let ty = y + dy * step;
+                        if let Some(m) = monsters.iter().find(|m| m.x == tx && m.y == ty) {
+                            found = Some((m.id, m.monster_index, tx, ty));
+                            break;
+                        }
+                    }
+
+                    if let Some((id, monster_index, fx, fy)) = found {
+                        target_x = fx;
+                        target_y = fy;
+                        Some((id, monster_index))
+                    } else {
+                        None
+                    }
+                } else if is_thrusting_spell(effective_spell) {
+                    // Thrusting extends melee range in a straight line while
+                    // still using the physical melee model for damage.
+                    let max_range: i32 = thrusting_max_range(&self.provider, level).max(1);
+
+                    let mut found: Option<(u64, i32, i32, i32)> = None;
+                    for step in 1..=max_range {
+                        let tx = x + dx * step;
+                        let ty = y + dy * step;
+                        if let Some(m) = monsters.iter().find(|m| m.x == tx && m.y == ty) {
+                            found = Some((m.id, m.monster_index, tx, ty));
+                            break;
+                        }
+                    }
+
+                    if let Some((id, monster_index, fx, fy)) = found {
+                        target_x = fx;
+                        target_y = fy;
+                        Some((id, monster_index))
+                    } else {
+                        None
+                    }
+                } else {
+                    monsters
+                        .iter()
+                        .find(|m| m.x == target_x && m.y == target_y)
+                        .map(|m| (m.id, m.monster_index))
+                }
+            }
             None => None,
         };
         if let Some((id, monster_index)) = target_info {
@@ -123,28 +249,48 @@ impl<P: WorldProvider> World<P> {
             };
 
             // Use the unified C#-style physical melee model (including
-            // Accuracy/Agility, AC/DR and crit) for player -> monster hits.
-            let (hit, mut raw_damage, damage_type) =
-                compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+            // Accuracy/Agility, AC/DR and crit) for player -> monster hits for
+            // most attacks. Pure magic spells such as FireBall and
+            // SoulFireBall use their MagicInfo parameters directly instead of
+            // relying on the melee helper for base damage.
+            let use_pure_magic = is_pure_magic_attack(effective_spell);
 
-            // Apply FatalSword as an additional scalar on top of the physical
-            // hit if present. This approximates C# UserMagic.GetDamage where
-            // the magic modifies the base physical damage.
+            let (hit, mut raw_damage, damage_type) = if use_pure_magic {
+                let dmg = compute_pure_magic_attack_damage(
+                    &self.provider,
+                    effective_spell,
+                    level,
+                );
+                if dmg > 0 {
+                    (true, dmg, 0)
+                } else {
+                    (false, 0, 1)
+                }
+            } else {
+                compute_physical_melee_with_crit(&attacker_stats, &defender_stats)
+            };
+
             if hit && raw_damage > 0 {
-                if let Some(fatal_level) = fatal_level {
-                    if let Some(info) = self.provider.get_magic_info(SPELL_FATAL_SWORD) {
-                        let mut rng = thread_rng();
-                        let boosted = magic_damage(info, fatal_level, raw_damage, &mut rng);
-                        if boosted > 0 {
-                            raw_damage = boosted;
-                        }
-                    }
+                if !use_pure_magic {
+                    // First apply the active attack spell (if any) using the
+                    // MagicInfo parameters for that spell and the learned
+                    // level.
+                    raw_damage = apply_attack_spell_scaling(
+                        &self.provider,
+                        effective_spell,
+                        level,
+                        raw_damage,
+                    );
                 }
 
-                if undead {
-                    let holy_bonus: i32 = 0;
-                    raw_damage = raw_damage.saturating_add(holy_bonus);
-                }
+                // Then apply any passive FatalSword and undead-specific
+                // tweaks via the shared skills helper.
+                raw_damage = apply_fatal_sword_and_undead(
+                    &self.provider,
+                    fatal_level,
+                    undead,
+                    raw_damage,
+                );
             }
 
             let mut strike_x = target_x;
@@ -155,6 +301,9 @@ impl<P: WorldProvider> World<P> {
 
             if let Some(monsters) = self.monsters.get_mut(&map_index) {
                 if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                    m.target_session_id = Some(session_id);
+                    m.ai_state = MonsterAiState::Chase;
+
                     strike_x = m.x;
                     strike_y = m.y;
                     strike_dir = m.direction;
@@ -367,6 +516,502 @@ impl<P: WorldProvider> World<P> {
             level,
             attack_type: 0,
         });
+    }
+
+    fn handle_half_moon_attack(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        level: u8,
+        fatal_level: Option<u8>,
+        attacker_stats: &Stats,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let targets = compute_half_moon_targets(x, y, direction);
+
+        for (tx, ty, is_primary) in targets {
+            let target_info = match self.monsters.get(&map_index) {
+                Some(monsters) => monsters
+                    .iter()
+                    .find(|m| m.x == tx && m.y == ty)
+                    .map(|m| (m.id, m.monster_index)),
+                None => None,
+            };
+
+            if let Some((id, monster_index)) = target_info {
+                let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
+                    u32,
+                    bool,
+                    i32,
+                    Stats,
+                    Vec<crate::world::drop::DropInfo>,
+                ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
+                    let max_hp = info.stats.get(Stat::HP).max(1);
+                    (
+                        info.experience,
+                        info.undead,
+                        max_hp,
+                        info.stats.clone(),
+                        info.drops.clone(),
+                    )
+                } else {
+                    (0, false, 1, Stats::default(), Vec::new())
+                };
+
+                let (hit, mut raw_damage, mut damage_type) =
+                    compute_physical_melee_with_crit(attacker_stats, &defender_stats);
+
+                if hit && raw_damage > 0 {
+                    raw_damage = crate::world::skills::warrior::compute_half_moon_damage_for_target(
+                        &self.provider,
+                        raw_damage,
+                        level,
+                        is_primary,
+                    );
+
+                    raw_damage = apply_fatal_sword_and_undead(
+                        &self.provider,
+                        fatal_level,
+                        undead,
+                        raw_damage,
+                    );
+                }
+
+                let mut strike_x = tx;
+                let mut strike_y = ty;
+                let mut strike_dir = direction;
+                let mut damage_done: i32 = 0;
+                let mut health_percent: u8 = 100;
+                let mut dead = false;
+
+                if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                    if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                        m.target_session_id = Some(session_id);
+                        m.ai_state = MonsterAiState::Chase;
+
+                        strike_x = m.x;
+                        strike_y = m.y;
+                        strike_dir = m.direction;
+
+                        let old_hp = m.hp.max(0);
+                        let mut new_hp = old_hp;
+
+                        if hit && raw_damage > 0 {
+                            damage_done = raw_damage;
+
+                            if raw_damage >= m.hp {
+                                m.hp = 0;
+                                dead = true;
+                            } else {
+                                m.hp -= raw_damage;
+                            }
+
+                            new_hp = if dead { 0 } else { m.hp.max(0) };
+                        }
+
+                        if max_hp > 0 {
+                            let pct = (new_hp as i64 * 100 / max_hp as i64)
+                                .clamp(0, 100) as u8;
+                            health_percent = pct;
+                        } else {
+                            health_percent = 0;
+                        }
+                    }
+                }
+
+                if hit {
+                    if damage_done > 0 {
+                        events.push(WorldEvent::ObjectStruck {
+                            attacker_id: session_id,
+                            target_id: id,
+                            map_index,
+                            x: strike_x,
+                            y: strike_y,
+                            direction: strike_dir,
+                            damage: damage_done,
+                            damage_type,
+                            health_percent,
+                        });
+                    }
+                } else {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: id,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: 0,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+
+                if dead {
+                    self.mark_monster_dead(map_index, id);
+
+                    if let Some(info) = self.provider.get_monster_info(monster_index) {
+                        println!(
+                            "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                            monster_index,
+                            info.name,
+                            info.drop_path,
+                            monster_drops.len(),
+                        );
+                    }
+
+                    if !monster_drops.is_empty() {
+                        let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
+                        let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
+                        let mut rng = thread_rng();
+                        let mut total = crate::world::drop::DropRewardInfo {
+                            items: Vec::new(),
+                            gold: 0,
+                        };
+
+                        for d in &monster_drops {
+                            if d.quest_required {
+                                continue;
+                            }
+
+                            if let Some(r) = d.attempt_drop(
+                                self.drop_rate,
+                                item_offset,
+                                gold_offset,
+                                &mut rng,
+                            ) {
+                                total.gold = total.gold.saturating_add(r.gold);
+                                if !r.items.is_empty() {
+                                    total.items.extend(r.items);
+                                }
+                            }
+                        }
+
+                        println!(
+                            "[drop-total] monster_index={} gold={} items_len={}",
+                            monster_index,
+                            total.gold,
+                            total.items.len(),
+                        );
+
+                        if total.gold > 0 || !total.items.is_empty() {
+                            let entry = self.map_items.entry(map_index).or_default();
+                            let item_timeout_ms: i64 = 300_000;
+
+                            if total.gold > 0 {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index: None,
+                                    gold: total.gold,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
+
+                                events.push(WorldEvent::GoldDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    gold: total.gold,
+                                });
+                            }
+
+                            for item_index in total.items {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index: Some(item_index),
+                                    gold: 0,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
+
+                                events.push(WorldEvent::ItemDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index,
+                                });
+                            }
+                        }
+                    }
+
+                    if monster_exp > 0 {
+                        if let Some(p) = self.players.get_mut(&session_id) {
+                            p.experience = p
+                                .experience
+                                .saturating_add(monster_exp as i64);
+                        }
+
+                        events.push(WorldEvent::GainExperience {
+                            session_id,
+                            amount: monster_exp,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle_cross_half_moon_attack(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        level: u8,
+        fatal_level: Option<u8>,
+        attacker_stats: &Stats,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let targets = compute_cross_half_moon_targets(x, y, direction);
+
+        for (tx, ty, is_primary) in targets {
+            let target_info = match self.monsters.get(&map_index) {
+                Some(monsters) => monsters
+                    .iter()
+                    .find(|m| m.x == tx && m.y == ty)
+                    .map(|m| (m.id, m.monster_index)),
+                None => None,
+            };
+
+            if let Some((id, monster_index)) = target_info {
+                let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
+                    u32,
+                    bool,
+                    i32,
+                    Stats,
+                    Vec<crate::world::drop::DropInfo>,
+                ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
+                    let max_hp = info.stats.get(Stat::HP).max(1);
+                    (
+                        info.experience,
+                        info.undead,
+                        max_hp,
+                        info.stats.clone(),
+                        info.drops.clone(),
+                    )
+                } else {
+                    (0, false, 1, Stats::default(), Vec::new())
+                };
+
+                let (hit, mut raw_damage, mut damage_type) =
+                    compute_physical_melee_with_crit(attacker_stats, &defender_stats);
+
+                if hit && raw_damage > 0 {
+                    raw_damage = crate::world::skills::warrior::compute_cross_half_moon_damage_for_target(
+                        &self.provider,
+                        raw_damage,
+                        level,
+                        is_primary,
+                    );
+
+                    raw_damage = apply_fatal_sword_and_undead(
+                        &self.provider,
+                        fatal_level,
+                        undead,
+                        raw_damage,
+                    );
+                }
+
+                let mut strike_x = tx;
+                let mut strike_y = ty;
+                let mut strike_dir = direction;
+                let mut damage_done: i32 = 0;
+                let mut health_percent: u8 = 100;
+                let mut dead = false;
+
+                if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                    if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                        m.target_session_id = Some(session_id);
+                        m.ai_state = MonsterAiState::Chase;
+
+                        strike_x = m.x;
+                        strike_y = m.y;
+                        strike_dir = m.direction;
+
+                        let old_hp = m.hp.max(0);
+                        let mut new_hp = old_hp;
+
+                        if hit && raw_damage > 0 {
+                            damage_done = raw_damage;
+
+                            if raw_damage >= m.hp {
+                                m.hp = 0;
+                                dead = true;
+                            } else {
+                                m.hp -= raw_damage;
+                            }
+
+                            new_hp = if dead { 0 } else { m.hp.max(0) };
+                        }
+
+                        if max_hp > 0 {
+                            let pct = (new_hp as i64 * 100 / max_hp as i64)
+                                .clamp(0, 100) as u8;
+                            health_percent = pct;
+                        } else {
+                            health_percent = 0;
+                        }
+                    }
+                }
+
+                if hit {
+                    if damage_done > 0 {
+                        events.push(WorldEvent::ObjectStruck {
+                            attacker_id: session_id,
+                            target_id: id,
+                            map_index,
+                            x: strike_x,
+                            y: strike_y,
+                            direction: strike_dir,
+                            damage: damage_done,
+                            damage_type,
+                            health_percent,
+                        });
+                    }
+                } else {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: id,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: 0,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+
+                if dead {
+                    self.mark_monster_dead(map_index, id);
+
+                    if let Some(info) = self.provider.get_monster_info(monster_index) {
+                        println!(
+                            "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                            monster_index,
+                            info.name,
+                            info.drop_path,
+                            monster_drops.len(),
+                        );
+                    }
+
+                    if !monster_drops.is_empty() {
+                        let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
+                        let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
+                        let mut rng = thread_rng();
+                        let mut total = crate::world::drop::DropRewardInfo {
+                            items: Vec::new(),
+                            gold: 0,
+                        };
+
+                        for d in &monster_drops {
+                            if d.quest_required {
+                                continue;
+                            }
+
+                            if let Some(r) = d.attempt_drop(
+                                self.drop_rate,
+                                item_offset,
+                                gold_offset,
+                                &mut rng,
+                            ) {
+                                total.gold = total.gold.saturating_add(r.gold);
+                                if !r.items.is_empty() {
+                                    total.items.extend(r.items);
+                                }
+                            }
+                        }
+
+                        println!(
+                            "[drop-total] monster_index={} gold={} items_len={}",
+                            monster_index,
+                            total.gold,
+                            total.items.len(),
+                        );
+
+                        if total.gold > 0 || !total.items.is_empty() {
+                            let entry = self.map_items.entry(map_index).or_default();
+                            let item_timeout_ms: i64 = 300_000;
+
+                            if total.gold > 0 {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index: None,
+                                    gold: total.gold,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
+
+                                events.push(WorldEvent::GoldDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    gold: total.gold,
+                                });
+                            }
+
+                            for item_index in total.items {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index: Some(item_index),
+                                    gold: 0,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
+
+                                events.push(WorldEvent::ItemDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: strike_x,
+                                    y: strike_y,
+                                    item_index,
+                                });
+                            }
+                        }
+                    }
+
+                    if monster_exp > 0 {
+                        if let Some(p) = self.players.get_mut(&session_id) {
+                            p.experience = p
+                                .experience
+                                .saturating_add(monster_exp as i64);
+                        }
+
+                        events.push(WorldEvent::GainExperience {
+                            session_id,
+                            amount: monster_exp,
+                        });
+                    }
+                }
+            }
+        }
     }
 }
 

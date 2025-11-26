@@ -1,6 +1,10 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::sync::mpsc::{self, Sender, RecvTimeoutError};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use crystal_server_core::account::{
@@ -776,5 +780,467 @@ impl AccountStore for SqliteAccountStore {
             ))?;
             Ok(())
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+enum SaveTask {
+    CharacterStats {
+        account_id: String,
+        idx: i32,
+        stats: CharacterStats,
+    },
+    CharacterLevel {
+        account_id: String,
+        idx: i32,
+        level: u16,
+    },
+    CharacterItems {
+        account_id: String,
+        idx: i32,
+        inventory: Inventory,
+        equipment: Equipment,
+    },
+    CharacterPosition {
+        account_id: String,
+        idx: i32,
+        pos: CharacterPosition,
+    },
+    CharacterBind {
+        account_id: String,
+        idx: i32,
+        pos: CharacterPosition,
+    },
+    CharacterMagics {
+        account_id: String,
+        idx: i32,
+        magics: Vec<UserMagic>,
+    },
+    CharacterGuild {
+        account_id: String,
+        idx: i32,
+        guild_name: String,
+        rank_index: u8,
+    },
+    SaveGuild {
+        guild: GuildInfo,
+    },
+    DeleteGuild {
+        guild_id: i32,
+    },
+}
+
+#[derive(Clone, Debug, Default)]
+struct PendingCharacter {
+    stats: Option<CharacterStats>,
+    level: Option<u16>,
+    items: Option<(Inventory, Equipment)>,
+    position: Option<CharacterPosition>,
+    bind: Option<CharacterPosition>,
+    magics: Option<Vec<UserMagic>>,
+    guild: Option<(String, u8)>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PendingGuild {
+    guild: Option<GuildInfo>,
+    delete: bool,
+}
+
+type CharKey = (String, i32);
+
+fn apply_save_task(
+    task: SaveTask,
+    chars: &mut HashMap<CharKey, PendingCharacter>,
+    guilds: &mut HashMap<i32, PendingGuild>,
+) {
+    match task {
+        SaveTask::CharacterStats { account_id, idx, stats } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.stats = Some(stats);
+        }
+        SaveTask::CharacterLevel { account_id, idx, level } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.level = Some(level);
+        }
+        SaveTask::CharacterItems { account_id, idx, inventory, equipment } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.items = Some((inventory, equipment));
+        }
+        SaveTask::CharacterPosition { account_id, idx, pos } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.position = Some(pos);
+        }
+        SaveTask::CharacterBind { account_id, idx, pos } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.bind = Some(pos);
+        }
+        SaveTask::CharacterMagics { account_id, idx, magics } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.magics = Some(magics);
+        }
+        SaveTask::CharacterGuild {
+            account_id,
+            idx,
+            guild_name,
+            rank_index,
+        } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.guild = Some((guild_name, rank_index));
+        }
+        SaveTask::SaveGuild { guild } => {
+            let entry = guilds.entry(guild.id.0).or_default();
+            entry.guild = Some(guild);
+            entry.delete = false;
+        }
+        SaveTask::DeleteGuild { guild_id } => {
+            let entry = guilds.entry(guild_id).or_default();
+            entry.guild = None;
+            entry.delete = true;
+        }
+    }
+}
+
+fn flush_pending(
+    db_path: &PathBuf,
+    chars: &mut HashMap<CharKey, PendingCharacter>,
+    guilds: &mut HashMap<i32, PendingGuild>,
+) {
+    if chars.is_empty() && guilds.is_empty() {
+        return;
+    }
+
+    let store = match SqliteAccountStore::open(db_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[db] AsyncAccountStore: failed to open sqlite for flush: {:?}", e);
+            return;
+        }
+    };
+
+    for ((account_id, idx), pending) in chars.drain() {
+        if let Some(stats) = pending.stats {
+            let _ = AccountStore::save_character_stats(&store, &account_id, idx, &stats);
+        }
+
+        if let Some(level) = pending.level {
+            let _ = AccountStore::update_character_level(&store, &account_id, idx, level);
+        }
+
+        if let Some((inventory, equipment)) = pending.items {
+            let _ = AccountStore::save_character_items(&store, &account_id, idx, &inventory, &equipment);
+        }
+
+        if let Some(pos) = pending.position {
+            let _ = AccountStore::save_character_position(&store, &account_id, idx, &pos);
+        }
+
+        if let Some(pos) = pending.bind {
+            let _ = AccountStore::save_character_bind(&store, &account_id, idx, &pos);
+        }
+
+        if let Some(magics) = pending.magics {
+            let _ = AccountStore::save_character_magics(&store, &account_id, idx, &magics);
+        }
+
+        if let Some((guild_name, rank_index)) = pending.guild {
+            let _ = AccountStore::save_character_guild(&store, &account_id, idx, &guild_name, rank_index);
+        }
+    }
+
+    for (id, pending) in guilds.drain() {
+        if pending.delete {
+            let _ = AccountStore::delete_guild(&store, id);
+        } else if let Some(guild) = pending.guild {
+            let _ = AccountStore::save_guild(&store, &guild);
+        }
+    }
+}
+
+fn run_async_worker(db_path: PathBuf, rx: mpsc::Receiver<SaveTask>, flush_interval: Duration) {
+    let mut chars: HashMap<CharKey, PendingCharacter> = HashMap::new();
+    let mut guilds: HashMap<i32, PendingGuild> = HashMap::new();
+    let mut last_flush = Instant::now();
+
+    loop {
+        let timeout = flush_interval
+            .checked_sub(last_flush.elapsed())
+            .unwrap_or_else(|| Duration::from_secs(0));
+
+        match rx.recv_timeout(timeout) {
+            Ok(task) => {
+                apply_save_task(task, &mut chars, &mut guilds);
+
+                if last_flush.elapsed() >= flush_interval {
+                    flush_pending(&db_path, &mut chars, &mut guilds);
+                    last_flush = Instant::now();
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                flush_pending(&db_path, &mut chars, &mut guilds);
+                last_flush = Instant::now();
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                flush_pending(&db_path, &mut chars, &mut guilds);
+                break;
+            }
+        }
+    }
+}
+
+pub struct AsyncAccountStore {
+    path: PathBuf,
+    tx: Sender<SaveTask>,
+}
+
+impl AsyncAccountStore {
+    pub fn open<P: AsRef<Path>>(path: P, flush_interval: Duration) -> Result<Self, StoreError> {
+        let path_buf = path.as_ref().to_path_buf();
+
+        if let Some(parent) = path_buf.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+
+        // Ensure database and schema exist.
+        let _ = SqliteAccountStore::open(&path_buf)?;
+
+        let (tx, rx) = mpsc::channel();
+        let worker_path = path_buf.clone();
+        thread::spawn(move || {
+            run_async_worker(worker_path, rx, flush_interval);
+        });
+
+        Ok(AsyncAccountStore { path: path_buf, tx })
+    }
+
+    fn sync_store(&self) -> SqliteAccountStore {
+        SqliteAccountStore { path: self.path.clone() }
+    }
+}
+
+impl AccountStore for AsyncAccountStore {
+    fn account_exists(&self, id: &str) -> Result<bool, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::account_exists(&inner, id)
+    }
+
+    fn create_account(&self, id: &str, password: &str) -> Result<(), StoreError> {
+        let inner = self.sync_store();
+        AccountStore::create_account(&inner, id, password)
+    }
+
+    fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::verify_password(&inner, id, password)
+    }
+
+    fn list_characters(&self, account_id: &str) -> Result<Vec<CharacterSummary>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::list_characters(&inner, account_id)
+    }
+
+    fn create_character(
+        &self,
+        account_id: &str,
+        name: String,
+        class: u8,
+        gender: u8,
+    ) -> Result<CharacterSummary, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::create_character(&inner, account_id, name, class, gender)
+    }
+
+    fn delete_character(&self, account_id: &str, index: i32) -> Result<bool, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::delete_character(&inner, account_id, index)
+    }
+
+    fn set_password(&self, id: &str, new_password: &str) -> Result<bool, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::set_password(&inner, id, new_password)
+    }
+
+    fn load_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<UserMagic>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_magics(&inner, account_id, index)
+    }
+
+    fn save_character_magics(
+        &self,
+        account_id: &str,
+        index: i32,
+        magics: &[UserMagic],
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterMagics {
+            account_id: account_id.to_string(),
+            idx: index,
+            magics: magics.to_vec(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_magics failed: {}", e))))
+    }
+
+    fn load_character_stats(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterStats>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_stats(&inner, account_id, index)
+    }
+
+    fn save_character_stats(
+        &self,
+        account_id: &str,
+        index: i32,
+        stats: &CharacterStats,
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterStats {
+            account_id: account_id.to_string(),
+            idx: index,
+            stats: stats.clone(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_stats failed: {}", e))))
+    }
+
+    fn load_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_position(&inner, account_id, index)
+    }
+
+    fn save_character_position(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError> {
+        // Position is used immediately by the next StartGame call after
+        // logout/character-switch, so write it synchronously to avoid
+        // visible rollback when using AsyncAccountStore.
+        let inner = self.sync_store();
+        AccountStore::save_character_position(&inner, account_id, index, pos)
+    }
+
+    fn load_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<CharacterPosition>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_bind(&inner, account_id, index)
+    }
+
+    fn save_character_bind(
+        &self,
+        account_id: &str,
+        index: i32,
+        pos: &CharacterPosition,
+    ) -> Result<(), StoreError> {
+        // Bind position (Town Revive spawn) is also needed with low latency,
+        // so keep this write synchronous as well.
+        let inner = self.sync_store();
+        AccountStore::save_character_bind(&inner, account_id, index, pos)
+    }
+
+    fn update_character_level(
+        &self,
+        account_id: &str,
+        index: i32,
+        level: u16,
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterLevel {
+            account_id: account_id.to_string(),
+            idx: index,
+            level,
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async update_character_level failed: {}", e))))
+    }
+
+    fn load_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(Inventory, Equipment)>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_items(&inner, account_id, index)
+    }
+
+    fn save_character_items(
+        &self,
+        account_id: &str,
+        index: i32,
+        inventory: &Inventory,
+        equipment: &Equipment,
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterItems {
+            account_id: account_id.to_string(),
+            idx: index,
+            inventory: inventory.clone(),
+            equipment: equipment.clone(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_items failed: {}", e))))
+    }
+
+    fn load_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<(String, u8)>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_guild(&inner, account_id, index)
+    }
+
+    fn save_character_guild(
+        &self,
+        account_id: &str,
+        index: i32,
+        guild_name: &str,
+        rank_index: u8,
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterGuild {
+            account_id: account_id.to_string(),
+            idx: index,
+            guild_name: guild_name.to_string(),
+            rank_index,
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_guild failed: {}", e))))
+    }
+
+    fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_all_guilds(&inner)
+    }
+
+    fn save_guild(&self, guild: &GuildInfo) -> Result<(), StoreError> {
+        let task = SaveTask::SaveGuild { guild: guild.clone() };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_guild failed: {}", e))))
+    }
+
+    fn delete_guild(&self, id: i32) -> Result<(), StoreError> {
+        let task = SaveTask::DeleteGuild { guild_id: id };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async delete_guild failed: {}", e))))
     }
 }
