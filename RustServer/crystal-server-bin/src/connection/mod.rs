@@ -18,6 +18,7 @@ pub mod gm_commands;
 pub mod map;
 pub mod market;
 pub mod chat;
+pub mod group;
 pub mod guild;
 pub mod item;
 

@@ -38,11 +38,35 @@ impl<P: WorldProvider> World<P> {
 
         match self.get_or_load_map(dest_map_index) {
             Some(dest_map) => {
+                if dest_x < 0 || dest_y < 0 {
+                    println!(
+                        "[move] Map movement blocked: dest out of bounds ({}, {}) on map {}",
+                        dest_x, dest_y, dest_map_index
+                    );
+                    return;
+                }
+
+                let ux = dest_x as u16;
+                let uy = dest_y as u16;
+                if ux >= dest_map.width || uy >= dest_map.height || !dest_map.is_walkable(ux, uy) {
+                    println!(
+                        "[move] Map movement blocked: dest not walkable on map {} at ({}, {})",
+                        dest_map_index, dest_x, dest_y
+                    );
+                    return;
+                }
+
                 self.spawn_monsters_for_map(dest_map_index, &dest_map);
 
+                let session_id = player.session_id;
+                let old_x = player.x;
+                let old_y = player.y;
                 player.map_index = dest_map_index;
                 player.x = dest_x;
                 player.y = dest_y;
+
+                self.remove_player_from_occupancy(session_id, current_map_index, old_x, old_y);
+                self.add_player_to_occupancy(session_id, player.map_index, player.x, player.y);
 
                 println!(
                     "[move] Map movement success: session {} now on map {} at ({}, {})",
@@ -69,7 +93,13 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
-    pub(super) fn apply_step(player: &mut PlayerState, map: Option<map::Map>, direction: u8, distance: i32) {
+    pub(super) fn apply_step(
+        &mut self,
+        player: &mut PlayerState,
+        map: Option<map::Map>,
+        direction: u8,
+        distance: i32,
+    ) {
         let (dx, dy) = match direction {
             0 => (0, -1),
             1 => (1, -1),
@@ -90,12 +120,14 @@ impl<P: WorldProvider> World<P> {
         }
 
         let steps = distance;
-        let mut new_x = player.x;
-        let mut new_y = player.y;
+        let mut cur_x = player.x;
+        let mut cur_y = player.y;
+        let map_index = player.map_index;
+        let session_id = player.session_id;
 
         for _ in 0..steps {
-            let tx = new_x + dx;
-            let ty = new_y + dy;
+            let tx = cur_x + dx;
+            let ty = cur_y + dy;
 
             if tx < 0 || ty < 0 || tx > u16::MAX as i32 || ty > u16::MAX as i32 {
                 println!("[move] blocked: out of bounds ({}, {})", tx, ty);
@@ -106,26 +138,32 @@ impl<P: WorldProvider> World<P> {
                 let ux = tx as u16;
                 let uy = ty as u16;
 
-                if m.is_walkable(ux, uy) {
-                    new_x = tx;
-                    new_y = ty;
-                } else {
+                if !m.is_walkable(ux, uy) {
                     let attr = m.cell(ux, uy).map(|c| &c.attribute);
                     println!(
                         "[move] blocked on map {} from ({}, {}) to ({}, {}), attr={:?}",
                         player.map_index,
-                        new_x,
-                        new_y,
+                        cur_x,
+                        cur_y,
                         tx,
                         ty,
                         attr,
                     );
                     break;
                 }
-            } else {
-                new_x = tx;
-                new_y = ty;
             }
+
+            // Dynamic blocking: prevent walking into cells occupied by other
+            // players or monsters, mirroring C# Cell.Objects + Blocking.
+            if self.is_cell_blocked(map_index, tx, ty) {
+                break;
+            }
+
+            // Move one step and update occupancy tracking.
+            self.remove_player_from_occupancy(session_id, map_index, cur_x, cur_y);
+            self.add_player_to_occupancy(session_id, map_index, tx, ty);
+            cur_x = tx;
+            cur_y = ty;
         }
 
         println!(
@@ -135,11 +173,11 @@ impl<P: WorldProvider> World<P> {
             distance,
             player.x,
             player.y,
-            new_x,
-            new_y,
+            cur_x,
+            cur_y,
         );
 
-        player.x = new_x;
-        player.y = new_y;
+        player.x = cur_x;
+        player.y = cur_y;
     }
 }

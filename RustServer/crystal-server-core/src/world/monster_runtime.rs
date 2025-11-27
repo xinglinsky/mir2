@@ -87,6 +87,10 @@ impl<P: WorldProvider> World<P> {
             instances.extend(self.create_monsters_from_respawn(map, respawn));
         }
 
+        for m in &instances {
+            self.add_monster_to_occupancy(m.id, m.map_index, m.x, m.y);
+        }
+
         self.monsters.insert(map_index, instances);
     }
 
@@ -227,6 +231,10 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
+            for m in &spawned {
+                self.add_monster_to_occupancy(m.id, m.map_index, m.x, m.y);
+            }
+
             let monsters_on_map = self.monsters.entry(map_index).or_default();
             monsters_on_map.extend(spawned);
 
@@ -274,11 +282,15 @@ impl<P: WorldProvider> World<P> {
 
         let mut rng = thread_rng();
 
-        // Clone map indices so we can load maps (&self) before borrowing
-        // the monsters vector mutably for each map.
-        let map_indices: Vec<i32> = self.monsters.keys().cloned().collect();
+        // Temporarily take ownership of the monsters map to avoid borrowing
+        // conflicts while iterating. This allows us to call methods on `self`
+        // (like get_or_load_map, is_cell_blocked, occupancy updates) inside
+        // the loop.
+        let mut monsters_map = std::mem::take(&mut self.monsters);
 
-        for map_index in map_indices {
+        for (map_index, monsters) in monsters_map.iter_mut() {
+            let map_index = *map_index;
+
             // Load the map for this index so that movement checks can respect
             // walkability and bounds, mirroring the player movement logic.
             let map = match self.get_or_load_map(map_index) {
@@ -286,18 +298,21 @@ impl<P: WorldProvider> World<P> {
                 None => continue,
             };
 
-            let Some(monsters) = self.monsters.get_mut(&map_index) else {
-                continue;
-            };
-
             for monster in monsters.iter_mut() {
-                let Some(info) = self.provider.get_monster_info(monster.monster_index) else {
-                    monster.ai_state = MonsterAiState::Idle;
-                    monster.target_session_id = None;
-                    continue;
+                let (ai, view_range, move_speed, attack_speed) = {
+                    let Some(info) = self.provider.get_monster_info(monster.monster_index) else {
+                        monster.ai_state = MonsterAiState::Idle;
+                        monster.target_session_id = None;
+                        continue;
+                    };
+                    (
+                        info.ai,
+                        info.view_range as i32,
+                        info.move_speed,
+                        info.attack_speed,
+                    )
                 };
 
-                let ai = info.ai;
                 if matches!(ai, 6 | 57 | 58 | 102 | 103 | 104 | 105 | 113) {
                     monster.ai_state = MonsterAiState::Idle;
                     monster.target_session_id = None;
@@ -306,7 +321,6 @@ impl<P: WorldProvider> World<P> {
 
                 // Use the monster's configured view range to decide when to
                 // start chasing nearby players.
-                let view_range = info.view_range as i32;
                 if view_range <= 0 {
                     monster.ai_state = MonsterAiState::Idle;
                     monster.target_session_id = None;
@@ -461,11 +475,28 @@ impl<P: WorldProvider> World<P> {
                                         continue;
                                     }
 
+                                    if self.is_cell_blocked(map_index, new_x, new_y) {
+                                        continue;
+                                    }
+
+                                    self.remove_monster_from_occupancy(
+                                        monster.id,
+                                        map_index,
+                                        monster.x,
+                                        monster.y,
+                                    );
+                                    self.add_monster_to_occupancy(
+                                        monster.id,
+                                        map_index,
+                                        new_x,
+                                        new_y,
+                                    );
+
                                     monster.x = new_x;
                                     monster.y = new_y;
 
                                     let delay_ms =
-                                        Self::compute_monster_move_delay_ms(info.move_speed);
+                                        Self::compute_monster_move_delay_ms(move_speed);
                                     monster.next_move_time_ms =
                                         now_ms.saturating_add(delay_ms);
 
@@ -548,7 +579,7 @@ impl<P: WorldProvider> World<P> {
                             monster.monster_index,
                         ));
 
-                        let delay_ms = Self::compute_monster_attack_delay_ms(info.attack_speed);
+                        let delay_ms = Self::compute_monster_attack_delay_ms(attack_speed);
                         monster.next_attack_time_ms = now_ms.saturating_add(delay_ms);
                     }
 
@@ -562,14 +593,22 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
 
-                // Step at most one tile towards the target (8-directional).
-                let step_x = dx_full.clamp(-1, 1);
-                let step_y = dy_full.clamp(-1, 1);
-                if step_x == 0 && step_y == 0 {
+                // Compute the primary direction towards the target using the
+                // same 8-way scheme as the C# server, then attempt to walk in
+                // that direction. If blocked (by map tiles or other
+                // blocking objects), try up to 7 alternative directions by
+                // rotating clockwise or counter-clockwise, mirroring
+                // MonsterObject.MoveTo/Walk behaviour.
+
+                let base_step_x = dx_full.clamp(-1, 1);
+                let base_step_y = dy_full.clamp(-1, 1);
+
+                // If we cannot determine a primary step, skip movement.
+                if base_step_x == 0 && base_step_y == 0 {
                     continue;
                 }
 
-                let dir = match (step_x, step_y) {
+                let base_dir: u8 = match (base_step_x, base_step_y) {
                     (0, -1) => 0,
                     (1, -1) => 1,
                     (1, 0) => 2,
@@ -581,45 +620,111 @@ impl<P: WorldProvider> World<P> {
                     _ => monster.direction,
                 };
 
-                let new_x = monster.x.saturating_add(step_x);
-                let new_y = monster.y.saturating_add(step_y);
-                if new_x < 0 || new_y < 0 {
-                    continue;
+                let mut candidate_dirs: [u8; 8] = [0; 8];
+                candidate_dirs[0] = base_dir;
+
+                // Randomise whether we explore clockwise or counter-clockwise
+                // first, as in the C# MoveTo implementation.
+                let mut dir = base_dir;
+                if rng.gen_range(0..2) == 0 {
+                    for i in 1..8 {
+                        dir = (dir + 1) & 7;
+                        candidate_dirs[i] = dir;
+                    }
+                } else {
+                    for i in 1..8 {
+                        dir = dir.wrapping_sub(1) & 7;
+                        candidate_dirs[i] = dir;
+                    }
                 }
 
-                if monster.x < 0 || monster.y < 0 {
-                    continue;
+                let mut moved = false;
+
+                for &dir in &candidate_dirs {
+                    let (step_x, step_y) = match dir {
+                        0 => (0, -1),
+                        1 => (1, -1),
+                        2 => (1, 0),
+                        3 => (1, 1),
+                        4 => (0, 1),
+                        5 => (-1, 1),
+                        6 => (-1, 0),
+                        7 => (-1, -1),
+                        _ => (0, 0),
+                    };
+
+                    if step_x == 0 && step_y == 0 {
+                        continue;
+                    }
+
+                    let new_x = monster.x.saturating_add(step_x);
+                    let new_y = monster.y.saturating_add(step_y);
+                    if new_x < 0 || new_y < 0 {
+                        continue;
+                    }
+
+                    if monster.x < 0 || monster.y < 0 {
+                        continue;
+                    }
+
+                    let from_x = monster.x as u16;
+                    let from_y = monster.y as u16;
+                    let to_x = new_x as u16;
+                    let to_y = new_y as u16;
+
+                    if to_x >= map.width || to_y >= map.height {
+                        continue;
+                    }
+
+                    if !map.can_move(from_x, from_y, to_x, to_y) {
+                        continue;
+                    }
+
+                    if self.is_cell_blocked(map_index, new_x, new_y) {
+                        continue;
+                    }
+
+                    self.remove_monster_from_occupancy(
+                        monster.id,
+                        map_index,
+                        monster.x,
+                        monster.y,
+                    );
+                    self.add_monster_to_occupancy(
+                        monster.id,
+                        map_index,
+                        new_x,
+                        new_y,
+                    );
+
+                    monster.x = new_x;
+                    monster.y = new_y;
+                    monster.direction = dir;
+
+                    let delay_ms = Self::compute_monster_move_delay_ms(move_speed);
+                    monster.next_move_time_ms = now_ms.saturating_add(delay_ms);
+
+                    events.push(WorldEvent::ObjectLocation {
+                        object_id: monster.id,
+                        map_index,
+                        x: monster.x,
+                        y: monster.y,
+                        direction: monster.direction,
+                    });
+
+                    moved = true;
+                    break;
                 }
 
-                let from_x = monster.x as u16;
-                let from_y = monster.y as u16;
-                let to_x = new_x as u16;
-                let to_y = new_y as u16;
-
-                if to_x >= map.width || to_y >= map.height {
-                    continue;
+                if !moved {
+                    // All directions blocked this tick; monster stays put.
                 }
-
-                if !map.can_move(from_x, from_y, to_x, to_y) {
-                    continue;
-                }
-
-                monster.x = new_x;
-                monster.y = new_y;
-                monster.direction = dir;
-
-                let delay_ms = Self::compute_monster_move_delay_ms(info.move_speed);
-                monster.next_move_time_ms = now_ms.saturating_add(delay_ms);
-
-                events.push(WorldEvent::ObjectLocation {
-                    object_id: monster.id,
-                    map_index,
-                    x: monster.x,
-                    y: monster.y,
-                    direction: monster.direction,
-                });
             }
         }
+
+        // Restore the monsters map to the world state.
+        self.monsters = monsters_map;
+
         // Resolve pending monster attacks against players after we finish
         // iterating over the monsters map to avoid borrow conflicts.
         for (monster_id, map_index, target_sid, monster_index) in pending_attacks {
@@ -829,30 +934,59 @@ impl<P: WorldProvider> World<P> {
 
         let mut rng = thread_rng();
 
+        // For each monster we want to spawn, try a bounded number of times to
+        // find a candidate cell that is not currently occupied by any player or
+        // monster. This mirrors C# MapRespawn + MonsterObject.Spawn using
+        // Map.ValidPoint/Cell.Objects, where occupied cells are rejected and
+        // failed spawns are simply skipped.
         for _ in 0..needed {
-            let idx = rng.gen_range(0..len);
-            let (x, y) = candidates[idx];
+            let mut placed = false;
 
-            self.next_monster_id = self.next_monster_id.wrapping_add(1);
+            // Limit the number of attempts per monster so that heavily
+            // congested respawn areas do not cause extremely long loops.
+            for _attempt in 0..8 {
+                let idx = rng.gen_range(0..len);
+                let (x, y) = candidates[idx];
 
-            result.push(MonsterInstance {
-                id: self.next_monster_id,
-                monster_index: respawn.monster_index,
-                map_index: map.info.index,
-                x,
-                y,
-                direction: respawn.direction,
-                hp: base_hp,
-                respawn_index: respawn.respawn_index,
-                ai_state: MonsterAiState::Idle,
-                target_session_id: None,
-                next_move_time_ms: 0,
-                next_attack_time_ms: 0,
-                search_time_ms: 0,
-                roam_time_ms: 0,
-                alone: false,
-                alone_time_ms: 0,
-            });
+                if self.is_cell_blocked(map.info.index, x, y) {
+                    continue;
+                }
+
+                self.next_monster_id = self.next_monster_id.wrapping_add(1);
+
+                result.push(MonsterInstance {
+                    id: self.next_monster_id,
+                    monster_index: respawn.monster_index,
+                    map_index: map.info.index,
+                    x,
+                    y,
+                    direction: respawn.direction,
+                    hp: base_hp,
+                    respawn_index: respawn.respawn_index,
+                    ai_state: MonsterAiState::Idle,
+                    target_session_id: None,
+                    next_move_time_ms: 0,
+                    next_attack_time_ms: 0,
+                    search_time_ms: 0,
+                    roam_time_ms: 0,
+                    alone: false,
+                    alone_time_ms: 0,
+                });
+
+                placed = true;
+                break;
+            }
+
+            if !placed {
+                debug!(
+                    "respawn: all candidate cells blocked for map={} respawn_index={} loc=({}, {}) spread={}",
+                    map.info.index,
+                    respawn.respawn_index,
+                    respawn.location_x,
+                    respawn.location_y,
+                    respawn.spread,
+                );
+            }
         }
 
         result
@@ -904,6 +1038,11 @@ impl<P: WorldProvider> World<P> {
         if let Some(monsters) = self.monsters.get_mut(&map_index) {
             if let Some(pos) = monsters.iter().position(|m| m.id == monster_id) {
                 let inst = monsters.remove(pos);
+
+                // Clear dynamic occupancy so that the cell is no longer
+                // blocking for players or other monsters, mirroring C# where
+                // Dead monsters do not block movement.
+                self.remove_monster_from_occupancy(monster_id, map_index, inst.x, inst.y);
 
                 if let Some(runtimes) = self.respawns.get_mut(&map_index) {
                     if let Some(rt) = runtimes

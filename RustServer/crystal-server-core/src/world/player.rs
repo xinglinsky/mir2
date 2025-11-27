@@ -3,12 +3,14 @@ use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 use crate::stats::Stat;
 use crate::stats_util::aggregate_equipment_stats;
 use crate::world::magic::UserMagic;
+use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
 
 use super::{Job, PlayerStats, SessionId, World};
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
+    pub name: String,
     pub session_id: SessionId,
     pub character_index: i32,
     pub map_index: i32,
@@ -19,6 +21,10 @@ pub struct PlayerState {
     pub experience: i64,
     pub job: Job,
     pub gender: u8,
+    pub allow_group: bool,
+    pub party_id: Option<PartyId>,
+    pub pending_group_invite_from: Option<SessionId>,
+    pub next_group_invite_time_ms: i64,
     pub magics: Vec<UserMagic>,
     pub stats: PlayerStats,
     pub hp: i32,
@@ -33,6 +39,7 @@ impl<P: WorldProvider> World<P> {
         &mut self,
         session_id: SessionId,
         character_index: i32,
+        name: String,
         map_index: i32,
         x: i32,
         y: i32,
@@ -44,6 +51,7 @@ impl<P: WorldProvider> World<P> {
         magics: Vec<UserMagic>,
     ) -> &PlayerState {
         let is_new = !self.players.contains_key(&session_id);
+        let player_name = name;
 
         let start_inventory = if is_new {
             Some(self.build_start_inventory(job, gender))
@@ -55,6 +63,7 @@ impl<P: WorldProvider> World<P> {
             .entry(session_id)
             .and_modify(|p| {
                 p.character_index = character_index;
+                p.name = player_name.clone();
                 p.map_index = map_index;
                 p.x = x;
                 p.y = y;
@@ -79,6 +88,7 @@ impl<P: WorldProvider> World<P> {
                 let equipment = Equipment::new_default();
 
                 PlayerState {
+                    name: player_name.clone(),
                     session_id,
                     character_index,
                     map_index,
@@ -89,6 +99,10 @@ impl<P: WorldProvider> World<P> {
                     experience,
                     job,
                     gender,
+                    allow_group: true,
+                    party_id: None,
+                    pending_group_invite_from: None,
+                    next_group_invite_time_ms: 0,
                     magics,
                     stats,
                     hp: max_hp,

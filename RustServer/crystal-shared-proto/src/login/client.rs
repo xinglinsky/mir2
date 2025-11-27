@@ -1,9 +1,11 @@
 use std::io::{self, Cursor, Read};
 
 use crate::io::{
+    read_bool,
     read_i32_le,
     read_string,
     read_u32_le,
+    write_bool,
     write_i32_le,
     write_string,
     write_u32_le,
@@ -525,6 +527,60 @@ impl CSearchMap {
 }
 
 #[derive(Clone, Debug)]
+pub struct CMagic {
+    pub spell: u8,
+    pub direction: u8,
+    pub target_id: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+impl CMagic {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::with_capacity(10);
+        buf.push(self.spell);
+        buf.push(self.direction);
+        write_u32_le(&mut buf, self.target_id)?;
+        write_i32_le(&mut buf, self.x)?;
+        write_i32_le(&mut buf, self.y)?;
+        Ok(RawPacket {
+            id: ClientPacketId::Magic as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() < 10 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CMagic payload too short",
+            ));
+        }
+        let mut c = Cursor::new(payload);
+        let spell = {
+            let mut b = [0u8; 1];
+            c.read_exact(&mut b)?;
+            b[0]
+        };
+        let direction = {
+            let mut b = [0u8; 1];
+            c.read_exact(&mut b)?;
+            b[0]
+        };
+        let target_id = read_u32_le(&mut c)?;
+        let x = read_i32_le(&mut c)?;
+        let y = read_i32_le(&mut c)?;
+        Ok(CMagic {
+            spell,
+            direction,
+            target_id,
+            x,
+            y,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CMagicKey {
     pub spell: u8,
     pub key: u8,
@@ -555,5 +611,93 @@ impl CMagicKey {
             key: payload[1],
             old_key: payload[2],
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSwitchGroup {
+    pub allow_group: bool,
+}
+
+impl CSwitchGroup {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.allow_group)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SwitchGroup as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let allow_group = read_bool(&mut c)?;
+        Ok(CSwitchGroup { allow_group })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAddMember {
+    pub name: String,
+}
+
+impl CAddMember {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AddMember as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(CAddMember { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDelMember {
+    pub name: String,
+}
+
+impl CDelMember {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DellMember as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(CDelMember { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CGroupInvite {
+    pub accept_invite: bool,
+}
+
+impl CGroupInvite {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.accept_invite)?;
+        Ok(RawPacket {
+            id: ClientPacketId::GroupInvite as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let accept_invite = read_bool(&mut c)?;
+        Ok(CGroupInvite { accept_invite })
     }
 }

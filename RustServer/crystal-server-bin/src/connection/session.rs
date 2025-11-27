@@ -164,6 +164,13 @@ impl LoginConnection {
                         .update_character_level(account_id, char_idx, ch.level);
                 }
             }
+
+            // Remove the player from the world state and occupancy tracking so
+            // that disconnected characters no longer block movement.
+            {
+                let mut world = self.world.lock().unwrap();
+                world.remove_player_from_world(self.session_id);
+            }
         }
 
         if let Some(ref acc_id) = self.account_id {

@@ -376,6 +376,7 @@ impl LoginConnection {
                 world.handle_command(world::WorldCommand::StartGame {
                     session_id: self.session_id,
                     character_index: ch.index,
+                    name: ch.name.clone(),
                     map_index: map_info_core.index,
                     x: spawn_x,
                     y: spawn_y,

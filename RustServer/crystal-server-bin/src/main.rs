@@ -21,6 +21,7 @@ use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectDied,
     SObjectGold,
+    SObjectRemove,
     SStruck,
 };
 use crystal_shared_proto::user::SHealthChanged;
@@ -465,6 +466,42 @@ async fn main() -> io::Result<()> {
                                 gold,
                                 location_x: x,
                                 location_y: y,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::MapItemRemoved {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectRemove {
+                                object_id: object_id as u32,
                             };
 
                             if let Ok(raw) = pkt.encode() {

@@ -7,10 +7,13 @@ use crystal_server_net::ConnectionHandler;
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::{CBuyItem, CDropItem};
 use crystal_shared_proto::login::{
+    CAddMember,
     CAttack,
     CCallNPC,
     CChangePassword,
+    CDelMember,
     CEquipItem,
+    CGroupInvite,
     CKeepAlive,
     CClientVersion,
     CDeleteCharacter,
@@ -21,6 +24,7 @@ use crystal_shared_proto::login::{
     CRemoveItem,
     CRun,
     CStartGame,
+    CSwitchGroup,
     CTownRevive,
     CPickUp,
     CTurn,
@@ -29,6 +33,7 @@ use crystal_shared_proto::login::{
     CRequestMapInfo,
     CTeleportToNPC,
     CSearchMap,
+    CMagic,
     CMagicKey,
     CGuildInvite,
     CGuildNameReturn,
@@ -225,15 +230,9 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::Magic => {
-                // Magic casting packets (C.Magic in the C# client) are not yet
-                // implemented in this Rust server. For now we ignore them,
-                // which matches the previous behaviour when this packet ID
-                // was unmapped in ClientPacketId::from_i16.
-                tracing::debug!(
-                    "Magic packet received but not implemented yet: id={} payload_len={}",
-                    packet.id,
-                    packet.payload.len(),
-                );
+                if let Ok(msg) = CMagic::decode(&packet.payload) {
+                    self.handle_magic(msg, &mut out);
+                }
             }
             ClientPacketId::Attack => {
                 if let Ok(msg) = CAttack::decode(&packet.payload) {
@@ -356,20 +355,24 @@ impl ConnectionHandler for LoginConnection {
             }
             // Group protocols (stub - not implemented yet)
             ClientPacketId::SwitchGroup => {
-                tracing::debug!("SwitchGroup packet received but not implemented yet");
-                // TODO: Implement switch group logic
+                if let Ok(msg) = CSwitchGroup::decode(&packet.payload) {
+                    self.handle_switch_group(msg, &mut out);
+                }
             }
             ClientPacketId::AddMember => {
-                tracing::debug!("AddMember packet received but not implemented yet");
-                // TODO: Implement add member logic
+                if let Ok(msg) = CAddMember::decode(&packet.payload) {
+                    self.handle_add_member(msg, &mut out);
+                }
             }
             ClientPacketId::DellMember => {
-                tracing::debug!("DellMember packet received but not implemented yet");
-                // TODO: Implement delete member logic
+                if let Ok(msg) = CDelMember::decode(&packet.payload) {
+                    self.handle_del_member(msg, &mut out);
+                }
             }
             ClientPacketId::GroupInvite => {
-                tracing::debug!("GroupInvite packet received but not implemented yet");
-                // TODO: Implement group invite logic
+                if let Ok(msg) = CGroupInvite::decode(&packet.payload) {
+                    self.handle_group_invite(msg, &mut out);
+                }
             }
         }
 
@@ -435,6 +438,13 @@ impl ConnectionHandler for LoginConnection {
                         .store
                         .update_character_level(account_id, char_idx, ch.level);
                 }
+            }
+
+            // Remove the player from the world state and occupancy tracking so
+            // that disconnected characters no longer block movement.
+            {
+                let mut world = self.world.lock().unwrap();
+                world.remove_player_from_world(self.session_id);
             }
         }
 

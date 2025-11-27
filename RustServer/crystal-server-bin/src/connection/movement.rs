@@ -8,6 +8,7 @@ use crystal_shared_proto::login::{
     CWalk,
     CRun,
     CMagicKey,
+    CMagic,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::scene::{
@@ -593,11 +594,19 @@ impl LoginConnection {
                     x,
                     y,
                     item_index,
+                    count,
                 } => {
                     if let Some(info) = self.world_db.get_item_info(item_index) {
+                        let base_name = info.friendly_name();
+                        let name = if count > 1 {
+                            format!("{} ({})", base_name, count)
+                        } else {
+                            base_name
+                        };
+
                         let pkt = SObjectItem {
                             object_id: object_id as u32,
-                            name: info.friendly_name(),
+                            name,
                             name_colour_argb: Self::item_name_colour_for_grade(info.grade),
                             location_x: x,
                             location_y: y,
@@ -690,6 +699,26 @@ impl LoginConnection {
         }
 
         map_changed
+    }
+
+    pub(crate) fn handle_magic(&mut self, msg: CMagic, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::Magic {
+                session_id: self.session_id,
+                spell: msg.spell,
+                direction: msg.direction,
+                target_id: msg.target_id,
+                x: msg.x,
+                y: msg.y,
+            })
+        };
+
+        let _ = self.handle_world_events(events, out);
     }
 
     pub(crate) fn handle_attack(&mut self, msg: CAttack, out: &mut Vec<Vec<u8>>) {

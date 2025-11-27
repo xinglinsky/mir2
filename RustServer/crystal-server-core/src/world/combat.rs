@@ -40,6 +40,125 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    pub(super) fn handle_magic_command(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+        direction: u8,
+        _target_id: u32,
+        _x: i32,
+        _y: i32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let (player_map, player_x, player_y) = match self.players.get(&session_id) {
+            Some(p) => (p.map_index, p.x, p.y),
+            None => return,
+        };
+
+        if spell == Spell::FlamingSword as u8 {
+            self.handle_flaming_sword_spell(session_id, events);
+            return;
+        }
+
+        if spell == Spell::Rage as u8 {
+            self.handle_rage_spell(session_id, events);
+            return;
+        }
+
+        if spell == Spell::ImmortalSkin as u8 {
+            self.handle_immortal_skin_spell(session_id, events);
+            return;
+        }
+
+        if spell == Spell::CounterAttack as u8 {
+            self.handle_counter_attack_spell(session_id, events);
+            return;
+        }
+
+        // TODO: Handle other spells.
+        // For now, just emit a visual effect to show something happened.
+        events.push(WorldEvent::ObjectAttack {
+            session_id,
+            map_index: player_map,
+            x: player_x,
+            y: player_y,
+            direction,
+            spell,
+            level: 0,
+            attack_type: 0,
+        });
+    }
+
+    fn handle_flaming_sword_spell(
+        &mut self,
+        session_id: SessionId,
+        _events: &mut Vec<WorldEvent>,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            // Toggle Flaming Sword state.
+            // In C#, this is:
+            // FlamingSword = true;
+            // FlamingSwordTime = Envir.Time + 10000;
+            // Enqueue(new S.SpellToggle { ObjectID = ObjectID, Spell = Spell.FlamingSword, CanUse = true });
+            // ChangeMP(-cost);
+
+            // For now, just print a debug message. We need to add Buff/SpellToggle support to WorldEvent
+            // and PlayerState to fully implement this.
+            println!("[combat] FlamingSword toggle requested for session {}", session_id);
+            
+            // TODO: Deduct MP
+            // TODO: Update PlayerState with FlamingSword active + expiry time
+            // TODO: Emit SpellToggle event
+        }
+    }
+
+    fn handle_rage_spell(
+        &mut self,
+        session_id: SessionId,
+        _events: &mut Vec<WorldEvent>,
+    ) {
+        if let Some(_player) = self.players.get_mut(&session_id) {
+            // In C# this applies a long-duration Rage buff (attack-oriented).
+            // The full behaviour depends on Buffs and MagicInfo; here we only
+            // record that the spell was invoked so that the build succeeds.
+            println!("[combat] Rage spell requested for session {}", session_id);
+            // TODO: Implement Rage buff and MP cost using MagicInfo and Buff events.
+        }
+    }
+
+    fn handle_immortal_skin_spell(
+        &mut self,
+        session_id: SessionId,
+        _events: &mut Vec<WorldEvent>,
+    ) {
+        if let Some(_player) = self.players.get_mut(&session_id) {
+            // In C# this applies a temporary ImmortalSkin defence buff via
+            // AddBuff(BuffType.ImmortalSkin, ...). For now we just log.
+            println!(
+                "[combat] ImmortalSkin spell requested for session {}",
+                session_id
+            );
+            // TODO: Implement ImmortalSkin buff as a defensive AC/MAC increase.
+        }
+    }
+
+    fn handle_counter_attack_spell(
+        &mut self,
+        session_id: SessionId,
+        _events: &mut Vec<WorldEvent>,
+    ) {
+        if let Some(_player) = self.players.get_mut(&session_id) {
+            // In C# this toggles CounterAttack state and adds a short buff
+            // window during which incoming hits can be reflected. Here we
+            // only log the request.
+            println!(
+                "[combat] CounterAttack spell requested for session {}",
+                session_id
+            );
+            // TODO: Implement CounterAttack window and reactive damage logic.
+        }
+    }
+
     pub(super) fn handle_attack_command(
         &mut self,
         session_id: SessionId,
@@ -229,6 +348,20 @@ impl<P: WorldProvider> World<P> {
         if let Some((id, monster_index)) = target_info {
             let mut dead = false;
 
+            // For Thrusting we need to distinguish between a normal adjacent
+            // melee hit (front tile) and the extended range tile used by the
+            // C# HumanObject "Thrusting" label. In C#, only the extended
+            // tile applies the Thrusting magic damage multiplier, while a
+            // target directly in front uses plain physical damage.
+            let mut use_thrusting_scaling = true;
+            if is_thrusting_spell(effective_spell) {
+                let front_x = x + dx;
+                let front_y = y + dy;
+                if target_x == front_x && target_y == front_y {
+                    use_thrusting_scaling = false;
+                }
+            }
+
             let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
                 u32,
                 bool,
@@ -274,13 +407,18 @@ impl<P: WorldProvider> World<P> {
                 if !use_pure_magic {
                     // First apply the active attack spell (if any) using the
                     // MagicInfo parameters for that spell and the learned
-                    // level.
-                    raw_damage = apply_attack_spell_scaling(
-                        &self.provider,
-                        effective_spell,
-                        level,
-                        raw_damage,
-                    );
+                    // level. For Thrusting this multiplier should only be
+                    // applied when the extended range tile is hit; an
+                    // adjacent (front) target uses plain melee damage, as in
+                    // the C# HumanObject.Attack/Thrusting flow.
+                    if !is_thrusting_spell(effective_spell) || use_thrusting_scaling {
+                        raw_damage = apply_attack_spell_scaling(
+                            &self.provider,
+                            effective_spell,
+                            level,
+                            raw_damage,
+                        );
+                    }
                 }
 
                 // Then apply any passive FatalSword and undead-specific
@@ -291,6 +429,19 @@ impl<P: WorldProvider> World<P> {
                     undead,
                     raw_damage,
                 );
+
+                // Finally, approximate multi-hit skills such as DoubleSlash
+                // and TwinDrakeBlade by doubling the final damage. In the C#
+                // HumanObject implementation these skills schedule two
+                // DelayedAction damage entries with the same magic-scaled
+                // damage value; here we aggregate them into a single hit with
+                // twice the damage to keep the world-event model simple while
+                // preserving total DPS.
+                if effective_spell == Spell::DoubleSlash as u8
+                    || effective_spell == Spell::TwinDrakeBlade as u8
+                {
+                    raw_damage = raw_damage.saturating_mul(2);
+                }
             }
 
             let mut strike_x = target_x;
@@ -439,6 +590,8 @@ impl<P: WorldProvider> World<P> {
                                 y: strike_y,
                                 item_index: None,
                                 gold: total.gold,
+                                count: 0,
+                                item: None,
                                 expire_time_ms: self.time_ms + item_timeout_ms,
                             });
 
@@ -461,6 +614,8 @@ impl<P: WorldProvider> World<P> {
                                 y: strike_y,
                                 item_index: Some(item_index),
                                 gold: 0,
+                                count: 1,
+                                item: None,
                                 expire_time_ms: self.time_ms + item_timeout_ms,
                             });
 
@@ -470,6 +625,7 @@ impl<P: WorldProvider> World<P> {
                                 x: strike_x,
                                 y: strike_y,
                                 item_index,
+                                count: 1,
                             });
                         }
                     }
@@ -712,6 +868,8 @@ impl<P: WorldProvider> World<P> {
                                     y: strike_y,
                                     item_index: None,
                                     gold: total.gold,
+                                    count: 0,
+                                    item: None,
                                     expire_time_ms: self.time_ms + item_timeout_ms,
                                 });
 
@@ -735,6 +893,8 @@ impl<P: WorldProvider> World<P> {
                                     y: strike_y,
                                     item_index: Some(item_index),
                                     gold: 0,
+                                    count: 1,
+                                    item: None,
                                     expire_time_ms: self.time_ms + item_timeout_ms,
                                 });
 
@@ -744,6 +904,7 @@ impl<P: WorldProvider> World<P> {
                                     x: strike_x,
                                     y: strike_y,
                                     item_index,
+                                    count: 1,
                                 });
                             }
                         }
@@ -960,6 +1121,8 @@ impl<P: WorldProvider> World<P> {
                                     y: strike_y,
                                     item_index: None,
                                     gold: total.gold,
+                                    count: 0,
+                                    item: None,
                                     expire_time_ms: self.time_ms + item_timeout_ms,
                                 });
 
@@ -983,6 +1146,8 @@ impl<P: WorldProvider> World<P> {
                                     y: strike_y,
                                     item_index: Some(item_index),
                                     gold: 0,
+                                    count: 1,
+                                    item: None,
                                     expire_time_ms: self.time_ms + item_timeout_ms,
                                 });
 
@@ -992,6 +1157,7 @@ impl<P: WorldProvider> World<P> {
                                     x: strike_x,
                                     y: strike_y,
                                     item_index,
+                                    count: 1,
                                 });
                             }
                         }
