@@ -9,6 +9,8 @@ pub struct WorldConfig {
     pub drop_rate: f32,
     pub teleport_to_npc_cost: i32,
     pub world_map_setup: WorldMapSetupData,
+    pub safe_zone_border: bool,
+    pub safe_zone_healing: bool,
 }
 
 impl WorldConfig {
@@ -19,6 +21,8 @@ impl WorldConfig {
         drop_rate: f32,
         teleport_to_npc_cost: i32,
         world_map_setup: WorldMapSetupData,
+        safe_zone_border: bool,
+        safe_zone_healing: bool,
     ) -> Self {
         Self {
             map_path: map_path.as_ref().to_path_buf(),
@@ -27,6 +31,8 @@ impl WorldConfig {
             drop_rate,
             teleport_to_npc_cost,
             world_map_setup,
+            safe_zone_border,
+            safe_zone_healing,
         }
     }
 }

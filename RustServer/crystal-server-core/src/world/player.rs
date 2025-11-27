@@ -3,6 +3,7 @@ use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 use crate::stats::Stat;
 use crate::stats_util::aggregate_equipment_stats;
 use crate::world::magic::UserMagic;
+use crate::world::buff::PlayerBuff;
 use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
 
@@ -26,6 +27,7 @@ pub struct PlayerState {
     pub pending_group_invite_from: Option<SessionId>,
     pub next_group_invite_time_ms: i64,
     pub magics: Vec<UserMagic>,
+    pub active_buffs: Vec<PlayerBuff>,
     pub stats: PlayerStats,
     pub hp: i32,
     pub mp: i32,
@@ -104,6 +106,7 @@ impl<P: WorldProvider> World<P> {
                     pending_group_invite_from: None,
                     next_group_invite_time_ms: 0,
                     magics,
+                    active_buffs: Vec::new(),
                     stats,
                     hp: max_hp,
                     mp: max_mp,

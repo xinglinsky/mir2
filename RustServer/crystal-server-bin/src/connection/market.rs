@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crystal_shared_proto::item::{CBuyItem, CSellItem, SSellItem};
+use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::user::{SGainedGold, SUserSlotsRefresh, SLoseGold};
 
 use super::{LoginConnection, Stage};
@@ -150,6 +151,12 @@ impl LoginConnection {
         }
 
         // Update inventory: either remove the stack or decrement the count.
+        // Snapshot of the sold portion of the stack for BuyBack. For a full
+        // stack sale this is the entire item; for a partial sale this is a
+        // clone with Count = msg.count.
+        let mut sold_item: UserItemData = item.clone();
+        sold_item.count = msg.count;
+
         if msg.count as u16 == item.count {
             inv.slots[idx] = None;
         } else {
@@ -158,10 +165,17 @@ impl LoginConnection {
             inv.slots[idx] = Some(updated);
         }
 
-        // Persist updated items to the world.
+        // Persist updated items to the world and append to the per-player
+        // BuyBack list for this NPC.
         {
             let mut world = self.world.lock().unwrap();
             world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.add_buyback_item(
+                self.session_id,
+                self.current_map_index,
+                npc.index,
+                sold_item,
+            );
         }
 
         // Update gold in current_stats and store.

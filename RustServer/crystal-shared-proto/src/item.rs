@@ -186,6 +186,42 @@ impl SUseItem {
 }
 
 #[derive(Clone, Debug)]
+pub struct SDropItem {
+    pub unique_id: u64,
+    pub count: u16,
+    pub hero_item: bool,
+    pub success: bool,
+}
+
+impl SDropItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        write_bool(&mut buf, self.hero_item)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::DropItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        let hero_item = read_bool(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SDropItem {
+            unique_id,
+            count,
+            hero_item,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SSellItem {
     pub unique_id: u64,
     pub count: u16,

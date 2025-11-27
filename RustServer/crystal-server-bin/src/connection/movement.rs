@@ -11,6 +11,7 @@ use crystal_shared_proto::login::{
     CMagic,
 };
 use crystal_shared_proto::map::SMapChanged;
+use crystal_shared_proto::magic::SObjectSpell;
 use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectRun,
@@ -31,8 +32,11 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
     SRevived,
     SObjectRevived,
+    SSpellToggle,
+    SAddBuff,
+    SRemoveBuff,
 };
-use crystal_shared_proto::user::{SUserLocation, SHealthChanged};
+use crystal_shared_proto::user::{SUserLocation, SHealthChanged, SUserSlotsRefresh};
 
 use super::{LoginConnection, Stage};
 
@@ -290,6 +294,11 @@ impl LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
                     }
+
+                    // Emit decorative SafeZone border spells (TrapHexagon) for
+                    // this map, mirroring C# Map.CreateSafeZone when
+                    // Settings.SafeZoneBorder is enabled.
+                    self.send_safezone_border_spells(map_index, out);
                 }
                 world::WorldEvent::ObjectAttack {
                     session_id,
@@ -695,6 +704,58 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, encoded);
                     }
                 }
+                world::WorldEvent::SpellToggle {
+                    session_id,
+                    spell_id,
+                    enabled,
+                } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    let pkt = SSpellToggle {
+                        object_id: self.session_id,
+                        spell: spell_id,
+                        can_use: enabled,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
+                world::WorldEvent::AddBuff {
+                    session_id,
+                    buff_bytes,
+                } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    let pkt = SAddBuff { buff_bytes };
+                    let raw = pkt.encode();
+                    out.push(Self::encode_raw(raw));
+                }
+                world::WorldEvent::RemoveBuff {
+                    session_id,
+                    buff_type,
+                } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    let pkt = SRemoveBuff {
+                        buff_type,
+                        object_id: self.session_id,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
+                world::WorldEvent::PlayerHealed { .. } => {}
+                world::WorldEvent::PartySystemMessage { session_id, message } => {
+                    if session_id == self.session_id {
+                        self.send_system_chat(&message, out);
+                    }
+                }
             }
         }
 
@@ -752,6 +813,27 @@ impl LoginConnection {
         };
 
         let _ = self.handle_world_events(events, out);
+
+        // After applying pickup results, refresh inventory/equipment so that
+        // the client does not display stale items or ghost highlights. This
+        // mirrors the explicit slot refresh we perform after DropItem.
+        let (inv_after, eq_after) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        let refresh = SUserSlotsRefresh {
+            inventory: inv_after.slots,
+            equipment: eq_after.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
     }
 
     pub(crate) fn handle_town_revive(&mut self, _msg: CTownRevive, out: &mut Vec<Vec<u8>>) {
@@ -846,5 +928,55 @@ impl LoginConnection {
             out.push(raw.clone());
             self.enqueue_for_viewers(map_index, x, y, raw);
         }
+    }
+
+    fn send_safezone_border_spells(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
+        if !self.world_config.safe_zone_border {
+            return;
+        }
+
+        let Some(info) = self.world_db.get_map_info(map_index) else {
+            return;
+        };
+
+        for sz in &info.safe_zones {
+            let cx = sz.location_x;
+            let cy = sz.location_y;
+            let size = sz.size as i32;
+
+            let min_y = cy - size;
+            let max_y = cy + size;
+            for y in min_y..=max_y {
+                let dy = (y - cy).abs();
+                let step = if dy == size { 1 } else { (size * 2).max(1) };
+
+                let min_x = cx - size;
+                let max_x = cx + size;
+                let mut x = min_x;
+                while x <= max_x {
+                    let object_id = Self::safezone_spell_object_id(map_index, x, y);
+                    let pkt = SObjectSpell {
+                        object_id,
+                        location_x: x,
+                        location_y: y,
+                        spell: world::Spell::TrapHexagon as u8,
+                        direction: 0,
+                        param: false,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+
+                    x += step;
+                }
+            }
+        }
+    }
+
+    fn safezone_spell_object_id(map_index: i32, x: i32, y: i32) -> u32 {
+        let mi = map_index as u32 & 0xFFF; // 12 bits for map index
+        let ux = x.max(0) as u32 & 0x3FF; // 10 bits for x
+        let uy = y.max(0) as u32 & 0x3FF; // 10 bits for y
+        (mi << 20) | (ux << 10) | uy
     }
 }

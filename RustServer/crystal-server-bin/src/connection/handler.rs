@@ -40,6 +40,8 @@ use crystal_shared_proto::login::{
     ClientPacketId,
     SConnected,
 };
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
+use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::packet::RawPacket;
 
 use super::{LoginConnection, Stage};

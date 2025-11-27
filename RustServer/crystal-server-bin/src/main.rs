@@ -24,6 +24,7 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
     SStruck,
 };
+use crystal_shared_proto::magic::SObjectEffect;
 use crystal_shared_proto::user::SHealthChanged;
 use crystal_shared_proto::map_types::{WorldMapSetupData, WorldMapIconData};
 use serde::{Deserialize, Serialize};
@@ -331,12 +332,35 @@ async fn main() -> io::Result<()> {
             );
         }
     }
+
+    let buff_infos = world::buff::load_default_buff_infos(cfg.game_master_effect);
+    println!("[core] Loaded {} Buffs.", buff_infos.len());
+    world_db.buff_infos = buff_infos;
+
+    match world::recipe::load_recipes_from_dir(&cfg.recipes_path, &world_db.item_infos) {
+        Ok(recipes) => {
+            println!(
+                "[core] Loaded {} Recipes from {}",
+                recipes.len(),
+                cfg.recipes_path.display()
+            );
+            world_db.recipe_infos = recipes;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Recipes from {}: {} (continuing without Recipe DB)",
+                cfg.recipes_path.display(),
+                e
+            );
+        }
+    }
     let world_db = Arc::new(world_db);
 
     let world_map_setup = load_world_map_setup();
 
     // Map directory and spawn settings come from configuration, mirroring
     // C# Settings.MapPath and Envir.SpawnMultiplier / RespawnTick.BaseSpawnRate.
+    // SafeZoneBorder/SafeZoneHealing are also configurable to match Setup.ini.
     let world_config = WorldConfig::new(
         &cfg.maps_path,
         cfg.spawn_multiplier,
@@ -344,6 +368,8 @@ async fn main() -> io::Result<()> {
         cfg.drop_rate,
         cfg.teleport_to_npc_cost,
         world_map_setup,
+        cfg.safe_zone_border,
+        cfg.safe_zone_healing,
     );
 
     // Global world instance shared by all connections, mirroring the single-world
@@ -724,6 +750,80 @@ async fn main() -> io::Result<()> {
                                             .or_default()
                                             .push(encoded);
                                     }
+                                }
+                            }
+                        }
+                        world::WorldEvent::PlayerHealed {
+                            session_id,
+                            map_index,
+                            x,
+                            y,
+                            amount: _,
+                            new_hp: _,
+                        } => {
+                            // Send HP/MP update to the healed player.
+                            let (hp, mp) = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.player_current_hp_mp(session_id)
+                                    .unwrap_or((0, 0))
+                            };
+
+                            let hc_pkt = SHealthChanged { hp, mp };
+                            if let Ok(raw) = hc_pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(encoded);
+                            }
+
+                            // Emit a Healing visual effect for the player and
+                            // nearby viewers, approximating the behaviour of
+                            // C# SpellEffect.Healing triggered by SafeZone
+                            // Healing spell objects.
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            // SpellEffect.Healing has enum value 3 in the
+                            // original C# client.
+                            const HEALING_EFFECT: u8 = 3;
+                            let eff_pkt = SObjectEffect {
+                                object_id: session_id,
+                                effect: HEALING_EFFECT,
+                                effect_type: 0,
+                                delay_time: 0,
+                                time: 0,
+                            };
+
+                            if let Ok(raw) = eff_pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+
+                                // Always show the effect to the healed player.
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(encoded.clone());
+
+                                // Also broadcast to other nearby viewers.
+                                for sid in viewers {
+                                    if sid == session_id {
+                                        continue;
+                                    }
+                                    outboxes
+                                        .entry(sid)
+                                        .or_default()
+                                        .push(encoded.clone());
                                 }
                             }
                         }

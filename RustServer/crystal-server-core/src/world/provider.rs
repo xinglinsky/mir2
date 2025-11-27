@@ -2,7 +2,13 @@ use crate::world::map::MapInfo;
 use crate::world::monster::MonsterInfo;
 use crate::world::npc::NpcInfo;
 use crate::world::magic::MagicInfo;
+use crate::world::buff::BuffInfo;
+use crate::world::recipe::RecipeInfo;
+use crate::world::types::BuffType;
 use crystal_shared_proto::item_types::ItemInfoData;
+
+static EMPTY_BUFF_INFOS: &[BuffInfo] = &[];
+static EMPTY_RECIPE_INFOS: &[RecipeInfo] = &[];
 
 #[derive(Clone, Debug, Default)]
 pub struct WorldDatabase {
@@ -11,6 +17,8 @@ pub struct WorldDatabase {
     pub monster_infos: Vec<MonsterInfo>,
     pub npc_infos: Vec<NpcInfo>,
     pub magic_infos: Vec<MagicInfo>,
+    pub buff_infos: Vec<BuffInfo>,
+    pub recipe_infos: Vec<RecipeInfo>,
 }
 
 pub trait WorldProvider {
@@ -19,6 +27,14 @@ pub trait WorldProvider {
     fn monster_infos(&self) -> &[MonsterInfo];
     fn npc_infos(&self) -> &[NpcInfo];
     fn magic_infos(&self) -> &[MagicInfo];
+
+    fn buff_infos(&self) -> &[BuffInfo] {
+        EMPTY_BUFF_INFOS
+    }
+
+    fn recipe_infos(&self) -> &[RecipeInfo] {
+        EMPTY_RECIPE_INFOS
+    }
 
     fn get_map_info(&self, index: i32) -> Option<&MapInfo> {
         self.map_infos().iter().find(|m| m.index == index)
@@ -51,6 +67,12 @@ pub trait WorldProvider {
             .iter()
             .find(|i| i.name.eq_ignore_ascii_case(name))
     }
+
+    fn get_buff_info(&self, buff_type: BuffType) -> Option<&BuffInfo> {
+        self.buff_infos()
+            .iter()
+            .find(|b| b.buff_type == buff_type)
+    }
 }
 
 impl WorldDatabase {
@@ -78,5 +100,13 @@ impl WorldProvider for WorldDatabase {
 
     fn magic_infos(&self) -> &[MagicInfo] {
         &self.magic_infos
+    }
+
+    fn buff_infos(&self) -> &[BuffInfo] {
+        &self.buff_infos
+    }
+
+    fn recipe_infos(&self) -> &[RecipeInfo] {
+        &self.recipe_infos
     }
 }

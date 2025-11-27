@@ -159,6 +159,7 @@ pub enum BuffType {
     MagicDefence = 207,
     WonderDrug = 208,
     Knapsack = 209,
+    FlamingSword = 210,
 }
 
 impl BuffType {
@@ -228,6 +229,7 @@ impl BuffType {
             207 => Some(BuffType::MagicDefence),
             208 => Some(BuffType::WonderDrug),
             209 => Some(BuffType::Knapsack),
+            210 => Some(BuffType::FlamingSword),
             _ => None,
         }
     }

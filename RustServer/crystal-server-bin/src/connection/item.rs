@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crystal_server_core::world::{self, WorldProvider};
-use crystal_shared_proto::item::{CDropItem, SEquipItem, SMoveItem, SRemoveItem, SUseItem};
+use crystal_shared_proto::item::{CDropItem, SDropItem, SEquipItem, SMoveItem, SRemoveItem, SUseItem};
 use crystal_shared_proto::login::{CEquipItem, CMoveItem, CRemoveItem, CUseItem};
 use crystal_shared_proto::npc::SNpcUpdate;
 use crystal_shared_proto::scene::{
@@ -571,6 +571,15 @@ impl LoginConnection {
         // For now we only support dropping from the main inventory, and we
         // ignore hero_inventory semantics.
         if msg.count == 0 {
+            let pkt = SDropItem {
+                unique_id: msg.unique_id,
+                count: msg.count,
+                hero_item: msg.hero_inventory,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
             return;
         }
 
@@ -597,7 +606,18 @@ impl LoginConnection {
         let idx = match found_index {
             Some(i) => i,
             None => {
-                // Nothing to drop; just refresh client view of slots.
+                // Nothing to drop; send a failed SDropItem and refresh the
+                // client view of slots so it can resync.
+                let pkt = SDropItem {
+                    unique_id: msg.unique_id,
+                    count: msg.count,
+                    hero_item: msg.hero_inventory,
+                    success: false,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
                 let refresh = SUserSlotsRefresh {
                     inventory: inv.slots,
                     equipment: eq.slots,
@@ -612,6 +632,16 @@ impl LoginConnection {
         let item = match inv.slots[idx].clone() {
             Some(it) => it,
             None => {
+                let pkt = SDropItem {
+                    unique_id: msg.unique_id,
+                    count: msg.count,
+                    hero_item: msg.hero_inventory,
+                    success: false,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
                 let refresh = SUserSlotsRefresh {
                     inventory: inv.slots,
                     equipment: eq.slots,
@@ -624,6 +654,16 @@ impl LoginConnection {
         };
 
         if msg.count as u32 > item.count as u32 {
+            let pkt = SDropItem {
+                unique_id: msg.unique_id,
+                count: msg.count,
+                hero_item: msg.hero_inventory,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
             let refresh = SUserSlotsRefresh {
                 inventory: inv.slots,
                 equipment: eq.slots,
@@ -658,6 +698,36 @@ impl LoginConnection {
                     crystal_server_core::item::Equipment::new_default(),
                 ))
         };
+
+        // Determine whether the drop actually succeeded by comparing the
+        // inventory state before and after applying the world command. We
+        // treat either a reduced stack count or complete removal of the item
+        // as success; unchanged count means the drop was rejected by server
+        // rules (e.g. NoThrowItem, DontDrop).
+        let mut remaining_count: Option<u16> = None;
+        for slot in &inv_after.slots {
+            if let Some(it) = slot {
+                if it.unique_id == msg.unique_id {
+                    remaining_count = Some(it.count);
+                    break;
+                }
+            }
+        }
+
+        let success = match remaining_count {
+            Some(after_count) => after_count < item.count,
+            None => true,
+        };
+
+        let pkt = SDropItem {
+            unique_id: msg.unique_id,
+            count: msg.count,
+            hero_item: msg.hero_inventory,
+            success,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
 
         let refresh = SUserSlotsRefresh {
             inventory: inv_after.slots,

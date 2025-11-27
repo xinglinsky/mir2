@@ -60,9 +60,12 @@ impl LoginConnection {
             let packet = SObjectNpc {
                 object_id: npc.index as u32,
                 name: npc.name.clone(),
-                name_colour_argb: -1,
+                // Match C# NPCObject default: NameColour = Color.Lime.
+                name_colour_argb: 0xFF00FF00u32 as i32,
                 image: npc.image,
-                colour_argb: -1,
+                // Match default NPCInfo.Colour.ToArgb(), which is 0 unless
+                // explicitly overridden for special NPCs like flags.
+                colour_argb: 0,
                 location_x: npc.location_x,
                 location_y: npc.location_y,
                 direction: 0,
@@ -158,9 +161,9 @@ impl LoginConnection {
                     let packet = SObjectNpc {
                         object_id: npc.index as u32,
                         name: npc.name.clone(),
-                        name_colour_argb: -1,
+                        name_colour_argb: 0xFF00FF00u32 as i32,
                         image: npc.image,
-                        colour_argb: -1,
+                        colour_argb: 0,
                         location_x: npc.location_x,
                         location_y: npc.location_y,
                         direction: 0,

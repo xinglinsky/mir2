@@ -17,7 +17,44 @@ impl<P: WorldProvider> World<P> {
             let Some(movement) = map_info
                 .movements
                 .iter()
-                .find(|m| m.source_x == player.x && m.source_y == player.y)
+                .find(|m| {
+                    if m.source_x != player.x || m.source_y != player.y {
+                        return false;
+                    }
+
+                    // NeedHole: in C# this requires a DigOutZombie/DigOutArmadillo
+                    // spell object on the source cell. The Rust core does not yet
+                    // track map spell instances, so we conservatively treat this as
+                    // unsatisfied and skip such movements for now.
+                    if m.need_hole {
+                        if !self.cell_has_hole_spell(current_map_index, m.source_x, m.source_y) {
+                            println!(
+                                "[move] Map movement candidate blocked: need_hole at map {} source=({}, {})",
+                                current_map_index,
+                                m.source_x,
+                                m.source_y,
+                            );
+                            return false;
+                        }
+                    }
+
+                    // ConquestIndex: in C# this requires the player's guild to own
+                    // the specified conquest. Guild/conquest ownership is not yet
+                    // wired into the Rust world state, so treat movements with a
+                    // positive conquest_index as gated off for now.
+                    if m.conquest_index > 0 {
+                        println!(
+                            "[move] Map movement candidate blocked: conquest_index {} at map {} source=({}, {})",
+                            m.conquest_index,
+                            current_map_index,
+                            m.source_x,
+                            m.source_y,
+                        );
+                        return false;
+                    }
+
+                    true
+                })
             else {
                 return;
             };

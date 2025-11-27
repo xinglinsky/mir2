@@ -6,6 +6,8 @@ use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
+use crate::world::types::BuffType;
+use crate::world::Spell;
 
 use super::{World, WorldEvent};
 
@@ -133,6 +135,23 @@ impl<P: WorldProvider> World<P> {
         // Process expired map items: remove items that have exceeded their
         // expire_time_ms, mirroring C# ItemObject.Process() behavior.
         self.process_map_items(now_ms, &mut events);
+
+        // Process player buffs: check for expiration
+        self.process_player_buffs(now_ms, &mut events);
+
+        // SafeZoneHealing: periodically heal players standing inside any
+        // configured SafeZone when Settings.SafeZoneHealing is enabled. This
+        // mirrors the effect of C# Healing spell objects placed by
+        // Map.CreateSafeZone but applies healing directly to player HP.
+        if self.config.safe_zone_healing {
+            const SAFEZONE_HEAL_INTERVAL_MS: i64 = 2_000;
+            let due = self.safezone_heal_last_ms == 0
+                || now_ms.saturating_sub(self.safezone_heal_last_ms) >= SAFEZONE_HEAL_INTERVAL_MS;
+            if due {
+                self.process_safezone_healing(&mut events);
+                self.safezone_heal_last_ms = now_ms;
+            }
+        }
 
         let mut jobs: Vec<(i32, usize, u16)> = Vec::new();
         let mut total_spawned: u32 = 0;
@@ -268,6 +287,52 @@ impl<P: WorldProvider> World<P> {
         self.process_monster_ai(now_ms, &mut events);
 
         events
+    }
+
+    fn process_player_buffs(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        for (session_id, player) in &mut self.players {
+            let mut removed_indices = Vec::new();
+            let mut stats_changed = false;
+
+            for (idx, buff) in player.active_buffs.iter().enumerate() {
+                if !buff.infinite && buff.expire_time_ms <= now_ms {
+                    removed_indices.push(idx);
+                }
+            }
+
+            if removed_indices.is_empty() {
+                continue;
+            }
+
+            // Sort descending to remove from back
+            removed_indices.sort_unstable_by(|a, b| b.cmp(a));
+
+            for idx in removed_indices {
+                let buff = player.active_buffs.remove(idx);
+                stats_changed = true;
+
+                if buff.buff_type == BuffType::FlamingSword {
+                    events.push(WorldEvent::SpellToggle {
+                        session_id: *session_id,
+                        spell_id: Spell::FlamingSword as u8,
+                        enabled: false,
+                    });
+                } else {
+                    events.push(WorldEvent::RemoveBuff {
+                        session_id: *session_id,
+                        buff_type: buff.buff_type as u8,
+                    });
+                }
+            }
+
+            if stats_changed {
+                player.stats.buffs.clear();
+                for b in &player.active_buffs {
+                    player.stats.buffs.add(&b.stats);
+                }
+                player.stats.recalc_if_dirty_for_job(player.job);
+            }
+        }
     }
 
     fn process_monster_ai(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {

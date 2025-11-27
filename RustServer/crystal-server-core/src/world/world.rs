@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use super::Job;
-use crate::world::party::PartyManager;
+use crate::world::Spell;
+use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
 use crate::guild::{GuildInfo, GuildManager};
 use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
@@ -40,6 +41,14 @@ pub struct CorePlayerInfo {
     pub y: i32,
     pub level: u16,
     pub job: Job,
+}
+
+#[derive(Clone, Debug)]
+pub struct BuyBackEntry {
+    /// Snapshot of the sold item at the time it was added to BuyBack.
+    pub item: UserItemData,
+    /// Server time in milliseconds when this entry was created.
+    pub added_ms: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -210,6 +219,34 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
     },
+    PlayerHealed {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        amount: i32,
+        new_hp: i32,
+    },
+    SpellToggle {
+        session_id: SessionId,
+        spell_id: u8,
+        enabled: bool,
+    },
+    AddBuff {
+        session_id: SessionId,
+        buff_bytes: Vec<u8>,
+    },
+    RemoveBuff {
+        session_id: SessionId,
+        buff_type: u8, // BuffType as u8
+    },
+    /// A free-form system message destined for a specific player session,
+    /// typically used for errors or feedback from world-side social logic
+    /// such as the party system.
+    PartySystemMessage {
+        session_id: SessionId,
+        message: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -226,15 +263,21 @@ pub struct World<P: WorldProvider> {
     pub(crate) map_items: HashMap<i32, Vec<MapItem>>,
     pub(crate) next_map_item_id: u64,
     pub(crate) occupancy: HashMap<i32, HashMap<(i32, i32), CellOccupants>>,
+    pub(crate) map_spells: HashMap<i32, HashMap<(i32, i32), Vec<u8>>>,
     /// Per-map respawn runtime state, mirroring C# MapRespawn in a simplified form.
     pub(crate) respawns: HashMap<i32, Vec<RespawnRuntime>>,
     pub(crate) respawn_tick_counter: u64,
     pub(crate) respawn_last_tick_ms: i64,
+    /// Last time (in ms) when SafeZone healing was processed.
+    pub(crate) safezone_heal_last_ms: i64,
     pub(crate) respawn_base_spawn_rate_minutes: u8,
     pub(crate) spawn_multiplier: u16,
     pub(crate) drop_rate: f32,
     pub(crate) guilds: GuildManager,
     pub(crate) parties: PartyManager,
+    /// In-memory BuyBack storage keyed by (session, map_index, npc_index).
+    /// This approximates C# NPCObject.BuyBack per player and per NPC.
+    pub(crate) buyback: HashMap<(SessionId, i32, i32), Vec<BuyBackEntry>>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -253,14 +296,17 @@ impl<P: WorldProvider> World<P> {
             map_items: HashMap::new(),
             next_map_item_id: 1,
             occupancy: HashMap::new(),
+            map_spells: HashMap::new(),
             respawns: HashMap::new(),
             respawn_tick_counter: 0,
             respawn_last_tick_ms: 0,
+            safezone_heal_last_ms: 0,
             respawn_base_spawn_rate_minutes,
             spawn_multiplier,
             drop_rate,
             guilds: GuildManager::new(),
             parties: PartyManager::new(),
+            buyback: HashMap::new(),
         }
     }
 
@@ -314,6 +360,61 @@ impl<P: WorldProvider> World<P> {
             .iter()
             .find(|m| m.id == monster_id)
             .map(|m| (m.x, m.y, m.direction))
+    }
+
+    /// Look up the canonical player name for a given session.
+    pub fn player_name(&self, session_id: SessionId) -> Option<String> {
+        self.players.get(&session_id).map(|p| p.name.clone())
+    }
+
+    /// Find a player session by character name using a case-insensitive
+    /// comparison. This mirrors C# party and social lookup behaviour.
+    pub fn find_session_by_name(&self, name: &str) -> Option<SessionId> {
+        self
+            .players
+            .iter()
+            .find(|(_, p)| p.name.eq_ignore_ascii_case(name))
+            .map(|(&sid, _)| sid)
+    }
+
+    /// Inspect who, if anyone, has a pending group invite targeted at the
+    /// given session. This mirrors C# PendingGroupInviteFrom behaviour.
+    pub fn pending_group_invite_from(&self, session_id: SessionId) -> Option<SessionId> {
+        self.players
+            .get(&session_id)
+            .and_then(|p| p.pending_group_invite_from)
+    }
+
+    /// Helper to snapshot current party members (online only) for a given
+    /// session, returning a list of (SessionId, Name) pairs.
+    pub fn party_members_for_session(
+        &self,
+        session_id: SessionId,
+    ) -> Option<Vec<(SessionId, String)>> {
+        let party_id = self.players.get(&session_id).and_then(|p| p.party_id)?;
+        let party = self.parties.parties.get(&party_id)?;
+
+        let mut members = Vec::new();
+        for &sid in &party.members {
+            if let Some(p) = self.players.get(&sid) {
+                members.push((sid, p.name.clone()));
+            }
+        }
+        Some(members)
+    }
+
+    /// Helper for MovementInfo.NeedHole: returns true if the given map cell
+    /// has a "hole" spell (DigOutZombie or DigOutArmadillo) recorded in the
+    /// map_spells occupancy, approximating C# Cell.Objects SpellObject check.
+    pub(crate) fn cell_has_hole_spell(&self, map_index: i32, x: i32, y: i32) -> bool {
+        if let Some(map_spells) = self.map_spells.get(&map_index) {
+            if let Some(spells) = map_spells.get(&(x, y)) {
+                return spells.iter().any(|&s| {
+                    s == Spell::DigOutZombie as u8 || s == Spell::DigOutArmadillo as u8
+                });
+            }
+        }
+        false
     }
 
     /// Create a new guild with the given name if no existing guild uses the
@@ -370,7 +471,7 @@ impl<P: WorldProvider> World<P> {
         &mut self,
         map_index: i32,
     ) -> &mut HashMap<(i32, i32), CellOccupants> {
-        self.occupancy.entry(map_index).or_default()
+        self.occupancy.entry(map_index).or_insert_with(HashMap::new)
     }
 
     pub(crate) fn is_cell_blocked(&self, map_index: i32, x: i32, y: i32) -> bool {
@@ -387,10 +488,10 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
     ) {
-        let occ_map = self.occupancy_map_mut(map_index);
-        let entry = occ_map.entry((x, y)).or_default();
-        if !entry.players.contains(&session_id) {
-            entry.players.push(session_id);
+        let map = self.occupancy_map_mut(map_index);
+        let cell = map.entry((x, y)).or_insert_with(CellOccupants::default);
+        if !cell.players.contains(&session_id) {
+            cell.players.push(session_id);
         }
     }
 
@@ -401,22 +502,28 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
     ) {
-        if let Some(map_occ) = self.occupancy.get_mut(&map_index) {
-            if let Some(cell) = map_occ.get_mut(&(x, y)) {
+        if let Some(map) = self.occupancy.get_mut(&map_index) {
+            if let Some(cell) = map.get_mut(&(x, y)) {
                 cell.players.retain(|&sid| sid != session_id);
                 if cell.players.is_empty() && cell.monsters.is_empty() {
-                    map_occ.remove(&(x, y));
+                    map.remove(&(x, y));
                 }
-            }
-            if map_occ.is_empty() {
-                self.occupancy.remove(&map_index);
             }
         }
     }
 
     pub(crate) fn clear_player_from_occupancy(&mut self, session_id: SessionId) {
-        if let Some(p) = self.players.get(&session_id) {
-            self.remove_player_from_occupancy(session_id, p.map_index, p.x, p.y);
+        for map in self.occupancy.values_mut() {
+            let mut to_remove = Vec::new();
+            for (&coord, cell) in map.iter_mut() {
+                cell.players.retain(|&sid| sid != session_id);
+                if cell.players.is_empty() && cell.monsters.is_empty() {
+                    to_remove.push(coord);
+                }
+            }
+            for coord in to_remove {
+                map.remove(&coord);
+            }
         }
     }
 
@@ -427,10 +534,10 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
     ) {
-        let occ_map = self.occupancy_map_mut(map_index);
-        let entry = occ_map.entry((x, y)).or_default();
-        if !entry.monsters.contains(&monster_id) {
-            entry.monsters.push(monster_id);
+        let map = self.occupancy_map_mut(map_index);
+        let cell = map.entry((x, y)).or_insert_with(CellOccupants::default);
+        if !cell.monsters.contains(&monster_id) {
+            cell.monsters.push(monster_id);
         }
     }
 
@@ -441,22 +548,101 @@ impl<P: WorldProvider> World<P> {
         x: i32,
         y: i32,
     ) {
-        if let Some(map_occ) = self.occupancy.get_mut(&map_index) {
-            if let Some(cell) = map_occ.get_mut(&(x, y)) {
+        if let Some(map) = self.occupancy.get_mut(&map_index) {
+            if let Some(cell) = map.get_mut(&(x, y)) {
                 cell.monsters.retain(|&id| id != monster_id);
                 if cell.players.is_empty() && cell.monsters.is_empty() {
-                    map_occ.remove(&(x, y));
+                    map.remove(&(x, y));
                 }
-            }
-            if map_occ.is_empty() {
-                self.occupancy.remove(&map_index);
             }
         }
     }
+    
+    /// Append a sold item to the BuyBack list for the given player, map and
+    /// NPC. This mirrors the C# behaviour where each NPC keeps a per-player
+    /// list of recently sold items that can be repurchased via @BUYBACK.
+    pub fn add_buyback_item(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        npc_index: i32,
+        item: UserItemData,
+    ) {
+        let key = (session_id, map_index, npc_index);
+        let entry = BuyBackEntry {
+            item,
+            added_ms: self.time_ms,
+        };
+        self.buyback.entry(key).or_default().push(entry);
+    }
 
-    /// Remove a player from the world and occupancy tracking. This is used when
-    /// a connection fully disconnects so that offline characters no longer
-    /// block movement.
+    /// Get a cloned list of BuyBack items for a player at a specific NPC on
+    /// the given map. This is used by the connection layer to populate the
+    /// @BUYBACK panel.
+    pub fn buyback_items_for(
+        &self,
+        session_id: SessionId,
+        map_index: i32,
+        npc_index: i32,
+    ) -> Vec<UserItemData> {
+        let key = (session_id, map_index, npc_index);
+        self
+            .buyback
+            .get(&key)
+            .map(|v| v.iter().map(|e| e.item.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn leave_party(&mut self, session_id: SessionId) {
+        let party_id = match self
+            .players
+            .get(&session_id)
+            .and_then(|p| p.party_id)
+        {
+            Some(pid) => pid,
+            None => return,
+        };
+
+        let members_snapshot = match self.parties.parties.get(&party_id) {
+            Some(p) => p.members.clone(),
+            None => return,
+        };
+
+        let mut disband = false;
+        if let Some(party) = self.parties.parties.get_mut(&party_id) {
+            party.members.retain(|&sid| sid != session_id);
+            if party.members.is_empty() {
+                disband = true;
+            } else if party.leader == session_id {
+                if let Some(&new_leader) = party.members.first() {
+                    party.leader = new_leader;
+                }
+            }
+        } else {
+            return;
+        }
+
+        if let Some(p) = self.players.get_mut(&session_id) {
+            if p.party_id == Some(party_id) {
+                p.party_id = None;
+            }
+        }
+
+        if disband {
+            for sid in members_snapshot {
+                if let Some(p) = self.players.get_mut(&sid) {
+                    if p.party_id == Some(party_id) {
+                        p.party_id = None;
+                    }
+                }
+            }
+            self.parties.parties.remove(&party_id);
+        }
+    }
+
+    /// Remove a player from the world and occupancy tracking. This is used
+    /// when a connection fully disconnects so that offline characters no
+    /// longer block movement.
     pub fn remove_player_from_world(&mut self, session_id: SessionId) {
         if let Some(p) = self.players.remove(&session_id) {
             self.remove_player_from_occupancy(session_id, p.map_index, p.x, p.y);
@@ -464,7 +650,7 @@ impl<P: WorldProvider> World<P> {
     }
 
     pub fn handle_command(&mut self, cmd: WorldCommand) -> Vec<WorldEvent> {
-        let mut events = Vec::new();
+        let mut events: Vec<WorldEvent> = Vec::new();
 
         match cmd {
             WorldCommand::StartGame {
@@ -904,11 +1090,434 @@ impl<P: WorldProvider> World<P> {
                     p.allow_group = allow;
                 }
             }
-            WorldCommand::InviteToParty { .. } => {}
-            WorldCommand::KickFromParty { .. } => {}
-            WorldCommand::RespondPartyInvite { .. } => {}
+            WorldCommand::InviteToParty {
+                session_id,
+                target_name,
+            } => {
+                // Look up the inviter first so we can apply leadership and
+                // cooldown checks.
+                let inviter = match self.players.get(&session_id) {
+                    Some(p) => p,
+                    None => return events,
+                };
+
+                // If already in a party, only the leader may invite.
+                if let Some(pid) = inviter.party_id {
+                    if let Some(party) = self.parties.parties.get(&pid) {
+                        if party.leader != session_id {
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message:
+                                    "你不是队长，不能邀请其他玩家加入队伍。".to_string(),
+                            });
+                            return events;
+                        }
+
+                        if party.members.len() >= MAX_GROUP_SIZE {
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message: "你的队伍人数已经达到上限。".to_string(),
+                            });
+                            return events;
+                        }
+                    }
+                }
+
+                // Simple cooldown: mirror C# NextGroupInviteTime 行为，静默丢弃过
+                // 于频繁的邀请，不发送任何提示。
+                if inviter.next_group_invite_time_ms > self.time_ms {
+                    return events;
+                }
+
+                // 禁止给自己发邀请。
+                if inviter.name.eq_ignore_ascii_case(&target_name) {
+                    events.push(WorldEvent::PartySystemMessage {
+                        session_id,
+                        message: "你不能把自己加入队伍。".to_string(),
+                    });
+                    return events;
+                }
+
+                // 从名字解析目标玩家。
+                let target_session_id = match self.find_session_by_name(&target_name) {
+                    Some(sid) => sid,
+                    None => {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: format!("未找到玩家 {}。", target_name),
+                        });
+                        return events;
+                    }
+                };
+
+                // 只读检查目标玩家状态，决定是否可以发送邀请。
+                let target_name_canonical;
+                {
+                    let target = match self.players.get(&target_session_id) {
+                        Some(p) => p,
+                        None => {
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message: format!("未找到玩家 {}。", target_name),
+                            });
+                            return events;
+                        }
+                    };
+
+                    target_name_canonical = target.name.clone();
+
+                    if !target.allow_group {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: format!(
+                                "{} 未开启允许组队。",
+                                target_name_canonical
+                            ),
+                        });
+                        return events;
+                    }
+
+                    if target.party_id.is_some() {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: format!(
+                                "{} 已经在其他队伍中了。",
+                                target_name_canonical
+                            ),
+                        });
+                        return events;
+                    }
+
+                    if target.pending_group_invite_from.is_some() {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: format!(
+                                "{} 已经在处理另一位玩家的组队邀请。",
+                                target_name_canonical
+                            ),
+                        });
+                        return events;
+                    }
+                }
+
+                // 所有检查通过，记录这次待处理的组队邀请并设置冷却。
+                if let Some(target) = self.players.get_mut(&target_session_id) {
+                    target.pending_group_invite_from = Some(session_id);
+                }
+
+                if let Some(inviter) = self.players.get_mut(&session_id) {
+                    let cooldown_ms: i64 = 10_000;
+                    inviter.next_group_invite_time_ms =
+                        self.time_ms.saturating_add(cooldown_ms);
+                }
+            }
+            WorldCommand::KickFromParty {
+                session_id,
+                target_name,
+            } => {
+                let kicker = match self.players.get(&session_id) {
+                    Some(p) => p,
+                    None => return events,
+                };
+
+                let party_id = match kicker.party_id {
+                    Some(pid) => pid,
+                    None => {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: "你当前不在任何队伍中。".to_string(),
+                        });
+                        return events;
+                    }
+                };
+
+                let party = match self.parties.parties.get(&party_id) {
+                    Some(p) => p,
+                    None => {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: "你当前不在任何队伍中。".to_string(),
+                        });
+                        return events;
+                    }
+                };
+
+                if party.leader != session_id {
+                    events.push(WorldEvent::PartySystemMessage {
+                        session_id,
+                        message:
+                            "你不是队长，不能将成员移出队伍。".to_string(),
+                    });
+                    return events;
+                }
+
+                let target_session_id = match self.find_session_by_name(&target_name) {
+                    Some(sid) => sid,
+                    None => {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id,
+                            message: format!(
+                                "玩家 {} 不在你的队伍中。",
+                                target_name
+                            ),
+                        });
+                        return events;
+                    }
+                };
+
+                if !party.members.contains(&target_session_id) {
+                    events.push(WorldEvent::PartySystemMessage {
+                        session_id,
+                        message: format!(
+                            "玩家 {} 不在你的队伍中。",
+                            target_name
+                        ),
+                    });
+                    return events;
+                }
+
+                self.leave_party(target_session_id);
+            }
+            WorldCommand::RespondPartyInvite { session_id, accept } => {
+                let (inviter_session_id, invitee_party_id, inviter_party_id, inviter_name, invitee_name, inviter_allow_group) =
+                    {
+                        let invitee = match self.players.get(&session_id) {
+                            Some(p) => p,
+                            None => return events,
+                        };
+
+                        let inviter_session_id = match invitee.pending_group_invite_from {
+                            Some(sid) => sid,
+                            None => {
+                                events.push(WorldEvent::PartySystemMessage {
+                                    session_id,
+                                    message:
+                                        "你当前没有收到任何组队邀请。".to_string(),
+                                });
+                                return events;
+                            }
+                        };
+
+                        let inviter = match self.players.get(&inviter_session_id) {
+                            Some(p) => p,
+                            None => {
+                                events.push(WorldEvent::PartySystemMessage {
+                                    session_id,
+                                    message: "组队发起者已下线。".to_string(),
+                                });
+                                if let Some(invitee_mut) =
+                                    self.players.get_mut(&session_id)
+                                {
+                                    if invitee_mut.pending_group_invite_from
+                                        == Some(inviter_session_id)
+                                    {
+                                        invitee_mut.pending_group_invite_from = None;
+                                    }
+                                }
+                                return events;
+                            }
+                        };
+
+                        (
+                            inviter_session_id,
+                            invitee.party_id,
+                            inviter.party_id,
+                            inviter.name.clone(),
+                            invitee.name.clone(),
+                            inviter.allow_group,
+                        )
+                    };
+
+                if !accept {
+                    // 通知发起人：对方拒绝了组队邀请。
+                    events.push(WorldEvent::PartySystemMessage {
+                        session_id: inviter_session_id,
+                        message: format!(
+                            "{} 拒绝了你的组队邀请。",
+                            invitee_name
+                        ),
+                    });
+
+                    if let Some(invitee) = self.players.get_mut(&session_id) {
+                        if invitee.pending_group_invite_from
+                            == Some(inviter_session_id)
+                        {
+                            invitee.pending_group_invite_from = None;
+                        }
+                    }
+                    return events;
+                }
+
+                // 接受前的各种合法性检查，尽量贴近 C# 行为。
+                if let Some(pid) = invitee_party_id {
+                    if let Some(party) = self.parties.parties.get(&pid) {
+                        if party.members.contains(&session_id) {
+                            if let Some(invitee) =
+                                self.players.get_mut(&session_id)
+                            {
+                                invitee.pending_group_invite_from = None;
+                            }
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message: format!(
+                                    "你已经在队伍中，无法加入 {} 的队伍。",
+                                    inviter_name
+                                ),
+                            });
+                            return events;
+                        }
+                    }
+                }
+
+                if let Some(pid) = inviter_party_id {
+                    if let Some(party) = self.parties.parties.get(&pid) {
+                        if party.leader != inviter_session_id {
+                            if let Some(invitee) =
+                                self.players.get_mut(&session_id)
+                            {
+                                if invitee.pending_group_invite_from
+                                    == Some(inviter_session_id)
+                                {
+                                    invitee.pending_group_invite_from = None;
+                                }
+                            }
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message: format!(
+                                    "{} 已经不是该队伍的队长了。",
+                                    inviter_name
+                                ),
+                            });
+                            return events;
+                        }
+
+                        if party.members.len() >= MAX_GROUP_SIZE {
+                            if let Some(invitee) =
+                                self.players.get_mut(&session_id)
+                            {
+                                if invitee.pending_group_invite_from
+                                    == Some(inviter_session_id)
+                                {
+                                    invitee.pending_group_invite_from = None;
+                                }
+                            }
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id,
+                                message: format!(
+                                    "{} 的队伍人数已经达到上限。",
+                                    inviter_name
+                                ),
+                            });
+                            return events;
+                        }
+                    }
+                }
+
+                if !inviter_allow_group {
+                    if let Some(invitee) = self.players.get_mut(&session_id) {
+                        if invitee.pending_group_invite_from
+                            == Some(inviter_session_id)
+                        {
+                            invitee.pending_group_invite_from = None;
+                        }
+                    }
+                    events.push(WorldEvent::PartySystemMessage {
+                        session_id,
+                        message: format!(
+                            "{} 当前未开启允许组队。",
+                            inviter_name
+                        ),
+                    });
+                    return events;
+                }
+
+                // 通过所有检查后，按原有逻辑创建或加入队伍。
+                let party_id = {
+                    if let Some(pid) = inviter_party_id {
+                        if let Some(party) = self.parties.parties.get_mut(&pid) {
+                            if !party.members.contains(&session_id) {
+                                party.members.push(session_id);
+                            }
+                        }
+                        pid
+                    } else {
+                        let pid = self.parties.next_id;
+                        let next = self.parties.next_id.wrapping_add(1);
+                        self.parties.next_id = if next == 0 { 1 } else { next };
+
+                        let party = Party {
+                            id: pid,
+                            leader: inviter_session_id,
+                            members: vec![inviter_session_id, session_id],
+                        };
+                        self.parties.parties.insert(pid, party);
+                        pid
+                    }
+                };
+
+                if let Some(invitee) = self.players.get_mut(&session_id) {
+                    invitee.party_id = Some(party_id);
+                    invitee.pending_group_invite_from = None;
+                }
+
+                if let Some(inviter) = self.players.get_mut(&inviter_session_id) {
+                    inviter.party_id = Some(party_id);
+                }
+            }
         }
 
         events
+    }
+
+    fn point_in_safe_zone(info: &map::MapInfo, x: i32, y: i32) -> bool {
+        for sz in &info.safe_zones {
+            let dx = x - sz.location_x;
+            let dy = y - sz.location_y;
+            if dx.abs() <= sz.size as i32 && dy.abs() <= sz.size as i32 {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn process_safezone_healing(&mut self, events: &mut Vec<WorldEvent>) {
+        const HEAL_AMOUNT: i32 = 25;
+
+        for player in self.players.values_mut() {
+            if player.dead || player.hp <= 0 {
+                continue;
+            }
+
+            let Some(map_info) = self.provider.get_map_info(player.map_index) else {
+                continue;
+            };
+
+            if !Self::point_in_safe_zone(map_info, player.x, player.y) {
+                continue;
+            }
+
+            let max_hp = player.stats.total.get(crate::stats::Stat::HP).max(1);
+            if player.hp >= max_hp {
+                continue;
+            }
+
+            let old_hp = player.hp;
+            let new_hp = (old_hp + HEAL_AMOUNT).min(max_hp);
+            if new_hp <= old_hp {
+                continue;
+            }
+
+            let amount = new_hp - old_hp;
+            player.hp = new_hp;
+
+            events.push(WorldEvent::PlayerHealed {
+                session_id: player.session_id,
+                map_index: player.map_index,
+                x: player.x,
+                y: player.y,
+                amount,
+                new_hp,
+            });
+        }
     }
 }

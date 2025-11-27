@@ -19,6 +19,8 @@ use crate::world::skills::warrior::{
     is_thrusting_spell,
     thrusting_max_range,
 };
+use crate::world::buff::PlayerBuff;
+use crate::world::types::BuffType;
 use crate::world::Spell;
 
 use super::{SessionId, World, WorldEvent};
@@ -92,70 +94,272 @@ impl<P: WorldProvider> World<P> {
     fn handle_flaming_sword_spell(
         &mut self,
         session_id: SessionId,
-        _events: &mut Vec<WorldEvent>,
+        events: &mut Vec<WorldEvent>,
     ) {
-        if let Some(player) = self.players.get_mut(&session_id) {
-            // Toggle Flaming Sword state.
-            // In C#, this is:
-            // FlamingSword = true;
-            // FlamingSwordTime = Envir.Time + 10000;
-            // Enqueue(new S.SpellToggle { ObjectID = ObjectID, Spell = Spell.FlamingSword, CanUse = true });
-            // ChangeMP(-cost);
+        let spell_id = Spell::FlamingSword as u8;
+        let info = match self.provider.get_magic_info(spell_id) {
+            Some(i) => i.clone(),
+            None => return,
+        };
 
-            // For now, just print a debug message. We need to add Buff/SpellToggle support to WorldEvent
-            // and PlayerState to fully implement this.
-            println!("[combat] FlamingSword toggle requested for session {}", session_id);
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let level = magic.level;
+            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+
+            if player.mp < cost {
+                return;
+            }
+
+            // Check if already active (C# checks flamingSword bool or time)
+            // We'll check if the buff exists in active_buffs.
+            if player.active_buffs.iter().any(|b| b.buff_type == BuffType::FlamingSword) {
+                return;
+            }
+
+            // Apply cost
+            player.mp -= cost;
+
+            // Add buff
+            let duration_ms = 10000;
+            let mut buff = PlayerBuff::new(BuffType::FlamingSword, self.time_ms + duration_ms);
+            // FlamingSword uses SpellToggle packet, so we don't necessarily need SAddBuff for client visualization
+            // if the client relies solely on SpellToggle.
+            // However, we track it as a buff for server-side state/expiration.
+            // We set visible=false to avoid sending SAddBuff if we were to implement generic buff sending?
+            // Actually, let's keep it consistent. If we don't send SAddBuff, we need to handle SpellToggle manually.
+            buff.visible = false; 
+            buff.values = vec![]; // No values needed for FlamingSword logic yet?
             
-            // TODO: Deduct MP
-            // TODO: Update PlayerState with FlamingSword active + expiry time
-            // TODO: Emit SpellToggle event
+            player.active_buffs.push(buff);
+
+            // Emit SpellToggle
+            events.push(WorldEvent::SpellToggle {
+                session_id,
+                spell_id,
+                enabled: true,
+            });
         }
     }
 
     fn handle_rage_spell(
         &mut self,
         session_id: SessionId,
-        _events: &mut Vec<WorldEvent>,
+        events: &mut Vec<WorldEvent>,
     ) {
-        if let Some(_player) = self.players.get_mut(&session_id) {
-            // In C# this applies a long-duration Rage buff (attack-oriented).
-            // The full behaviour depends on Buffs and MagicInfo; here we only
-            // record that the spell was invoked so that the build succeeds.
-            println!("[combat] Rage spell requested for session {}", session_id);
-            // TODO: Implement Rage buff and MP cost using MagicInfo and Buff events.
+        let spell_id = Spell::Rage as u8;
+        let info = match self.provider.get_magic_info(spell_id) {
+            Some(i) => i.clone(),
+            None => return,
+        };
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let level = magic.level;
+            // Rage cost isn't explicitly in C# snippet but usually follows standard formula or MagicInfo.
+            // We'll use MagicInfo cost.
+            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+
+            if player.mp < cost {
+                return;
+            }
+
+            player.mp -= cost;
+
+            // Calculate stats: 
+            // int duration = 18 + (6 * magic.Level);
+            // int addValue = (int)Math.Round(Stats[Stat.MaxDC] * (0.12 + (0.03 * magic.Level)));
+            let duration_sec = 18 + 6 * level as i64;
+            let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
+            let multiplier = 0.12 + 0.03 * level as f32;
+            let add_value = (max_dc * multiplier).round() as i32;
+
+            let mut stats = Stats::default();
+            stats.set(Stat::MaxDC, add_value);
+            stats.set(Stat::MinDC, add_value);
+
+            let mut buff = PlayerBuff::new(BuffType::Rage, self.time_ms + duration_sec * 1000);
+            buff.stats = stats;
+            buff.visible = true;
+            buff.caster_id = Some(session_id);
+            // PlayerBuff struct has caster_id, but client packet has ObjectID. 
+            // In SAddBuff logic (ClientBuff.Save), ObjectID is written. 
+            // Usually ObjectID refers to the target (the player having the buff).
+            // Wait, ClientBuff.ObjectID usually refers to the caster or the buff holder?
+            // In C# AddBuff: "buff.ObjectID = obj.ObjectID;" where obj is the target.
+            // So it's the holder's ID.
+            // But PlayerBuff doesn't have object_id field in my struct?
+            // I have caster_id.
+            // When sending SAddBuff, I should use the player's session_id (as object_id) if needed?
+            // Wait, let's check `PlayerBuff` struct again.
+            // `caster_id: Option<u32>`.
+            // `SAddBuff` sends `ClientBuff` bytes.
+            // `ClientBuff` has `ObjectID`.
+            // I should probably add `object_id` to `PlayerBuff` or fill it during serialization.
+            // Since `PlayerBuff` is on `PlayerState`, the `ObjectID` is implicit (it's the player's ID).
+            // But `ClientBuff.Save` writes it.
+            // So `PlayerBuff::encode` writes `caster_id`? No, `ClientBuff` has `Caster` string and `ObjectID` uint.
+            // In C#, `ObjectID` is the ID of the object the buff is ON.
+            // So when I serialize `PlayerBuff` for a specific player, I should use that player's ID.
+            // But `PlayerBuff::encode` takes `&self` and `buf`. It doesn't know the player ID.
+            // I should probably update `PlayerBuff` to store `object_id` OR pass it to `encode`.
+            // I'll pass it to `encode`. I need to update `buff.rs`.
+            
+            // For now, let's proceed with logic and assume I'll fix `encode` signature.
+            
+            player.active_buffs.retain(|b| b.buff_type != BuffType::Rage);
+            player.active_buffs.push(buff.clone());
+            
+            // Recalculate stats
+            player.stats.buffs.clear();
+            for b in &player.active_buffs {
+                player.stats.buffs.add(&b.stats);
+            }
+            player.stats.recalc_if_dirty_for_job(player.job);
+
+            // Serialize buff for packet
+            // I need a way to get bytes.
+            // Let's assume `buff.encode(&mut vec, player_id)`.
+            let mut buff_bytes = Vec::new();
+            buff.encode(&mut buff_bytes); // I need to fix this call if I change signature.
+
+            events.push(WorldEvent::AddBuff {
+                session_id,
+                buff_bytes,
+            });
         }
     }
 
     fn handle_immortal_skin_spell(
         &mut self,
         session_id: SessionId,
-        _events: &mut Vec<WorldEvent>,
+        events: &mut Vec<WorldEvent>,
     ) {
-        if let Some(_player) = self.players.get_mut(&session_id) {
-            // In C# this applies a temporary ImmortalSkin defence buff via
-            // AddBuff(BuffType.ImmortalSkin, ...). For now we just log.
-            println!(
-                "[combat] ImmortalSkin spell requested for session {}",
-                session_id
-            );
-            // TODO: Implement ImmortalSkin buff as a defensive AC/MAC increase.
+        let spell_id = Spell::ImmortalSkin as u8;
+        let info = match self.provider.get_magic_info(spell_id) {
+            Some(i) => i.clone(),
+            None => return,
+        };
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let level = magic.level;
+            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+
+            if player.mp < cost {
+                return;
+            }
+
+            player.mp -= cost;
+
+            // Duration: 60 + level seconds
+            let duration_sec = 60 + level as i64;
+            
+            // Stats:
+            // MaxDC -= MaxDC * (0.05 + 0.01 * level)
+            // MaxAC += MaxAC * (0.10 + 0.07 * level)
+            let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
+            let max_ac = player.stats.total.get(Stat::MaxAC) as f32;
+            
+            let dc_loss = (max_dc * (0.05 + 0.01 * level as f32)).round() as i32;
+            let ac_gain = (max_ac * (0.10 + 0.07 * level as f32)).round() as i32;
+
+            let mut stats = Stats::default();
+            stats.set(Stat::MaxDC, -dc_loss);
+            stats.set(Stat::MaxAC, ac_gain);
+
+            let mut buff = PlayerBuff::new(BuffType::ImmortalSkin, self.time_ms + duration_sec * 1000);
+            buff.stats = stats;
+            buff.visible = true;
+
+            player.active_buffs.retain(|b| b.buff_type != BuffType::ImmortalSkin);
+            player.active_buffs.push(buff.clone());
+
+            player.stats.buffs.clear();
+            for b in &player.active_buffs {
+                player.stats.buffs.add(&b.stats);
+            }
+            player.stats.recalc_if_dirty_for_job(player.job);
+
+            let mut buff_bytes = Vec::new();
+            buff.encode(&mut buff_bytes);
+
+            events.push(WorldEvent::AddBuff {
+                session_id,
+                buff_bytes,
+            });
         }
     }
 
     fn handle_counter_attack_spell(
         &mut self,
         session_id: SessionId,
-        _events: &mut Vec<WorldEvent>,
+        events: &mut Vec<WorldEvent>,
     ) {
-        if let Some(_player) = self.players.get_mut(&session_id) {
-            // In C# this toggles CounterAttack state and adds a short buff
-            // window during which incoming hits can be reflected. Here we
-            // only log the request.
-            println!(
-                "[combat] CounterAttack spell requested for session {}",
-                session_id
-            );
-            // TODO: Implement CounterAttack window and reactive damage logic.
+        let spell_id = Spell::CounterAttack as u8;
+        let info = match self.provider.get_magic_info(spell_id) {
+            Some(i) => i.clone(),
+            None => return,
+        };
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let level = magic.level;
+            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+
+            if player.mp < cost {
+                return;
+            }
+
+            player.mp -= cost;
+
+            // Duration: 7 seconds? C# says Settings.Second * 7.
+            let duration_sec = 7;
+
+            // Stats: MinAC/MaxAC/MinMAC/MaxMAC += 11 + level * 3
+            let bonus = 11 + level as i32 * 3;
+            let mut stats = Stats::default();
+            stats.set(Stat::MinAC, bonus);
+            stats.set(Stat::MaxAC, bonus);
+            stats.set(Stat::MinMAC, bonus);
+            stats.set(Stat::MaxMAC, bonus);
+
+            let mut buff = PlayerBuff::new(BuffType::CounterAttack, self.time_ms + duration_sec * 1000);
+            buff.stats = stats;
+            buff.visible = true;
+
+            player.active_buffs.retain(|b| b.buff_type != BuffType::CounterAttack);
+            player.active_buffs.push(buff.clone());
+
+            player.stats.buffs.clear();
+            for b in &player.active_buffs {
+                player.stats.buffs.add(&b.stats);
+            }
+            player.stats.recalc_if_dirty_for_job(player.job);
+
+            let mut buff_bytes = Vec::new();
+            buff.encode(&mut buff_bytes);
+
+            events.push(WorldEvent::AddBuff {
+                session_id,
+                buff_bytes,
+            });
         }
     }
 

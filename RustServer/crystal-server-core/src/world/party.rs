@@ -4,6 +4,10 @@ use super::SessionId;
 
 pub type PartyId = u32;
 
+/// Maximum number of members allowed in a single party. Mirrors the C#
+/// Globals.MaxGroup value of 15.
+pub const MAX_GROUP_SIZE: usize = 15;
+
 #[derive(Clone, Debug)]
 pub struct Party {
     pub id: PartyId,

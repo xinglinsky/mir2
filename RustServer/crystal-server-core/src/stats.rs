@@ -98,6 +98,16 @@ impl Stats {
     pub fn clear(&mut self) {
         self.values.clear();
     }
+
+    pub fn encode(&self, buf: &mut Vec<u8>) {
+        let count = self.values.len() as i32;
+        buf.extend_from_slice(&count.to_le_bytes());
+
+        for (stat, value) in &self.values {
+            buf.push(*stat as u8);
+            buf.extend_from_slice(&value.to_le_bytes());
+        }
+    }
 }
 
 impl Stat {
