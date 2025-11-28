@@ -26,6 +26,7 @@ pub struct PlayerState {
     pub party_id: Option<PartyId>,
     pub pending_group_invite_from: Option<SessionId>,
     pub pending_guild_invite_from: Option<String>,
+    pub pending_trade_invite_from: Option<SessionId>,
     pub next_group_invite_time_ms: i64,
     pub magics: Vec<UserMagic>,
     pub active_buffs: Vec<PlayerBuff>,
@@ -36,6 +37,11 @@ pub struct PlayerState {
     pub dead: bool,
     pub inventory: Inventory,
     pub equipment: Equipment,
+    pub slaying_charged: bool,
+    pub trade_partner: Option<SessionId>,
+    pub trade_gold: u32,
+    pub trade_locked: bool,
+    pub trade: Vec<Option<UserItemData>>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -107,6 +113,7 @@ impl<P: WorldProvider> World<P> {
                     party_id: None,
                     pending_group_invite_from: None,
                     pending_guild_invite_from: None,
+                    pending_trade_invite_from: None,
                     next_group_invite_time_ms: 0,
                     magics,
                     active_buffs: Vec::new(),
@@ -117,6 +124,11 @@ impl<P: WorldProvider> World<P> {
                     dead: false,
                     inventory,
                     equipment,
+                    slaying_charged: false,
+                    trade_partner: None,
+                    trade_gold: 0,
+                    trade_locked: false,
+                    trade: vec![None; 10],
                 }
             });
 
@@ -392,6 +404,102 @@ impl<P: WorldProvider> World<P> {
             player.equipment = equipment;
             self.recalc_player_equipment_stats(session_id);
         }
+    }
+
+    pub fn deposit_trade_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        from: i32,
+        to: i32,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if from < 0 || to < 0 {
+            return false;
+        }
+        let from = from as usize;
+        let to = to as usize;
+
+        if from >= player.inventory.len() || to >= player.trade.len() {
+            return false;
+        }
+
+        let item = match player.inventory.slots[from].as_ref() {
+            Some(it) => it.clone(),
+            None => return false,
+        };
+
+        let info = match self.provider.get_item_info(item.item_index) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        const BIND_DONT_TRADE: i16 = 0x0010;
+
+        if (info.bind & BIND_DONT_TRADE) != 0 {
+            return false;
+        }
+
+        if item
+            .rental_information
+            .as_ref()
+            .map_or(false, |r| (r.binding_flags & BIND_DONT_TRADE) != 0)
+        {
+            return false;
+        }
+
+        if player.trade[to].is_some() {
+            return false;
+        }
+
+        player.trade[to] = Some(item);
+        player.inventory.slots[from] = None;
+        true
+    }
+
+    pub fn retrieve_trade_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        from: i32,
+        to: i32,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if from < 0 || to < 0 {
+            return false;
+        }
+        let from = from as usize;
+        let to = to as usize;
+
+        if from >= player.trade.len() || to >= player.inventory.len() {
+            return false;
+        }
+
+        let item = match player.trade[from].as_ref() {
+            Some(it) => it.clone(),
+            None => return false,
+        };
+
+        if player.inventory.slots[to].is_some() {
+            return false;
+        }
+
+        player.inventory.slots[to] = Some(item);
+        player.trade[from] = None;
+        true
+    }
+
+    pub fn player_trade_items(&self, session_id: SessionId) -> Vec<Option<UserItemData>> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.trade.clone())
+            .unwrap_or_else(|| vec![None; 10])
     }
 
     pub fn move_item_in_grid(

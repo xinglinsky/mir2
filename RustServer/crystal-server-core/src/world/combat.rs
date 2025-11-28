@@ -1,7 +1,8 @@
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
+use crate::world::magic::magic_power;
 use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
@@ -78,6 +79,20 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if is_pure_magic_attack(spell) {
+            // Route wizard single-target attack spells (FireBall, GreatFireBall,
+            // ThunderBolt, SoulFireBall, etc.) through the unified attack
+            // pipeline so that MP cost, damage, skill training and visual
+            // effects are handled consistently.
+            self.handle_attack_command(session_id, direction, spell, events);
+            return;
+        }
+
+        if spell == Spell::MagicShield as u8 {
+            self.handle_magic_shield_spell(session_id, events);
+            return;
+        }
+
         // TODO: Handle other spells.
         // For now, just emit a visual effect to show something happened.
         events.push(WorldEvent::ObjectAttack {
@@ -147,6 +162,9 @@ impl<P: WorldProvider> World<P> {
                 spell_id,
                 enabled: true,
             });
+
+            // Train FlamingSword on successful activation.
+            self.level_up_magic_for_player(session_id, spell_id, events);
         }
     }
 
@@ -156,7 +174,12 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::Rage as u8;
-        if let Some(player) = self.players.get_mut(&session_id) {
+        let (duration_ms, stats) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
                 None => return,
@@ -181,10 +204,10 @@ impl<P: WorldProvider> World<P> {
 
             player.mp -= cost;
 
-            // Calculate stats: 
-            // int duration = 18 + (6 * magic.Level);
-            // int addValue = (int)Math.Round(Stats[Stat.MaxDC] * (0.12 + (0.03 * magic.Level)));
+            // duration = 18 + (6 * magic.Level) seconds
             let duration_sec = 18 + 6 * level as i64;
+            let duration_ms = duration_sec.saturating_mul(1_000);
+
             let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
             let multiplier = 0.12 + 0.03 * level as f32;
             let add_value = (max_dc * multiplier).round() as i32;
@@ -193,56 +216,17 @@ impl<P: WorldProvider> World<P> {
             stats.set(Stat::MaxDC, add_value);
             stats.set(Stat::MinDC, add_value);
 
-            let mut buff = PlayerBuff::new(BuffType::Rage, self.time_ms + duration_sec * 1000);
-            buff.stats = stats;
-            buff.visible = true;
-            buff.caster_id = Some(session_id);
-            // PlayerBuff struct has caster_id, but client packet has ObjectID. 
-            // In SAddBuff logic (ClientBuff.Save), ObjectID is written. 
-            // Usually ObjectID refers to the target (the player having the buff).
-            // Wait, ClientBuff.ObjectID usually refers to the caster or the buff holder?
-            // In C# AddBuff: "buff.ObjectID = obj.ObjectID;" where obj is the target.
-            // So it's the holder's ID.
-            // But PlayerBuff doesn't have object_id field in my struct?
-            // I have caster_id.
-            // When sending SAddBuff, I should use the player's session_id (as object_id) if needed?
-            // Wait, let's check `PlayerBuff` struct again.
-            // `caster_id: Option<u32>`.
-            // `SAddBuff` sends `ClientBuff` bytes.
-            // `ClientBuff` has `ObjectID`.
-            // I should probably add `object_id` to `PlayerBuff` or fill it during serialization.
-            // Since `PlayerBuff` is on `PlayerState`, the `ObjectID` is implicit (it's the player's ID).
-            // But `ClientBuff.Save` writes it.
-            // So `PlayerBuff::encode` writes `caster_id`? No, `ClientBuff` has `Caster` string and `ObjectID` uint.
-            // In C#, `ObjectID` is the ID of the object the buff is ON.
-            // So when I serialize `PlayerBuff` for a specific player, I should use that player's ID.
-            // But `PlayerBuff::encode` takes `&self` and `buf`. It doesn't know the player ID.
-            // I should probably update `PlayerBuff` to store `object_id` OR pass it to `encode`.
-            // I'll pass it to `encode`. I need to update `buff.rs`.
-            
-            // For now, let's proceed with logic and assume I'll fix `encode` signature.
-            
-            player.active_buffs.retain(|b| b.buff_type != BuffType::Rage);
-            player.active_buffs.push(buff.clone());
-            
-            // Recalculate stats
-            player.stats.buffs.clear();
-            for b in &player.active_buffs {
-                player.stats.buffs.add(&b.stats);
-            }
-            player.stats.recalc_if_dirty_for_job(player.job);
+            (duration_ms, stats)
+        };
 
-            // Serialize buff for packet
-            // I need a way to get bytes.
-            // Let's assume `buff.encode(&mut vec, player_id)`.
-            let mut buff_bytes = Vec::new();
-            buff.encode(&mut buff_bytes); // I need to fix this call if I change signature.
-
-            events.push(WorldEvent::AddBuff {
-                session_id,
-                buff_bytes,
-            });
-        }
+        self.add_player_buff(
+            session_id,
+            BuffType::Rage,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
     }
 
     fn handle_immortal_skin_spell(
@@ -251,7 +235,12 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::ImmortalSkin as u8;
-        if let Some(player) = self.players.get_mut(&session_id) {
+        let (duration_ms, stats) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
                 None => return,
@@ -276,6 +265,7 @@ impl<P: WorldProvider> World<P> {
 
             // Duration: 60 + level seconds
             let duration_sec = 60 + level as i64;
+            let duration_ms = duration_sec.saturating_mul(1_000);
             
             // Stats:
             // MaxDC -= MaxDC * (0.05 + 0.01 * level)
@@ -290,27 +280,17 @@ impl<P: WorldProvider> World<P> {
             stats.set(Stat::MaxDC, -dc_loss);
             stats.set(Stat::MaxAC, ac_gain);
 
-            let mut buff = PlayerBuff::new(BuffType::ImmortalSkin, self.time_ms + duration_sec * 1000);
-            buff.stats = stats;
-            buff.visible = true;
+            (duration_ms, stats)
+        };
 
-            player.active_buffs.retain(|b| b.buff_type != BuffType::ImmortalSkin);
-            player.active_buffs.push(buff.clone());
-
-            player.stats.buffs.clear();
-            for b in &player.active_buffs {
-                player.stats.buffs.add(&b.stats);
-            }
-            player.stats.recalc_if_dirty_for_job(player.job);
-
-            let mut buff_bytes = Vec::new();
-            buff.encode(&mut buff_bytes);
-
-            events.push(WorldEvent::AddBuff {
-                session_id,
-                buff_bytes,
-            });
-        }
+        self.add_player_buff(
+            session_id,
+            BuffType::ImmortalSkin,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
     }
 
     fn handle_counter_attack_spell(
@@ -319,7 +299,12 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::CounterAttack as u8;
-        if let Some(player) = self.players.get_mut(&session_id) {
+        let (duration_ms, stats) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
                 None => return,
@@ -343,7 +328,8 @@ impl<P: WorldProvider> World<P> {
             player.mp -= cost;
 
             // Duration: 7 seconds? C# says Settings.Second * 7.
-            let duration_sec = 7;
+            let duration_sec = 7_i64;
+            let duration_ms = duration_sec.saturating_mul(1_000);
 
             // Stats: MinAC/MaxAC/MinMAC/MaxMAC += 11 + level * 3
             let bonus = 11 + level as i32 * 3;
@@ -353,27 +339,97 @@ impl<P: WorldProvider> World<P> {
             stats.set(Stat::MinMAC, bonus);
             stats.set(Stat::MaxMAC, bonus);
 
-            let mut buff = PlayerBuff::new(BuffType::CounterAttack, self.time_ms + duration_sec * 1000);
-            buff.stats = stats;
-            buff.visible = true;
+            (duration_ms, stats)
+        };
 
-            player.active_buffs.retain(|b| b.buff_type != BuffType::CounterAttack);
-            player.active_buffs.push(buff.clone());
+        self.add_player_buff(
+            session_id,
+            BuffType::CounterAttack,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
+    }
 
-            player.stats.buffs.clear();
-            for b in &player.active_buffs {
-                player.stats.buffs.add(&b.stats);
+    fn handle_magic_shield_spell(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let spell_id = Spell::MagicShield as u8;
+        let (duration_ms, stats) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            // Do not stack MagicShield: if already active, ignore the cast
+            // without consuming MP, mirroring the C# behaviour.
+            if player
+                .active_buffs
+                .iter()
+                .any(|b| b.buff_type == BuffType::MagicShield)
+            {
+                return;
             }
-            player.stats.recalc_if_dirty_for_job(player.job);
 
-            let mut buff_bytes = Vec::new();
-            buff.encode(&mut buff_bytes);
+            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+                Some(m) => m,
+                None => return,
+            };
 
-            events.push(WorldEvent::AddBuff {
-                session_id,
-                buff_bytes,
-            });
-        }
+            let level = magic.level;
+            let cost = match compute_magic_mana_cost(
+                &self.provider,
+                &player.stats.total,
+                spell_id,
+                level,
+            ) {
+                Some(c) => c,
+                None => return,
+            };
+
+            if player.mp < cost {
+                return;
+            }
+
+            player.mp -= cost;
+
+            // Approximate C# MagicShield duration by using the magic's power
+            // value as a number of seconds. This mirrors the intent of
+            // magic.GetPower(GetAttackPower(MinMC, MaxMC) + 15) without
+            // re-implementing the full delayed-action pipeline.
+            let mut duration_sec: i64 = 0;
+            if let Some(info) = self.provider.get_magic_info(spell_id) {
+                let mut rng = thread_rng();
+                let power = magic_power(info, level, &mut rng).max(1);
+                duration_sec = power as i64;
+            }
+            if duration_sec <= 0 {
+                duration_sec = 60;
+            }
+            let duration_ms = duration_sec.saturating_mul(1_000);
+
+            let mut stats = Stats::default();
+            let dr = (level as i32 + 2) * 10;
+            stats.set(Stat::DamageReductionPercent, dr);
+
+            (duration_ms, stats)
+        };
+
+        self.add_player_buff(
+            session_id,
+            BuffType::MagicShield,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
+
+        // Train MagicShield on successful application, mirroring C#
+        // LevelMagic(magic) in the completion handler.
+        self.level_up_magic_for_player(session_id, spell_id, events);
     }
 
     pub(super) fn handle_attack_command(
@@ -383,7 +439,20 @@ impl<P: WorldProvider> World<P> {
         spell: u8,
         events: &mut Vec<WorldEvent>,
     ) {
-        let (map_index, x, y, direction, effective_spell, level, fatal_level, attacker_stats) =
+        let (
+            map_index,
+            x,
+            y,
+            direction,
+            effective_spell,
+            level,
+            fatal_level,
+            attacker_stats,
+            flaming_sword_trigger,
+            slaying_toggled_on,
+            moon_dark_spell,
+            moon_dark_level,
+        ) =
             match self.players.get_mut(&session_id) {
                 Some(p) => {
                     if !Self::can_attack(p) {
@@ -391,8 +460,161 @@ impl<P: WorldProvider> World<P> {
                     }
 
                     p.direction = direction;
-                    let (effective_spell, level) =
-                        resolve_attack_spell_and_level_for_player(p, spell);
+
+                    // Check for FlamingSword buff logic BEFORE resolving spell.
+                    let mut spell_to_use = spell;
+                    let mut consumed_flaming_sword = false;
+                    let mut slaying_toggled_on = false;
+
+                    // Mirror the C# HumanObject.Attack behaviour for MoonLight /
+                    // DarkBody: if the player is emerging from a hidden state
+                    // with one of these buffs active, the very next physical
+                    // attack receives a DamageBase bonus equal to
+                    // magic.GetPower() for the corresponding spell. We
+                    // approximate Hidden by the presence of the buff itself
+                    // and remove the buffs immediately so the bonus is
+                    // one-shot.
+                    let mut moon_dark_spell: u8 = 0;
+                    let mut moon_dark_level: u8 = 0;
+
+                    let mut had_moon_light = false;
+                    let mut had_dark_body = false;
+                    for buff in &p.active_buffs {
+                        match buff.buff_type {
+                            BuffType::MoonLight => had_moon_light = true,
+                            BuffType::DarkBody => had_dark_body = true,
+                            _ => {}
+                        }
+                    }
+
+                    if had_moon_light {
+                        if let Some(m) = p
+                            .magics
+                            .iter()
+                            .find(|m| m.spell == Spell::MoonLight as u8)
+                        {
+                            moon_dark_spell = Spell::MoonLight as u8;
+                            moon_dark_level = m.level;
+                        }
+                    }
+
+                    if moon_dark_spell == 0 && had_dark_body {
+                        if let Some(m) = p
+                            .magics
+                            .iter()
+                            .find(|m| m.spell == Spell::DarkBody as u8)
+                        {
+                            moon_dark_spell = Spell::DarkBody as u8;
+                            moon_dark_level = m.level;
+                        }
+                    }
+
+                    if had_moon_light || had_dark_body {
+                        p.active_buffs.retain(|b| {
+                            b.buff_type != BuffType::MoonLight
+                                && b.buff_type != BuffType::DarkBody
+                        });
+                    }
+
+                    // If it's a basic attack (spell 0) and we have FlamingSword buff
+                    // active, treat this swing as FlamingSword and consume the buff.
+                    if spell == 0 {
+                        if let Some(idx) = p
+                            .active_buffs
+                            .iter()
+                            .position(|b| b.buff_type == BuffType::FlamingSword)
+                        {
+                            p.active_buffs.remove(idx);
+                            spell_to_use = Spell::FlamingSword as u8;
+                            consumed_flaming_sword = true;
+                        }
+                    }
+
+                    // Resolve the effective attack spell and its learned level.
+                    let (mut effective_spell, mut level) =
+                        resolve_attack_spell_and_level_for_player(p, spell_to_use);
+
+                    // Mirror the C# HumanObject.Attack MP gating for certain
+                    // warrior attack skills that are driven from the melee
+                    // attack loop rather than the magic command path.
+                    if level > 0 {
+                        if let Some(spell_enum) = Spell::from_u8(effective_spell) {
+                            use Spell as S;
+                            match spell_enum {
+                                // These skills consume MP per attack when used
+                                // as part of the melee flow. If there is not
+                                // enough MP, the swing still happens but
+                                // falls back to a plain physical attack.
+                                S::DoubleSlash | S::HalfMoon | S::CrossHalfMoon | S::TwinDrakeBlade => {
+                                    if let Some(cost) = compute_magic_mana_cost(
+                                        &self.provider,
+                                        &p.stats.total,
+                                        effective_spell,
+                                        level,
+                                    ) {
+                                        if p.mp < cost {
+                                            // Not enough MP: downgrade to
+                                            // plain melee for this swing.
+                                            effective_spell = 0;
+                                            level = 0;
+                                        } else {
+                                            p.mp -= cost;
+                                        }
+                                    } else {
+                                        // No MagicInfo entry; treat as plain
+                                        // melee to avoid inconsistent state.
+                                        effective_spell = 0;
+                                        level = 0;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    // Handle Slaying activation/consumption and random charge, mirroring
+                    // the C# HumanObject.Attack flow. Slaying is a one-shot charged
+                    // strike: when the client requests Slaying while a charge is
+                    // available, we consume the charge and apply the Slaying magic
+                    // scaling for this swing. Separately, each attack has a chance to
+                    // grant a new Slaying charge based on the learned magic level.
+
+                    // If the player explicitly attempts to use Slaying, require an
+                    // existing charge; otherwise fall back to a plain melee swing.
+                    if level > 0 && effective_spell == Spell::Slaying as u8 {
+                        if !p.slaying_charged {
+                            effective_spell = 0;
+                            level = 0;
+                        } else {
+                            // Consume the one-shot Slaying charge for this
+                            // swing but do not emit a SpellToggle(false)
+                            // event. The original C# implementation only
+                            // sends SpellToggle when Slaying becomes
+                            // available, not when it is spent, so the icon
+                            // may remain lit until the next refresh.
+                            p.slaying_charged = false;
+                        }
+                    }
+
+                    // If Slaying is not currently charged, roll for a new charge using
+                    // the same pattern as the C# server:
+                    //   if (magic != null && Random.Next(12) <= magic.Level)
+                    //       Slaying = true;
+                    if !p.slaying_charged {
+                        if let Some(magic) = p
+                            .magics
+                            .iter()
+                            .find(|m| m.spell == Spell::Slaying as u8)
+                        {
+                            let mut rng = thread_rng();
+                            let roll: i32 = rng.gen_range(0..12);
+                            if roll <= magic.level as i32 {
+                                p.slaying_charged = true;
+                                slaying_toggled_on = true;
+                            }
+                        }
+                    }
+
                     let fatal_level = fatal_sword_level_for_player(p);
                     let attacker_stats = p.stats.total.clone();
 
@@ -405,6 +627,10 @@ impl<P: WorldProvider> World<P> {
                         level,
                         fatal_level,
                         attacker_stats,
+                        consumed_flaming_sword,
+                        slaying_toggled_on,
+                        moon_dark_spell,
+                        moon_dark_level,
                     )
                 }
                 None => {
@@ -412,10 +638,29 @@ impl<P: WorldProvider> World<P> {
                 }
             };
 
+        if flaming_sword_trigger {
+             events.push(WorldEvent::SpellToggle {
+                session_id,
+                spell_id: Spell::FlamingSword as u8,
+                enabled: false,
+            });
+        }
+
+        if slaying_toggled_on {
+            events.push(WorldEvent::SpellToggle {
+                session_id,
+                spell_id: Spell::Slaying as u8,
+                enabled: true,
+            });
+        }
+
         let is_half_moon = effective_spell == Spell::HalfMoon as u8;
         let is_cross_half_moon = effective_spell == Spell::CrossHalfMoon as u8;
 
         if is_half_moon {
+            // Train HalfMoon when the attack is actually executed.
+            self.level_up_magic_for_player(session_id, Spell::HalfMoon as u8, events);
+
             self.handle_half_moon_attack(
                 session_id,
                 map_index,
@@ -451,6 +696,9 @@ impl<P: WorldProvider> World<P> {
         }
 
         if is_cross_half_moon {
+            // Train CrossHalfMoon when the attack is actually executed.
+            self.level_up_magic_for_player(session_id, Spell::CrossHalfMoon as u8, events);
+
             self.handle_cross_half_moon_attack(
                 session_id,
                 map_index,
@@ -579,6 +827,13 @@ impl<P: WorldProvider> World<P> {
                 }
             }
 
+            // Train attack-type magic when a valid target is acquired and the
+            // effective spell is non-zero (i.e. a learned skill rather than a
+            // plain melee swing).
+            if effective_spell != 0 {
+                self.level_up_magic_for_player(session_id, effective_spell, events);
+            }
+
             let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
                 u32,
                 bool,
@@ -587,11 +842,23 @@ impl<P: WorldProvider> World<P> {
                 Vec<crate::world::drop::DropInfo>,
             ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
                 let max_hp = info.stats.get(Stat::HP).max(1);
+
+                // Base defender stats from MonsterInfo plus any active
+                // per-instance buff_stats on this specific monster instance,
+                // mirroring C# MonsterObject.RefreshBuffs where Buff.Stats are
+                // added on top of base stats.
+                let mut defender_stats = info.stats.clone();
+                if let Some(monsters) = self.monsters.get(&map_index) {
+                    if let Some(m) = monsters.iter().find(|m| m.id == id) {
+                        defender_stats.add(&m.buff_stats);
+                    }
+                }
+
                 (
                     info.experience,
                     info.undead,
                     max_hp,
-                    info.stats.clone(),
+                    defender_stats,
                     info.drops.clone(),
                 )
             } else {
@@ -645,6 +912,20 @@ impl<P: WorldProvider> World<P> {
 
             if hit && raw_damage > 0 {
                 if !use_pure_magic {
+                    // Apply MoonLight / DarkBody opening strike bonus by
+                    // adding magic.GetPower() to the physical DamageBase
+                    // before any active attack spell scaling, mirroring the
+                    // C# HumanObject.Attack flow.
+                    if moon_dark_spell != 0 && moon_dark_level > 0 {
+                        if let Some(info) = self.provider.get_magic_info(moon_dark_spell) {
+                            let mut rng = thread_rng();
+                            let bonus = magic_power(info, moon_dark_level, &mut rng);
+                            if bonus > 0 {
+                                raw_damage = raw_damage.saturating_add(bonus);
+                            }
+                        }
+                    }
+
                     // First apply the active attack spell (if any) using the
                     // MagicInfo parameters for that spell and the learned
                     // level. For Thrusting this multiplier should only be
@@ -660,28 +941,28 @@ impl<P: WorldProvider> World<P> {
                         );
                     }
                 }
+            }
 
-                // Then apply any passive FatalSword and undead-specific
-                // tweaks via the shared skills helper.
-                raw_damage = apply_fatal_sword_and_undead(
-                    &self.provider,
-                    fatal_level,
-                    undead,
-                    raw_damage,
-                );
+            // Then apply any passive FatalSword and undead-specific
+            // tweaks via the shared skills helper.
+            raw_damage = apply_fatal_sword_and_undead(
+                &self.provider,
+                fatal_level,
+                undead,
+                raw_damage,
+            );
 
-                // Finally, approximate multi-hit skills such as DoubleSlash
-                // and TwinDrakeBlade by doubling the final damage. In the C#
-                // HumanObject implementation these skills schedule two
-                // DelayedAction damage entries with the same magic-scaled
-                // damage value; here we aggregate them into a single hit with
-                // twice the damage to keep the world-event model simple while
-                // preserving total DPS.
-                if effective_spell == Spell::DoubleSlash as u8
-                    || effective_spell == Spell::TwinDrakeBlade as u8
-                {
-                    raw_damage = raw_damage.saturating_mul(2);
-                }
+            // Finally, approximate multi-hit skills such as DoubleSlash
+            // and TwinDrakeBlade by doubling the final damage. In the C#
+            // HumanObject implementation these skills schedule two
+            // DelayedAction damage entries with the same magic-scaled
+            // damage value; here we aggregate them into a single hit with
+            // twice the damage to keep the world-event model simple while
+            // preserving total DPS.
+            if effective_spell == Spell::DoubleSlash as u8
+                || effective_spell == Spell::TwinDrakeBlade as u8
+            {
+                raw_damage = raw_damage.saturating_mul(2);
             }
 
             let mut strike_x = target_x;
@@ -812,8 +1093,6 @@ impl<P: WorldProvider> World<P> {
                     );
 
                     if total.gold > 0 || !total.items.is_empty() {
-                        let entry = self.map_items.entry(map_index).or_default();
-
                         // Set expire time for monster drops: default 5 minutes
                         // (300000 ms) after the current world time, mirroring
                         // the behaviour used for player-dropped items in
@@ -821,52 +1100,66 @@ impl<P: WorldProvider> World<P> {
                         let item_timeout_ms: i64 = 300_000; // 5 minutes
 
                         if total.gold > 0 {
-                            let item_id = self.next_map_item_id;
-                            self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
-                            entry.push(crate::world::map_item::MapItem {
-                                id: item_id,
-                                map_index,
-                                x: strike_x,
-                                y: strike_y,
-                                item_index: None,
-                                gold: total.gold,
-                                count: 0,
-                                item: None,
-                                expire_time_ms: self.time_ms + item_timeout_ms,
-                            });
+                            if let Some((drop_x, drop_y)) =
+                                self.find_drop_location(map_index, strike_x, strike_y, 4)
+                            {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                let entry =
+                                    self.map_items.entry(map_index).or_default();
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: drop_x,
+                                    y: drop_y,
+                                    item_index: None,
+                                    gold: total.gold,
+                                    count: 0,
+                                    item: None,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
 
-                            events.push(WorldEvent::GoldDropped {
-                                object_id: item_id,
-                                map_index,
-                                x: strike_x,
-                                y: strike_y,
-                                gold: total.gold,
-                            });
+                                events.push(WorldEvent::GoldDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: drop_x,
+                                    y: drop_y,
+                                    gold: total.gold,
+                                });
+                            }
                         }
 
                         for item_index in total.items {
-                            let item_id = self.next_map_item_id;
-                            self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
-                            entry.push(crate::world::map_item::MapItem {
-                                id: item_id,
-                                map_index,
-                                x: strike_x,
-                                y: strike_y,
-                                item_index: Some(item_index),
-                                gold: 0,
-                                count: 1,
-                                item: None,
-                                expire_time_ms: self.time_ms + item_timeout_ms,
-                            });
+                            if let Some((drop_x, drop_y)) =
+                                self.find_drop_location(map_index, strike_x, strike_y, 4)
+                            {
+                                let item_id = self.next_map_item_id;
+                                self.next_map_item_id =
+                                    self.next_map_item_id.wrapping_add(1);
+                                let entry =
+                                    self.map_items.entry(map_index).or_default();
+                                entry.push(crate::world::map_item::MapItem {
+                                    id: item_id,
+                                    map_index,
+                                    x: drop_x,
+                                    y: drop_y,
+                                    item_index: Some(item_index),
+                                    gold: 0,
+                                    count: 1,
+                                    item: None,
+                                    expire_time_ms: self.time_ms + item_timeout_ms,
+                                });
 
-                            events.push(WorldEvent::ItemDropped {
-                                object_id: item_id,
-                                map_index,
-                                x: strike_x,
-                                y: strike_y,
-                                item_index,
-                                count: 1,
-                            });
+                                events.push(WorldEvent::ItemDropped {
+                                    object_id: item_id,
+                                    map_index,
+                                    x: drop_x,
+                                    y: drop_y,
+                                    item_index,
+                                    count: 1,
+                                });
+                            }
                         }
                     }
                 }

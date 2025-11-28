@@ -29,10 +29,10 @@ impl PlayerBuff {
         }
     }
 
-    pub fn encode(&self, buf: &mut Vec<u8>) {
+    pub fn encode(&self, buf: &mut Vec<u8>, owner_id: u32) {
         buf.push(self.buff_type.as_u8());
         buf.push(if self.visible { 1 } else { 0 });
-        buf.extend_from_slice(&self.caster_id.unwrap_or(0).to_le_bytes());
+        buf.extend_from_slice(&owner_id.to_le_bytes());
         buf.extend_from_slice(&self.expire_time_ms.to_le_bytes());
         buf.push(if self.infinite { 1 } else { 0 });
         buf.push(if self.paused { 1 } else { 0 });

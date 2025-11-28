@@ -1,5 +1,6 @@
 use crate::stats::Stats;
 use crate::world::drop::DropInfo;
+use crate::world::types::BuffType;
 
 #[derive(Clone, Debug)]
 pub struct MonsterInfo {
@@ -24,6 +25,15 @@ pub struct MonsterInfo {
     pub has_spawn_script: bool,
     pub has_die_script: bool,
     pub stats: Stats,
+}
+
+#[derive(Clone, Debug)]
+pub struct MonsterBuff {
+    pub buff_type: BuffType,
+    pub expire_time_ms: i64,
+    pub stats: Stats,
+    pub infinite: bool,
+    pub flag_for_removal: bool,
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
@@ -75,4 +85,6 @@ pub struct MonsterInstance {
     /// re-run its "alone" check, mirroring C# MonsterObject.AloneTime and
     /// AloneDelay.
     pub alone_time_ms: i64,
+    pub buff_stats: Stats,
+    pub buffs: Vec<MonsterBuff>,
 }

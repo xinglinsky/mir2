@@ -402,8 +402,32 @@ impl LoginConnection {
                         }
                     }
                 }
+                world::WorldEvent::MagicLeveled {
+                    session_id,
+                    spell_id,
+                    level,
+                    experience,
+                } => {
+                    if session_id == self.session_id {
+                        self.send_magic_leveled(spell_id, level, experience, out);
+                    }
+                }
                 world::WorldEvent::PlayerGainedGold { session_id, amount } => {
                     if session_id == self.session_id {
+                        if let Some(ref mut stats) = self.current_stats {
+                            let add = amount as i64;
+                            let new_gold = stats.gold.saturating_add(add);
+                            stats.gold = new_gold;
+
+                            if let (Some(ref account_id), Some(char_idx)) =
+                                (self.account_id.as_ref(), self.current_char_index)
+                            {
+                                let _ = self
+                                    .store
+                                    .save_character_stats(account_id, char_idx, stats);
+                            }
+                        }
+
                         let pkt = SGainedGold { gold: amount };
                         if let Ok(raw) = pkt.encode() {
                             out.push(Self::encode_raw(raw));
@@ -416,6 +440,15 @@ impl LoginConnection {
                     x,
                     y,
                 } => {
+                    println!(
+                        "[pickup] MapItemRemoved dispatch: session={} object_id={} map={} pos=({}, {})",
+                        self.session_id,
+                        object_id,
+                        map_index,
+                        x,
+                        y
+                    );
+
                     let pkt = SObjectRemove {
                         object_id: object_id as u32,
                     };
@@ -685,7 +718,7 @@ impl LoginConnection {
         }
     }
 
-    fn send_safezone_border_spells(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
+    pub(crate) fn send_safezone_border_spells(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
         if !self.world_config.safe_zone_border {
             return;
         }

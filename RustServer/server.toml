@@ -6,3 +6,4 @@ spawn_multiplier = 1
 respawn_base_spawn_rate_minutes = 20
 log_filter = "info"
 drop_rate = 1.5
+safe_zone_border = true

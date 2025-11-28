@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use super::Job;
-use crate::world::Spell;
+use crate::stats::{Stat, Stats};
+use crate::world::{BuffProperty, BuffStackType, BuffType, Spell};
 use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
 use crate::guild::{GuildInfo, GuildManager};
 use crate::item::create_fresh_user_item;
@@ -233,6 +234,12 @@ pub enum WorldEvent {
         amount: i32,
         new_hp: i32,
     },
+    MagicLeveled {
+        session_id: SessionId,
+        spell_id: u8,
+        level: u8,
+        experience: u16,
+    },
     SpellToggle {
         session_id: SessionId,
         spell_id: u8,
@@ -305,7 +312,7 @@ impl<P: WorldProvider> World<P> {
             monsters: HashMap::new(),
             next_monster_id: 0,
             map_items: HashMap::new(),
-            next_map_item_id: 1,
+            next_map_item_id: 1_000_000_000,
             occupancy: HashMap::new(),
             map_spells: HashMap::new(),
             respawns: HashMap::new(),
@@ -319,6 +326,52 @@ impl<P: WorldProvider> World<P> {
             parties: PartyManager::new(),
             buyback: HashMap::new(),
         }
+    }
+
+    /// Increment experience for the given player's magic and, if the
+    /// underlying UserMagic changes, emit a MagicLeveled world event so the
+    /// connection layer can notify the client via SMagicLeveled.
+    pub(crate) fn level_up_magic_for_player(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        use crate::world::magic::level_up_magic_simple;
+
+        let (new_level, new_exp) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            let magic = match player.magics.iter_mut().find(|m| m.spell == spell) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let info = match self.provider.get_magic_info(spell) {
+                Some(i) => i,
+                None => return,
+            };
+
+            let player_level = player.level;
+            let skill_mult = player.stats.total.get(Stat::SkillGainMultiplier);
+
+            let changed = level_up_magic_simple(info, magic, player_level, skill_mult);
+            if !changed {
+                return;
+            }
+
+            (magic.level, magic.experience)
+        };
+
+        events.push(WorldEvent::MagicLeveled {
+            session_id,
+            spell_id: spell,
+            level: new_level,
+            experience: new_exp,
+        });
     }
 
     pub fn snapshot_metrics(&self, connections: u32) -> CoreMetrics {
@@ -362,15 +415,18 @@ impl<P: WorldProvider> World<P> {
             .collect()
     }
 
-    /// Look up the latest known position and facing of a monster on the given
-    /// map. This is used by the connection layer when emitting visual attack
-    /// packets (SObjectAttack) for monster melee swings.
     pub fn monster_position(&self, map_index: i32, monster_id: u64) -> Option<(i32, i32, u8)> {
         let monsters = self.monsters.get(&map_index)?;
         monsters
             .iter()
             .find(|m| m.id == monster_id)
             .map(|m| (m.x, m.y, m.direction))
+    }
+
+    pub fn player_position(&self, session_id: SessionId) -> Option<(i32, i32, i32, u8)> {
+        self.players
+            .get(&session_id)
+            .map(|p| (p.map_index, p.x, p.y, p.direction))
     }
 
     /// Look up the canonical player name for a given session.
@@ -425,6 +481,122 @@ impl<P: WorldProvider> World<P> {
             p.pending_guild_invite_from.take()
         } else {
             None
+        }
+    }
+
+    /// Inspect who, if anyone, has a pending trade invite targeted at the
+    /// given session. This mirrors C# trade invitation behaviour.
+    pub fn pending_trade_invite_from(&self, session_id: SessionId) -> Option<SessionId> {
+        self.players
+            .get(&session_id)
+            .and_then(|p| p.pending_trade_invite_from)
+    }
+
+    /// Set or overwrite the pending trade invite for the given session.
+    pub fn set_pending_trade_invite(&mut self, session_id: SessionId, from: SessionId) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_trade_invite_from = Some(from);
+        }
+    }
+
+    /// Clear any pending trade invite for the given session.
+    pub fn clear_pending_trade_invite(&mut self, session_id: SessionId) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_trade_invite_from = None;
+        }
+    }
+
+    /// Take and clear the pending trade invite for the given session,
+    /// returning the inviter session id if present.
+    pub fn take_pending_trade_invite(&mut self, session_id: SessionId) -> Option<SessionId> {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_trade_invite_from.take()
+        } else {
+            None
+        }
+    }
+
+    pub fn trade_partner_for(&self, session_id: SessionId) -> Option<SessionId> {
+        self.players.get(&session_id).and_then(|p| p.trade_partner)
+    }
+
+    pub fn is_trade_locked(&self, session_id: SessionId) -> Option<bool> {
+        self.players.get(&session_id).map(|p| p.trade_locked)
+    }
+
+    pub fn trade_gold_for(&self, session_id: SessionId) -> Option<u32> {
+        self.players.get(&session_id).map(|p| p.trade_gold)
+    }
+
+    pub fn set_trade_partner_pair(&mut self, a: SessionId, b: SessionId) -> bool {
+        if a == b {
+            return false;
+        }
+        let (exists_a, exists_b) = (self.players.contains_key(&a), self.players.contains_key(&b));
+        if !exists_a || !exists_b {
+            return false;
+        }
+
+        if let Some(p) = self.players.get_mut(&a) {
+            p.trade_partner = Some(b);
+            p.trade_gold = 0;
+            p.trade_locked = false;
+        }
+        if let Some(p) = self.players.get_mut(&b) {
+            p.trade_partner = Some(a);
+            p.trade_gold = 0;
+            p.trade_locked = false;
+        }
+        true
+    }
+
+    pub fn clear_trade_session(&mut self, session_id: SessionId) {
+        let partner = match self.players.get(&session_id) {
+            Some(p) => p.trade_partner,
+            None => return,
+        };
+
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.trade_partner = None;
+            p.trade_gold = 0;
+            p.trade_locked = false;
+        }
+
+        if let Some(partner_id) = partner {
+            if let Some(p) = self.players.get_mut(&partner_id) {
+                p.trade_partner = None;
+                p.trade_gold = 0;
+                p.trade_locked = false;
+            }
+        }
+    }
+
+    pub fn add_trade_gold(&mut self, session_id: SessionId, amount: u32) -> Option<u32> {
+        let p = self.players.get_mut(&session_id)?;
+        let new = p.trade_gold.saturating_add(amount);
+        p.trade_gold = new;
+        Some(new)
+    }
+
+    pub fn set_trade_locked(&mut self, session_id: SessionId, locked: bool) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.trade_locked = locked;
+        }
+    }
+
+    /// Clear the trade_locked flag for the given session and its trade
+    /// partner (if any). This mirrors the C# TradeUnlock behaviour for the
+    /// lock state only; item and gold rollback are handled separately.
+    pub fn trade_unlock(&mut self, session_id: SessionId) {
+        let partner = match self.players.get(&session_id) {
+            Some(p) => p.trade_partner,
+            None => return,
+        };
+
+        self.set_trade_locked(session_id, false);
+
+        if let Some(partner_id) = partner {
+            self.set_trade_locked(partner_id, false);
         }
     }
 
@@ -512,6 +684,112 @@ impl<P: WorldProvider> World<P> {
         self.config.spawn_multiplier = self.spawn_multiplier;
         self.config.respawn_base_spawn_rate_minutes = self.respawn_base_spawn_rate_minutes;
         self.config.drop_rate = self.drop_rate;
+    }
+
+    /// Find a suitable drop location around the given centre tile, mirroring
+    /// the C# ItemObject.Drop behaviour. The search expands in rings from the
+    /// centre up to max_distance, preferring:
+    ///   1) The first completely empty, walkable, non-movement, non-blocked
+    ///      cell it finds.
+    ///   2) Otherwise, the cell with the fewest existing map items, subject
+    ///      to a maximum stack size, so that drops spread out when many items
+    ///      are present.
+    pub(crate) fn find_drop_location(
+        &self,
+        map_index: i32,
+        center_x: i32,
+        center_y: i32,
+        max_distance: i32,
+    ) -> Option<(i32, i32)> {
+        let map = self.get_or_load_map(map_index)?;
+        let info = &map.info;
+
+        let mut best_location: Option<(i32, i32)> = None;
+        let mut best_count: usize = 0;
+
+        let items_on_map = self.map_items.get(&map_index);
+
+        let max_d = if max_distance < 0 { 0 } else { max_distance };
+
+        for d in 0..=max_d {
+            for y in (center_y - d)..=(center_y + d) {
+                if y < 0 || y >= map.height as i32 {
+                    continue;
+                }
+
+                let dy = (y - center_y).abs();
+                let step = if d == 0 || dy == d { 1 } else { (d * 2).max(1) };
+
+                let mut x = center_x - d;
+                while x <= center_x + d {
+                    if x < 0 || x >= map.width as i32 {
+                        x += step;
+                        continue;
+                    }
+
+                    let ux = x as u16;
+                    let uy = y as u16;
+
+                    // Only consider walkable tiles, approximating
+                    // CurrentMap.ValidPoint in C#.
+                    if !map.is_walkable(ux, uy) {
+                        x += step;
+                        continue;
+                    }
+
+                    // Skip movement source tiles so players do not drop items
+                    // directly on teleports, mirroring the C# MovementInfo
+                    // check in ItemObject.Drop.
+                    if info
+                        .movements
+                        .iter()
+                        .any(|m| m.source_x == x && m.source_y == y)
+                    {
+                        x += step;
+                        continue;
+                    }
+
+                    // Treat any occupancy by players or monsters as
+                    // blocking, approximating MapObject.Blocking.
+                    if self.is_cell_blocked(map_index, x, y) {
+                        x += step;
+                        continue;
+                    }
+
+                    // Count existing map items on this tile for stack-size
+                    // enforcement and best-cell selection.
+                    let mut count: usize = 0;
+                    if let Some(items) = items_on_map {
+                        for mi in items.iter().filter(|mi| mi.x == x && mi.y == y) {
+                            let _ = mi;
+                            count = count.saturating_add(1);
+                        }
+                    }
+
+                    // Match C# Settings.DropStackSize default of 5.
+                    const DROP_STACK_SIZE: usize = 5;
+                    if count >= DROP_STACK_SIZE {
+                        x += step;
+                        continue;
+                    }
+
+                    // Prefer the first completely empty tile.
+                    if count == 0 {
+                        return Some((x, y));
+                    }
+
+                    // Otherwise track the tile with the smallest stack so far.
+                    if best_location.is_none() || count < best_count {
+                        best_location = Some((x, y));
+                        best_count = count;
+                    }
+
+                    x += step;
+                }
+            }
+        }
+
+        best_location
     }
 
     pub(crate) fn get_or_load_map(&self, map_index: i32) -> Option<map::Map> {
@@ -965,6 +1243,14 @@ impl<P: WorldProvider> World<P> {
                     }
                 };
 
+                // Use a C#-style ItemObject.Drop search to find a nearby
+                // valid tile for the dropped stack, matching Settings.DropRange
+                // (4) for the search radius.
+                let (drop_x, drop_y) = match self.find_drop_location(map_index, px, py, 4) {
+                    Some(pos) => pos,
+                    None => return events,
+                };
+
                 // Create a new MapItem representing the dropped stack.
                 let entry = self.map_items.entry(map_index).or_default();
                 let map_item_id = self.next_map_item_id;
@@ -976,8 +1262,8 @@ impl<P: WorldProvider> World<P> {
                 entry.push(MapItem {
                     id: map_item_id,
                     map_index,
-                    x: px,
-                    y: py,
+                    x: drop_x,
+                    y: drop_y,
                     item_index: Some(info.index),
                     gold: 0,
                     count: dropped_item.count,
@@ -988,8 +1274,8 @@ impl<P: WorldProvider> World<P> {
                 events.push(WorldEvent::ItemDropped {
                     object_id: map_item_id,
                     map_index,
-                    x: px,
-                    y: py,
+                    x: drop_x,
+                    y: drop_y,
                     item_index: info.index,
                     count: dropped_item.count,
                 });
@@ -1012,6 +1298,16 @@ impl<P: WorldProvider> World<P> {
 
                     if let Some(map_item) = maybe_item {
                         if map_item.gold > 0 && map_item.item_index.is_none() {
+                            println!(
+                                "[pickup] gold map_item: session={} map={} pos=({}, {}) object_id={} gold={}",
+                                session_id,
+                                map_index,
+                                map_item.x,
+                                map_item.y,
+                                map_item.id,
+                                map_item.gold
+                            );
+
                             if map_item.gold > 0 {
                                 events.push(WorldEvent::PlayerGainedGold {
                                     session_id,
@@ -1026,6 +1322,14 @@ impl<P: WorldProvider> World<P> {
                                     items.swap_remove(pos);
                                 }
                             }
+
+                            println!(
+                                "[pickup] MapItemRemoved queued: object_id={} map={} pos=({}, {})",
+                                map_item.id,
+                                map_index,
+                                map_item.x,
+                                map_item.y
+                            );
 
                             events.push(WorldEvent::MapItemRemoved {
                                 object_id: map_item.id,
@@ -1527,6 +1831,240 @@ impl<P: WorldProvider> World<P> {
         }
 
         events
+    }
+
+    pub fn add_player_buff(
+        &mut self,
+        session_id: SessionId,
+        buff_type: BuffType,
+        duration_ms: i64,
+        stats: Stats,
+        values: Vec<i32>,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let now_ms = self.time_ms;
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let buff_info = match self.provider.get_buff_info(buff_type) {
+            Some(info) => info,
+            None => return,
+        };
+
+        // Determine whether the player is currently inside any SafeZone on
+        // their map so that PauseInSafeZone buffs can start in paused state
+        // when applied inside town, mirroring C# MapObject.AddBuff.
+        let in_safe_zone = self
+            .provider
+            .get_map_info(player.map_index)
+            .map(|info| Self::point_in_safe_zone(info, player.x, player.y))
+            .unwrap_or(false);
+
+        let infinite = matches!(buff_info.stack_type, BuffStackType::Infinite);
+
+        // Find any existing buff of this type on the player.
+        let existing_index = player
+            .active_buffs
+            .iter()
+            .position(|b| b.buff_type == buff_type);
+
+        if let Some(idx) = existing_index {
+            let buff = &mut player.active_buffs[idx];
+
+            buff.infinite = infinite;
+
+            // Update duration/stat behaviour based on BuffStackType, closely
+            // mirroring C# MapObject.AddBuff.
+            match buff_info.stack_type {
+                BuffStackType::ResetDuration => {
+                    if !infinite && duration_ms > 0 {
+                        buff.expire_time_ms = now_ms.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::StackDuration => {
+                    if !infinite && duration_ms > 0 {
+                        let base = buff.expire_time_ms.max(now_ms);
+                        buff.expire_time_ms = base.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::StackStat => {
+                    buff.stats.add(&stats);
+                }
+                BuffStackType::StackStatAndDuration => {
+                    buff.stats.add(&stats);
+                    if !infinite && duration_ms > 0 {
+                        let base = buff.expire_time_ms.max(now_ms);
+                        buff.expire_time_ms = base.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::ResetStat => {
+                    buff.stats = stats;
+                }
+                BuffStackType::ResetStatAndDuration => {
+                    buff.stats = stats;
+                    if !infinite && duration_ms > 0 {
+                        buff.expire_time_ms = now_ms.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::Infinite | BuffStackType::None => {}
+            }
+
+            buff.values = values;
+            buff.visible = buff_info.visible;
+
+            if buff_info.has_property(BuffProperty::PauseInSafeZone) && in_safe_zone {
+                buff.paused = true;
+                if !buff.infinite {
+                    let remaining = buff.expire_time_ms.saturating_sub(now_ms).max(0);
+                    buff.pause_remaining_ms = remaining;
+                } else {
+                    buff.pause_remaining_ms = 0;
+                }
+            }
+        } else {
+            let expire_time_ms = if infinite || duration_ms <= 0 {
+                0
+            } else {
+                now_ms.saturating_add(duration_ms)
+            };
+
+            let mut buff = crate::world::buff::PlayerBuff::new(buff_type, expire_time_ms);
+            buff.stats = stats;
+            buff.values = values;
+            buff.visible = buff_info.visible;
+            buff.infinite = infinite;
+            buff.caster_id = Some(session_id);
+
+            if buff_info.has_property(BuffProperty::PauseInSafeZone) && in_safe_zone {
+                buff.paused = true;
+                if !buff.infinite && duration_ms > 0 {
+                    buff.pause_remaining_ms = duration_ms.max(0);
+                }
+            }
+
+            player.active_buffs.push(buff);
+        }
+
+        // Recalculate buff-derived stats after mutating the active buff list.
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.stats.buffs.clear();
+            for b in &p.active_buffs {
+                p.stats.buffs.add(&b.stats);
+            }
+            p.stats.recalc_if_dirty_for_job(p.job);
+        }
+
+        // Emit an AddBuff world event so the connection layer can send
+        // SAddBuff to the client. Only visible buffs are serialized.
+        if let Some(p) = self.players.get(&session_id) {
+            if let Some(buff) = p.active_buffs.iter().find(|b| b.buff_type == buff_type) {
+                if buff.visible {
+                    let mut buff_bytes = Vec::new();
+                    buff.encode(&mut buff_bytes, session_id);
+                    events.push(WorldEvent::AddBuff {
+                        session_id,
+                        buff_bytes,
+                    });
+                }
+            }
+        }
+    }
+
+    pub fn add_monster_buff(
+        &mut self,
+        map_index: i32,
+        monster_id: u64,
+        buff_type: BuffType,
+        duration_ms: i64,
+        stats: Stats,
+    ) {
+        let now_ms = self.time_ms;
+
+        let buff_info = match self.provider.get_buff_info(buff_type) {
+             Some(info) => info,
+             None => return,
+        };
+
+        let monsters = match self.monsters.get_mut(&map_index) {
+             Some(list) => list,
+             None => return,
+        };
+
+        let monster = match monsters.iter_mut().find(|m| m.id == monster_id) {
+             Some(m) => m,
+             None => return,
+        };
+
+        let infinite = matches!(buff_info.stack_type, BuffStackType::Infinite);
+
+        let existing_index = monster
+            .buffs
+            .iter()
+            .position(|b| b.buff_type == buff_type);
+
+        if let Some(idx) = existing_index {
+            let buff = &mut monster.buffs[idx];
+
+            buff.infinite = infinite;
+
+            match buff_info.stack_type {
+                BuffStackType::ResetDuration => {
+                    if !infinite && duration_ms > 0 {
+                        buff.expire_time_ms = now_ms.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::StackDuration => {
+                    if !infinite && duration_ms > 0 {
+                        let base = buff.expire_time_ms.max(now_ms);
+                        buff.expire_time_ms = base.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::StackStat => {
+                    buff.stats.add(&stats);
+                }
+                BuffStackType::StackStatAndDuration => {
+                    buff.stats.add(&stats);
+                    if !infinite && duration_ms > 0 {
+                        let base = buff.expire_time_ms.max(now_ms);
+                        buff.expire_time_ms = base.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::ResetStat => {
+                    buff.stats = stats;
+                }
+                BuffStackType::ResetStatAndDuration => {
+                    buff.stats = stats;
+                    if !infinite && duration_ms > 0 {
+                        buff.expire_time_ms = now_ms.saturating_add(duration_ms);
+                    }
+                }
+                BuffStackType::Infinite | BuffStackType::None => {}
+            }
+        } else {
+            let expire_time_ms = if infinite || duration_ms <= 0 {
+                0
+            } else {
+                now_ms.saturating_add(duration_ms)
+            };
+
+            let buff = crate::world::monster::MonsterBuff {
+                buff_type,
+                expire_time_ms,
+                stats,
+                infinite,
+                flag_for_removal: false,
+            };
+
+            monster.buffs.push(buff);
+        }
+
+        monster.buff_stats.clear();
+        for b in &monster.buffs {
+            monster.buff_stats.add(&b.stats);
+        }
     }
 
     pub(crate) fn point_in_safe_zone(info: &map::MapInfo, x: i32, y: i32) -> bool {

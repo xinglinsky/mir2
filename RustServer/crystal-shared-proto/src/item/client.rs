@@ -3,9 +3,11 @@ use std::io::{self, Cursor, Read};
 use crate::io::{
     read_i32_le,
     read_u16_le,
+    read_u32_le,
     read_u64_le,
     write_i32_le,
     write_u16_le,
+    write_u32_le,
     write_u64_le,
 };
 use crate::login::ClientPacketId;
@@ -169,60 +171,151 @@ impl CDropItem {
 }
 
 #[derive(Clone, Debug)]
-pub struct CBuyItem {
-    pub item_index: u64,
-    pub count: u16,
-    pub panel_type: u8,
+pub struct CStoreItem {
+    pub from: i32,
+    pub to: i32,
 }
 
-impl CBuyItem {
+impl CStoreItem {
     pub fn encode(&self) -> io::Result<RawPacket> {
         let mut buf = Vec::new();
-        write_u64_le(&mut buf, self.item_index)?;
-        write_u16_le(&mut buf, self.count)?;
-        buf.push(self.panel_type);
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
         Ok(RawPacket {
-            id: ClientPacketId::BuyItem as i16,
+            id: ClientPacketId::StoreItem as i16,
             payload: buf,
         })
     }
 
     pub fn decode(payload: &[u8]) -> io::Result<Self> {
         let mut c = Cursor::new(payload);
-        let item_index = read_u64_le(&mut c)?;
-        let count = read_u16_le(&mut c)?;
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        Ok(CStoreItem { from, to })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTakeBackItem {
+    pub from: i32,
+    pub to: i32,
+}
+
+impl CTakeBackItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        Ok(RawPacket {
+            id: ClientPacketId::TakeBackItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        Ok(CTakeBackItem { from, to })
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct CRemoveSlotItem {
+    pub grid: u8,
+    pub grid_to: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub from_unique_id: u64,
+}
+
+impl CRemoveSlotItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        buf.push(self.grid_to);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_u64_le(&mut buf, self.from_unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RemoveSlotItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
         let mut one = [0u8; 1];
         c.read_exact(&mut one)?;
-        let panel_type = one[0];
-        Ok(CBuyItem {
-            item_index,
-            count,
-            panel_type,
+        let grid = one[0];
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let from_unique_id = read_u64_le(&mut c)?;
+        Ok(CRemoveSlotItem {
+            grid,
+            grid_to,
+            unique_id,
+            to,
+            from_unique_id,
         })
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct CSellItem {
+pub struct CSplitItem {
+    pub grid: u8,
     pub unique_id: u64,
     pub count: u16,
 }
 
-impl CSellItem {
+impl CSplitItem {
     pub fn encode(&self) -> io::Result<RawPacket> {
         let mut buf = Vec::new();
+        buf.push(self.grid);
         write_u64_le(&mut buf, self.unique_id)?;
         write_u16_le(&mut buf, self.count)?;
         Ok(RawPacket {
-            id: ClientPacketId::SellItem as i16,
+            id: ClientPacketId::SplitItem as i16,
             payload: buf,
         })
     }
 
     pub fn decode(payload: &[u8]) -> io::Result<Self> {
         let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
         let unique_id = read_u64_le(&mut c)?;
         let count = read_u16_le(&mut c)?;
-        Ok(CSellItem { unique_id, count })
+        Ok(CSplitItem {
+            grid,
+            unique_id,
+            count,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDropGold {
+    pub amount: u32,
+}
+
+impl CDropGold {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.amount)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DropGold as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let amount = read_u32_le(&mut c)?;
+        Ok(CDropGold { amount })
     }
 }

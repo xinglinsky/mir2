@@ -13,6 +13,9 @@ use crate::io::{
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
+mod client;
+pub use client::{CTakeBackHeroItem, CTransferHeroItem};
+
 #[derive(Clone, Debug)]
 pub struct SHeroCreateRequest {
     pub can_create_class: Vec<bool>,

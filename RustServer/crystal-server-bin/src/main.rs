@@ -522,6 +522,15 @@ async fn main() -> io::Result<()> {
                                 )
                             };
 
+                            println!(
+                                "[tick] MapItemRemoved: object_id={} map={} pos=({}, {}) viewers={}",
+                                object_id,
+                                map_index,
+                                x,
+                                y,
+                                viewers.len()
+                            );
+
                             if viewers.is_empty() {
                                 continue;
                             }

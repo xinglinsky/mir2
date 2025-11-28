@@ -21,6 +21,7 @@ pub mod chat;
 pub mod group;
 pub mod guild;
 pub mod item;
+pub mod trade;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -81,4 +82,10 @@ pub(crate) struct LoginConnection {
     pub(crate) world_map_setup_sent: bool,
     /// Set of map indices for which SNewMapInfo has already been sent.
     pub(crate) sent_map_infos: HashSet<i32>,
+    #[allow(dead_code)]
+    pub(crate) trade_partner: Option<world::SessionId>,
+    #[allow(dead_code)]
+    pub(crate) trade_gold_offered: u32,
+    #[allow(dead_code)]
+    pub(crate) trade_locked: bool,
 }

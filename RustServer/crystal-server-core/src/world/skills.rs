@@ -10,6 +10,8 @@ use crate::world::{Job, Spell};
 
 const SPELL_FATAL_SWORD: u8 = crate::world::Spell::FatalSword as u8;
 const SPELL_FIRE_BALL: u8 = crate::world::Spell::FireBall as u8;
+const SPELL_GREAT_FIRE_BALL: u8 = crate::world::Spell::GreatFireBall as u8;
+const SPELL_THUNDER_BOLT: u8 = crate::world::Spell::ThunderBolt as u8;
 const SPELL_SOUL_FIRE_BALL: u8 = crate::world::Spell::SoulFireBall as u8;
 
 // Approximation of C# Settings.MaxLuck used by MapObject.GetAttackPower when
@@ -82,7 +84,10 @@ pub fn class_owns_spell(class_id: u8, spell: u8) -> bool {
 /// Return true if this spell should be treated as a pure magic attack that
 /// does not rely on the physical melee damage helper for its base damage.
 pub fn is_pure_magic_attack(spell: u8) -> bool {
-    spell == SPELL_FIRE_BALL || spell == SPELL_SOUL_FIRE_BALL
+    spell == SPELL_FIRE_BALL
+        || spell == SPELL_GREAT_FIRE_BALL
+        || spell == SPELL_THUNDER_BOLT
+        || spell == SPELL_SOUL_FIRE_BALL
 }
 
 /// Compute damage for a pure magic attack spell by combining the caster's

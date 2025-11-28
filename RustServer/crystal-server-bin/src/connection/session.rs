@@ -69,6 +69,9 @@ impl LoginConnection {
             pending_guild_invite: None,
             world_map_setup_sent: false,
             sent_map_infos: HashSet::new(),
+            trade_partner: None,
+            trade_gold_offered: 0,
+            trade_locked: false,
         }
     }
 

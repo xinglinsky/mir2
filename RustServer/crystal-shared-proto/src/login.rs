@@ -7,6 +7,18 @@ mod server;
 pub use ids::{ClientPacketId, ServerPacketId};
 pub use client::*;
 pub use server::*;
-pub use crate::item::{CBuyItem, CSellItem, CMoveItem, CEquipItem, CRemoveItem, CUseItem, CDropItem};
-pub use crate::npc::CCallNPC;
+pub use crate::item::{CMoveItem, CEquipItem, CRemoveItem, CUseItem, CDropItem, CStoreItem, CTakeBackItem, CRemoveSlotItem, CSplitItem, CDropGold};
+pub use crate::npc::{
+    CCallNPC,
+    CBuyItem,
+    CSellItem,
+    CDepositRefineItem,
+    CRetrieveRefineItem,
+    CRefineCancel,
+    CRefineItem,
+    CCheckRefine,
+    CReplaceWedRing,
+    CDepositTradeItem,
+    CRetrieveTradeItem,
+};
 pub use crate::guild::{CGuildInvite, CGuildNameReturn, CEditGuildMember};

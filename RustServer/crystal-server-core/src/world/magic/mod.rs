@@ -1,6 +1,6 @@
 use std::io;
 
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use crystal_shared_proto::io::{write_i64_le, write_string, write_u16_le};
 
@@ -172,4 +172,84 @@ pub fn encode_client_magic_bytes(
     write_i64_le(&mut buf, cast_time_offset)?;
 
     Ok(buf)
+}
+
+/// Increment experience for a learned magic and potentially increase its
+/// level, approximating the C# HumanObject.LevelMagic(UserMagic magic)
+/// behaviour. Returns true if the magic's level or experience changed.
+pub fn level_up_magic_simple(
+    info: &MagicInfo,
+    magic: &mut UserMagic,
+    player_level: u16,
+    skill_gain_multiplier: i32,
+) -> bool {
+    use std::cmp::min;
+
+    // Base random increment: Envir.Random.Next(3) + 1 -> [1, 3]
+    let mut rng = thread_rng();
+    let mut exp: u8 = rng.gen_range(1..=3);
+
+    // Apply SkillGainMultiplier, clamped to byte range as in C#.
+    let mult = if skill_gain_multiplier <= 0 {
+        1
+    } else {
+        min(skill_gain_multiplier, u8::MAX as i32)
+    } as u8;
+    exp = exp.saturating_mul(mult);
+
+    // If the player is at max level, treat this as max exp ticks.
+    if player_level == u16::MAX {
+        exp = u8::MAX;
+    }
+
+    let old_level = magic.level;
+    let old_exp = magic.experience;
+
+    let mut new_exp = magic.experience;
+
+    match magic.level {
+        0 => {
+            // Require minimum character level before training this rank.
+            if player_level < info.level1 as u16 {
+                return false;
+            }
+
+            new_exp = new_exp.saturating_add(exp as u16);
+            if new_exp >= info.need1 {
+                magic.level = magic.level.saturating_add(1);
+                new_exp = new_exp.saturating_sub(info.need1);
+            }
+        }
+        1 => {
+            if player_level < info.level2 as u16 {
+                return false;
+            }
+
+            new_exp = new_exp.saturating_add(exp as u16);
+            if new_exp >= info.need2 {
+                magic.level = magic.level.saturating_add(1);
+                new_exp = new_exp.saturating_sub(info.need2);
+            }
+        }
+        2 => {
+            if player_level < info.level3 as u16 {
+                return false;
+            }
+
+            new_exp = new_exp.saturating_add(exp as u16);
+            if new_exp >= info.need3 {
+                magic.level = magic.level.saturating_add(1);
+                // At max rank C# resets experience to 0.
+                new_exp = 0;
+            }
+        }
+        // Already at or above max rank: no further training.
+        _ => {
+            return false;
+        }
+    }
+
+    magic.experience = new_exp;
+
+    magic.level != old_level || magic.experience != old_exp
 }

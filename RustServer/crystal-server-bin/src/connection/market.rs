@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use crystal_shared_proto::item::{CBuyItem, CSellItem, SSellItem};
+use crystal_shared_proto::item::SSellItem;
+use crystal_shared_proto::npc::{CBuyItem, CSellItem};
 use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::user::{SGainedGold, SUserSlotsRefresh, SLoseGold};
 

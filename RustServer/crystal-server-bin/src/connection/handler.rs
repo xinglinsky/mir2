@@ -6,7 +6,8 @@ use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
 use crystal_shared_proto::guild::CEditGuildMember;
 use crystal_shared_proto::io::read_string;
-use crystal_shared_proto::item::{CBuyItem, CDropItem};
+use crystal_shared_proto::item::CDropItem;
+use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
 use crystal_shared_proto::login::{
     CAddMember,
     CAttack,
@@ -197,7 +198,7 @@ impl ConnectionHandler for LoginConnection {
                     packet.id,
                     packet.payload.len(),
                 );
-                match crystal_shared_proto::item::CSellItem::decode(&packet.payload) {
+                match crystal_shared_proto::npc::CSellItem::decode(&packet.payload) {
                     Ok(msg) => {
                         println!(
                             "[ingame] decoded SellItem: unique_id={} count={}",
@@ -305,6 +306,37 @@ impl ConnectionHandler for LoginConnection {
                     );
                 }
             }
+            ClientPacketId::GuildStorageGoldChange => {
+                tracing::debug!(
+                    "GuildStorageGoldChange packet received but not implemented yet",
+                );
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "行会仓库金币变更功能尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
+            ClientPacketId::GuildStorageItemChange => {
+                tracing::debug!(
+                    "GuildStorageItemChange packet received but not implemented yet",
+                );
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "行会仓库物品变更功能尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
+            ClientPacketId::GuildWarReturn => {
+                tracing::debug!("GuildWarReturn packet received but not implemented yet");
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "行会战争相关功能尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
             ClientPacketId::KeepAlive => {
                 if let Ok(msg) = CKeepAlive::decode(&packet.payload) {
                     self.handle_keep_alive(msg, &mut out);
@@ -321,20 +353,11 @@ impl ConnectionHandler for LoginConnection {
                     self.send_system_chat("采集系统尚未在 Rust 服务器上实现。", &mut out);
                 }
             }
-            // Trade protocols: minimal handling (decode + user-facing message).
+            // Trade protocols: request and reply are now partially handled.
             ClientPacketId::TradeRequest => {
                 match CTradeRequest::decode(&packet.payload) {
-                    Ok(_) => {
-                        tracing::debug!(
-                            "TradeRequest received from session_id={}",
-                            self.session_id,
-                        );
-                        if self.stage == Stage::InGame {
-                            self.send_system_chat(
-                                "玩家交易系统尚未在 Rust 服务器上实现。",
-                                &mut out,
-                            );
-                        }
+                    Ok(msg) => {
+                        self.handle_trade_request(msg, &mut out);
                     }
                     Err(e) => {
                         tracing::debug!(
@@ -348,17 +371,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::TradeReply => {
                 match CTradeReply::decode(&packet.payload) {
                     Ok(msg) => {
-                        tracing::debug!(
-                            "TradeReply received from session_id={} accept={}",
-                            self.session_id,
-                            msg.accept,
-                        );
-                        if self.stage == Stage::InGame {
-                            self.send_system_chat(
-                                "玩家交易系统尚未在 Rust 服务器上实现，无法处理本次交易邀请。",
-                                &mut out,
-                            );
-                        }
+                        self.handle_trade_reply(msg, &mut out);
                     }
                     Err(e) => {
                         tracing::debug!(
@@ -372,17 +385,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::TradeGold => {
                 match CTradeGold::decode(&packet.payload) {
                     Ok(msg) => {
-                        tracing::debug!(
-                            "TradeGold received from session_id={} amount={} (ignored, trade not implemented)",
-                            self.session_id,
-                            msg.amount,
-                        );
-                        if self.stage == Stage::InGame {
-                            self.send_system_chat(
-                                "玩家交易系统尚未在 Rust 服务器上实现，赠送金币请求已忽略。",
-                                &mut out,
-                            );
-                        }
+                        self.handle_trade_gold(msg, &mut out);
                     }
                     Err(e) => {
                         tracing::debug!(
@@ -396,17 +399,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::TradeConfirm => {
                 match CTradeConfirm::decode(&packet.payload) {
                     Ok(msg) => {
-                        tracing::debug!(
-                            "TradeConfirm received from session_id={} locked={}",
-                            self.session_id,
-                            msg.locked,
-                        );
-                        if self.stage == Stage::InGame {
-                            self.send_system_chat(
-                                "玩家交易系统尚未在 Rust 服务器上实现，确认操作无效。",
-                                &mut out,
-                            );
-                        }
+                        self.handle_trade_confirm(msg, &mut out);
                     }
                     Err(e) => {
                         tracing::debug!(
@@ -420,16 +413,7 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::TradeCancel => {
                 match CTradeCancel::decode(&packet.payload) {
                     Ok(_) => {
-                        tracing::debug!(
-                            "TradeCancel received from session_id={}",
-                            self.session_id,
-                        );
-                        if self.stage == Stage::InGame {
-                            self.send_system_chat(
-                                "玩家交易系统尚未在 Rust 服务器上实现，当前不存在有效的交易会话。",
-                                &mut out,
-                            );
-                        }
+                        self.handle_trade_cancel(&mut out);
                     }
                     Err(e) => {
                         tracing::debug!(
@@ -510,6 +494,34 @@ impl ConnectionHandler for LoginConnection {
                     );
                 }
             }
+            ClientPacketId::DepositTradeItem => {
+                match CDepositTradeItem::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_deposit_trade_item(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CDepositTradeItem from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
+            }
+            ClientPacketId::RetrieveTradeItem => {
+                match CRetrieveTradeItem::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_retrieve_trade_item(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CRetrieveTradeItem from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
+            }
             // Quest protocols (stub - not implemented yet)
             ClientPacketId::AcceptQuest => {
                 tracing::debug!("AcceptQuest packet received but not implemented yet");
@@ -572,6 +584,20 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_group_invite(msg, &mut out);
                 }
             }
+            _ => {
+                tracing::debug!(
+                    "Unhandled client packet {:?} (id={} payload_len={})",
+                    pid,
+                    packet.id,
+                    packet.payload.len(),
+                );
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "该客户端操作尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
         }
 
         out
@@ -579,6 +605,11 @@ impl ConnectionHandler for LoginConnection {
 
     fn poll_outbound(&mut self) -> Vec<Vec<u8>> {
         let mut out = Vec::new();
+
+        if self.stage == Stage::InGame && self.current_map_index != 0 {
+            self.update_visibility(&mut out);
+        }
+
         let mut outboxes = self.outboxes.lock().unwrap();
         if let Some(mut queued) = outboxes.remove(&self.session_id) {
             out.append(&mut queued);

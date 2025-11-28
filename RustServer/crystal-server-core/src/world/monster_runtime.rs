@@ -158,6 +158,8 @@ impl<P: WorldProvider> World<P> {
             }
         }
 
+        self.process_monster_buffs(now_ms);
+
         let mut jobs: Vec<(i32, usize, u16)> = Vec::new();
         let mut total_spawned: u32 = 0;
         let mut total_jobs: u32 = 0;
@@ -286,10 +288,8 @@ impl<P: WorldProvider> World<P> {
             );
         }
 
-        // After maintaining respawn counts, run per-monster AI. In this
-        // initial phase the AI only selects targets and updates internal
-        // state; movement and active attacks will be layered on later.
         self.process_monster_ai(now_ms, &mut events);
+        self.process_guard_ai(now_ms, &mut events);
 
         events
     }
@@ -389,6 +389,44 @@ impl<P: WorldProvider> World<P> {
                     player.stats.buffs.add(&b.stats);
                 }
                 player.stats.recalc_if_dirty_for_job(player.job);
+            }
+        }
+    }
+
+    fn process_monster_buffs(&mut self, now_ms: i64) {
+        for monsters in self.monsters.values_mut() {
+            for monster in monsters.iter_mut() {
+                if monster.buffs.is_empty() {
+                    continue;
+                }
+
+                let mut removed_indices: Vec<usize> = Vec::new();
+
+                for (idx, buff) in monster.buffs.iter_mut().enumerate() {
+                    if buff.infinite {
+                        continue;
+                    }
+                    if buff.flag_for_removal
+                        || (buff.expire_time_ms > 0 && buff.expire_time_ms <= now_ms)
+                    {
+                        removed_indices.push(idx);
+                    }
+                }
+
+                if removed_indices.is_empty() {
+                    continue;
+                }
+
+                removed_indices.sort_unstable_by(|a, b| b.cmp(a));
+
+                for idx in removed_indices {
+                    monster.buffs.remove(idx);
+                }
+
+                monster.buff_stats.clear();
+                for b in &monster.buffs {
+                    monster.buff_stats.add(&b.stats);
+                }
             }
         }
     }
@@ -945,7 +983,17 @@ impl<P: WorldProvider> World<P> {
             let Some(info) = self.provider.get_monster_info(monster_index) else {
                 continue;
             };
-            let attacker_stats: Stats = info.stats.clone();
+
+            // Start from the static MonsterInfo stats and layer on any
+            // per-instance buff_stats that are currently active on this
+            // monster instance, mirroring C# MonsterObject.RefreshBuffs where
+            // Buff.Stats are added on top of base stats.
+            let mut attacker_stats: Stats = info.stats.clone();
+            if let Some(monsters) = self.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == monster_id) {
+                    attacker_stats.add(&m.buff_stats);
+                }
+            }
             let (hit, raw_damage, raw_damage_type) =
                 compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
 
@@ -993,6 +1041,127 @@ impl<P: WorldProvider> World<P> {
                 damage,
                 damage_type,
                 health_percent,
+            });
+        }
+    }
+
+    fn process_guard_ai(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        const GUARD_AIS: [u8; 8] = [6, 57, 58, 102, 103, 104, 105, 113];
+        let map_indices: Vec<i32> = self.monsters.keys().cloned().collect();
+        let mut pending_kills: Vec<(i32, u64, i32, i32, u8)> = Vec::new();
+
+        for map_index in map_indices {
+            let Some(monsters) = self.monsters.get_mut(&map_index) else {
+                continue;
+            };
+
+            let len = monsters.len();
+            for i in 0..len {
+                let (attack_range, attack_delay_ms, guard_x, guard_y) = {
+                    let m = &monsters[i];
+
+                    if m.hp <= 0 {
+                        continue;
+                    }
+
+                    let Some(info) = self.provider.get_monster_info(m.monster_index) else {
+                        continue;
+                    };
+
+                    if !GUARD_AIS.contains(&info.ai) {
+                        continue;
+                    }
+
+                    let range: i32 = match info.ai {
+                        105 => 10,
+                        _ => info.view_range as i32,
+                    }
+                    .max(1);
+
+                    let delay_ms = Self::compute_monster_attack_delay_ms(info.attack_speed);
+
+                    (range, delay_ms, m.x, m.y)
+                };
+
+                if now_ms < monsters[i].next_attack_time_ms {
+                    continue;
+                }
+
+                let mut best_target: Option<(usize, i32)> = None;
+
+                for j in 0..len {
+                    if j == i {
+                        continue;
+                    }
+
+                    let t = &monsters[j];
+                    if t.hp <= 0 {
+                        continue;
+                    }
+
+                    let Some(t_info) = self.provider.get_monster_info(t.monster_index) else {
+                        continue;
+                    };
+
+                    if GUARD_AIS.contains(&t_info.ai) {
+                        continue;
+                    }
+
+                    let dx = t.x - guard_x;
+                    let dy = t.y - guard_y;
+                    let dist = dx.abs().max(dy.abs());
+                    if dist == 0 || dist > attack_range {
+                        continue;
+                    }
+
+                    match best_target {
+                        None => best_target = Some((j, dist)),
+                        Some((_, best_dist)) if dist < best_dist => {
+                            best_target = Some((j, dist));
+                        }
+                        _ => {}
+                    }
+                }
+
+                let (target_id, target_x, target_y, target_dir) = match best_target {
+                    Some((idx, _)) => {
+                        let t = &monsters[idx];
+                        (t.id, t.x, t.y, t.direction)
+                    }
+                    None => continue,
+                };
+
+                {
+                    let guard = &mut monsters[i];
+                    let dx = target_x - guard.x;
+                    let dy = target_y - guard.y;
+                    let sx = dx.clamp(-1, 1);
+                    let sy = dy.clamp(-1, 1);
+                    guard.direction = match (sx, sy) {
+                        (0, -1) => 0,
+                        (1, -1) => 1,
+                        (1, 0) => 2,
+                        (1, 1) => 3,
+                        (0, 1) => 4,
+                        (-1, 1) => 5,
+                        (-1, 0) => 6,
+                        (-1, -1) => 7,
+                        _ => guard.direction,
+                    };
+                    guard.next_attack_time_ms = now_ms.saturating_add(attack_delay_ms);
+                }
+
+                pending_kills.push((map_index, target_id, target_x, target_y, target_dir));
+            }
+        }
+        for (map_index, target_id, x, y, direction) in pending_kills {
+            self.mark_monster_dead(map_index, target_id);
+            events.push(WorldEvent::MonsterDied {
+                object_id: target_id,
+                map_index,
+                x,
+                y,
+                direction,
             });
         }
     }
@@ -1171,6 +1340,8 @@ impl<P: WorldProvider> World<P> {
                     roam_time_ms: 0,
                     alone: false,
                     alone_time_ms: 0,
+                    buff_stats: Stats::default(),
+                    buffs: Vec::new(),
                 });
 
                 placed = true;

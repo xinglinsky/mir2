@@ -543,6 +543,8 @@ impl LoginConnection {
                 out.push(Self::encode_raw(raw));
             }
 
+            self.send_safezone_border_spells(map_info_core.index, out);
+
             let default_npc = SDefaultNpc {
                 object_id: super::LoginConnection::DEFAULT_NPC_ID,
             };

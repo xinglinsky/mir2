@@ -292,7 +292,7 @@ impl ItemInfoData {
             }
         }
 
-        result.trim().to_string()
+        result
     }
 }
 
