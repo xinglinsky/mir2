@@ -701,3 +701,113 @@ impl CGroupInvite {
         Ok(CGroupInvite { accept_invite })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct CTradeRequest;
+
+impl CTradeRequest {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::TradeRequest as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CTradeRequest payload must be empty",
+            ));
+        }
+        Ok(CTradeRequest)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTradeReply {
+    pub accept: bool,
+}
+
+impl CTradeReply {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.accept)?;
+        Ok(RawPacket {
+            id: ClientPacketId::TradeReply as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let accept = read_bool(&mut c)?;
+        Ok(CTradeReply { accept })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTradeGold {
+    pub amount: u32,
+}
+
+impl CTradeGold {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.amount)?;
+        Ok(RawPacket {
+            id: ClientPacketId::TradeGold as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let amount = read_u32_le(&mut c)?;
+        Ok(CTradeGold { amount })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTradeConfirm {
+    pub locked: bool,
+}
+
+impl CTradeConfirm {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.locked)?;
+        Ok(RawPacket {
+            id: ClientPacketId::TradeConfirm as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let locked = read_bool(&mut c)?;
+        Ok(CTradeConfirm { locked })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CTradeCancel;
+
+impl CTradeCancel {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::TradeCancel as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CTradeCancel payload must be empty",
+            ));
+        }
+        Ok(CTradeCancel)
+    }
+}

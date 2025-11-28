@@ -63,6 +63,19 @@ pub struct StoredAccount {
     pub characters: Vec<CharacterSummary>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountStatus {
+    pub id: String,
+    pub banned: bool,
+    pub ban_reason: String,
+    /// Unix timestamp in milliseconds until which the ban is active.
+    /// When sending ban-related packets to the legacy C# client, this is
+    /// converted to DateTime.ToBinary-compatible ticks.
+    pub ban_expires_at: i64,
+    pub require_password_change: bool,
+    pub wrong_password_count: i32,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[allow(dead_code)]
 struct AccountDb {
@@ -73,6 +86,13 @@ pub trait AccountStore: Send + Sync {
     fn account_exists(&self, id: &str) -> Result<bool, StoreError>;
     fn create_account(&self, id: &str, password: &str) -> Result<(), StoreError>;
     fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError>;
+
+    /// Load/save account flags required to mirror the C# AccountInfo login
+    /// semantics (banned / ban reason / expiry / RequirePasswordChange /
+    /// WrongPasswordCount). Implementations are expected to keep this in the
+    /// same backing store as passwords and timestamps.
+    fn load_account_status(&self, id: &str) -> Result<Option<AccountStatus>, StoreError>;
+    fn save_account_status(&self, status: &AccountStatus) -> Result<(), StoreError>;
 
     fn list_characters(&self, account_id: &str) -> Result<Vec<CharacterSummary>, StoreError>;
     fn create_character(

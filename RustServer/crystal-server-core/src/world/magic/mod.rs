@@ -67,7 +67,10 @@ pub fn magic_mpower<R: Rng + ?Sized>(info: &MagicInfo, rng: &mut R) -> i32 {
     if info.mpower_bonus > 0 {
         let base = info.mpower_base as i32;
         let bonus = info.mpower_bonus as i32;
-        rng.gen_range(base..=base + bonus)
+        // C# Envir.Random.Next(Info.MPowerBase, Info.MPowerBonus + Info.MPowerBase)
+        // samples in the half-open interval [base, base + bonus), so we must
+        // mirror that using an exclusive upper bound in Rust.
+        rng.gen_range(base..base + bonus)
     } else {
         info.mpower_base as i32
     }
@@ -79,7 +82,9 @@ pub fn magic_def_power<R: Rng + ?Sized>(info: &MagicInfo, rng: &mut R) -> i32 {
     if info.power_bonus > 0 {
         let base = info.power_base as i32;
         let bonus = info.power_bonus as i32;
-        rng.gen_range(base..=base + bonus)
+        // C# Envir.Random.Next(Info.PowerBase, Info.PowerBonus + Info.PowerBase)
+        // uses the same half-open range [base, base + bonus).
+        rng.gen_range(base..base + bonus)
     } else {
         info.power_base as i32
     }
@@ -105,8 +110,12 @@ pub fn magic_damage<R: Rng + ?Sized>(
     let power = magic_power(info, level, rng);
     let mult = magic_multiplier(info, level);
     let sum = damage_base.saturating_add(power).max(0) as f32;
-    let raw = (sum * mult).round();
-    raw.clamp(i32::MIN as f32, i32::MAX as f32) as i32
+    // C# UserMagic.GetDamage casts the floating-point result of
+    //   (DamageBase + GetPower()) * GetMultiplier()
+    // directly to int, which truncates toward zero. We mirror that
+    // behaviour here instead of rounding.
+    let raw = (sum * mult) as i32;
+    raw
 }
 
 /// Encode the exact payload of ClientMagic.Save(writer) given the static MagicInfo

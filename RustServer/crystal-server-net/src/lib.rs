@@ -1,10 +1,87 @@
-use std::{io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    io,
+    net::{IpAddr, SocketAddr},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use crystal_shared_proto::packet::RawPacket;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
+
+struct IpState {
+    blocked_until: Option<Instant>,
+    active: u16,
+}
+
+struct IpLimiter {
+    max_ip: u16,
+    block_duration: Duration,
+    states: Mutex<HashMap<IpAddr, IpState>>,
+}
+
+impl IpLimiter {
+    fn new(max_ip: u16, block_duration: Duration) -> Self {
+        IpLimiter {
+            max_ip,
+            block_duration,
+            states: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Attempt to acquire a connection slot for the given IP address.
+    /// Returns true if the connection is allowed, or false if the IP is
+    /// currently blocked or has reached the maximum concurrent connection
+    /// count.
+    fn try_acquire(&self, ip: IpAddr) -> bool {
+        let now = Instant::now();
+        let mut map = self.states.lock().unwrap();
+        let entry = map.entry(ip).or_insert(IpState {
+            blocked_until: None,
+            active: 0,
+        });
+
+        if let Some(until) = entry.blocked_until {
+            if until > now {
+                return false;
+            }
+        }
+
+        if self.max_ip > 0 && entry.active >= self.max_ip {
+            entry.blocked_until = Some(now + self.block_duration);
+            return false;
+        }
+
+        entry.active = entry.active.saturating_add(1);
+        true
+    }
+
+    fn release(&self, ip: IpAddr) {
+        let mut map = match self.states.lock() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+        if let Some(entry) = map.get_mut(&ip) {
+            if entry.active > 0 {
+                entry.active -= 1;
+            }
+        }
+    }
+}
+
+struct IpGuard {
+    limiter: Arc<IpLimiter>,
+    ip: IpAddr,
+}
+
+impl Drop for IpGuard {
+    fn drop(&mut self) {
+        self.limiter.release(self.ip);
+    }
+}
 
 pub trait ConnectionHandler: Send + 'static {
     /// Called right after a TCP connection is accepted, before any packets are read.
@@ -36,20 +113,43 @@ pub trait ConnectionHandler: Send + 'static {
 
 pub type HandlerFactory = Arc<dyn Fn() -> Box<dyn ConnectionHandler> + Send + Sync + 'static>;
 
-pub async fn run_server(addr: SocketAddr, factory: HandlerFactory) -> io::Result<()> {
+pub async fn run_server(
+    addr: SocketAddr,
+    factory: HandlerFactory,
+    max_ip: u16,
+    ip_block_seconds: u64,
+) -> io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
+    let block_secs = if ip_block_seconds == 0 { 1 } else { ip_block_seconds };
+    let limiter = Arc::new(IpLimiter::new(max_ip, Duration::from_secs(block_secs)));
 
     loop {
-        let (stream, _) = listener.accept().await?;
+        let (stream, peer_addr) = listener.accept().await?;
         let factory = factory.clone();
+        let limiter = limiter.clone();
 
         tokio::spawn(async move {
-            let _ = handle_connection(stream, factory).await;
+            let ip = peer_addr.ip();
+            if !limiter.try_acquire(ip) {
+                eprintln!(
+                    "[net] rejecting connection from {} due to IP limits or temporary block",
+                    ip
+                );
+                return;
+            }
+
+            let _ = handle_connection(stream, factory, limiter, ip).await;
         });
     }
 }
 
-async fn handle_connection(mut stream: TcpStream, factory: HandlerFactory) -> io::Result<()> {
+async fn handle_connection(
+    mut stream: TcpStream,
+    factory: HandlerFactory,
+    limiter: Arc<IpLimiter>,
+    ip: IpAddr,
+) -> io::Result<()> {
+    let _guard = IpGuard { limiter, ip };
     stream.set_nodelay(true)?;
 
     let mut handler = factory();

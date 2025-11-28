@@ -214,4 +214,23 @@ impl LoginConnection {
             out.push(Self::encode_raw(raw));
         }
     }
+
+    /// Map item grade to ARGB name colour, mirroring the C# ItemObject
+    /// NameColour logic based on ItemGrade. The mapping is:
+    /// None/Common -> White, Rare -> DeepSkyBlue, Legendary -> DarkOrange,
+    /// Mythical -> Plum, Heroic -> Red.
+    pub(crate) fn item_name_colour_for_grade(grade: u8) -> i32 {
+        match grade {
+            // ItemGrade.Rare
+            2 => 0xFF00BFFFu32 as i32,
+            // ItemGrade.Legendary
+            3 => 0xFFFF8C00u32 as i32,
+            // ItemGrade.Mythical
+            4 => 0xFFDDA0DDu32 as i32,
+            // ItemGrade.Heroic
+            5 => 0xFFFF0000u32 as i32,
+            // ItemGrade.None / Common / unknown -> White
+            _ => 0xFFFFFFFFu32 as i32,
+        }
+    }
 }

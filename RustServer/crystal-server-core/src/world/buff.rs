@@ -11,6 +11,7 @@ pub struct PlayerBuff {
     pub values: Vec<i32>,
     pub infinite: bool,
     pub paused: bool,
+    pub pause_remaining_ms: i64,
 }
 
 impl PlayerBuff {
@@ -24,6 +25,7 @@ impl PlayerBuff {
             values: Vec::new(),
             infinite: false,
             paused: false,
+            pause_remaining_ms: 0,
         }
     }
 

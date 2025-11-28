@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use crystal_server_core::account::{
+    AccountStatus,
     AccountStore,
     StoreError,
     CharacterSummary,
@@ -135,7 +136,12 @@ impl SqliteAccountStore {
                     id              TEXT PRIMARY KEY,
                     password_hash   TEXT NOT NULL,
                     created_at      INTEGER NOT NULL,
-                    last_login_at   INTEGER
+                    last_login_at   INTEGER,
+                    banned                  INTEGER NOT NULL DEFAULT 0,
+                    ban_reason              TEXT NOT NULL DEFAULT '',
+                    ban_expires_at          INTEGER NOT NULL DEFAULT 0,
+                    require_password_change INTEGER NOT NULL DEFAULT 0,
+                    wrong_password_count    INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS characters (
@@ -216,6 +222,26 @@ impl SqliteAccountStore {
                 );
                 "#,
             ))?;
+            let _ = conn.execute(
+                "ALTER TABLE accounts ADD COLUMN banned INTEGER NOT NULL DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE accounts ADD COLUMN ban_reason TEXT NOT NULL DEFAULT ''",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE accounts ADD COLUMN ban_expires_at INTEGER NOT NULL DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE accounts ADD COLUMN require_password_change INTEGER NOT NULL DEFAULT 0",
+                [],
+            );
+            let _ = conn.execute(
+                "ALTER TABLE accounts ADD COLUMN wrong_password_count INTEGER NOT NULL DEFAULT 0",
+                [],
+            );
             Ok(())
         })
     }
@@ -263,6 +289,53 @@ impl AccountStore for SqliteAccountStore {
             } else {
                 Ok(false)
             }
+        })
+    }
+
+    fn load_account_status(&self, id: &str) -> Result<Option<AccountStatus>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT banned, ban_reason, ban_expires_at, require_password_change, wrong_password_count FROM accounts WHERE id = ?1 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query([id]))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let banned_int: i64 = Self::map_sql_err(row.get(0))?;
+                let banned = banned_int != 0;
+                let ban_reason: String = Self::map_sql_err(row.get(1))?;
+                let ban_expires_at: i64 = Self::map_sql_err(row.get(2))?;
+                let require_int: i64 = Self::map_sql_err(row.get(3))?;
+                let require_password_change = require_int != 0;
+                let wrong_password_count: i64 = Self::map_sql_err(row.get(4))?;
+                Ok(Some(AccountStatus {
+                    id: id.to_string(),
+                    banned,
+                    ban_reason,
+                    ban_expires_at,
+                    require_password_change,
+                    wrong_password_count: wrong_password_count as i32,
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_account_status(&self, status: &AccountStatus) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            let banned_val: i64 = if status.banned { 1 } else { 0 };
+            let require_val: i64 = if status.require_password_change { 1 } else { 0 };
+            Self::map_sql_err(conn.execute(
+                "UPDATE accounts SET banned = ?2, ban_reason = ?3, ban_expires_at = ?4, require_password_change = ?5, wrong_password_count = ?6 WHERE id = ?1",
+                (
+                    &status.id,
+                    &banned_val,
+                    &status.ban_reason,
+                    &status.ban_expires_at,
+                    &require_val,
+                    &(status.wrong_password_count as i64),
+                ),
+            ))?;
+            Ok(())
         })
     }
 
@@ -784,6 +857,7 @@ impl AccountStore for SqliteAccountStore {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 enum SaveTask {
     CharacterStats {
         account_id: String,
@@ -1034,6 +1108,16 @@ impl AccountStore for AsyncAccountStore {
     fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError> {
         let inner = self.sync_store();
         AccountStore::verify_password(&inner, id, password)
+    }
+
+    fn load_account_status(&self, id: &str) -> Result<Option<AccountStatus>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_account_status(&inner, id)
+    }
+
+    fn save_account_status(&self, status: &AccountStatus) -> Result<(), StoreError> {
+        let inner = self.sync_store();
+        AccountStore::save_account_status(&inner, status)
     }
 
     fn list_characters(&self, account_id: &str) -> Result<Vec<CharacterSummary>, StoreError> {

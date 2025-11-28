@@ -1180,5 +1180,5 @@ async fn main() -> io::Result<()> {
 
     tracing::info!("Rust Crystal stub server listening on {}", addr);
 
-    run_server(addr, factory).await
+    run_server(addr, factory, cfg.max_ip, cfg.ip_block_seconds).await
 }

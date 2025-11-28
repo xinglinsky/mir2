@@ -207,7 +207,7 @@ pub fn compute_cross_half_moon_damage_for_target<P: WorldProvider>(
 /// Determine the effective maximum range (in tiles) for Thrusting. This uses
 /// the MagicInfo.range value when available and falls back to a small
 /// reasonable default when not.
-pub fn thrusting_max_range<P: WorldProvider>(provider: &P, level: u8) -> i32 {
+pub fn thrusting_max_range<P: WorldProvider>(provider: &P, _level: u8) -> i32 {
     let base = provider
         .get_magic_info(SPELL_THRUSTING)
         .map(|info| info.range as i32)

@@ -18,7 +18,7 @@ use crystal_shared_proto::item_types::UserItemData;
 pub type SessionId = u32;
 
 #[derive(Clone, Debug, Default)]
-struct CellOccupants {
+pub(crate) struct CellOccupants {
     players: Vec<SessionId>,
     monsters: Vec<u64>,
 }
@@ -49,6 +49,12 @@ pub struct BuyBackEntry {
     pub item: UserItemData,
     /// Server time in milliseconds when this entry was created.
     pub added_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub enum GuildJoinError {
+    NotFound,
+    Full,
 }
 
 #[derive(Clone, Debug)]
@@ -240,6 +246,11 @@ pub enum WorldEvent {
         session_id: SessionId,
         buff_type: u8, // BuffType as u8
     },
+    PauseBuff {
+        session_id: SessionId,
+        buff_type: u8, // BuffType as u8
+        paused: bool,
+    },
     /// A free-form system message destined for a specific player session,
     /// typically used for errors or feedback from world-side social logic
     /// such as the party system.
@@ -385,6 +396,38 @@ impl<P: WorldProvider> World<P> {
             .and_then(|p| p.pending_group_invite_from)
     }
 
+    /// Inspect which guild (if any) currently has a pending invite targeted
+    /// at the given session. This mirrors C# PendingGuildInvite behaviour.
+    pub fn pending_guild_invite(&self, session_id: SessionId) -> Option<String> {
+        self.players
+            .get(&session_id)
+            .and_then(|p| p.pending_guild_invite_from.clone())
+    }
+
+    /// Set or overwrite the pending guild invite for the given session.
+    pub fn set_pending_guild_invite(&mut self, session_id: SessionId, guild_name: &str) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_guild_invite_from = Some(guild_name.to_string());
+        }
+    }
+
+    /// Clear any pending guild invite for the given session.
+    pub fn clear_pending_guild_invite(&mut self, session_id: SessionId) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_guild_invite_from = None;
+        }
+    }
+
+    /// Take and clear the pending guild invite for the given session,
+    /// returning the guild name if present.
+    pub fn take_pending_guild_invite(&mut self, session_id: SessionId) -> Option<String> {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.pending_guild_invite_from.take()
+        } else {
+            None
+        }
+    }
+
     /// Helper to snapshot current party members (online only) for a given
     /// session, returning a list of (SessionId, Name) pairs.
     pub fn party_members_for_session(
@@ -435,6 +478,23 @@ impl<P: WorldProvider> World<P> {
 
     pub fn init_guilds_from_db(&mut self, guilds: Vec<GuildInfo>) {
         self.guilds = GuildManager::from_guilds(guilds);
+    }
+
+    pub fn guild_add_member_by_name(
+        &mut self,
+        guild_name: &str,
+    ) -> Result<GuildInfo, GuildJoinError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildJoinError::NotFound),
+        };
+
+        if !guild.has_room() {
+            return Err(GuildJoinError::Full);
+        }
+
+        guild.member_count = guild.member_count.saturating_add(1);
+        Ok(guild.clone())
     }
 
     pub fn set_spawn_config(
@@ -1469,7 +1529,7 @@ impl<P: WorldProvider> World<P> {
         events
     }
 
-    fn point_in_safe_zone(info: &map::MapInfo, x: i32, y: i32) -> bool {
+    pub(crate) fn point_in_safe_zone(info: &map::MapInfo, x: i32, y: i32) -> bool {
         for sz in &info.safe_zones {
             let dx = x - sz.location_x;
             let dy = y - sz.location_y;

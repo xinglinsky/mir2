@@ -65,6 +65,15 @@ impl GuildInfo {
     pub fn has_gt(&self, now_ticks: i64) -> bool {
         self.gt_rent_ticks > now_ticks
     }
+
+    /// Return true if this guild can accept additional members.
+    pub fn has_room(&self) -> bool {
+        if self.member_cap > 0 {
+            self.member_count < self.member_cap
+        } else {
+            true
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -145,5 +154,17 @@ impl GuildManager {
 
     pub fn remove_guild(&mut self, id: GuildId) -> Option<GuildInfo> {
         self.guilds.remove(&id)
+    }
+
+    pub fn get_guild_by_name(&self, name: &str) -> Option<&GuildInfo> {
+        self.guilds
+            .values()
+            .find(|g| g.name.eq_ignore_ascii_case(name))
+    }
+
+    pub fn get_guild_by_name_mut(&mut self, name: &str) -> Option<&mut GuildInfo> {
+        self.guilds
+            .values_mut()
+            .find(|g| g.name.eq_ignore_ascii_case(name))
     }
 }

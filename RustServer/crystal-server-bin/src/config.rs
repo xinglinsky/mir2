@@ -33,10 +33,26 @@ pub struct ServerConfig {
     pub log_filter: Option<String>,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
+    /// Maximum concurrent connections allowed per IP address. Mirrors
+    /// C# Settings.MaxIP. A value of 0 disables the per-IP limit.
+    #[serde(default = "default_max_ip")]
+    pub max_ip: u16,
+    /// Number of seconds to temporarily block an IP when it exceeds max_ip,
+    /// mirroring C# Settings.IPBlockSeconds. A value of 0 falls back to 1.
+    #[serde(default = "default_ip_block_seconds")]
+    pub ip_block_seconds: u64,
 }
 
 fn default_timeout_ms() -> u64 {
     10_000
+}
+
+fn default_max_ip() -> u16 {
+    5
+}
+
+fn default_ip_block_seconds() -> u64 {
+    5
 }
 
 fn default_spawn_multiplier() -> u16 {

@@ -84,8 +84,11 @@ pub enum ClientPacketId {
     FinishQuest = 102,
     AbandonQuest = 103,
     ShareQuest = 104,
-    GuildInvite = 78,
-    GuildNameReturn = 79,
+    EditGuildMember = 77,
+    EditGuildNotice = 78,
+    GuildInvite = 79,
+    GuildNameReturn = 80,
+    RequestGuildInfo = 81,
 }
 
 impl ClientPacketId {
@@ -122,8 +125,6 @@ impl ClientPacketId {
             54 => Some(ClientPacketId::MagicKey),
             55 => Some(ClientPacketId::Magic),
             65 => Some(ClientPacketId::TownRevive),
-            78 => Some(ClientPacketId::GuildInvite),
-            79 => Some(ClientPacketId::GuildNameReturn),
             56 => Some(ClientPacketId::SwitchGroup),
             57 => Some(ClientPacketId::AddMember),
             58 => Some(ClientPacketId::DellMember),
@@ -143,6 +144,11 @@ impl ClientPacketId {
             101 => Some(ClientPacketId::AcceptQuest),
             102 => Some(ClientPacketId::FinishQuest),
             103 => Some(ClientPacketId::AbandonQuest),
+            77 => Some(ClientPacketId::EditGuildMember),
+            78 => Some(ClientPacketId::EditGuildNotice),
+            79 => Some(ClientPacketId::GuildInvite),
+            80 => Some(ClientPacketId::GuildNameReturn),
+            81 => Some(ClientPacketId::RequestGuildInfo),
             104 => Some(ClientPacketId::ShareQuest),
             _ => None,
         }

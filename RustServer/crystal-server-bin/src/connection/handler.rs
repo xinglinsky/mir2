@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
+use crystal_shared_proto::guild::CEditGuildMember;
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::{CBuyItem, CDropItem};
 use crystal_shared_proto::login::{
@@ -37,11 +38,14 @@ use crystal_shared_proto::login::{
     CMagicKey,
     CGuildInvite,
     CGuildNameReturn,
+    CTradeRequest,
+    CTradeReply,
+    CTradeGold,
+    CTradeConfirm,
+    CTradeCancel,
     ClientPacketId,
     SConnected,
 };
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
-use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::packet::RawPacket;
 
 use super::{LoginConnection, Stage};
@@ -261,6 +265,22 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_search_map(msg, &mut out);
                 }
             }
+            ClientPacketId::EditGuildMember => {
+                if let Ok(msg) = CEditGuildMember::decode(&packet.payload) {
+                    self.handle_edit_guild_member(msg, &mut out);
+                }
+            }
+            // Guild protocols: partial support. Notice editing and info
+            // requests are not yet implemented on the Rust server.
+            ClientPacketId::EditGuildNotice => {
+                tracing::debug!("EditGuildNotice packet received but not implemented yet");
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "行会公告编辑功能尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
             ClientPacketId::TownRevive => {
                 if let Ok(msg) = CTownRevive::decode(&packet.payload) {
                     self.handle_town_revive(msg, &mut out);
@@ -276,6 +296,15 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_guild_name_return(msg, &mut out);
                 }
             }
+            ClientPacketId::RequestGuildInfo => {
+                tracing::debug!("RequestGuildInfo packet received but not implemented yet");
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "行会信息查询功能尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
+            }
             ClientPacketId::KeepAlive => {
                 if let Ok(msg) = CKeepAlive::decode(&packet.payload) {
                     self.handle_keep_alive(msg, &mut out);
@@ -288,72 +317,239 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Harvest => {
                 tracing::debug!("Harvest packet received but not implemented yet");
                 // TODO: Implement harvest logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat("采集系统尚未在 Rust 服务器上实现。", &mut out);
+                }
             }
-            // Trade protocols (stub - not implemented yet)
+            // Trade protocols: minimal handling (decode + user-facing message).
             ClientPacketId::TradeRequest => {
-                tracing::debug!("TradeRequest packet received but not implemented yet");
-                // TODO: Implement trade request logic
+                match CTradeRequest::decode(&packet.payload) {
+                    Ok(_) => {
+                        tracing::debug!(
+                            "TradeRequest received from session_id={}",
+                            self.session_id,
+                        );
+                        if self.stage == Stage::InGame {
+                            self.send_system_chat(
+                                "玩家交易系统尚未在 Rust 服务器上实现。",
+                                &mut out,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CTradeRequest from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
             }
             ClientPacketId::TradeReply => {
-                tracing::debug!("TradeReply packet received but not implemented yet");
-                // TODO: Implement trade reply logic
+                match CTradeReply::decode(&packet.payload) {
+                    Ok(msg) => {
+                        tracing::debug!(
+                            "TradeReply received from session_id={} accept={}",
+                            self.session_id,
+                            msg.accept,
+                        );
+                        if self.stage == Stage::InGame {
+                            self.send_system_chat(
+                                "玩家交易系统尚未在 Rust 服务器上实现，无法处理本次交易邀请。",
+                                &mut out,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CTradeReply from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
             }
             ClientPacketId::TradeGold => {
-                tracing::debug!("TradeGold packet received but not implemented yet");
-                // TODO: Implement trade gold logic
+                match CTradeGold::decode(&packet.payload) {
+                    Ok(msg) => {
+                        tracing::debug!(
+                            "TradeGold received from session_id={} amount={} (ignored, trade not implemented)",
+                            self.session_id,
+                            msg.amount,
+                        );
+                        if self.stage == Stage::InGame {
+                            self.send_system_chat(
+                                "玩家交易系统尚未在 Rust 服务器上实现，赠送金币请求已忽略。",
+                                &mut out,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CTradeGold from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
             }
             ClientPacketId::TradeConfirm => {
-                tracing::debug!("TradeConfirm packet received but not implemented yet");
-                // TODO: Implement trade confirm logic
+                match CTradeConfirm::decode(&packet.payload) {
+                    Ok(msg) => {
+                        tracing::debug!(
+                            "TradeConfirm received from session_id={} locked={}",
+                            self.session_id,
+                            msg.locked,
+                        );
+                        if self.stage == Stage::InGame {
+                            self.send_system_chat(
+                                "玩家交易系统尚未在 Rust 服务器上实现，确认操作无效。",
+                                &mut out,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CTradeConfirm from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
             }
             ClientPacketId::TradeCancel => {
-                tracing::debug!("TradeCancel packet received but not implemented yet");
-                // TODO: Implement trade cancel logic
+                match CTradeCancel::decode(&packet.payload) {
+                    Ok(_) => {
+                        tracing::debug!(
+                            "TradeCancel received from session_id={}",
+                            self.session_id,
+                        );
+                        if self.stage == Stage::InGame {
+                            self.send_system_chat(
+                                "玩家交易系统尚未在 Rust 服务器上实现，当前不存在有效的交易会话。",
+                                &mut out,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CTradeCancel from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
+                }
             }
             // Market protocols (stub - not implemented yet)
             ClientPacketId::ConsignItem => {
                 tracing::debug!("ConsignItem packet received but not implemented yet");
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketSearch => {
                 tracing::debug!("MarketSearch packet received but not implemented yet");
                 // TODO: Implement market search logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketRefresh => {
                 tracing::debug!("MarketRefresh packet received but not implemented yet");
                 // TODO: Implement market refresh logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketPage => {
                 tracing::debug!("MarketPage packet received but not implemented yet");
                 // TODO: Implement market page logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketBuy => {
                 tracing::debug!("MarketBuy packet received but not implemented yet");
                 // TODO: Implement market buy logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketGetBack => {
                 tracing::debug!("MarketGetBack packet received but not implemented yet");
                 // TODO: Implement market get back logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::MarketSellNow => {
                 tracing::debug!("MarketSellNow packet received but not implemented yet");
                 // TODO: Implement market sell now logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             // Quest protocols (stub - not implemented yet)
             ClientPacketId::AcceptQuest => {
                 tracing::debug!("AcceptQuest packet received but not implemented yet");
                 // TODO: Implement accept quest logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "任务系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::FinishQuest => {
                 tracing::debug!("FinishQuest packet received but not implemented yet");
                 // TODO: Implement finish quest logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "任务系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::AbandonQuest => {
                 tracing::debug!("AbandonQuest packet received but not implemented yet");
                 // TODO: Implement abandon quest logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "任务系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             ClientPacketId::ShareQuest => {
                 tracing::debug!("ShareQuest packet received but not implemented yet");
                 // TODO: Implement share quest logic
+                if self.stage == Stage::InGame {
+                    self.send_system_chat(
+                        "任务系统尚未在 Rust 服务器上实现。",
+                        &mut out,
+                    );
+                }
             }
             // Group protocols (stub - not implemented yet)
             ClientPacketId::SwitchGroup => {

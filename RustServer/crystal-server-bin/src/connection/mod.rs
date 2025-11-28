@@ -68,12 +68,14 @@ pub(crate) struct LoginConnection {
     pub(crate) last_active: Instant,
     pub(crate) timeout_ms: u64,
     pub(crate) closing: bool,
+    #[allow(dead_code)]
     pub(crate) last_move_kind: Option<u8>,
     #[allow(dead_code)]
     pub(crate) can_create_guild: bool,
     pub(crate) is_gm: bool,
     #[allow(dead_code)]
     pub(crate) gm_login: bool,
+    #[allow(dead_code)]
     pub(crate) pending_guild_invite: Option<String>,
     /// Whether SWorldMapSetupInfo has been sent to this client.
     pub(crate) world_map_setup_sent: bool,

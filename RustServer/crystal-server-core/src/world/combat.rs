@@ -8,6 +8,7 @@ use crate::world::provider::WorldProvider;
 use crate::world::skills::{
     apply_attack_spell_scaling,
     apply_fatal_sword_and_undead,
+    compute_magic_mana_cost,
     compute_pure_magic_attack_damage,
     fatal_sword_level_for_player,
     is_pure_magic_attack,
@@ -97,11 +98,6 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::FlamingSword as u8;
-        let info = match self.provider.get_magic_info(spell_id) {
-            Some(i) => i.clone(),
-            None => return,
-        };
-
         if let Some(player) = self.players.get_mut(&session_id) {
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
@@ -109,7 +105,15 @@ impl<P: WorldProvider> World<P> {
             };
 
             let level = magic.level;
-            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+            let cost = match compute_magic_mana_cost(
+                &self.provider,
+                &player.stats.total,
+                spell_id,
+                level,
+            ) {
+                Some(c) => c,
+                None => return,
+            };
 
             if player.mp < cost {
                 return;
@@ -152,11 +156,6 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::Rage as u8;
-        let info = match self.provider.get_magic_info(spell_id) {
-            Some(i) => i.clone(),
-            None => return,
-        };
-
         if let Some(player) = self.players.get_mut(&session_id) {
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
@@ -166,7 +165,15 @@ impl<P: WorldProvider> World<P> {
             let level = magic.level;
             // Rage cost isn't explicitly in C# snippet but usually follows standard formula or MagicInfo.
             // We'll use MagicInfo cost.
-            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+            let cost = match compute_magic_mana_cost(
+                &self.provider,
+                &player.stats.total,
+                spell_id,
+                level,
+            ) {
+                Some(c) => c,
+                None => return,
+            };
 
             if player.mp < cost {
                 return;
@@ -244,11 +251,6 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::ImmortalSkin as u8;
-        let info = match self.provider.get_magic_info(spell_id) {
-            Some(i) => i.clone(),
-            None => return,
-        };
-
         if let Some(player) = self.players.get_mut(&session_id) {
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
@@ -256,7 +258,15 @@ impl<P: WorldProvider> World<P> {
             };
 
             let level = magic.level;
-            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+            let cost = match compute_magic_mana_cost(
+                &self.provider,
+                &player.stats.total,
+                spell_id,
+                level,
+            ) {
+                Some(c) => c,
+                None => return,
+            };
 
             if player.mp < cost {
                 return;
@@ -309,11 +319,6 @@ impl<P: WorldProvider> World<P> {
         events: &mut Vec<WorldEvent>,
     ) {
         let spell_id = Spell::CounterAttack as u8;
-        let info = match self.provider.get_magic_info(spell_id) {
-            Some(i) => i.clone(),
-            None => return,
-        };
-
         if let Some(player) = self.players.get_mut(&session_id) {
             let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
                 Some(m) => m,
@@ -321,7 +326,15 @@ impl<P: WorldProvider> World<P> {
             };
 
             let level = magic.level;
-            let cost: i32 = info.base_cost as i32 + level as i32 * info.level_cost as i32;
+            let cost = match compute_magic_mana_cost(
+                &self.provider,
+                &player.stats.total,
+                spell_id,
+                level,
+            ) {
+                Some(c) => c,
+                None => return,
+            };
 
             if player.mp < cost {
                 return;
@@ -592,9 +605,32 @@ impl<P: WorldProvider> World<P> {
             // relying on the melee helper for base damage.
             let use_pure_magic = is_pure_magic_attack(effective_spell);
 
+            if use_pure_magic {
+                // Apply MP cost for pure magic attack spells (FireBall, SoulFireBall)
+                let cost = match compute_magic_mana_cost(
+                    &self.provider,
+                    &attacker_stats,
+                    effective_spell,
+                    level,
+                ) {
+                    Some(c) => c,
+                    None => return,
+                };
+
+                if let Some(player) = self.players.get_mut(&session_id) {
+                    if player.mp < cost {
+                        return;
+                    }
+                    player.mp -= cost;
+                } else {
+                    return;
+                }
+            }
+
             let (hit, mut raw_damage, damage_type) = if use_pure_magic {
                 let dmg = compute_pure_magic_attack_damage(
                     &self.provider,
+                    &attacker_stats,
                     effective_spell,
                     level,
                 );
@@ -921,7 +957,7 @@ impl<P: WorldProvider> World<P> {
                     (0, false, 1, Stats::default(), Vec::new())
                 };
 
-                let (hit, mut raw_damage, mut damage_type) =
+                let (hit, mut raw_damage, damage_type) =
                     compute_physical_melee_with_crit(attacker_stats, &defender_stats);
 
                 if hit && raw_damage > 0 {
@@ -1174,7 +1210,7 @@ impl<P: WorldProvider> World<P> {
                     (0, false, 1, Stats::default(), Vec::new())
                 };
 
-                let (hit, mut raw_damage, mut damage_type) =
+                let (hit, mut raw_damage, damage_type) =
                     compute_physical_melee_with_crit(attacker_stats, &defender_stats);
 
                 if hit && raw_damage > 0 {
