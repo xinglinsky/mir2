@@ -165,6 +165,17 @@ impl LoginConnection {
                     let _ = self
                         .store
                         .update_character_level(account_id, char_idx, ch.level);
+
+                    // Also persist the last-access time for this
+                    // character, mirroring the C# server's
+                    // CharacterInfo.LastLogoutDate behaviour. We store the
+                    // value as Unix ms in the database and convert to
+                    // DateTime.ToBinary-compatible ticks when sending it to
+                    // the legacy client.
+                    let now_ms = super::LoginConnection::now_millis();
+                    let _ = self
+                        .store
+                        .update_character_last_access(account_id, char_idx, now_ms);
                 }
             }
 
@@ -188,7 +199,12 @@ impl LoginConnection {
                     level: c.level,
                     class: c.class,
                     gender: c.gender,
-                    last_access_binary: c.last_access_binary,
+                    // Stored as Unix ms in the database; convert to .NET
+                    // DateTime.ToBinary-compatible ticks for the legacy
+                    // C# client.
+                    last_access_binary: super::LoginConnection::unix_ms_to_dotnet_binary(
+                        c.last_access_binary,
+                    ),
                 })
                 .collect();
             self.characters = chars.clone();

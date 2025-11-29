@@ -1,6 +1,7 @@
 use rand::Rng;
 use rand::thread_rng;
 use tracing::debug;
+use std::fs;
 use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
@@ -10,6 +11,13 @@ use crate::world::types::{BuffProperty, BuffType};
 use crate::world::Spell;
 
 use super::{World, WorldEvent};
+
+#[derive(Clone, Debug)]
+pub struct RoutePoint {
+    pub x: i32,
+    pub y: i32,
+    pub delay_ms: i64,
+}
 
 /// Runtime state for a single RespawnInfo entry on a map. This mirrors a subset
 /// of the C# MapRespawn fields so that we can later drive timed respawns from
@@ -30,6 +38,7 @@ pub struct RespawnRuntime {
     /// Simple error counter mirroring the C# MapRespawn.ErrorCount field; for
     /// now it is unused but reserved for future spawn failure backoff.
     pub error_count: u8,
+    pub route_points: Option<Vec<RoutePoint>>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -67,6 +76,7 @@ impl<P: WorldProvider> World<P> {
                     next_spawn_time_ms: 0,
                     next_spawn_tick: 0,
                     error_count: 0,
+                    route_points: self.load_route_points(&respawn.route_path),
                 });
             }
             self.respawns.insert(map_index, runtimes);
@@ -94,6 +104,46 @@ impl<P: WorldProvider> World<P> {
         }
 
         self.monsters.insert(map_index, instances);
+    }
+
+    fn load_route_points(&self, route_path: &str) -> Option<Vec<RoutePoint>> {
+        if route_path.is_empty() {
+            return None;
+        }
+
+        let file_name = format!("{route_path}.txt");
+        let full_path = self.config.routes_path.join(file_name);
+
+        let contents = fs::read_to_string(&full_path).ok()?;
+        let mut points = Vec::new();
+
+        for line in contents.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+            if parts.len() < 2 {
+                continue;
+            }
+
+            let Ok(x) = parts[0].parse::<i32>() else { continue };
+            let Ok(y) = parts[1].parse::<i32>() else { continue };
+            let delay_ms = if parts.len() >= 3 {
+                parts[2].parse::<i64>().unwrap_or(0)
+            } else {
+                0
+            };
+
+            points.push(RoutePoint { x, y, delay_ms });
+        }
+
+        if points.is_empty() {
+            None
+        } else {
+            Some(points)
+        }
     }
 
     pub fn monsters_for_map(&self, map_index: i32) -> Vec<MonsterInstance> {
@@ -1098,15 +1148,32 @@ impl<P: WorldProvider> World<P> {
             .map(|(&sid, p)| (sid, p.map_index, p.x, p.y, p.direction, p.pk_points))
             .collect();
         let mut pending_guard_hits: Vec<(u64, i32, u32, i32)> = Vec::new();
+        let mut pending_guard_moves: Vec<(u64, i32, i32, i32, i32, i32)> = Vec::new();
 
         for map_index in map_indices {
+            // Load the map so that guard movement (both chase and patrol)
+            // can respect bounds and walkability, mirroring the behaviour
+            // used by the generic monster AI.
+            let map = match self.get_or_load_map(map_index) {
+                Some(m) => m,
+                None => continue,
+            };
+
             let Some(monsters) = self.monsters.get_mut(&map_index) else {
                 continue;
             };
 
             let len = monsters.len();
             for i in 0..len {
-                let (attack_range, attack_delay_ms, guard_x, guard_y, guard_ai, guard_monster_index) = {
+                let (
+                    attack_range,
+                    attack_delay_ms,
+                    guard_x,
+                    guard_y,
+                    guard_ai,
+                    guard_monster_index,
+                    guard_move_speed,
+                ) = {
                     let m = &monsters[i];
 
                     if m.hp <= 0 {
@@ -1122,6 +1189,9 @@ impl<P: WorldProvider> World<P> {
                     }
 
                     let range: i32 = match info.ai {
+                        // IceGuard uses a fixed AttackRange of 8 in C#.
+                        102 => 8,
+                        // KingGuard uses a fixed AttackRange of 10.
                         105 => 10,
                         _ => info.view_range as i32,
                     }
@@ -1129,7 +1199,7 @@ impl<P: WorldProvider> World<P> {
 
                     let delay_ms = Self::compute_monster_attack_delay_ms(info.attack_speed);
 
-                    (range, delay_ms, m.x, m.y, info.ai, m.monster_index)
+                    (range, delay_ms, m.x, m.y, info.ai, m.monster_index, info.move_speed)
                 };
 
                 if now_ms < monsters[i].next_attack_time_ms {
@@ -1246,6 +1316,210 @@ impl<P: WorldProvider> World<P> {
                         target_dir = t.direction;
                     }
                     (None, None) => {
+                        // No valid target this tick; attempt patrol for
+                        // stationary guard types that are configured with
+                        // a route (Guard/TownArcher/TaoGuard).
+                        if matches!(guard_ai, 6 | 57 | 58) {
+                            if let Some(respawns) = self.respawns.get(&map_index) {
+                                let guard_respawn_index = monsters[i].respawn_index;
+                                if let Some(rt) = respawns
+                                    .iter()
+                                    .find(|rt| rt.info.respawn_index == guard_respawn_index)
+                                {
+                                    if let Some(route_points) = &rt.route_points {
+                                        if !route_points.is_empty() {
+                                            let guard = &mut monsters[i];
+
+                                            // Respect per-waypoint delay.
+                                            if guard.route_wait_until_ms > 0
+                                                && now_ms < guard.route_wait_until_ms
+                                            {
+                                                // Still waiting at current waypoint.
+                                            } else {
+                                                let len = route_points.len() as i32;
+                                                if guard.route_index < 0
+                                                    || guard.route_index >= len
+                                                {
+                                                    guard.route_index = 0;
+                                                }
+
+                                                let idx = guard.route_index as usize;
+                                                let point = &route_points[idx];
+
+                                                if guard.x == point.x && guard.y == point.y {
+                                                    // Arrived: apply delay and advance to next
+                                                    // waypoint.
+                                                    if point.delay_ms > 0 {
+                                                        guard.route_wait_until_ms = now_ms
+                                                            .saturating_add(point.delay_ms);
+                                                    } else {
+                                                        guard.route_wait_until_ms = 0;
+                                                    }
+
+                                                    let mut next = guard.route_index + 1;
+                                                    if next >= len {
+                                                        next = 0;
+                                                    }
+                                                    guard.route_index = next;
+                                                } else {
+                                                    // Step one tile towards the current waypoint,
+                                                    // gated by the monster's movement cooldown.
+                                                    if guard.next_move_time_ms == 0
+                                                        || now_ms >= guard.next_move_time_ms
+                                                    {
+                                                        let dx = point.x - guard.x;
+                                                        let dy = point.y - guard.y;
+                                                        let step_x = dx.clamp(-1, 1);
+                                                        let step_y = dy.clamp(-1, 1);
+
+                                                        if step_x != 0 || step_y != 0 {
+                                                            let new_x = guard.x.saturating_add(step_x);
+                                                            let new_y = guard.y.saturating_add(step_y);
+
+                                                            // Reject patrol moves that go
+                                                            // outside map bounds or into
+                                                            // blocked cells, mirroring the
+                                                            // generic monster movement checks.
+                                                            if new_x < 0 || new_y < 0 {
+                                                                continue;
+                                                            }
+                                                            if guard.x < 0 || guard.y < 0 {
+                                                                continue;
+                                                            }
+
+                                                            let from_x = guard.x as u16;
+                                                            let from_y = guard.y as u16;
+                                                            let to_x = new_x as u16;
+                                                            let to_y = new_y as u16;
+
+                                                            if to_x >= map.width || to_y >= map.height {
+                                                                continue;
+                                                            }
+
+                                                            if !map.can_move(from_x, from_y, to_x, to_y)
+                                                            {
+                                                                continue;
+                                                            }
+
+                                                            let old_x = guard.x;
+                                                            let old_y = guard.y;
+                                                            guard.x = new_x;
+                                                            guard.y = new_y;
+
+                                                            pending_guard_moves.push((
+                                                                guard.id,
+                                                                map_index,
+                                                                old_x,
+                                                                old_y,
+                                                                new_x,
+                                                                new_y,
+                                                            ));
+
+                                                            let delay = Self::
+                                                                compute_monster_move_delay_ms(
+                                                                    guard_move_speed,
+                                                                );
+                                                            guard.next_move_time_ms = now_ms
+                                                                .saturating_add(delay);
+
+                                                            events.push(
+                                                                WorldEvent::ObjectLocation {
+                                                                    object_id: guard.id,
+                                                                    map_index,
+                                                                    x: guard.x,
+                                                                    y: guard.y,
+                                                                    direction: guard.direction,
+                                                                },
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        continue;
+                    }
+                }
+
+                // For chase-type guards (IceGuard, ElementGuard, DemonGuard,
+                // KingGuard), move one tile towards the target when it is
+                // currently outside their attack range, mirroring the C#
+                // MoveTo(Target.CurrentLocation) behaviour in
+                // IceGuard/ElementGuard/KingGuard.ProcessTarget and the base
+                // MonsterObject logic used by DemonGuard.
+                if matches!(guard_ai, 102 | 103 | 104 | 105) {
+                    let dist = (target_x - guard_x).abs().max((target_y - guard_y).abs());
+                    if dist > attack_range {
+                        let guard = &mut monsters[i];
+
+                        if guard.next_move_time_ms == 0 || now_ms >= guard.next_move_time_ms {
+                            let dx = target_x - guard.x;
+                            let dy = target_y - guard.y;
+                            let step_x = dx.clamp(-1, 1);
+                            let step_y = dy.clamp(-1, 1);
+
+                            if step_x != 0 || step_y != 0 {
+                                let new_x = guard.x.saturating_add(step_x);
+                                let new_y = guard.y.saturating_add(step_y);
+
+                                // Respect map bounds and walkability when
+                                // chasing, just like generic monsters do.
+                                if new_x < 0 || new_y < 0 {
+                                    continue;
+                                }
+                                if guard.x < 0 || guard.y < 0 {
+                                    continue;
+                                }
+
+                                let from_x = guard.x as u16;
+                                let from_y = guard.y as u16;
+                                let to_x = new_x as u16;
+                                let to_y = new_y as u16;
+
+                                if to_x >= map.width || to_y >= map.height {
+                                    continue;
+                                }
+
+                                if !map.can_move(from_x, from_y, to_x, to_y)
+                                {
+                                    continue;
+                                }
+
+                                let old_x = guard.x;
+                                let old_y = guard.y;
+                                guard.x = new_x;
+                                guard.y = new_y;
+
+                                pending_guard_moves.push((
+                                    guard.id,
+                                    map_index,
+                                    old_x,
+                                    old_y,
+                                    new_x,
+                                    new_y,
+                                ));
+
+                                let delay =
+                                    Self::compute_monster_move_delay_ms(guard_move_speed);
+                                guard.next_move_time_ms =
+                                    now_ms.saturating_add(delay);
+
+                                events.push(WorldEvent::ObjectLocation {
+                                    object_id: guard.id,
+                                    map_index,
+                                    x: guard.x,
+                                    y: guard.y,
+                                    direction: guard.direction,
+                                });
+                            }
+                        }
+
+                        // Skip attacking this tick; the guard has spent its
+                        // action moving towards the target instead.
                         continue;
                     }
                 }
@@ -1305,6 +1579,14 @@ impl<P: WorldProvider> World<P> {
                     pending_kills.push((map_index, target_id, target_x, target_y, target_dir));
                 }
             }
+        }
+        // Apply deferred occupancy updates for guards that moved along their
+        // patrol routes. These must be done outside the main loop to avoid
+        // borrowing self.monsters mutably at the same time as calling
+        // occupancy helpers that also take &mut self.
+        for (guard_id, map_index, old_x, old_y, new_x, new_y) in pending_guard_moves {
+            self.remove_monster_from_occupancy(guard_id, map_index, old_x, old_y);
+            self.add_monster_to_occupancy(guard_id, map_index, new_x, new_y);
         }
         for (map_index, target_id, x, y, direction) in pending_kills {
             // For guard-instakilled monsters, mark them as dead and clear
@@ -1483,21 +1765,14 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
-    fn create_monsters_from_respawn(&mut self, map: &map::Map, respawn: &RespawnInfo) -> Vec<MonsterInstance> {
+    fn create_monsters_from_respawn(
+        &mut self,
+        map: &map::Map,
+        respawn: &RespawnInfo,
+    ) -> Vec<MonsterInstance> {
         let mut result = Vec::new();
 
-        // Strictly mirror the C# logic:
-        //   info.WalkableCells = WalkableCells.Where(x =>
-        //       x.X <= Info.Location.X + Info.Spread &&
-        //       x.X >= Info.Location.X - Info.Spread &&
-        //       x.Y <= Info.Location.Y + Info.Spread &&
-        //       x.Y >= Info.Location.Y - Info.Spread).ToList();
-        //
-        // and then MonsterObject.Spawn(MapRespawn) picks a random point from
-        // Respawn.WalkableCells for each spawned monster. Here we build the
-        // candidate list from map.walkable_cells and then distribute Count
-        // monsters across those cells in a deterministic but equivalent way.
-
+        // Build candidate walkable cells within the configured spread.
         let spread = respawn.spread as i32;
         let mut candidates: Vec<(i32, i32)> = Vec::new();
 
@@ -1513,9 +1788,7 @@ impl<P: WorldProvider> World<P> {
             }
         }
 
-        // If there are no walkable cells in range, C# 的 MapRespawn 会得到
-        // 一个空的 WalkableCells 列表，MonsterObject.Spawn 返回 false，
-        // 该 Respawn 点不会刷怪，这里也保持相同行为：直接返回空列表。
+        // No walkable candidates in range: mirror C# by skipping this respawn.
         if candidates.is_empty() {
             debug!(
                 "respawn: no walkable cells for map={} respawn_index={} loc=({}, {}) spread={}",
@@ -1546,14 +1819,10 @@ impl<P: WorldProvider> World<P> {
 
         // For each monster we want to spawn, try a bounded number of times to
         // find a candidate cell that is not currently occupied by any player or
-        // monster. This mirrors C# MapRespawn + MonsterObject.Spawn using
-        // Map.ValidPoint/Cell.Objects, where occupied cells are rejected and
-        // failed spawns are simply skipped.
+        // monster.
         for _ in 0..needed {
             let mut placed = false;
 
-            // Limit the number of attempts per monster so that heavily
-            // congested respawn areas do not cause extremely long loops.
             for _attempt in 0..8 {
                 let idx = rng.gen_range(0..len);
                 let (x, y) = candidates[idx];
@@ -1570,6 +1839,8 @@ impl<P: WorldProvider> World<P> {
                     map_index: map.info.index,
                     x,
                     y,
+                    home_x: respawn.location_x,
+                    home_y: respawn.location_y,
                     direction: respawn.direction,
                     hp: base_hp,
                     respawn_index: respawn.respawn_index,
@@ -1579,6 +1850,8 @@ impl<P: WorldProvider> World<P> {
                     next_attack_time_ms: 0,
                     search_time_ms: 0,
                     roam_time_ms: 0,
+                    route_index: 0,
+                    route_wait_until_ms: 0,
                     alone: false,
                     alone_time_ms: 0,
                     buff_stats: Stats::default(),

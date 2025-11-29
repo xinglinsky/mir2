@@ -1,4 +1,8 @@
-use crystal_server_core::account::{CharacterPosition, CharacterStats};
+use std::fs;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crystal_server_core::account::{CharacterPosition, CharacterStats, CharacterSummary, StoredMail};
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
 use crystal_server_core::item::{Equipment, Inventory};
@@ -21,7 +25,19 @@ use crystal_shared_proto::scene::{
     SDefaultNpc,
 };
 use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
+use crystal_shared_proto::notice::{NoticeData, SUpdateNotice};
+use crystal_shared_proto::shop::SGameShopInfo;
+use crystal_shared_proto::mail::SReceiveMail;
 use crystal_shared_proto::user::{SUserInformation, SUserLocation, SUserSlotsRefresh};
+use crystal_shared_proto::io::{
+    write_bool,
+    write_i32_le,
+    write_i64_le,
+    write_u16_le,
+    write_u32_le,
+    write_string,
+    write_u64_le,
+};
 
 use super::{LoginConnection, Stage};
 
@@ -32,6 +48,10 @@ impl LoginConnection {
         out: &mut Vec<Vec<u8>>,
     ) {
         if let Some(acc_id) = &self.account_id {
+            if let Ok(Some(_)) = self.store.find_character_by_name(&msg.name) {
+                out.push(Self::encode_raw(SNewCharacter { result: 5 }.encode()));
+                return;
+            }
             match self.store.create_character(acc_id, msg.name, msg.class, msg.gender) {
                 Ok(ch) => {
                     let info = SelectInfo {
@@ -40,7 +60,10 @@ impl LoginConnection {
                         level: ch.level,
                         class: ch.class,
                         gender: ch.gender,
-                        last_access_binary: ch.last_access_binary,
+                        // Stored as Unix ms in the database; convert to
+                        // .NET DateTime.ToBinary-compatible ticks for the
+                        // legacy C# client.
+                        last_access_binary: Self::unix_ms_to_dotnet_binary(ch.last_access_binary),
                     };
 
                     self.characters.push(info.clone());
@@ -101,6 +124,34 @@ impl LoginConnection {
             .find(|c| c.index == msg.character_index)
             .cloned()
         {
+            // Before fully entering the game, mirror the C# PlayerObject.StartGame
+            // behaviour for server notices: if Envir/Notice.txt exists and its
+            // last modification time is more recent than the character's last
+            // logout, send an UpdateNotice packet so the client shows the
+            // welcome/notice dialog on first login after a change.
+            if let Some(ref account_id) = self.account_id {
+                let last_logout_unix_ms = self
+                    .store
+                    .list_characters(account_id)
+                    .ok()
+                    .and_then(|chars: Vec<CharacterSummary>| {
+                        chars
+                            .into_iter()
+                            .find(|cs| cs.index == ch.index)
+                            .map(|cs| cs.last_access_binary)
+                    })
+                    .unwrap_or(0);
+
+                if let Some((notice, notice_last_update_ms)) = Self::load_notice_from_file() {
+                    if notice_last_update_ms > last_logout_unix_ms {
+                        let pkt = SUpdateNotice { notice: notice };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+            }
+
             let (guild_name, guild_rank_name) = if let Some(ref account_id) = self.account_id {
                 if let Ok(Some((name, rank_idx))) =
                     self.store.load_character_guild(account_id, ch.index)
@@ -582,6 +633,19 @@ impl LoginConnection {
             self.known_monsters.clear();
             self.known_npcs.clear();
             self.update_visibility(out);
+
+            // Send the GameShop list to the client, mirroring the C#
+            // PlayerObject.GetGameShop behaviour that enqueues a
+            // GameShopInfo packet for each GameShopItem when a player
+            // enters the game. For now we do not track purchases, so the
+            // stock level is taken directly from the mir.db GameShopItem
+            // record.
+            self.send_full_gameshop(out);
+
+            // Send any stored mail for this character, approximating the
+            // C# behaviour where pending mail is delivered on login via
+            // a ReceiveMail packet containing ClientMail blobs.
+            self.send_full_mailbox(ch.index, out);
         } else {
             let err = SStartGame {
                 result: 2,
@@ -590,6 +654,260 @@ impl LoginConnection {
             if let Ok(raw) = err.encode() {
                 out.push(Self::encode_raw(raw));
             }
+        }
+    }
+
+    fn load_notice_from_file() -> Option<(NoticeData, i64)> {
+        let path_deploy = Path::new("./deploy/Envir/Notice.txt");
+        let path_plain = Path::new("./Envir/Notice.txt");
+        let path = if path_deploy.exists() { path_deploy } else { path_plain };
+        if !path.exists() {
+            return None;
+        }
+
+        let metadata = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::debug!("load_notice_from_file: failed to stat {:?}: {:?}", path, e);
+                return None;
+            }
+        };
+
+        let modified: SystemTime = match metadata.modified() {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::debug!(
+                    "load_notice_from_file: failed to get modified time for {:?}: {:?}",
+                    path,
+                    e,
+                );
+                return None;
+            }
+        };
+
+        let notice_last_update_ms = match modified.duration_since(UNIX_EPOCH) {
+            Ok(dur) => dur.as_millis() as i64,
+            Err(_) => 0,
+        };
+
+        let text = match fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::debug!("load_notice_from_file: failed to read {:?}: {:?}", path, e);
+                return None;
+            }
+        };
+
+        let mut title = String::new();
+        let mut message_lines: Vec<String> = Vec::new();
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            let upper = trimmed.to_ascii_uppercase();
+            if upper.starts_with("TITLE") && trimmed.contains('=') {
+                if let Some((_, value)) = trimmed.split_once('=') {
+                    title = value.to_string();
+                    continue;
+                }
+            }
+
+            message_lines.push(line.to_string());
+        }
+
+        if title.is_empty() && message_lines.is_empty() {
+            return None;
+        }
+
+        let mut message = message_lines.join("\r\n");
+        if !message.is_empty() {
+            message.push_str("\r\n");
+        }
+
+        let notice = NoticeData { title, message };
+
+        Some((notice, notice_last_update_ms))
+    }
+
+    fn encode_game_shop_item_bytes(
+        &self,
+        rec: &world::map::GameShopItemRecord,
+        stock_level: i32,
+    ) -> Option<Vec<u8>> {
+        let info = self.world_db.get_item_info(rec.item_index)?;
+
+        let mut buf = Vec::new();
+
+        if write_i32_le(&mut buf, rec.item_index).is_err() {
+            return None;
+        }
+        if write_i32_le(&mut buf, rec.g_index).is_err() {
+            return None;
+        }
+
+        if info.encode(&mut buf).is_err() {
+            return None;
+        }
+
+        if write_u32_le(&mut buf, rec.gold_price).is_err() {
+            return None;
+        }
+        if write_u32_le(&mut buf, rec.credit_price).is_err() {
+            return None;
+        }
+        if write_u16_le(&mut buf, rec.count).is_err() {
+            return None;
+        }
+
+        if write_string(&mut buf, &rec.class).is_err() {
+            return None;
+        }
+        if write_string(&mut buf, &rec.category).is_err() {
+            return None;
+        }
+
+        if write_i32_le(&mut buf, rec.stock).is_err() {
+            return None;
+        }
+        if write_bool(&mut buf, rec.i_stock).is_err() {
+            return None;
+        }
+        if write_bool(&mut buf, rec.deal).is_err() {
+            return None;
+        }
+        if write_bool(&mut buf, rec.top_item).is_err() {
+            return None;
+        }
+
+        if write_i64_le(&mut buf, rec.date_binary).is_err() {
+            return None;
+        }
+        if write_bool(&mut buf, rec.can_buy_credit).is_err() {
+            return None;
+        }
+        if write_bool(&mut buf, rec.can_buy_gold).is_err() {
+            return None;
+        }
+
+        if write_i32_le(&mut buf, stock_level).is_err() {
+            return None;
+        }
+
+        Some(buf)
+    }
+
+    /// Send the full GameShop item list to the client, approximating the
+    /// C# PlayerObject.GetGameShop method. Each GameShopItemRecord is
+    /// converted into GameShopItem.Save(writer, true) bytes followed by
+    /// StockLevel and wrapped in an SGameShopInfo packet.
+    pub(crate) fn send_full_gameshop(&self, out: &mut Vec<Vec<u8>>) {
+        for rec in &self.world_db.game_shop_items {
+            let stock_level = if rec.stock != 0 {
+                // Mirror the C# logic:
+                //  * For individual stock (iStock == true), subtract the
+                //    per-player GSpurchases from Stock.
+                //  * For server stock (iStock == false), subtract the
+                //    global GameshopLog value from Stock.
+                let (per_player, global) = {
+                    let world = self.world.lock().unwrap();
+                    let per_player = world.gameshop_purchased_for_player(self.session_id, rec.g_index);
+                    let global = world.gameshop_purchased_global(rec.g_index);
+                    (per_player, global)
+                };
+
+                let purchased = if rec.i_stock { per_player } else { global };
+                let remaining = rec.stock - purchased;
+                if remaining < 0 {
+                    continue;
+                }
+                remaining
+            } else {
+                rec.stock
+            };
+
+            if let Some(info_bytes) = self.encode_game_shop_item_bytes(rec, stock_level) {
+                let pkt = SGameShopInfo { info_bytes };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
+        }
+    }
+
+    /// Load all stored mail for the given character and, if any exists,
+    /// encode it into a ReceiveMail payload using the same layout as
+    /// ClientMail.Save(writer) in the C# client, then send it via
+    /// SReceiveMail.
+    fn send_full_mailbox(&self, char_index: i32, out: &mut Vec<Vec<u8>>) {
+        let account_id = match &self.account_id {
+            Some(id) => id,
+            None => return,
+        };
+
+        let mails: Vec<StoredMail> = match self.store.load_character_mail(account_id, char_index) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::debug!("send_full_mailbox: failed to load mail for account_id={} idx={} err={:?}", account_id, char_index, e);
+                return;
+            }
+        };
+
+        if mails.is_empty() {
+            return;
+        }
+
+        let mut buf = Vec::new();
+
+        if write_i32_le(&mut buf, mails.len() as i32).is_err() {
+            return;
+        }
+
+        for mail in &mails {
+            if write_u64_le(&mut buf, mail.mail_id).is_err() {
+                return;
+            }
+            if write_string(&mut buf, &mail.sender).is_err() {
+                return;
+            }
+            if write_string(&mut buf, &mail.message).is_err() {
+                return;
+            }
+            if write_bool(&mut buf, mail.opened).is_err() {
+                return;
+            }
+            if write_bool(&mut buf, mail.locked).is_err() {
+                return;
+            }
+            if write_bool(&mut buf, mail.can_reply).is_err() {
+                return;
+            }
+            if write_bool(&mut buf, mail.collected).is_err() {
+                return;
+            }
+
+            if write_i64_le(&mut buf, mail.date_sent_binary).is_err() {
+                return;
+            }
+
+            if write_u32_le(&mut buf, mail.gold).is_err() {
+                return;
+            }
+
+            let item_count: i32 = match mail.items.len().try_into() {
+                Ok(v) => v,
+                Err(_) => return,
+            };
+            if write_i32_le(&mut buf, item_count).is_err() {
+                return;
+            }
+
+            for item_bytes in &mail.items {
+                buf.extend_from_slice(item_bytes);
+            }
+        }
+
+        let pkt = SReceiveMail { mail_bytes: buf };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
         }
     }
 }

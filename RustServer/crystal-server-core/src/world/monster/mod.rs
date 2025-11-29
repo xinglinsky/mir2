@@ -51,6 +51,8 @@ pub struct MonsterInstance {
     pub map_index: i32,
     pub x: i32,
     pub y: i32,
+    pub home_x: i32,
+    pub home_y: i32,
     pub direction: u8,
     pub hp: i32,
     /// Respawn index from RespawnInfo, used to update runtime respawn counts
@@ -76,6 +78,8 @@ pub struct MonsterInstance {
     /// to perform a random roam step if it has no target, mirroring C#
     /// MonsterObject.RoamTime and RoamDelay.
     pub roam_time_ms: i64,
+    pub route_index: i32,
+    pub route_wait_until_ms: i64,
     /// Whether this monster considers itself "alone" (no players nearby).
     /// Mirrors C# MonsterObject.Alone, which is used together with
     /// CheckAlone/AloneDelay to optionally skip AI processing when the map

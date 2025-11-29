@@ -17,6 +17,8 @@ pub mod select_stage;
 pub mod gm_commands;
 pub mod map;
 pub mod market;
+pub mod gameshop;
+pub mod mail;
 pub mod chat;
 pub mod group;
 pub mod guild;

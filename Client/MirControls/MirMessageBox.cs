@@ -33,7 +33,9 @@ namespace Client.MirControls
                 Location = new Point(35, 35),
                 Size = new Size(390, 110),
                 Parent = this,
-                Text = message
+                Text = (message ?? string.Empty)
+                    .Replace("\\r\\n", "\r\n")
+                    .Replace("\\n", "\n"),
             };
 
             

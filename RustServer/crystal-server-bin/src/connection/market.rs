@@ -507,7 +507,7 @@ impl LoginConnection {
         );
     }
 
-    fn find_free_inventory_slot_for_new_item(
+    pub(crate) fn find_free_inventory_slot_for_new_item(
         &self,
         inv: &crystal_server_core::item::Inventory,
     ) -> Option<usize> {
@@ -540,7 +540,7 @@ impl LoginConnection {
         free_slot
     }
 
-    fn generate_unique_item_id_for_session(&self) -> u64 {
+    pub(crate) fn generate_unique_item_id_for_session(&self) -> u64 {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default();

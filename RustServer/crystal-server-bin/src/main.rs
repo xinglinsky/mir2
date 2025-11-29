@@ -382,6 +382,7 @@ async fn main() -> io::Result<()> {
     // SafeZoneBorder/SafeZoneHealing are also configurable to match Setup.ini.
     let world_config = WorldConfig::new(
         &cfg.maps_path,
+        &cfg.routes_path,
         cfg.spawn_multiplier,
         cfg.respawn_base_spawn_rate_minutes,
         cfg.drop_rate,

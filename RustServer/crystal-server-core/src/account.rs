@@ -53,6 +53,29 @@ pub struct CharacterStats {
     pub credit: i64,
 }
 
+/// Simplified persisted mail representation for a character, roughly
+/// mirroring the C# MailInfo/ClientMail structures. This is stored in the
+/// account database and projected into SReceiveMail/ClientMail bytes when
+/// sending mail to the legacy C# client.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StoredMail {
+    pub mail_id: u64,
+    pub sender: String,
+    pub message: String,
+    pub gold: u32,
+    /// Binary-encoded UserItemData blobs (one per attachment), using the
+    /// same layout as UserItemData::encode. This keeps the storage format
+    /// stable without requiring serde derives on UserItemData.
+    pub items: Vec<Vec<u8>>,
+    /// DateSent.ToBinary() from the C# world, represented directly so we
+    /// can forward it to the client without losing fidelity.
+    pub date_sent_binary: i64,
+    pub opened: bool,
+    pub locked: bool,
+    pub collected: bool,
+    pub can_reply: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StoredAccount {
     pub id: String,
@@ -225,6 +248,36 @@ pub trait AccountStore: Send + Sync {
     /// name, mirroring the C# server's ability to operate on offline
     /// characters.
     fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError>;
+
+    /// Update the last-access timestamp for a character in the summary
+    /// table. The value is stored as a Unix timestamp in milliseconds and
+    /// converted to DateTime.ToBinary-compatible ticks when sending
+    /// SelectInfo to the legacy C# client.
+    fn update_character_last_access(
+        &self,
+        account_id: &str,
+        index: i32,
+        last_access_unix_ms: i64,
+    ) -> Result<(), StoreError>;
+
+    /// Load all stored mail for a given character. This is a simplified
+    /// projection of the C# MailInfo/ClientMail data used for the legacy
+    /// client mailbox. Implementations should return an empty Vec when no
+    /// mail exists yet.
+    fn load_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredMail>, StoreError>;
+
+    /// Persist the full set of stored mail for a given character,
+    /// overwriting any previously saved list.
+    fn save_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+        mails: &[StoredMail],
+    ) -> Result<(), StoreError>;
 }
 
 pub fn hash_password(password: &str) -> String {

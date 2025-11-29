@@ -155,12 +155,23 @@ pub fn compute_pure_magic_attack_damage<P: WorldProvider>(
 
     if let Some(info) = provider.get_magic_info(spell) {
         let dmg = magic_damage(info, level, damage_base, &mut rng);
+
+        // For SoulFireBall in particular, ensure we never end up with zero or
+        // negative damage due to edge cases in MagicInfo or very low SC.
+        if spell == SPELL_SOUL_FIRE_BALL && dmg <= 0 {
+            return damage_base.max(1);
+        }
+
         dmg.max(0)
     } else {
         // If there is no MagicInfo entry for this spell, fall back to using
         // the sampled magic attack power directly so that pure magic spells
         // such as SoulFireBall still deal damage instead of silently
         // failing.
+        if spell == SPELL_SOUL_FIRE_BALL {
+            return damage_base.max(1);
+        }
+
         damage_base.max(0)
     }
 }

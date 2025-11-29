@@ -6,6 +6,7 @@ use crate::world::magic::UserMagic;
 use crate::world::buff::PlayerBuff;
 use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
+use std::collections::HashMap;
 
 use super::{Job, PlayerStats, SessionId, World};
 use crate::world::types::AttackMode;
@@ -48,6 +49,8 @@ pub struct PlayerState {
     pub brown_time_ms: i64,
     pub next_pk_decay_ms: i64,
     pub attack_mode: u8,
+    /// Per-player GameShop purchase counts keyed by GameShopItem GIndex.
+    pub gs_purchases: HashMap<i32, i32>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -140,6 +143,7 @@ impl<P: WorldProvider> World<P> {
                     brown_time_ms: 0,
                     next_pk_decay_ms: 0,
                     attack_mode: 5,
+                    gs_purchases: HashMap::new(),
                 }
             });
 

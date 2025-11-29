@@ -408,8 +408,7 @@ namespace Launcher
                 Name_label.Text = Settings.P_ServerName;
             }
 
-            _workThread = new Thread(Start) { IsBackground = true };
-            _workThread.Start();
+            Completed = true;
         }
 
         private void Main_browser_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)

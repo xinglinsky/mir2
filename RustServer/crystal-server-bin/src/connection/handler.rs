@@ -13,6 +13,8 @@ use crystal_shared_proto::login::{
     CAttack,
     CCallNPC,
     CChangePassword,
+    CCollectParcel,
+    CGameshopBuy,
     CDelMember,
     CEquipItem,
     CGroupInvite,
@@ -176,7 +178,7 @@ impl ConnectionHandler for LoginConnection {
                 );
                 match CBuyItem::decode(&packet.payload) {
                     Ok(msg) => {
-                        println!(
+                        tracing::debug!(
                             "[ingame] decoded BuyItem: item_index={} count={} panel_type={}",
                             msg.item_index,
                             msg.count,
@@ -584,6 +586,25 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::GroupInvite => {
                 if let Ok(msg) = CGroupInvite::decode(&packet.payload) {
                     self.handle_group_invite(msg, &mut out);
+                }
+            }
+            ClientPacketId::CollectParcel => {
+                if let Ok(msg) = CCollectParcel::decode(&packet.payload) {
+                    self.handle_collect_parcel(msg, &mut out);
+                }
+            }
+            ClientPacketId::GameshopBuy => {
+                match CGameshopBuy::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_gameshop_buy(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CGameshopBuy from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
                 }
             }
             _ => {

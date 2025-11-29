@@ -566,4 +566,8 @@ pub enum ServerPacketId {
     NPCRequestInput = 247,
     GameShopInfo = 248,
     GameShopStock = 249,
+    // Additional packet IDs following the C# ServerPacketIds ordering.
+    // We only need UpdateNotice for now, but we assign its value explicitly
+    // to keep compatibility with the legacy client.
+    UpdateNotice = 269,
 }

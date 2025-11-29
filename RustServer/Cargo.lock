@@ -242,6 +242,7 @@ dependencies = [
 name = "crystal-server-bin"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "crystal-server-core",
  "crystal-server-db",
  "crystal-server-net",
@@ -261,6 +262,7 @@ dependencies = [
  "chrono",
  "crystal-shared-proto",
  "hex",
+ "once_cell",
  "rand",
  "serde",
  "sha2",

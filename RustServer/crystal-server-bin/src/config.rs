@@ -11,6 +11,8 @@ pub struct ServerConfig {
     pub accounts_db_path: PathBuf,
     pub server_mirdb_path: PathBuf,
     pub maps_path: PathBuf,
+    #[serde(default = "default_routes_path")]
+    pub routes_path: PathBuf,
     #[serde(default = "default_drops_path")]
     pub drops_path: PathBuf,
     #[serde(default = "default_recipes_path")]
@@ -61,6 +63,10 @@ fn default_spawn_multiplier() -> u16 {
 
 fn default_respawn_base_spawn_rate_minutes() -> u8 {
     20
+}
+
+fn default_routes_path() -> PathBuf {
+    PathBuf::from("./Envir/Routes")
 }
 
 fn default_drops_path() -> PathBuf {

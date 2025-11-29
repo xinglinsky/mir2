@@ -26,7 +26,22 @@ namespace Client.MirObjects
 
         public void Load(S.ObjectItem info)
         {
-            Name = info.Name;
+            string name = info.Name;
+
+            Match match = Regex.Match(name, @"^(.*)\s\((\d+)\)$");
+            if (match.Success)
+            {
+                string baseName = match.Groups[1].Value;
+                string count = match.Groups[2].Value;
+                string localizedBaseName = GameLanguage.GetItemName(baseName);
+                name = string.Format("{0} ({1})", localizedBaseName, count);
+            }
+            else
+            {
+                name = GameLanguage.GetItemName(name);
+            }
+
+            Name = name;
             NameColour = info.NameColour;
 
             BodyLibrary = Libraries.FloorItems;
@@ -43,7 +58,7 @@ namespace Client.MirObjects
         }
         public void Load(S.ObjectGold info)
         {
-            Name = string.Format("Gold ({0:###,###,###})", info.Gold);
+            Name = string.Format("{0} ({1:###,###,###})", GameLanguage.Gold, info.Gold);
 
 
             BodyLibrary = Libraries.FloorItems;

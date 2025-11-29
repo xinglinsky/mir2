@@ -156,10 +156,26 @@ impl<P: WorldProvider> World<P> {
         y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
-        let (player_map, player_x, player_y) = match self.players.get(&session_id) {
-            Some(p) => (p.map_index, p.x, p.y),
+        let (player_map, player_x, player_y, has_magic) = match self.players.get(&session_id) {
+            Some(p) => {
+                let has_magic = p
+                    .magics
+                    .iter()
+                    .any(|m| m.spell == spell && m.level > 0);
+                (p.map_index, p.x, p.y, has_magic)
+            }
             None => return,
         };
+
+        // Notify the client that this magic has been cast so it can update the
+        // per-spell CastTime used for button cooldowns. We only emit this when
+        // the player actually knows the spell (level > 0).
+        if has_magic {
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id: spell,
+            });
+        }
 
         if spell == Spell::FlamingSword as u8 {
             cast_flaming_sword(self, session_id, events);
@@ -700,14 +716,29 @@ impl<P: WorldProvider> World<P> {
                         .provider
                         .get_magic_info(effective_spell)
                         .map(|info| info.range as i32)
-                        .unwrap_or(1)
+                        .unwrap_or_else(|| {
+                            // When there is no MagicInfo entry (e.g. an
+                            // incomplete MagicInfoList in the DB), fall back
+                            // to a reasonable default range so that pure
+                            // magic spells like SoulFireBall can still reach
+                            // distant monsters and produce ObjectMagic/
+                            // damage events instead of silently failing.
+                            if effective_spell == Spell::SoulFireBall as u8 {
+                                9
+                            } else {
+                                6
+                            }
+                        })
                         .max(1);
 
                     let mut found: Option<(u64, i32, i32, i32)> = None;
                     for step in 1..=max_range {
                         let tx = x + dx * step;
                         let ty = y + dy * step;
-                        if let Some(m) = monsters.iter().find(|m| m.x == tx && m.y == ty) {
+                        if let Some(m) = monsters
+                            .iter()
+                            .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                        {
                             found = Some((m.id, m.monster_index, tx, ty));
                             break;
                         }
@@ -729,7 +760,10 @@ impl<P: WorldProvider> World<P> {
                     for step in 1..=max_range {
                         let tx = x + dx * step;
                         let ty = y + dy * step;
-                        if let Some(m) = monsters.iter().find(|m| m.x == tx && m.y == ty) {
+                        if let Some(m) = monsters
+                            .iter()
+                            .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                        {
                             found = Some((m.id, m.monster_index, tx, ty));
                             break;
                         }
@@ -745,7 +779,7 @@ impl<P: WorldProvider> World<P> {
                 } else {
                     monsters
                         .iter()
-                        .find(|m| m.x == target_x && m.y == target_y)
+                        .find(|m| m.hp > 0 && m.x == target_x && m.y == target_y)
                         .map(|m| (m.id, m.monster_index))
                 }
             }
@@ -812,6 +846,24 @@ impl<P: WorldProvider> World<P> {
             // SoulFireBall use their MagicInfo parameters directly instead of
             // relying on the melee helper for base damage.
             let use_pure_magic = is_pure_magic_attack(effective_spell);
+
+            // For pure magic attacks, also emit an ObjectMagic-style world
+            // event so that the connection layer can send SObjectMagic and
+            // drive projectile animations and spell visuals on the client.
+            if use_pure_magic {
+                events.push(WorldEvent::ObjectMagic {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    spell: effective_spell,
+                    level,
+                    target_id: id as u32,
+                    target_x,
+                    target_y,
+                });
+            }
 
             if use_pure_magic {
                 // Apply MP cost for pure magic attack spells (FireBall,

@@ -5,10 +5,12 @@ use crate::io::{
     read_i32_le,
     read_string,
     read_u32_le,
+    read_u64_le,
     write_bool,
     write_i32_le,
     write_string,
     write_u32_le,
+    write_u64_le,
 };
 use crate::packet::RawPacket;
 
@@ -835,5 +837,61 @@ impl CTradeCancel {
             ));
         }
         Ok(CTradeCancel)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CGameshopBuy {
+    pub g_index: i32,
+    pub quantity: u8,
+    pub p_type: i32,
+}
+
+impl CGameshopBuy {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.g_index)?;
+        buf.push(self.quantity);
+        write_i32_le(&mut buf, self.p_type)?;
+        Ok(RawPacket {
+            id: ClientPacketId::GameshopBuy as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let g_index = read_i32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let quantity = one[0];
+        let p_type = read_i32_le(&mut c)?;
+        Ok(CGameshopBuy {
+            g_index,
+            quantity,
+            p_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCollectParcel {
+    pub mail_id: u64,
+}
+
+impl CCollectParcel {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.mail_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::CollectParcel as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mail_id = read_u64_le(&mut c)?;
+        Ok(CCollectParcel { mail_id })
     }
 }

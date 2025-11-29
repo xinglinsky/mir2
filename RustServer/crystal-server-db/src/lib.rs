@@ -14,6 +14,7 @@ use crystal_server_core::account::{
     CharacterSummary,
     CharacterStats,
     CharacterPosition,
+    StoredMail,
     hash_password,
     verify_password_hash,
 };
@@ -215,6 +216,14 @@ impl SqliteAccountStore {
                     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS character_mail (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    mail_json    TEXT NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
                 CREATE TABLE IF NOT EXISTS guilds (
                     id          INTEGER PRIMARY KEY,
                     name        TEXT NOT NULL UNIQUE,
@@ -392,7 +401,11 @@ impl AccountStore for SqliteAccountStore {
                 |row| row.get(0),
             ))?;
 
-            let now = Utc::now().timestamp_millis();
+            // For new characters, initialise last_access_binary to 0 so the
+            // legacy C# client interprets it as DateTime.MinValue
+            // ("Never"), matching the original server's behaviour until the
+            // character has logged out at least once.
+            let now: i64 = 0;
             Self::map_sql_err(conn.execute(
                 "INSERT INTO characters (account_id, idx, name, level, class, gender, last_access_binary)
                  VALUES (?1, ?2, ?3, 1, ?4, ?5, ?6)",
@@ -492,6 +505,21 @@ impl AccountStore for SqliteAccountStore {
             let _rows = Self::map_sql_err(conn.execute(
                 "UPDATE characters SET level = ?3 WHERE account_id = ?1 AND idx = ?2",
                 (account_id, &(index as i64), &(level as i64)),
+            ))?;
+            Ok(())
+        })
+    }
+
+    fn update_character_last_access(
+        &self,
+        account_id: &str,
+        index: i32,
+        last_access_unix_ms: i64,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| {
+            let _rows = Self::map_sql_err(conn.execute(
+                "UPDATE characters SET last_access_binary = ?3 WHERE account_id = ?1 AND idx = ?2",
+                (account_id, &(index as i64), &last_access_unix_ms),
             ))?;
             Ok(())
         })
@@ -810,6 +838,47 @@ impl AccountStore for SqliteAccountStore {
         })
     }
 
+    fn load_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredMail>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT mail_json FROM character_mail WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query((account_id, index)))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let mails: Vec<StoredMail> = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+                Ok(mails)
+            } else {
+                Ok(Vec::new())
+            }
+        })
+    }
+
+    fn save_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+        mails: &[StoredMail],
+    ) -> Result<(), StoreError> {
+        let json = serde_json::to_string(mails)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO character_mail (account_id, idx, mail_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET mail_json = excluded.mail_json",
+                (account_id, &index, &json),
+            ))?;
+            Ok(())
+        })
+    }
+
     fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError> {
         self.with_conn(|conn| {
             let mut stmt = Self::map_sql_err(conn.prepare(
@@ -858,7 +927,7 @@ impl AccountStore for SqliteAccountStore {
     fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError> {
         self.with_conn(|conn| {
             let mut stmt = Self::map_sql_err(conn.prepare(
-                "SELECT account_id, idx FROM characters WHERE name = ?1 LIMIT 1",
+                "SELECT account_id, idx FROM characters WHERE lower(name) = lower(?1) LIMIT 1",
             ))?;
             let mut rows = Self::map_sql_err(stmt.query([name]))?;
             if let Some(row) = Self::map_sql_err(rows.next())? {
@@ -912,6 +981,11 @@ enum SaveTask {
         guild_name: String,
         rank_index: u8,
     },
+    CharacterMail {
+        account_id: String,
+        idx: i32,
+        mails: Vec<StoredMail>,
+    },
     SaveGuild {
         guild: GuildInfo,
     },
@@ -929,6 +1003,7 @@ struct PendingCharacter {
     bind: Option<CharacterPosition>,
     magics: Option<Vec<UserMagic>>,
     guild: Option<(String, u8)>,
+    mail: Option<Vec<StoredMail>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -977,6 +1052,10 @@ fn apply_save_task(
         } => {
             let entry = chars.entry((account_id, idx)).or_default();
             entry.guild = Some((guild_name, rank_index));
+        }
+        SaveTask::CharacterMail { account_id, idx, mails } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.mail = Some(mails);
         }
         SaveTask::SaveGuild { guild } => {
             let entry = guilds.entry(guild.id.0).or_default();
@@ -1035,6 +1114,10 @@ fn flush_pending(
 
         if let Some((guild_name, rank_index)) = pending.guild {
             let _ = AccountStore::save_character_guild(&store, &account_id, idx, &guild_name, rank_index);
+        }
+
+        if let Some(mails) = pending.mail {
+            let _ = AccountStore::save_character_mail(&store, &account_id, idx, &mails);
         }
     }
 
@@ -1347,5 +1430,40 @@ impl AccountStore for AsyncAccountStore {
     fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError> {
         let inner = self.sync_store();
         AccountStore::find_character_by_name(&inner, name)
+    }
+
+    fn update_character_last_access(
+        &self,
+        account_id: &str,
+        index: i32,
+        last_access_unix_ms: i64,
+    ) -> Result<(), StoreError> {
+        let inner = self.sync_store();
+        AccountStore::update_character_last_access(&inner, account_id, index, last_access_unix_ms)
+    }
+
+    fn load_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredMail>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_mail(&inner, account_id, index)
+    }
+
+    fn save_character_mail(
+        &self,
+        account_id: &str,
+        index: i32,
+        mails: &[StoredMail],
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterMail {
+            account_id: account_id.to_string(),
+            idx: index,
+            mails: mails.to_vec(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_mail failed: {}", e))))
     }
 }

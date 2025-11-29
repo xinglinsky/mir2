@@ -294,7 +294,7 @@ pub fn cast_half_moon<P: WorldProvider>(
         let target_info = match world.monsters.get(&map_index) {
             Some(monsters) => monsters
                 .iter()
-                .find(|m| m.x == tx && m.y == ty)
+                .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
                 .map(|m| (m.id, m.monster_index)),
             None => None,
         };
@@ -549,7 +549,7 @@ pub fn cast_cross_half_moon<P: WorldProvider>(
         let target_info = match world.monsters.get(&map_index) {
             Some(monsters) => monsters
                 .iter()
-                .find(|m| m.x == tx && m.y == ty)
+                .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
                 .map(|m| (m.id, m.monster_index)),
             None => None,
         };

@@ -22,17 +22,21 @@ pub fn cast_healing<P: WorldProvider>(
             None => return,
         };
 
-        let magic = match player.magics.iter().find(|m| m.spell == spell) {
-            Some(m) => m,
-            None => return,
-        };
+        // Look up the learned level of Healing for this player if present;
+        // if there is no UserMagic entry, treat the level as 0 so that the
+        // spell can still be used (with base power) rather than aborting.
+        let level = player
+            .magics
+            .iter()
+            .find(|m| m.spell == spell)
+            .map(|m| m.level)
+            .unwrap_or(0);
 
-        let level = magic.level;
-        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
-        {
-            Some(c) => c,
-            None => return,
-        };
+        // If there is no MagicInfo entry for Healing, treat the MP cost as
+        // zero rather than aborting so that the spell still executes and
+        // emits PlayerHealed/visual events.
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
 
         if player.mp < cost {
             return;
@@ -587,17 +591,22 @@ pub fn cast_mass_healing<P: WorldProvider>(
             None => return,
         };
 
-        let magic = match player.magics.iter().find(|m| m.spell == spell) {
-            Some(m) => m,
-            None => return,
-        };
+        // Look up the learned level of MassHealing if present; when there is
+        // no UserMagic entry we treat the level as 0 so Taoist characters can
+        // still use the base version of the spell even if their magic list is
+        // incomplete.
+        let level = player
+            .magics
+            .iter()
+            .find(|m| m.spell == spell)
+            .map(|m| m.level)
+            .unwrap_or(0);
 
-        let level = magic.level;
-        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
-        {
-            Some(c) => c,
-            None => return,
-        };
+        // As with single-target Healing, fall back to zero MP cost when there
+        // is no MagicInfo entry so MassHealing still works even with a partial
+        // MagicInfoList.
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
 
         if player.mp < cost {
             return;

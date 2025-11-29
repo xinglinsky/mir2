@@ -168,6 +168,18 @@ pub enum WorldEvent {
         level: u8,
         attack_type: u8,
     },
+    ObjectMagic {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        spell: u8,
+        level: u8,
+        target_id: u32,
+        target_x: i32,
+        target_y: i32,
+    },
     ObjectStruck {
         attacker_id: SessionId,
         target_id: u64,
@@ -240,6 +252,19 @@ pub enum WorldEvent {
         level: u8,
         experience: u16,
     },
+    /// Notify the client that the cooldown (Delay) for a magic has changed,
+    /// typically after the magic levels up. Mirrors C# S.MagicDelay.
+    MagicDelay {
+        session_id: SessionId,
+        spell_id: u8,
+        delay: i64,
+    },
+    /// Notify the client that a magic has just been cast so it can update the
+    /// per-spell CastTime used for button cooldowns. Mirrors C# S.MagicCast.
+    MagicCast {
+        session_id: SessionId,
+        spell_id: u8,
+    },
     SpellToggle {
         session_id: SessionId,
         spell_id: u8,
@@ -293,6 +318,9 @@ pub struct World<P: WorldProvider> {
     pub(crate) drop_rate: f32,
     pub(crate) guilds: GuildManager,
     pub(crate) parties: PartyManager,
+    /// In-memory GameShop purchase log keyed by GameShopItem GIndex.
+    /// This approximates Envir.GameshopLog in the legacy C# server.
+    pub(crate) gameshop_log: HashMap<i32, i32>,
     /// In-memory BuyBack storage keyed by (session, map_index, npc_index).
     /// This approximates C# NPCObject.BuyBack per player and per NPC.
     pub(crate) buyback: HashMap<(SessionId, i32, i32), Vec<BuyBackEntry>>,
@@ -324,6 +352,7 @@ impl<P: WorldProvider> World<P> {
             drop_rate,
             guilds: GuildManager::new(),
             parties: PartyManager::new(),
+            gameshop_log: HashMap::new(),
             buyback: HashMap::new(),
         }
     }
@@ -339,7 +368,7 @@ impl<P: WorldProvider> World<P> {
     ) {
         use crate::world::magic::level_up_magic_simple;
 
-        let (new_level, new_exp) = {
+        let (new_level, new_exp, delay) = {
             let player = match self.players.get_mut(&session_id) {
                 Some(p) => p,
                 None => return,
@@ -363,7 +392,15 @@ impl<P: WorldProvider> World<P> {
                 return;
             }
 
-            (magic.level, magic.experience)
+            let new_level = magic.level;
+            let new_exp = magic.experience;
+
+            // Compute the new cooldown (Delay) for this magic using the same
+            // formula as ClientMagic.Save: DelayBase - Level * DelayReduction.
+            let delay: i64 = info.delay_base as i64
+                - (new_level as i64 * info.delay_reduction as i64);
+
+            (new_level, new_exp, delay)
         };
 
         events.push(WorldEvent::MagicLeveled {
@@ -371,6 +408,12 @@ impl<P: WorldProvider> World<P> {
             spell_id: spell,
             level: new_level,
             experience: new_exp,
+        });
+
+        events.push(WorldEvent::MagicDelay {
+            session_id,
+            spell_id: spell,
+            delay,
         });
     }
 
@@ -652,6 +695,13 @@ impl<P: WorldProvider> World<P> {
         self.guilds = GuildManager::from_guilds(guilds);
     }
 
+    /// Get a cloned snapshot of GuildInfo for the guild with the specified
+    /// name, if it exists. This is primarily used by the connection layer
+    /// when building guild member lists for the legacy client.
+    pub fn get_guild_info_by_name(&self, guild_name: &str) -> Option<GuildInfo> {
+        self.guilds.get_guild_by_name(guild_name).cloned()
+    }
+
     pub fn guild_add_member_by_name(
         &mut self,
         guild_name: &str,
@@ -680,6 +730,147 @@ impl<P: WorldProvider> World<P> {
         let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
         let (rank_index, _member) = guild.remove_member_by_name(member_name)?;
         Some((guild.clone(), rank_index))
+    }
+
+    /// Move a member to a different rank within the specified guild. The
+    /// new_rank_index is interpreted as the logical rank index as stored in
+    /// GuildRank.index, but will fall back to treating it as a zero-based
+    /// vector index if no matching GuildRank.index is found. Returns the
+    /// updated GuildInfo on success.
+    pub fn guild_change_member_rank(
+        &mut self,
+        guild_name: &str,
+        member_name: &str,
+        new_rank_index: u8,
+    ) -> Option<GuildInfo> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+
+        if guild.ranks.is_empty() {
+            return None;
+        }
+
+        let dest_pos = guild
+            .ranks
+            .iter()
+            .position(|r| r.index == new_rank_index)
+            .or_else(|| {
+                let idx = new_rank_index as usize;
+                if idx < guild.ranks.len() {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })?;
+
+        let mut moved: Option<crate::guild::GuildMember> = None;
+        for rank in &mut guild.ranks {
+            if let Some(i) = rank
+                .members
+                .iter()
+                .position(|m| m.name.eq_ignore_ascii_case(member_name))
+            {
+                let m = rank.members.remove(i);
+                moved = Some(m);
+                break;
+            }
+        }
+
+        let member = moved?;
+        guild.ranks[dest_pos].members.push(member);
+        Some(guild.clone())
+    }
+
+    /// Insert a new rank into the specified guild, mirroring the C#
+    /// GuildObject.NewRank behaviour. Returns the updated GuildInfo together
+    /// with a cloned copy of the newly created rank on success. If the guild
+    /// already has 255 ranks, this is a no-op.
+    pub fn guild_new_rank(
+        &mut self,
+        guild_name: &str,
+    ) -> Option<(GuildInfo, crate::guild::GuildRank)> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+
+        if guild.ranks.len() >= u8::MAX as usize {
+            return None;
+        }
+
+        let new_index: u8 = if guild.ranks.len() > 1 {
+            (guild.ranks.len() - 1) as u8
+        } else {
+            1
+        };
+
+        let new_rank = crate::guild::GuildRank {
+            index: new_index,
+            name: format!("Rank-{}", new_index),
+            options: 0,
+            members: Vec::new(),
+        };
+
+        let new_rank_clone = new_rank.clone();
+
+        let insert_pos = new_index as usize;
+        if insert_pos <= guild.ranks.len() {
+            guild.ranks.insert(insert_pos, new_rank);
+        } else {
+            guild.ranks.push(new_rank);
+        }
+
+        let len = guild.ranks.len();
+        if len > 0 {
+            let last_idx = len - 1;
+            if let Some(last) = guild.ranks.get_mut(last_idx) {
+                last.index = last_idx as u8;
+            }
+        }
+
+        Some((guild.clone(), new_rank_clone))
+    }
+
+    /// Change the name of an existing rank within the specified guild.
+    /// Returns the updated GuildInfo on success.
+    pub fn guild_change_rank_name(
+        &mut self,
+        guild_name: &str,
+        rank_index: u8,
+        new_name: &str,
+    ) -> Option<GuildInfo> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+        let idx = rank_index as usize;
+        if idx >= guild.ranks.len() {
+            return None;
+        }
+
+        guild.ranks[idx].name = new_name.to_string();
+        Some(guild.clone())
+    }
+
+    /// Change a single option flag on a rank within the specified guild.
+    /// The option parameter selects the bit (0-7). When enabled is true the
+    /// bit is set; when false, the bit is toggled, mirroring the C#
+    /// GuildObject.ChangeRankOption behaviour.
+    pub fn guild_change_rank_option(
+        &mut self,
+        guild_name: &str,
+        rank_index: u8,
+        option: u8,
+        enabled: bool,
+    ) -> Option<GuildInfo> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+        let idx = rank_index as usize;
+        if idx >= guild.ranks.len() || option > 7 {
+            return None;
+        }
+
+        let mask = 1u8 << option;
+        let rank = &mut guild.ranks[idx];
+        if enabled {
+            rank.options |= mask;
+        } else {
+            rank.options ^= mask;
+        }
+
+        Some(guild.clone())
     }
 
     pub fn set_spawn_config(
@@ -977,6 +1168,50 @@ impl<P: WorldProvider> World<P> {
         }
     }
     
+    /// Query the total GameShop purchases for a given GIndex across the
+    /// entire server. This mirrors Envir.GameshopLog in the C# server.
+    pub fn gameshop_purchased_global(&self, g_index: i32) -> i32 {
+        *self.gameshop_log.get(&g_index).unwrap_or(&0)
+    }
+
+    /// Query the per-player GameShop purchases for a given GIndex. This
+    /// approximates CharacterInfo.GSpurchases in the C# server but is kept
+    /// purely in-memory for now.
+    pub fn gameshop_purchased_for_player(&self, session_id: SessionId, g_index: i32) -> i32 {
+        self
+            .players
+            .get(&session_id)
+            .and_then(|p| p.gs_purchases.get(&g_index).copied())
+            .unwrap_or(0)
+    }
+
+    /// Increment the per-player GameShop purchase count for a given GIndex
+    /// by the specified quantity.
+    pub fn increment_gameshop_purchases_for_player(
+        &mut self,
+        session_id: SessionId,
+        g_index: i32,
+        quantity: i32,
+    ) {
+        if quantity <= 0 {
+            return;
+        }
+        if let Some(p) = self.players.get_mut(&session_id) {
+            let entry = p.gs_purchases.entry(g_index).or_insert(0);
+            *entry = entry.saturating_add(quantity);
+        }
+    }
+
+    /// Increment the global GameShop purchase log for a given GIndex by the
+    /// specified quantity.
+    pub fn increment_gameshop_log(&mut self, g_index: i32, quantity: i32) {
+        if quantity <= 0 {
+            return;
+        }
+        let entry = self.gameshop_log.entry(g_index).or_insert(0);
+        *entry = entry.saturating_add(quantity);
+    }
+
     /// Append a sold item to the BuyBack list for the given player, map and
     /// NPC. This mirrors the C# behaviour where each NPC keeps a per-player
     /// list of recently sold items that can be repurchased via @BUYBACK.
@@ -1126,7 +1361,6 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
-                println!("[world] Turn command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -1147,7 +1381,6 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
-                println!("[world] Walk command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -1169,7 +1402,6 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
-                println!("[world] Run command: session={} dir={}", session_id, direction);
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);

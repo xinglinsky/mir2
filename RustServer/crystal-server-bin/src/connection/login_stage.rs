@@ -1,4 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::Local;
 use crystal_server_core::account::{AccountStatus, CharacterSummary};
 use crystal_shared_proto::login::{
     CChangePassword,
@@ -34,16 +35,35 @@ impl LoginConnection {
         pwd.chars().all(|c| c.is_ascii_alphanumeric())
     }
 
-    fn now_millis() -> i64 {
+    pub(crate) fn now_millis() -> i64 {
         match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(dur) => dur.as_millis() as i64,
             Err(_) => 0,
         }
     }
 
-    fn unix_ms_to_dotnet_binary(ms: i64) -> i64 {
-        const DOTNET_TICKS_AT_UNIX_EPOCH: i64 = 621_355_968_000_000_000;
-        ms.saturating_mul(10_000).saturating_add(DOTNET_TICKS_AT_UNIX_EPOCH)
+    pub(crate) fn unix_ms_to_dotnet_binary(ms: i64) -> i64 {
+        if ms <= 0 {
+            // Match C# DateTime.MinValue.ToBinary() semantics used by the
+            // original server for "Never" last-access values.
+            0
+        } else {
+            // Convert the stored Unix timestamp (UTC) into the server's
+            // local time, then into DateTime.ToBinary-compatible ticks.
+            //
+            // The legacy C# server used Envir.Now (local time) for
+            // LastLogoutDate and ban expiry values, so the client expects
+            // local times when calling DateTime.FromBinary on these
+            // fields.
+            let offset_secs = Local::now().offset().local_minus_utc() as i64;
+            let local_ms = ms
+                .saturating_add(offset_secs.saturating_mul(1_000));
+
+            const DOTNET_TICKS_AT_UNIX_EPOCH: i64 = 621_355_968_000_000_000;
+            local_ms
+                .saturating_mul(10_000)
+                .saturating_add(DOTNET_TICKS_AT_UNIX_EPOCH)
+        }
     }
 
     pub(crate) fn handle_new_account(
@@ -219,7 +239,10 @@ impl LoginConnection {
                         level: c.level,
                         class: c.class,
                         gender: c.gender,
-                        last_access_binary: c.last_access_binary,
+                        // Stored as Unix ms in the database; convert to
+                        // .NET DateTime.ToBinary-compatible ticks for the
+                        // legacy C# client.
+                        last_access_binary: Self::unix_ms_to_dotnet_binary(c.last_access_binary),
                     })
                     .collect();
                 self.characters = chars.clone();

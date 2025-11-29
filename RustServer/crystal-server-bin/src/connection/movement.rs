@@ -12,7 +12,7 @@ use crystal_shared_proto::login::{
     CChangeAMode,
 };
 use crystal_shared_proto::map::SMapChanged;
-use crystal_shared_proto::magic::SObjectSpell;
+use crystal_shared_proto::magic::{SMagicCast, SMagicDelay, SObjectEffect, SObjectMagic, SObjectSpell};
 use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectRun,
@@ -282,6 +282,47 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
+                world::WorldEvent::ObjectMagic {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    spell,
+                    level,
+                    target_id,
+                    target_x,
+                    target_y,
+                } => {
+                    let pkt = SObjectMagic {
+                        object_id: session_id,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                        spell,
+                        target_id,
+                        target_x,
+                        target_y,
+                        cast: true,
+                        level,
+                        self_broadcast: true,
+                        secondary_target_ids: Vec::new(),
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+
+                        // Deliver the spell animation to the caster as well
+                        // as to other players in range. The client will use
+                        // this to drive SoulFireBall/FireBall-style
+                        // projectile animations and to update local
+                        // ClientMagic.CastTime.
+                        if session_id == self.session_id {
+                            out.push(bytes.clone());
+                        }
+
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
                 world::WorldEvent::ObjectStruck {
                     attacker_id,
                     target_id,
@@ -477,6 +518,32 @@ impl LoginConnection {
                         self.send_magic_leveled(spell_id, level, experience, out);
                     }
                 }
+                world::WorldEvent::MagicDelay {
+                    session_id,
+                    spell_id,
+                    delay,
+                } => {
+                    if session_id == self.session_id {
+                        let pkt = SMagicDelay {
+                            object_id: self.session_id,
+                            spell: spell_id,
+                            delay,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+                world::WorldEvent::MagicCast {
+                    session_id,
+                    spell_id,
+                } => {
+                    if session_id == self.session_id {
+                        let pkt = SMagicCast { spell: spell_id };
+                        let raw = pkt.encode();
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
                 world::WorldEvent::PlayerGainedGold { session_id, amount } => {
                     if session_id == self.session_id {
                         if let Some(ref mut stats) = self.current_stats {
@@ -525,12 +592,15 @@ impl LoginConnection {
                 }
                 world::WorldEvent::PlayerHealed {
                     session_id,
-                    map_index: _,
-                    x: _,
-                    y: _,
+                    map_index,
+                    x,
+                    y,
                     amount: _,
                     new_hp,
                 } => {
+                    // Update HP/MP for the healed player on their own
+                    // connection, mirroring the behaviour of the original
+                    // server's SHealthChanged packet.
                     if session_id == self.session_id {
                         if let Some(ref mut stats) = self.current_stats {
                             stats.hp = new_hp;
@@ -542,6 +612,34 @@ impl LoginConnection {
                                 out.push(Self::encode_raw(raw));
                             }
                         }
+                    }
+
+                    // Also emit a Healing visual effect around the healed
+                    // player, approximating the C# SpellEffect.Healing that
+                    // is normally produced by Healing/HealingCircle
+                    // SpellObjects. We always show it to the healed player
+                    // and broadcast it to nearby viewers.
+                    const HEALING_EFFECT: u8 = 3; // SpellEffect.Healing
+                    let eff_pkt = SObjectEffect {
+                        object_id: session_id,
+                        effect: HEALING_EFFECT,
+                        effect_type: 0,
+                        delay_time: 0,
+                        time: 0,
+                    };
+
+                    if let Ok(raw) = eff_pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+
+                        // Always send the effect to the healed player if this
+                        // connection corresponds to them.
+                        if session_id == self.session_id {
+                            out.push(bytes.clone());
+                        }
+
+                        // And broadcast to other nearby viewers around the
+                        // healed player's location.
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
                 world::WorldEvent::SpellToggle {
