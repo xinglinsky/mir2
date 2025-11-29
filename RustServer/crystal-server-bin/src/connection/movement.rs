@@ -1,5 +1,6 @@
 use crystal_server_core::world;
 use crystal_server_core::world::WorldProvider;
+use crystal_server_core::world::configs::setup_config::setup_config;
 use crystal_shared_proto::login::{
     CAttack,
     CPickUp,
@@ -255,6 +256,40 @@ impl LoginConnection {
                         let pkt = SGainExperience { amount };
                         if let Ok(raw) = pkt.encode() {
                             out.push(Self::encode_raw(raw));
+                        }
+
+                        // Mirror C# PlayerObject.GainExp guild experience
+                        // behaviour: whenever a player gains experience and
+                        // is in a non-newbie guild, award guild experience as
+                        // well. The effective guild gain (after
+                        // GuildSettings.ExpRate) is computed by
+                        // World::guild_gain_exp, and we broadcast
+                        // SGuildExpGain so all online members see the
+                        // progress.
+                        let guild_name = {
+                            let map = self.player_summaries.lock().unwrap();
+                            map.get(&self.session_id)
+                                .map(|v| v.guild_name.clone())
+                                .unwrap_or_default()
+                        };
+
+                        if !guild_name.is_empty() {
+                            let newbie_name = &setup_config().game.newbie_guild;
+                            if !guild_name.eq_ignore_ascii_case(newbie_name) {
+                                let outcome_opt = {
+                                    let mut world = self.world.lock().unwrap();
+                                    world.guild_gain_exp(&guild_name, amount)
+                                };
+
+                                if let Some(outcome) = outcome_opt {
+                                    let _ = self.store.save_guild(&outcome.guild);
+                                    self.broadcast_guild_exp_gain(&guild_name, outcome.exp_gained);
+                                    // TODO: consider broadcasting SGuildStatus
+                                    // when outcome.leveled is true so that all
+                                    // members immediately see the new level
+                                    // and spare points.
+                                }
+                            }
                         }
                     }
                 }
@@ -572,7 +607,7 @@ impl LoginConnection {
                     x,
                     y,
                 } => {
-                    println!(
+                    tracing::debug!(
                         "[pickup] MapItemRemoved dispatch: session={} object_id={} map={} pos=({}, {})",
                         self.session_id,
                         object_id,
@@ -663,9 +698,61 @@ impl LoginConnection {
                     buff_bytes,
                 } => {
                     if session_id == self.session_id {
+                        // First byte of buff_bytes is BuffType as u8.
+                        let buff_type_u8 = buff_bytes.first().copied().unwrap_or(0);
+
+                        tracing::debug!(
+                            "connection: AddBuff event for session_id={} local_session_id={} buff_type_u8={}",
+                            session_id,
+                            self.session_id,
+                            buff_type_u8,
+                        );
+
                         let pkt = SAddBuff { buff_bytes };
                         let raw = pkt.encode();
                         out.push(Self::encode_raw(raw));
+
+                        // For MagicShield / ElementalBarrier, also emit
+                        // a persistent shield visual using SObjectEffect
+                        // with SpellEffect.MagicShieldUp / ElementalBarrierUp.
+                        if buff_type_u8 == world::BuffType::MagicShield as u8
+                            || buff_type_u8 == world::BuffType::ElementalBarrier as u8
+                        {
+                            tracing::debug!(
+                                "connection: sending MagicShield/ElementalBarrier Up effect session_id={} buff_type_u8={}",
+                                session_id,
+                                buff_type_u8,
+                            );
+                            let effect: u8 = if buff_type_u8 == world::BuffType::MagicShield as u8 {
+                                6 // SpellEffect.MagicShieldUp
+                            } else {
+                                13 // SpellEffect.ElementalBarrierUp
+                            };
+
+                            let eff_pkt = SObjectEffect {
+                                object_id: self.session_id,
+                                effect,
+                                effect_type: 0,
+                                delay_time: 0,
+                                time: 0,
+                            };
+
+                            if let Ok(raw) = eff_pkt.encode() {
+                                let bytes = Self::encode_raw(raw);
+
+                                // Send to self
+                                out.push(bytes.clone());
+
+                                // And broadcast to nearby viewers around
+                                // the player's current location.
+                                self.enqueue_for_viewers(
+                                    self.current_map_index,
+                                    self.current_x,
+                                    self.current_y,
+                                    bytes,
+                                );
+                            }
+                        }
                     }
                 }
                 world::WorldEvent::RemoveBuff {
@@ -676,12 +763,61 @@ impl LoginConnection {
                         continue;
                     }
 
+                    tracing::debug!(
+                        "connection: RemoveBuff event for session_id={} buff_type={} (local_session_id={})",
+                        session_id,
+                        buff_type,
+                        self.session_id,
+                    );
+
                     let pkt = SRemoveBuff {
                         buff_type,
                         object_id: self.session_id,
                     };
                     if let Ok(raw) = pkt.encode() {
                         out.push(Self::encode_raw(raw));
+                    }
+
+                    // For MagicShield / ElementalBarrier, also emit the
+                    // corresponding "Down" visual to stop the shield
+                    // animation on the client.
+                    if buff_type == world::BuffType::MagicShield as u8
+                        || buff_type == world::BuffType::ElementalBarrier as u8
+                    {
+                        tracing::debug!(
+                            "connection: sending MagicShield/ElementalBarrier Down effect session_id={} buff_type={}",
+                            session_id,
+                            buff_type,
+                        );
+                        let effect: u8 = if buff_type == world::BuffType::MagicShield as u8 {
+                            7 // SpellEffect.MagicShieldDown
+                        } else {
+                            14 // SpellEffect.ElementalBarrierDown
+                        };
+
+                        let eff_pkt = SObjectEffect {
+                            object_id: self.session_id,
+                            effect,
+                            effect_type: 0,
+                            delay_time: 0,
+                            time: 0,
+                        };
+
+                        if let Ok(raw) = eff_pkt.encode() {
+                            let bytes = Self::encode_raw(raw);
+
+                            // Send to self
+                            out.push(bytes.clone());
+
+                            // And broadcast to nearby viewers around the
+                            // player's current location.
+                            self.enqueue_for_viewers(
+                                self.current_map_index,
+                                self.current_x,
+                                self.current_y,
+                                bytes,
+                            );
+                        }
                     }
                 }
                 world::WorldEvent::PauseBuff {

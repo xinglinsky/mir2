@@ -98,8 +98,8 @@ pub fn load_default_buff_infos(game_master_effect: bool) -> Vec<BuffInfo> {
     list.push(BuffInfo { buff_type: T::MagicBooster, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::PetEnhancer, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::ImmortalSkin, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
-    list.push(BuffInfo { buff_type: T::MagicShield, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
-    list.push(BuffInfo { buff_type: T::ElementalBarrier, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
+    list.push(BuffInfo { buff_type: T::MagicShield, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
+    list.push(BuffInfo { buff_type: T::ElementalBarrier, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
 
     // Monsters
     list.push(BuffInfo { buff_type: T::HornedArcherBuff, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });

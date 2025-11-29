@@ -219,7 +219,7 @@ async fn control_start(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("control: start server");
+    tracing::debug!("control: start server");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -230,7 +230,7 @@ async fn control_stop(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("control: stop server");
+    tracing::debug!("control: stop server");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -241,7 +241,7 @@ async fn control_reboot(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("control: reboot server");
+    tracing::debug!("control: reboot server");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -252,7 +252,7 @@ async fn control_clear_blocked_ips(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("control: clear blocked IPs");
+    tracing::debug!("control: clear blocked IPs");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -263,7 +263,7 @@ async fn reload_npcs(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("reload: NPCs");
+    tracing::debug!("reload: NPCs");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -274,7 +274,7 @@ async fn reload_drops(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("reload: drops");
+    tracing::debug!("reload: drops");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -285,7 +285,7 @@ async fn reload_line_messages(
     if !is_authorized(&headers, &state.config) {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    println!("reload: line messages");
+    tracing::debug!("reload: line messages");
     Ok(Json(ControlResponse { ok: true }))
 }
 
@@ -307,7 +307,7 @@ async fn broadcast(
         inner.pending_broadcasts.push(msg.to_string());
     }
 
-    println!("broadcast: {}", msg);
+    tracing::debug!("broadcast: {}", msg);
     Ok(Json(BroadcastResponse { ok: true }))
 }
 
@@ -433,7 +433,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/internal/broadcasts", get(take_broadcasts))
         .nest_service("/", static_service)
         .with_state(state);
-    println!("Crystal admin web console listening on {}", addr);
+    tracing::debug!("Crystal admin web console listening on {}", addr);
 
     let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

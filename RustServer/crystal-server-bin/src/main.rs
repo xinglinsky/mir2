@@ -204,14 +204,14 @@ async fn main() -> io::Result<()> {
     let mut world_db = WorldDatabase::new();
     match world::map::load_map_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(maps) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} MapInfo entries from Server.MirDB",
                 maps.len()
             );
             world_db.map_infos = maps;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (MapInfoList): {} (continuing with empty DB)",
                 e
             );
@@ -223,14 +223,14 @@ async fn main() -> io::Result<()> {
     // the single source of truth for shop entries.
     match world::map::load_game_shop_items_from_mirdb(&cfg.server_mirdb_path) {
         Ok(shop_items) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} GameShopItem entries from Server.MirDB",
                 shop_items.len()
             );
             world_db.game_shop_items = shop_items;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (GameShopList): {} (continuing without GameShop DB)",
                 e
             );
@@ -241,14 +241,14 @@ async fn main() -> io::Result<()> {
     // concrete UserItemData payloads for goods, mirroring C# Envir.ItemInfoList.
     match world::map::load_item_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(items) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} ItemInfo entries from Server.MirDB",
                 items.len()
             );
             world_db.item_infos = items;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (ItemInfoList): {} (continuing without Item DB)",
                 e
             );
@@ -260,7 +260,7 @@ async fn main() -> io::Result<()> {
     // WorldDatabase and not yet wired into spawn logic.
     match world::map::load_monster_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(monsters) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} MonsterInfo entries from Server.MirDB",
                 monsters.len()
             );
@@ -294,7 +294,7 @@ async fn main() -> io::Result<()> {
                 let drops = match world::drop::load_drop_file(&full_path, 0, &item_lookup) {
                     Ok(list) => list,
                     Err(e) => {
-                        println!(
+                        tracing::debug!(
                             "[core] Failed to load drops for monster {} from {}: {}",
                             m.name,
                             full_path.display(),
@@ -308,7 +308,7 @@ async fn main() -> io::Result<()> {
             }
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (MonsterInfoList): {} (continuing without Monster DB)",
                 e
             );
@@ -320,14 +320,14 @@ async fn main() -> io::Result<()> {
     // not yet wired into scene packets.
     match world::map::load_npc_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(npcs) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} NPCInfo entries from Server.MirDB",
                 npcs.len()
             );
             world_db.npc_infos = npcs;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (NPCInfoList): {} (continuing without NPC DB)",
                 e
             );
@@ -338,14 +338,14 @@ async fn main() -> io::Result<()> {
     // definitions (costs, ranges, power, etc.) from the MirDB.
     match world::map::load_magic_infos_from_mirdb(&cfg.server_mirdb_path) {
         Ok(magics) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} MagicInfo entries from Server.MirDB",
                 magics.len()
             );
             world_db.magic_infos = magics;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Server.MirDB (MagicInfoList): {} (continuing without Magic DB)",
                 e
             );
@@ -353,12 +353,12 @@ async fn main() -> io::Result<()> {
     }
 
     let buff_infos = world::buff::load_default_buff_infos(cfg.game_master_effect);
-    println!("[core] Loaded {} Buffs.", buff_infos.len());
+    tracing::debug!("[core] Loaded {} Buffs.", buff_infos.len());
     world_db.buff_infos = buff_infos;
 
     match world::recipe::load_recipes_from_dir(&cfg.recipes_path, &world_db.item_infos) {
         Ok(recipes) => {
-            println!(
+            tracing::debug!(
                 "[core] Loaded {} Recipes from {}",
                 recipes.len(),
                 cfg.recipes_path.display()
@@ -366,7 +366,7 @@ async fn main() -> io::Result<()> {
             world_db.recipe_infos = recipes;
         }
         Err(e) => {
-            println!(
+            tracing::debug!(
                 "[core] Failed to load Recipes from {}: {} (continuing without Recipe DB)",
                 cfg.recipes_path.display(),
                 e
@@ -493,7 +493,7 @@ async fn main() -> io::Result<()> {
                                 )
                             };
 
-                            println!(
+                            tracing::debug!(
                                 "[drop-send] GoldDropped: object_id={} map={} pos=({}, {}) gold={} viewers={}",
                                 object_id,
                                 map_index,
@@ -542,7 +542,7 @@ async fn main() -> io::Result<()> {
                                 )
                             };
 
-                            println!(
+                            tracing::debug!(
                                 "[tick] MapItemRemoved: object_id={} map={} pos=({}, {}) viewers={}",
                                 object_id,
                                 map_index,

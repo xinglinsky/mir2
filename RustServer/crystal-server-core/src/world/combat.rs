@@ -156,6 +156,15 @@ impl<P: WorldProvider> World<P> {
         y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
+        if let Some(p) = self.players.get(&session_id) {
+            tracing::debug!(
+                "handle_magic_command: session_id={} job={:?} spell_id={}",
+                session_id,
+                p.job,
+                spell,
+            );
+        }
+
         let (player_map, player_x, player_y, has_magic) = match self.players.get(&session_id) {
             Some(p) => {
                 let has_magic = p
@@ -1041,7 +1050,7 @@ impl<P: WorldProvider> World<P> {
                 self.mark_monster_dead(map_index, id);
 
                 if let Some(info) = self.provider.get_monster_info(monster_index) {
-                    println!(
+                    tracing::debug!(
                         "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
                         monster_index,
                         info.name,
@@ -1084,7 +1093,7 @@ impl<P: WorldProvider> World<P> {
                         }
                     }
 
-                    println!(
+                    tracing::debug!(
                         "[drop-total] monster_index={} gold={} items_len={}",
                         monster_index,
                         total.gold,

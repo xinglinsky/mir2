@@ -79,6 +79,51 @@ impl CEditGuildMember {
 }
 
 #[derive(Clone, Debug)]
+pub struct CEditGuildNotice {
+    pub notice: Vec<String>,
+}
+
+impl CEditGuildNotice {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+
+        let count: i32 = self
+            .notice
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many notice lines"))?;
+        write_i32_le(&mut buf, count)?;
+        for line in &self.notice {
+            write_string(&mut buf, line)?;
+        }
+
+        Ok(RawPacket {
+            id: ClientPacketId::EditGuildNotice as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let count = read_i32_le(&mut c)?;
+        if count < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative line count in CEditGuildNotice",
+            ));
+        }
+
+        let mut notice = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let line = read_string(&mut c)?;
+            notice.push(line);
+        }
+
+        Ok(CEditGuildNotice { notice })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CGuildNameReturn {
     pub name: String,
 }

@@ -1,6 +1,6 @@
 use rand::Rng;
 use rand::thread_rng;
-use tracing::debug;
+use tracing::{trace, debug};
 use std::fs;
 use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
@@ -414,7 +414,7 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
-            // Sort descending to remove from back
+            // Sort descending to remove from back.
             removed_indices.sort_unstable_by(|a, b| b.cmp(a));
 
             for idx in removed_indices {
@@ -1863,7 +1863,7 @@ impl<P: WorldProvider> World<P> {
             }
 
             if !placed {
-                debug!(
+                trace!(
                     "respawn: all candidate cells blocked for map={} respawn_index={} loc=({}, {}) spread={}",
                     map.info.index,
                     respawn.respawn_index,

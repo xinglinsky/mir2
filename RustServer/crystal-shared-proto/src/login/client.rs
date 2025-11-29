@@ -556,21 +556,25 @@ impl CSearchMap {
 
 #[derive(Clone, Debug)]
 pub struct CMagic {
+    pub object_id: u32,
     pub spell: u8,
     pub direction: u8,
     pub target_id: u32,
     pub x: i32,
     pub y: i32,
+    pub spell_target_lock: bool,
 }
 
 impl CMagic {
     pub fn encode(&self) -> io::Result<RawPacket> {
-        let mut buf = Vec::with_capacity(10);
+        let mut buf = Vec::with_capacity(19);
+        write_u32_le(&mut buf, self.object_id)?;
         buf.push(self.spell);
         buf.push(self.direction);
         write_u32_le(&mut buf, self.target_id)?;
         write_i32_le(&mut buf, self.x)?;
         write_i32_le(&mut buf, self.y)?;
+        write_bool(&mut buf, self.spell_target_lock)?;
         Ok(RawPacket {
             id: ClientPacketId::Magic as i16,
             payload: buf,
@@ -578,13 +582,14 @@ impl CMagic {
     }
 
     pub fn decode(payload: &[u8]) -> io::Result<Self> {
-        if payload.len() < 10 {
+        if payload.len() < 19 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "CMagic payload too short",
             ));
         }
         let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
         let spell = {
             let mut b = [0u8; 1];
             c.read_exact(&mut b)?;
@@ -598,12 +603,15 @@ impl CMagic {
         let target_id = read_u32_le(&mut c)?;
         let x = read_i32_le(&mut c)?;
         let y = read_i32_le(&mut c)?;
+        let spell_target_lock = read_bool(&mut c)?;
         Ok(CMagic {
+            object_id,
             spell,
             direction,
             target_id,
             x,
             y,
+            spell_target_lock,
         })
     }
 }
@@ -870,6 +878,157 @@ impl CGameshopBuy {
             g_index,
             quantity,
             p_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSendMail {
+    pub name: String,
+    pub message: String,
+    pub gold: u32,
+    pub items_idx: [u64; 5],
+    pub stamped: bool,
+}
+
+impl CSendMail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        write_string(&mut buf, &self.message)?;
+        write_u32_le(&mut buf, self.gold)?;
+        for id in &self.items_idx {
+            write_u64_le(&mut buf, *id)?;
+        }
+        write_bool(&mut buf, self.stamped)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SendMail as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        let message = read_string(&mut c)?;
+        let gold = read_u32_le(&mut c)?;
+        let mut items_idx = [0u64; 5];
+        for i in 0..5 {
+            items_idx[i] = read_u64_le(&mut c)?;
+        }
+        let stamped = read_bool(&mut c)?;
+        Ok(CSendMail {
+            name,
+            message,
+            gold,
+            items_idx,
+            stamped,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CReadMail {
+    pub mail_id: u64,
+}
+
+impl CReadMail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.mail_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ReadMail as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mail_id = read_u64_le(&mut c)?;
+        Ok(CReadMail { mail_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDeleteMail {
+    pub mail_id: u64,
+}
+
+impl CDeleteMail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.mail_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DeleteMail as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mail_id = read_u64_le(&mut c)?;
+        Ok(CDeleteMail { mail_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CLockMail {
+    pub mail_id: u64,
+    pub lock: bool,
+}
+
+impl CLockMail {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.mail_id)?;
+        write_bool(&mut buf, self.lock)?;
+        Ok(RawPacket {
+            id: ClientPacketId::LockMail as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mail_id = read_u64_le(&mut c)?;
+        let lock = read_bool(&mut c)?;
+        Ok(CLockMail { mail_id, lock })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMailCost {
+    pub gold: u32,
+    pub items_idx: [u64; 5],
+    pub stamped: bool,
+}
+
+impl CMailCost {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.gold)?;
+        for id in &self.items_idx {
+            write_u64_le(&mut buf, *id)?;
+        }
+        write_bool(&mut buf, self.stamped)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MailCost as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let gold = read_u32_le(&mut c)?;
+        let mut items_idx = [0u64; 5];
+        for i in 0..5 {
+            items_idx[i] = read_u64_le(&mut c)?;
+        }
+        let stamped = read_bool(&mut c)?;
+        Ok(CMailCost {
+            gold,
+            items_idx,
+            stamped,
         })
     }
 }

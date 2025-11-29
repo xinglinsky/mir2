@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crystal_server_core::account::{CharacterPosition, CharacterStats, CharacterSummary, StoredMail};
 use crystal_server_core::world::{self, WorldProvider};
+use crystal_server_core::world::configs::base_stats;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
 use crystal_server_core::item::{Equipment, Inventory};
 use crystal_shared_proto::login::{
@@ -282,7 +283,7 @@ impl LoginConnection {
 
             match world::map::load_map_from_file(map_info_core.clone(), map_dir) {
                 Ok(loaded_map) => {
-                    println!(
+                    tracing::debug!(
                         "[core] Loaded map '{}' ({}x{}, walkable cells: {}) from {:?}",
                         loaded_map.info.file_name,
                         loaded_map.width,
@@ -345,7 +346,7 @@ impl LoginConnection {
                         && !loaded_map.is_walkable(spawn_x as u16, spawn_y as u16);
 
                     if spawn_out_of_bounds || spawn_not_walkable {
-                        println!(
+                        tracing::debug!(
                             "[core] spawn position ({}, {}) on map {} not walkable; falling back to SafeZone centre",
                             spawn_x,
                             spawn_y,
@@ -384,7 +385,7 @@ impl LoginConnection {
                     }
                 }
                 Err(e) => {
-                    println!(
+                    tracing::debug!(
                         "[core] Failed to load map '3' from {:?}: {} (falling back to stub packets)",
                         map_dir, e
                     );
@@ -449,7 +450,7 @@ impl LoginConnection {
 
             // Send BaseStatsInfo so the client has the same core stat
             // formulas (HP/MP, weights, etc.) as the server for this class.
-            let base_stats_bytes = world::base_stats::encode_base_stats_for_job(job);
+            let base_stats_bytes = base_stats::encode_base_stats_for_job(job);
             let base_stats_pkt = SBaseStatsInfo {
                 stats_bytes: base_stats_bytes,
             };
@@ -837,7 +838,7 @@ impl LoginConnection {
     /// encode it into a ReceiveMail payload using the same layout as
     /// ClientMail.Save(writer) in the C# client, then send it via
     /// SReceiveMail.
-    fn send_full_mailbox(&self, char_index: i32, out: &mut Vec<Vec<u8>>) {
+    pub(crate) fn send_full_mailbox(&self, char_index: i32, out: &mut Vec<Vec<u8>>) {
         let account_id = match &self.account_id {
             Some(id) => id,
             None => return,

@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
-use crystal_shared_proto::guild::{CEditGuildMember, CRequestGuildInfo};
+use crystal_shared_proto::guild::{CEditGuildMember, CEditGuildNotice, CRequestGuildInfo};
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::CDropItem;
 use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
@@ -12,41 +12,46 @@ use crystal_shared_proto::login::{
     CAddMember,
     CAttack,
     CCallNPC,
+    CChangeAMode,
     CChangePassword,
+    CClientVersion,
     CCollectParcel,
-    CGameshopBuy,
+    CDeleteCharacter,
+    CDeleteMail,
     CDelMember,
     CEquipItem,
+    CGameshopBuy,
+    CGuildInvite,
+    CGuildNameReturn,
     CGroupInvite,
     CKeepAlive,
-    CClientVersion,
-    CDeleteCharacter,
+    CLockMail,
     CLogin,
+    CMagic,
+    CMagicKey,
+    CMailCost,
     CMoveItem,
     CNewAccount,
     CNewCharacter,
+    CPickUp,
+    CReadMail,
     CRemoveItem,
+    CRequestMapInfo,
     CRun,
+    CSendMail,
+    CSearchMap,
     CStartGame,
     CSwitchGroup,
+    CTeleportToNPC,
     CTownRevive,
-    CPickUp,
+    CTradeCancel,
+    CTradeConfirm,
+    CTradeGold,
+    CTradeReply,
+    CTradeRequest,
     CTurn,
     CUseItem,
     CWalk,
-    CRequestMapInfo,
-    CTeleportToNPC,
-    CSearchMap,
-    CMagic,
-    CMagicKey,
-    CChangeAMode,
-    CGuildInvite,
-    CGuildNameReturn,
-    CTradeRequest,
-    CTradeReply,
-    CTradeGold,
-    CTradeConfirm,
-    CTradeCancel,
     ClientPacketId,
     SConnected,
 };
@@ -65,13 +70,13 @@ impl ConnectionHandler for LoginConnection {
         // Temporary debug: see whether we ever receive raw Buy/Sell item
         // packets from the client.
         if packet.id == ClientPacketId::BuyItem as i16 {
-            println!(
+            tracing::debug!(
                 "[ingame] raw BuyItem packet received: id={} payload_len={}",
                 packet.id,
                 packet.payload.len(),
             );
         } else if packet.id == ClientPacketId::SellItem as i16 {
-            println!(
+            tracing::debug!(
                 "[ingame] raw SellItem packet received: id={} payload_len={}",
                 packet.id,
                 packet.payload.len(),
@@ -82,7 +87,7 @@ impl ConnectionHandler for LoginConnection {
             // Temporary debug: surface any packet IDs that are not mapped in
             // ClientPacketId so we can see what the client is actually
             // sending for operations like NPC Buy.
-            println!(
+            tracing::debug!(
                 "[ingame] unknown client packet id={} payload_len={}",
                 packet.id,
                 packet.payload.len(),
@@ -171,7 +176,7 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::BuyItem => {
-                println!(
+                tracing::debug!(
                     "[ingame] dispatch BuyItem: id={} payload_len={}",
                     packet.id,
                     packet.payload.len(),
@@ -187,7 +192,7 @@ impl ConnectionHandler for LoginConnection {
                         self.handle_buy_item(msg, &mut out);
                     }
                     Err(e) => {
-                        println!(
+                        tracing::debug!(
                             "[ingame] failed to decode CBuyItem: {:?}, payload_len={}",
                             e,
                             packet.payload.len(),
@@ -196,14 +201,14 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::SellItem => {
-                println!(
+                tracing::debug!(
                     "[ingame] dispatch SellItem: id={} payload_len={}",
                     packet.id,
                     packet.payload.len(),
                 );
                 match crystal_shared_proto::npc::CSellItem::decode(&packet.payload) {
                     Ok(msg) => {
-                        println!(
+                        tracing::debug!(
                             "[ingame] decoded SellItem: unique_id={} count={}",
                             msg.unique_id,
                             msg.count,
@@ -211,7 +216,7 @@ impl ConnectionHandler for LoginConnection {
                         self.handle_sell_item(msg, &mut out);
                     }
                     Err(e) => {
-                        println!(
+                        tracing::debug!(
                             "[ingame] failed to decode CSellItem: {:?}, payload_len={}",
                             e,
                             packet.payload.len(),
@@ -279,15 +284,9 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_edit_guild_member(msg, &mut out);
                 }
             }
-            // Guild protocols: partial support. Notice editing and info
-            // requests are not yet implemented on the Rust server.
             ClientPacketId::EditGuildNotice => {
-                tracing::debug!("EditGuildNotice packet received but not implemented yet");
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "行会公告编辑功能尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CEditGuildNotice::decode(&packet.payload) {
+                    self.handle_edit_guild_notice(msg, &mut out);
                 }
             }
             ClientPacketId::TownRevive => {
@@ -588,9 +587,34 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_group_invite(msg, &mut out);
                 }
             }
+            ClientPacketId::SendMail => {
+                if let Ok(msg) = CSendMail::decode(&packet.payload) {
+                    self.handle_send_mail(msg, &mut out);
+                }
+            }
+            ClientPacketId::ReadMail => {
+                if let Ok(msg) = CReadMail::decode(&packet.payload) {
+                    self.handle_read_mail(msg, &mut out);
+                }
+            }
             ClientPacketId::CollectParcel => {
                 if let Ok(msg) = CCollectParcel::decode(&packet.payload) {
                     self.handle_collect_parcel(msg, &mut out);
+                }
+            }
+            ClientPacketId::DeleteMail => {
+                if let Ok(msg) = CDeleteMail::decode(&packet.payload) {
+                    self.handle_delete_mail(msg, &mut out);
+                }
+            }
+            ClientPacketId::LockMail => {
+                if let Ok(msg) = CLockMail::decode(&packet.payload) {
+                    self.handle_lock_mail(msg, &mut out);
+                }
+            }
+            ClientPacketId::MailCost => {
+                if let Ok(msg) = CMailCost::decode(&packet.payload) {
+                    self.handle_mail_cost(msg, &mut out);
                 }
             }
             ClientPacketId::GameshopBuy => {

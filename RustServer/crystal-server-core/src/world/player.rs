@@ -1028,7 +1028,7 @@ impl<P: WorldProvider> World<P> {
             _ => 1 | 2,
         };
 
-        // println!(
+        // tracing::debug!(
         //     "[world] build_start_inventory: job={} gender={} class_bit={} gender_bit={}",
         //     job.as_u8(),
         //     gender,
@@ -1043,7 +1043,7 @@ impl<P: WorldProvider> World<P> {
             let matches_gender = (info.required_gender & gender_bit) != 0;
 
             // if info.start_item {
-            //     println!(
+            //     tracing::debug!(
             //         "[world]  candidate idx={} name={} start_item={} req_class={} req_gender={} matches_class={} matches_gender={}",
             //         info.index,
             //         info.name,
@@ -1092,7 +1092,7 @@ impl<P: WorldProvider> World<P> {
 
         for (i, slot) in inventory.slots.iter().enumerate() {
             if let Some(item) = slot {
-                println!(
+                tracing::debug!(
                     "[world]  result slot={} item_index={} for job={} gender={}",
                     i,
                     item.item_index,

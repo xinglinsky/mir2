@@ -22,6 +22,69 @@ impl LoginConnection {
             return true;
         }
 
+        // /guildexp
+        if let Some(rest) = trimmed.strip_prefix("/guildexp ") {
+            if !self.is_gm {
+                self.send_system_chat("GM only command.", out);
+                return true;
+            }
+
+            let arg = rest.trim();
+            if arg.is_empty() {
+                self.send_system_chat("Usage: /guildexp <amount>", out);
+                return true;
+            }
+
+            let Ok(base_amount) = arg.parse::<u32>() else {
+                self.send_system_chat("Invalid amount.", out);
+                return true;
+            };
+
+            let guild_name = {
+                let map = self.player_summaries.lock().unwrap();
+                map.get(&self.session_id)
+                    .map(|v| v.guild_name.clone())
+                    .unwrap_or_default()
+            };
+
+            if guild_name.is_empty() {
+                self.send_system_chat("You are not in a guild.", out);
+                return true;
+            }
+
+            let outcome_opt = {
+                let mut world = self.world.lock().unwrap();
+                world.guild_gain_exp(&guild_name, base_amount)
+            };
+
+            let Some(outcome) = outcome_opt else {
+                self.send_system_chat(
+                    "Guild has no experience progression configured.",
+                    out,
+                );
+                return true;
+            };
+
+            let _ = self.store.save_guild(&outcome.guild);
+
+            self.broadcast_guild_exp_gain(&guild_name, outcome.exp_gained);
+
+            let msg = if outcome.leveled {
+                format!(
+                    "Guild {} gained {} experience and leveled up to level {}.",
+                    guild_name, outcome.exp_gained, outcome.guild.level
+                )
+            } else {
+                format!(
+                    "Guild {} gained {} experience.",
+                    guild_name, outcome.exp_gained
+                )
+            };
+            self.send_system_chat(&msg, out);
+
+            return true;
+        }
+
         // /createguild
         if let Some(rest) = trimmed.strip_prefix("/createguild ") {
             self.handle_create_guild_command(rest, out);

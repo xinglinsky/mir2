@@ -444,6 +444,13 @@ pub fn cast_magic_shield<P: WorldProvider>(
             None => return,
         };
 
+        tracing::debug!(
+            "MagicShield: cast_magic_shield enter session_id={} mp={} buff_count={}",
+            session_id,
+            player.mp,
+            player.active_buffs.len(),
+        );
+
         // Do not stack MagicShield: if already active, ignore the cast
         // without consuming MP, mirroring the C# behaviour.
         if player
@@ -451,26 +458,58 @@ pub fn cast_magic_shield<P: WorldProvider>(
             .iter()
             .any(|b| b.buff_type == BuffType::MagicShield)
         {
+            tracing::debug!(
+                "MagicShield: cast aborted, buff already active for session_id={}",
+                session_id
+            );
             return;
         }
 
         let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
             Some(m) => m,
-            None => return,
+            None => {
+                tracing::debug!(
+                    "MagicShield: cast aborted, player has no magic entry for spell_id={} session_id={}",
+                    spell_id,
+                    session_id
+                );
+                return;
+            }
         };
 
         let level = magic.level;
-        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
-        {
-            Some(c) => c,
-            None => return,
-        };
+        // 对 MagicShield 而言，如果 MirDB 里暂时缺少 MagicInfo，我们不直接
+        // 中断施法，而是把消耗视为 0，这样技能仍然可以生效并挂上 Buff，行为
+        // 与 Healing/MassHealing 的容错方式一致。
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+            .unwrap_or(0);
+
+        tracing::debug!(
+            "MagicShield: computed mana cost session_id={} level={} mp_before={} cost={}",
+            session_id,
+            level,
+            player.mp,
+            cost
+        );
 
         if player.mp < cost {
+            tracing::debug!(
+                "MagicShield: cast aborted, insufficient MP session_id={} mp={} cost={}",
+                session_id,
+                player.mp,
+                cost
+            );
             return;
         }
 
         player.mp -= cost;
+
+        tracing::debug!(
+            "MagicShield: MP deducted session_id={} mp_after={} cost={}",
+            session_id,
+            player.mp,
+            cost
+        );
 
         // Approximate C# MagicShield duration by using the magic's power
         // value as a number of seconds, via magic_power().

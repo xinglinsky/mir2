@@ -1,5 +1,5 @@
 use crate::stats::{Stat, Stats};
-use super::{base_stats, Job};
+use super::{configs::base_stats, Job};
 
 #[derive(Clone, Debug, Default)]
 pub struct PlayerStats {

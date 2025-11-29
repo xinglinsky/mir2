@@ -14,7 +14,7 @@ pub mod world;
 pub mod types;
 pub mod buff;
 pub mod recipe;
-pub mod base_stats;
+pub mod configs;
 pub mod player;
 pub mod player_stats;
 pub mod movement;

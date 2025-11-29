@@ -28,7 +28,7 @@ impl<P: WorldProvider> World<P> {
                     // unsatisfied and skip such movements for now.
                     if m.need_hole {
                         if !self.cell_has_hole_spell(current_map_index, m.source_x, m.source_y) {
-                            println!(
+                            tracing::debug!(
                                 "[move] Map movement candidate blocked: need_hole at map {} source=({}, {})",
                                 current_map_index,
                                 m.source_x,
@@ -43,7 +43,7 @@ impl<P: WorldProvider> World<P> {
                     // wired into the Rust world state, so treat movements with a
                     // positive conquest_index as gated off for now.
                     if m.conquest_index > 0 {
-                        println!(
+                        tracing::debug!(
                             "[move] Map movement candidate blocked: conquest_index {} at map {} source=({}, {})",
                             m.conquest_index,
                             current_map_index,
@@ -58,7 +58,7 @@ impl<P: WorldProvider> World<P> {
             else {
                 return;
             };
-            println!(
+            tracing::debug!(
                 "[move] check_map_movement: from map {} at ({}, {}) using movement source=({}, {}) -> dest map {} at ({}, {})",
                 current_map_index,
                 player.x,
@@ -76,7 +76,7 @@ impl<P: WorldProvider> World<P> {
         match self.get_or_load_map(dest_map_index) {
             Some(dest_map) => {
                 if dest_x < 0 || dest_y < 0 {
-                    println!(
+                    tracing::debug!(
                         "[move] Map movement blocked: dest out of bounds ({}, {}) on map {}",
                         dest_x, dest_y, dest_map_index
                     );
@@ -86,7 +86,7 @@ impl<P: WorldProvider> World<P> {
                 let ux = dest_x as u16;
                 let uy = dest_y as u16;
                 if ux >= dest_map.width || uy >= dest_map.height || !dest_map.is_walkable(ux, uy) {
-                    println!(
+                    tracing::debug!(
                         "[move] Map movement blocked: dest not walkable on map {} at ({}, {})",
                         dest_map_index, dest_x, dest_y
                     );
@@ -105,7 +105,7 @@ impl<P: WorldProvider> World<P> {
                 self.remove_player_from_occupancy(session_id, current_map_index, old_x, old_y);
                 self.add_player_to_occupancy(session_id, player.map_index, player.x, player.y);
 
-                println!(
+                tracing::debug!(
                     "[move] Map movement success: session {} now on map {} at ({}, {})",
                     player.session_id,
                     player.map_index,
@@ -122,7 +122,7 @@ impl<P: WorldProvider> World<P> {
                 });
             }
             None => {
-                println!(
+                tracing::debug!(
                     "[move] Map movement failed: could not load destination map {} from ({}, {})",
                     dest_map_index, player.x, player.y
                 );
@@ -167,7 +167,7 @@ impl<P: WorldProvider> World<P> {
             let ty = cur_y + dy;
 
             if tx < 0 || ty < 0 || tx > u16::MAX as i32 || ty > u16::MAX as i32 {
-                println!("[move] blocked: out of bounds ({}, {})", tx, ty);
+                tracing::debug!("[move] blocked: out of bounds ({}, {})", tx, ty);
                 break;
             }
 
@@ -177,7 +177,7 @@ impl<P: WorldProvider> World<P> {
 
                 if !m.is_walkable(ux, uy) {
                     let attr = m.cell(ux, uy).map(|c| &c.attribute);
-                    println!(
+                    tracing::debug!(
                         "[move] blocked on map {} from ({}, {}) to ({}, {}), attr={:?}",
                         player.map_index,
                         cur_x,
@@ -203,7 +203,7 @@ impl<P: WorldProvider> World<P> {
             cur_y = ty;
         }
 
-        // println!(
+        // tracing::debug!(
         //     "[move] apply_step: map {} dir {} dist {} from ({}, {}) to ({}, {})",
         //     player.map_index,
         //     direction,

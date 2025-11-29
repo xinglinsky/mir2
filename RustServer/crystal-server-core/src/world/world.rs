@@ -5,6 +5,7 @@ use crate::stats::{Stat, Stats};
 use crate::world::{BuffProperty, BuffStackType, BuffType, Spell};
 use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
 use crate::guild::{GuildInfo, GuildManager};
+use super::configs::{guild_max_experience_for_level, guild_member_cap_for_level, guild_settings};
 use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
@@ -56,6 +57,13 @@ pub struct BuyBackEntry {
 pub enum GuildJoinError {
     NotFound,
     Full,
+}
+
+#[derive(Clone, Debug)]
+pub struct GuildExpGainResult {
+    pub guild: GuildInfo,
+    pub exp_gained: u32,
+    pub leveled: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -688,6 +696,20 @@ impl<P: WorldProvider> World<P> {
         }
 
         let info = self.guilds.create_guild(name.to_string());
+
+        // Initialize member cap and max experience for level 0 from
+        // GuildSettings.ini so that newly created guilds follow the same
+        // growth rules as the legacy C# server.
+        let level = info.level;
+        let cap = guild_member_cap_for_level(level);
+        if cap > 0 {
+            info.member_cap = cap;
+        }
+        let max_exp = guild_max_experience_for_level(level);
+        if max_exp > 0 {
+            info.max_experience = max_exp;
+        }
+
         Some(info.clone())
     }
 
@@ -700,6 +722,95 @@ impl<P: WorldProvider> World<P> {
     /// when building guild member lists for the legacy client.
     pub fn get_guild_info_by_name(&self, guild_name: &str) -> Option<GuildInfo> {
         self.guilds.get_guild_by_name(guild_name).cloned()
+    }
+
+    /// Replace the notice (bulletin) text for the given guild and return the
+    /// updated GuildInfo snapshot on success.
+    pub fn guild_update_notice(
+        &mut self,
+        guild_name: &str,
+        notice: Vec<String>,
+    ) -> Option<GuildInfo> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+        guild.notice = notice;
+        Some(guild.clone())
+    }
+
+    /// Apply raw experience to the specified guild, using GuildSettings
+    /// (exp_rate, points_per_level, exp_by_level, member_cap_by_level) to
+    /// determine the effective gain and any level-ups. This mirrors the core
+    /// behaviour of C# GuildObject.GainExp, but leaves rate/broadcast
+    /// throttling to the caller.
+    pub fn guild_gain_exp(
+        &mut self,
+        guild_name: &str,
+        base_amount: u32,
+    ) -> Option<GuildExpGainResult> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+
+        // No progression configured or already at cap.
+        if guild.max_experience <= 0 {
+            return None;
+        }
+
+        let settings = guild_settings();
+
+        if settings.exp_rate <= 0.0 {
+            return None;
+        }
+
+        // Effective guild exp gain uses ExpRate multiplier, mirroring the C#
+        // cast from double to uint which truncates toward zero.
+        let exp_amount: u32 = ((base_amount as f64) * (settings.exp_rate as f64)) as u32;
+        if exp_amount == 0 {
+            return None;
+        }
+
+        guild.experience = guild
+            .experience
+            .saturating_add(exp_amount as i64);
+
+        let mut experience = guild.experience;
+        let mut leveled = false;
+
+        // Loop while the cumulative experience exceeds the current level's
+        // MaxExperience, advancing levels and updating MaxExperience from
+        // GuildSettings. This matches the C# pattern of working on a local
+        // "experience" variable without mutating Info.Experience back down
+        // to the band.
+        while guild.max_experience > 0 && experience > guild.max_experience {
+            if guild.level == u8::MAX {
+                break;
+            }
+
+            leveled = true;
+            guild.level = guild.level.saturating_add(1);
+
+            let spare_total = (guild.spare_points as u16)
+                .saturating_add(settings.points_per_level as u16);
+            guild.spare_points = spare_total.min(u8::MAX as u16) as u8;
+
+            experience = experience.saturating_sub(guild.max_experience);
+
+            let next_max = guild_max_experience_for_level(guild.level);
+            guild.max_experience = next_max;
+            if guild.max_experience <= 0 {
+                break;
+            }
+        }
+
+        if leveled {
+            let cap = guild_member_cap_for_level(guild.level);
+            if cap > 0 {
+                guild.member_cap = cap;
+            }
+        }
+
+        Some(GuildExpGainResult {
+            guild: guild.clone(),
+            exp_gained: exp_amount,
+            leveled,
+        })
     }
 
     pub fn guild_add_member_by_name(
@@ -1611,7 +1722,7 @@ impl<P: WorldProvider> World<P> {
 
                     if let Some(map_item) = maybe_item {
                         if map_item.gold > 0 && map_item.item_index.is_none() {
-                            println!(
+                            tracing::debug!(
                                 "[pickup] gold map_item: session={} map={} pos=({}, {}) object_id={} gold={}",
                                 session_id,
                                 map_index,
@@ -1636,7 +1747,7 @@ impl<P: WorldProvider> World<P> {
                                 }
                             }
 
-                            println!(
+                            tracing::debug!(
                                 "[pickup] MapItemRemoved queued: object_id={} map={} pos=({}, {})",
                                 map_item.id,
                                 map_index,
@@ -2186,6 +2297,18 @@ impl<P: WorldProvider> World<P> {
             .map(|info| Self::point_in_safe_zone(info, player.x, player.y))
             .unwrap_or(false);
 
+        if matches!(buff_type, BuffType::MagicShield | BuffType::ElementalBarrier) {
+            tracing::debug!(
+                "add_player_buff: start buff_type={:?} session_id={} now_ms={} duration_ms={} in_safe_zone={} active_buffs_before={}",
+                buff_type,
+                session_id,
+                now_ms,
+                duration_ms,
+                in_safe_zone,
+                player.active_buffs.len(),
+            );
+        }
+
         let infinite = matches!(buff_info.stack_type, BuffStackType::Infinite);
 
         // Find any existing buff of this type on the player.
@@ -2271,6 +2394,18 @@ impl<P: WorldProvider> World<P> {
             player.active_buffs.push(buff);
         }
 
+        if matches!(buff_type, BuffType::MagicShield | BuffType::ElementalBarrier) {
+            if let Some(p) = self.players.get(&session_id) {
+                tracing::debug!(
+                    "add_player_buff: after mutation buff_type={:?} session_id={} active_buffs_now={} has_magicshield={}",
+                    buff_type,
+                    session_id,
+                    p.active_buffs.len(),
+                    p.active_buffs.iter().any(|b| b.buff_type == BuffType::MagicShield),
+                );
+            }
+        }
+
         // Recalculate buff-derived stats after mutating the active buff list.
         if let Some(p) = self.players.get_mut(&session_id) {
             p.stats.buffs.clear();
@@ -2287,6 +2422,15 @@ impl<P: WorldProvider> World<P> {
                 if buff.visible {
                     let mut buff_bytes = Vec::new();
                     buff.encode(&mut buff_bytes, session_id);
+                    if matches!(buff_type, BuffType::MagicShield | BuffType::ElementalBarrier) {
+                        tracing::debug!(
+                            "add_player_buff: pushing AddBuff event buff_type={:?} session_id={} visible={} buff_len={}",
+                            buff_type,
+                            session_id,
+                            buff.visible,
+                            buff_bytes.len(),
+                        );
+                    }
                     events.push(WorldEvent::AddBuff {
                         session_id,
                         buff_bytes,

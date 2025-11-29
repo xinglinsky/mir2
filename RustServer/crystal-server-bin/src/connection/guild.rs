@@ -2,18 +2,23 @@ use crystal_shared_proto::guild::{
     SGuildStatus,
     SGuildInvite,
     SGuildMemberChange,
+    SGuildNoticeChange,
+    SGuildExpGain,
     CRequestGuildInfo,
+    CEditGuildNotice,
 };
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_i64_le, write_string};
 use crystal_shared_proto::login::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
 use crystal_shared_proto::scene::SObjectGuildNameChanged;
 use crystal_server_core::guild::GuildRank as CoreGuildRank;
 use crystal_server_core::world::world::{GuildJoinError, SessionId};
+use crystal_server_core::world::configs::guild_settings;
 
 use super::{LoginConnection, Stage};
 
 impl LoginConnection {
     const GUILD_RANK_OPT_CAN_CHANGE_RANK: u8 = 1;
+    const GUILD_RANK_OPT_CAN_CHANGE_NOTICE: u8 = 64;
     /// Build a GuildRank/GuildMember list based on the persisted GuildInfo
     /// stored in the world, including offline members when ranks have been
     /// populated (e.g. from a migrated C# database). Returns None if the
@@ -110,6 +115,52 @@ impl LoginConnection {
                     continue;
                 }
             }
+            if v.guild_name.eq_ignore_ascii_case(guild_name) {
+                outboxes.entry(*sid).or_default().push(encoded.clone());
+            }
+        }
+    }
+
+    /// Broadcast a GuildExpGain packet to all online members of the
+    /// specified guild. This mirrors the non-level-up branch of C#
+    /// GuildObject.GainExp where GuildExpGain is sent periodically while the
+    /// guild is accumulating experience within the same level.
+    pub(crate) fn broadcast_guild_exp_gain(&self, guild_name: &str, amount: u32) {
+        let pkt = SGuildExpGain { amount };
+
+        let Ok(raw) = pkt.encode() else {
+            return;
+        };
+        let encoded = Self::encode_raw(raw);
+
+        let summaries = self.player_summaries.lock().unwrap();
+        let mut outboxes = self.outboxes.lock().unwrap();
+
+        for (sid, v) in summaries.iter() {
+            if v.guild_name.eq_ignore_ascii_case(guild_name) {
+                outboxes.entry(*sid).or_default().push(encoded.clone());
+            }
+        }
+    }
+
+    /// Broadcast a GuildNoticeChange(update = -1) to all online members of the
+    /// specified guild, mirroring the C# GuildObject.NewNotice behaviour where
+    /// this flag causes clients to re-request the full notice.
+    fn broadcast_guild_notice_changed(&self, guild_name: &str) {
+        let pkt = SGuildNoticeChange {
+            update: -1,
+            notice: Vec::new(),
+        };
+
+        let Ok(raw) = pkt.encode() else {
+            return;
+        };
+        let encoded = Self::encode_raw(raw);
+
+        let summaries = self.player_summaries.lock().unwrap();
+        let mut outboxes = self.outboxes.lock().unwrap();
+
+        for (sid, v) in summaries.iter() {
             if v.guild_name.eq_ignore_ascii_case(guild_name) {
                 outboxes.entry(*sid).or_default().push(encoded.clone());
             }
@@ -237,6 +288,22 @@ impl LoginConnection {
             return;
         }
 
+        // Enforce the same minimum level requirement as the C# server using
+        // GuildSettings.ini (Guilds.MinimumLevel).
+        let required_level = guild_settings().required_level as u16;
+        let player_level: u16 = {
+            let map = self.player_summaries.lock().unwrap();
+            map.get(&self.session_id).map(|v| v.level).unwrap_or(1)
+        };
+        if player_level < required_level {
+            let msg = format!(
+                "Your level is not high enough to create a guild, required: {}",
+                required_level
+            );
+            self.send_system_chat(&msg, out);
+            return;
+        }
+
         let guild_info = {
             let mut world = self.world.lock().unwrap();
             world.create_guild(name)
@@ -350,6 +417,24 @@ impl LoginConnection {
 
         match msg.info_type {
             // 0 = notice, 1 = member list in the legacy C# implementation.
+            0 => {
+                let notice = {
+                    let world = self.world.lock().unwrap();
+                    match world.get_guild_info_by_name(&guild_name) {
+                        Some(g) => g.notice.clone(),
+                        None => Vec::new(),
+                    }
+                };
+
+                let pkt = SGuildNoticeChange {
+                    update: notice.len() as i32,
+                    notice,
+                };
+
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
             1 => {
                 let ranks_bytes = self
                     .build_guild_member_ranks_bytes_from_guildinfo(&guild_name)
@@ -373,10 +458,77 @@ impl LoginConnection {
                 }
             }
             _ => {
-                // For now silently ignore other info types; notice editing is
-                // handled via EditGuildNotice and not implemented yet.
+                // Silently ignore other info types for now.
             }
         }
+    }
+
+    pub(crate) fn handle_edit_guild_notice(
+        &mut self,
+        msg: CEditGuildNotice,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Determine our current guild name from the cached PlayerVisual.
+        let guild_name = {
+            let map = self.player_summaries.lock().unwrap();
+            map.get(&self.session_id)
+                .map(|v| v.guild_name.clone())
+                .unwrap_or_default()
+        };
+
+        if guild_name.is_empty() {
+            self.send_system_chat("You are not part of a guild.", out);
+            return;
+        }
+
+        let (_rank_index, options) = match self.get_kicker_rank_index_and_options(&guild_name) {
+            Some(v) => v,
+            None => {
+                self.send_system_chat(
+                    "Guild data not found for notice operation.",
+                    out,
+                );
+                return;
+            }
+        };
+
+        if options & Self::GUILD_RANK_OPT_CAN_CHANGE_NOTICE == 0 {
+            self.send_system_chat(
+                "You are not allowed to change the guild notice!",
+                out,
+            );
+            return;
+        }
+
+        if msg.notice.len() > 200 {
+            self.send_system_chat(
+                "Guild notice can not be longer then 200 lines!",
+                out,
+            );
+            return;
+        }
+
+        let updated_guild = {
+            let mut world = self.world.lock().unwrap();
+            match world.guild_update_notice(&guild_name, msg.notice.clone()) {
+                Some(g) => g,
+                None => {
+                    self.send_system_chat("Guild not found.", out);
+                    return;
+                }
+            }
+        };
+
+        let _ = self.store.save_guild(&updated_guild);
+
+        // Notify all online guild members that the notice has changed. Clients
+        // will receive GuildNoticeChange(update=-1) and then request the
+        // updated notice via CRequestGuildInfo.
+        self.broadcast_guild_notice_changed(&guild_name);
     }
 
     pub(crate) fn handle_edit_guild_member(

@@ -1,10 +1,9 @@
+use crate::world::Job;
 use crate::stats::{Stat, Stats};
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-
-use super::Job;
 
 #[derive(Copy, Clone, Debug)]
 enum StatFormula {
