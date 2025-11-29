@@ -30,6 +30,7 @@ use crystal_shared_proto::login::{
     CMagic,
     CMagicKey,
     CMailCost,
+    CMailLockedItem,
     CMoveItem,
     CNewAccount,
     CNewCharacter,
@@ -610,6 +611,11 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::LockMail => {
                 if let Ok(msg) = CLockMail::decode(&packet.payload) {
                     self.handle_lock_mail(msg, &mut out);
+                }
+            }
+            ClientPacketId::MailLockedItem => {
+                if let Ok(msg) = CMailLockedItem::decode(&packet.payload) {
+                    self.handle_mail_locked_item(msg, &mut out);
                 }
             }
             ClientPacketId::MailCost => {

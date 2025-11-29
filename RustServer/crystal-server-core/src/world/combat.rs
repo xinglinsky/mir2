@@ -39,6 +39,8 @@ use crate::world::skills::taoist::{
     cast_healing,
     cast_mass_healing,
     cast_soul_shield,
+    cast_summon_holy_deva,
+    cast_summon_shinsu,
 };
 use crate::world::types::{AttackMode, BuffType};
 use crate::world::Spell;
@@ -257,6 +259,16 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::MassHealing as u8 {
             cast_mass_healing(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::SummonShinsu as u8 {
+            cast_summon_shinsu(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::SummonHolyDeva as u8 {
+            cast_summon_holy_deva(self, session_id, spell, direction, x, y, events);
             return;
         }
 
@@ -1050,8 +1062,8 @@ impl<P: WorldProvider> World<P> {
                 self.mark_monster_dead(map_index, id);
 
                 if let Some(info) = self.provider.get_monster_info(monster_index) {
-                    tracing::debug!(
-                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                    tracing::trace!(
+                        "[drop] monster_index={} name='{}' drop_path='{}' drops_len={}",
                         monster_index,
                         info.name,
                         info.drop_path,

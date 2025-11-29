@@ -25,6 +25,7 @@ pub struct PlayerState {
     pub job: Job,
     pub gender: u8,
     pub guild_name: String,
+    pub main_pet_id: Option<u64>,
     pub allow_group: bool,
     pub party_id: Option<PartyId>,
     pub pending_group_invite_from: Option<SessionId>,
@@ -119,6 +120,7 @@ impl<P: WorldProvider> World<P> {
                     job,
                     gender,
                     guild_name: String::new(),
+                    main_pet_id: None,
                     allow_group: true,
                     party_id: None,
                     pending_group_invite_from: None,
@@ -419,6 +421,10 @@ impl<P: WorldProvider> World<P> {
         self.players
             .get(&session_id)
             .map(|p| (p.inventory.clone(), p.equipment.clone()))
+    }
+
+    pub fn player_pk_points(&self, session_id: SessionId) -> Option<i32> {
+        self.players.get(&session_id).map(|p| p.pk_points)
     }
 
     pub fn set_player_items(

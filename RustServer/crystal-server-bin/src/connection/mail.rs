@@ -1,15 +1,23 @@
 use crystal_server_core::account::StoredMail;
 use crystal_server_core::item::{Equipment, Inventory};
+use crystal_server_core::world::configs::mail_config;
 use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::login::{
     CCollectParcel,
     CDeleteMail,
     CLockMail,
     CMailCost,
+    CMailLockedItem,
     CReadMail,
     CSendMail,
 };
-use crystal_shared_proto::mail::{SParcelCollected, SMailCost, SMailSent, SReceiveMail};
+use crystal_shared_proto::mail::{
+    SMailLockedItem,
+    SParcelCollected,
+    SMailCost,
+    SMailSent,
+    SReceiveMail,
+};
 use crystal_shared_proto::item::SDeleteItem;
 use crystal_shared_proto::user::{SGainedGold, SLoseGold, SUserSlotsRefresh};
 
@@ -256,6 +264,31 @@ impl LoginConnection {
         self.send_full_mailbox(char_idx, out);
     }
 
+    pub(crate) fn handle_mail_locked_item(
+        &mut self,
+        msg: CMailLockedItem,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        tracing::debug!(
+            "MailLockedItem: stage={:?} unique_id={} locked={}",
+            self.stage,
+            msg.unique_id,
+            msg.locked,
+        );
+
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let pkt = SMailLockedItem {
+            unique_id: msg.unique_id,
+            locked: msg.locked,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
     pub(crate) fn handle_delete_mail(
         &mut self,
         msg: CDeleteMail,
@@ -374,11 +407,20 @@ impl LoginConnection {
             return;
         }
 
-        // For now, keep mail sending free on the Rust server and simply
-        // acknowledge the request with a zero cost. This matches the
-        // protocol shape of C# MailCost without replicating all pricing
-        // settings yet.
-        let pkt = SMailCost { cost: 0 };
+        // Compute mail cost using the same rules as C# PlayerObject.GetMailCost:
+        // optional free-with-stamp behaviour, CostPer1k for attached gold,
+        // and InsurancePerItem as a percentage of each attached item's
+        // Price().
+        let (inv, _eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((Inventory::new_default(), Equipment::new_default()))
+        };
+
+        let cost = self.compute_mail_cost(msg.gold, &msg.items_idx, msg.stamped, &inv);
+
+        let pkt = SMailCost { cost };
         if let Ok(raw) = pkt.encode() {
             out.push(Self::encode_raw(raw));
         }
@@ -447,8 +489,8 @@ impl LoginConnection {
             }
         };
 
-        // Enforce a simple mailbox capacity limit of 50, matching the C#
-        // PlayerObject.SendMail check.
+        // Enforce mailbox capacity using the configured MailSystem.ini
+        // MailCapacity, mirroring C# Settings.MailCapacity.
         let mut recipient_mails = match self
             .store
             .load_character_mail(&recipient_account_id, recipient_char_idx)
@@ -468,7 +510,8 @@ impl LoginConnection {
             }
         };
 
-        if recipient_mails.len() >= 50 {
+        let capacity = mail_config().mail_capacity as usize;
+        if capacity > 0 && recipient_mails.len() >= capacity {
             self.send_system_chat("对方邮箱已满，无法接收更多邮件。", out);
             let pkt = SMailSent { result: -1 };
             out.push(Self::encode_raw(pkt.encode()));
@@ -483,6 +526,57 @@ impl LoginConnection {
                 .unwrap_or((Inventory::new_default(), Equipment::new_default()))
         };
 
+        // Compute the postage/insurance cost before mutating the inventory,
+        // mirroring C# GetMailCost which works against the current
+        // Info.Inventory state.
+        let parcel_cost = self.compute_mail_cost(msg.gold, &msg.items_idx, msg.stamped, &inv);
+
+        // Handle gold cost using CharacterStats.gold as the single source of
+        // truth on the Rust server. We deduct both the attached gold and the
+        // computed postage/insurance cost, mirroring C# totalGold.
+        let stats = match self.current_stats.clone() {
+            Some(s) => s,
+            None => {
+                self.send_system_chat("当前角色状态不可用，暂时无法发送邮件。", out);
+                let pkt = SMailSent { result: -1 };
+                out.push(Self::encode_raw(pkt.encode()));
+                return;
+            }
+        };
+
+        let mut new_stats = stats.clone();
+        let total_gold_needed: i64 = (msg.gold as i64).saturating_add(parcel_cost as i64);
+
+        if total_gold_needed > 0 {
+            if new_stats.gold < total_gold_needed {
+                self.send_system_chat("您的金币不足，无法支付邮件费用。", out);
+                let pkt = SMailSent { result: -1 };
+                out.push(Self::encode_raw(pkt.encode()));
+                return;
+            }
+
+            new_stats.gold = new_stats.gold.saturating_sub(total_gold_needed);
+
+            if let (Some(ref acc_id), Some(cidx)) =
+                (self.account_id.as_ref(), self.current_char_index)
+            {
+                let _ = self
+                    .store
+                    .save_character_stats(acc_id, cidx, &new_stats);
+            }
+
+            self.current_stats = Some(new_stats.clone());
+
+            let lose = SLoseGold {
+                gold: (msg.gold as u64 + parcel_cost as u64)
+                    .min(u32::MAX as u64) as u32,
+            };
+            if let Ok(raw) = lose.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        } else {
+            self.current_stats = Some(new_stats.clone());
+        }
         // Gather attachments by unique_id from the sender's inventory. We
         // honour the stamped flag by allowing up to 5 attachments when
         // stamped, otherwise only the first.
@@ -529,51 +623,6 @@ impl LoginConnection {
                     out.push(Self::encode_raw(raw));
                 }
             }
-        }
-
-        // Handle gold cost using CharacterStats.gold as the single source of
-        // truth on the Rust server. For now we only deduct the user-specified
-        // Gold value and keep MailCost free.
-        let stats = match self.current_stats.clone() {
-            Some(s) => s,
-            None => {
-                self.send_system_chat("当前角色状态不可用，暂时无法发送邮件。", out);
-                let pkt = SMailSent { result: -1 };
-                out.push(Self::encode_raw(pkt.encode()));
-                return;
-            }
-        };
-
-        let mut new_stats = stats.clone();
-        if msg.gold > 0 {
-            let needed = msg.gold as i64;
-            if new_stats.gold < needed {
-                self.send_system_chat("您的金币不足，无法发送包含金币的邮件。", out);
-                let pkt = SMailSent { result: -1 };
-                out.push(Self::encode_raw(pkt.encode()));
-                return;
-            }
-
-            new_stats.gold = new_stats.gold.saturating_sub(needed);
-        }
-
-        if msg.gold > 0 {
-            if let (Some(ref acc_id), Some(cidx)) =
-                (self.account_id.as_ref(), self.current_char_index)
-            {
-                let _ = self
-                    .store
-                    .save_character_stats(acc_id, cidx, &new_stats);
-            }
-
-            self.current_stats = Some(new_stats.clone());
-
-            let lose = SLoseGold { gold: msg.gold };
-            if let Ok(raw) = lose.encode() {
-                out.push(Self::encode_raw(raw));
-            }
-        } else {
-            self.current_stats = Some(new_stats.clone());
         }
 
         // Persist updated inventory/equipment for the sender.
@@ -623,6 +672,29 @@ impl LoginConnection {
             }
         }
 
+        // Determine initial Collected state using the same rules as C#
+        // MailInfo.Send and MailSystem.ini's MailAutoSendGold/Items flags.
+        let cfg = mail_config();
+        let has_items = !item_bytes.is_empty();
+        let has_gold = msg.gold > 0;
+        let mut collected = true;
+
+        if has_items || has_gold {
+            if has_items && has_gold {
+                if !cfg.auto_send.gold || !cfg.auto_send.items {
+                    collected = false;
+                }
+            } else if has_items {
+                if !cfg.auto_send.items {
+                    collected = false;
+                }
+            } else {
+                if !cfg.auto_send.gold {
+                    collected = false;
+                }
+            }
+        }
+
         let new_mail = StoredMail {
             mail_id,
             sender: sender_name,
@@ -632,7 +704,7 @@ impl LoginConnection {
             date_sent_binary,
             opened: false,
             locked: false,
-            collected: false,
+            collected,
             can_reply: true,
         };
 
@@ -686,5 +758,100 @@ impl LoginConnection {
 
         let pkt = SMailSent { result: 1 };
         out.push(Self::encode_raw(pkt.encode()));
+    }
+
+    /// Compute the effective price of a UserItemData instance using the same
+    /// rules as C# UserItem.Price: base ItemInfo.Price adjusted for
+    /// durability, AddedStats count and stack Count.
+    fn compute_item_price(&self, item: &UserItemData) -> u32 {
+        let info = match self
+            .world_db
+            .item_infos
+            .iter()
+            .find(|i| i.index == item.item_index)
+        {
+            Some(i) => i,
+            None => return 0,
+        };
+
+        let mut p: u32 = info.price;
+
+        if info.durability > 0 {
+            let r: f32 = (info.price as f32 / 2.0) / info.durability as f32;
+            p = (item.max_dura as f32 * r) as u32;
+
+            let r2: f32 = if item.max_dura > 0 {
+                item.current_dura as f32 / item.max_dura as f32
+            } else {
+                0.0
+            };
+
+            let p_half = p as f32 / 2.0;
+            p = (p_half + (p_half * r2) + info.price as f32 / 2.0).floor() as u32;
+        }
+
+        let added_count = item.added_stats.entries.len();
+        let factor: f32 = added_count as f32 * 0.1 + 1.0;
+        p = ((p as f32) * factor) as u32;
+
+        p.saturating_mul(item.count as u32)
+    }
+
+    /// Compute the postage and insurance cost for a prospective mail based on
+    /// the configured MailSystem.ini rates and the sender's current
+    /// inventory, mirroring C# PlayerObject.GetMailCost.
+    fn compute_mail_cost(
+        &self,
+        gold: u32,
+        items_idx: &[u64; 5],
+        stamped: bool,
+        inv: &Inventory,
+    ) -> u32 {
+        let cfg = mail_config();
+
+        // Free-with-stamp: when enabled, stamped mail is completely free.
+        if cfg.rates.free_with_stamp && stamped {
+            return 0;
+        }
+
+        let mut cost: u32 = 0;
+
+        if gold > 0 && cfg.rates.cost_per_1k > 0 {
+            let blocks = gold / 1000;
+            if blocks > 0 {
+                cost = cost.saturating_add(blocks.saturating_mul(cfg.rates.cost_per_1k));
+            }
+        }
+
+        if cfg.rates.insurance_per_item > 0 {
+            let max_items = if stamped { 5 } else { 1 };
+            for j in 0..max_items {
+                let uid = items_idx[j];
+                if uid == 0 {
+                    continue;
+                }
+
+                if let Some(item) = inv
+                    .slots
+                    .iter()
+                    .filter_map(|s| s.as_ref())
+                    .find(|it| it.unique_id == uid)
+                {
+                    let price = self.compute_item_price(item);
+                    if price == 0 {
+                        continue;
+                    }
+
+                    let part = ((price as f64 / 100.0)
+                        * cfg.rates.insurance_per_item as f64)
+                        .floor() as u32;
+                    if part > 0 {
+                        cost = cost.saturating_add(part);
+                    }
+                }
+            }
+        }
+
+        cost
     }
 }

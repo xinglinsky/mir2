@@ -284,10 +284,9 @@ impl LoginConnection {
                                 if let Some(outcome) = outcome_opt {
                                     let _ = self.store.save_guild(&outcome.guild);
                                     self.broadcast_guild_exp_gain(&guild_name, outcome.exp_gained);
-                                    // TODO: consider broadcasting SGuildStatus
-                                    // when outcome.leveled is true so that all
-                                    // members immediately see the new level
-                                    // and spare points.
+                                    if outcome.leveled {
+                                        self.broadcast_guild_status_for_guild(&outcome.guild);
+                                    }
                                 }
                             }
                         }

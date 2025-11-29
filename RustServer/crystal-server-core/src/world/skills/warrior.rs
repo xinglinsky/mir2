@@ -412,8 +412,8 @@ pub fn cast_half_moon<P: WorldProvider>(
                 world.mark_monster_dead(map_index, id);
 
                 if let Some(info) = world.provider.get_monster_info(monster_index) {
-                    tracing::debug!(
-                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                    tracing::trace!(
+                        "[drop] monster_index={} name='{}' drop_path='{}' drops_len={}",
                         monster_index,
                         info.name,
                         info.drop_path,
@@ -667,8 +667,8 @@ pub fn cast_cross_half_moon<P: WorldProvider>(
                 world.mark_monster_dead(map_index, id);
 
                 if let Some(info) = world.provider.get_monster_info(monster_index) {
-                    tracing::debug!(
-                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                    tracing::trace!(
+                        "[drop] monster_index={} name='{}' drop_path='{}' drops_len={}",
                         monster_index,
                         info.name,
                         info.drop_path,

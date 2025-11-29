@@ -356,7 +356,7 @@ pub(super) fn skip_gt_map<R: Read>(r: &mut R, _version: i32, _custom_version: i3
     Ok(())
 }
 
-pub(super) fn read_magic_info<R: Read>(r: &mut R, _version: i32, _custom_version: i32) -> io::Result<MagicInfo> {
+pub(super) fn read_magic_info<R: Read>(r: &mut R, version: i32, _custom_version: i32) -> io::Result<MagicInfo> {
     // MagicInfo.Save layout from Server/MirDatabase/MagicInfo.cs
     let name = read_string(r)?;
     let spell = read_u8(r)?;
@@ -375,9 +375,21 @@ pub(super) fn read_magic_info<R: Read>(r: &mut R, _version: i32, _custom_version
     let power_bonus = read_u16(r)?;
     let mpower_base = read_u16(r)?;
     let mpower_bonus = read_u16(r)?;
-    let range = read_u8(r)?;
-    let multiplier_base = read_f32(r)?;
-    let multiplier_bonus = read_f32(r)?;
+
+    // C# loader behaviour:
+    //   if (version > 66) Range = reader.ReadByte(); else Range stays at default 9.
+    //   if (version > 70) read MultiplierBase/MultiplierBonus, else use defaults 1.0/0.0.
+    let mut range: u8 = 9;
+    if version > 66 {
+        range = read_u8(r)?;
+    }
+
+    let mut multiplier_base: f32 = 1.0;
+    let mut multiplier_bonus: f32 = 0.0;
+    if version > 70 {
+        multiplier_base = read_f32(r)?;
+        multiplier_bonus = read_f32(r)?;
+    }
 
     Ok(MagicInfo {
         name,

@@ -1,17 +1,39 @@
 pub mod base_stats;
 pub mod guild_settings;
 pub mod awakening_config;
+pub mod exp_config;
 pub mod hero_exp_config;
 pub mod random_item_stats_config;
 pub mod hero_settings_config;
+pub mod mail_config;
 pub mod setup_config;
+pub mod mines_config;
+pub mod fishing_config;
+pub mod pet_config;
+pub mod refine_config;
+pub mod marriage_config;
+pub mod mentor_config;
+pub mod gem_config;
+pub mod goods_config;
+pub mod world_map_config;
 
 // For convenience, re-export the commonly used config modules at the
 // configs root so callers can do `world::configs::base_stats` etc.
 pub use base_stats::*;
 pub use guild_settings::*;
 pub use awakening_config::*;
+pub use exp_config::*;
 pub use hero_exp_config::*;
 pub use random_item_stats_config::*;
 pub use hero_settings_config::*;
+pub use mail_config::*;
 pub use setup_config::*;
+pub use mines_config::*;
+pub use fishing_config::*;
+pub use pet_config::*;
+pub use refine_config::*;
+pub use marriage_config::*;
+pub use mentor_config::*;
+pub use gem_config::*;
+pub use goods_config::*;
+pub use world_map_config::*;

@@ -10,7 +10,7 @@ use crystal_shared_proto::guild::{
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_i64_le, write_string};
 use crystal_shared_proto::login::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
 use crystal_shared_proto::scene::SObjectGuildNameChanged;
-use crystal_server_core::guild::GuildRank as CoreGuildRank;
+use crystal_server_core::guild::{GuildInfo as CoreGuildInfo, GuildRank as CoreGuildRank};
 use crystal_server_core::world::world::{GuildJoinError, SessionId};
 use crystal_server_core::world::configs::guild_settings;
 
@@ -139,6 +139,63 @@ impl LoginConnection {
         for (sid, v) in summaries.iter() {
             if v.guild_name.eq_ignore_ascii_case(guild_name) {
                 outboxes.entry(*sid).or_default().push(encoded.clone());
+            }
+        }
+    }
+
+    /// Broadcast an SGuildStatus snapshot to all online members of the given
+    /// guild. This is primarily used when a guild levels up so that all
+    /// members immediately see the new Level/MaxExperience/MemberCap and
+    /// SparePoints in their Guild dialog. Per-recipient rank name and options
+    /// are derived from GuildInfo.ranks when possible, falling back to the
+    /// cached PlayerVisual rank name otherwise.
+    pub(crate) fn broadcast_guild_status_for_guild(&self, guild: &CoreGuildInfo) {
+        let summaries = self.player_summaries.lock().unwrap();
+        let mut outboxes = self.outboxes.lock().unwrap();
+
+        for (sid, v) in summaries.iter() {
+            if !v.guild_name.eq_ignore_ascii_case(&guild.name) {
+                continue;
+            }
+
+            // Resolve rank information for this member from GuildInfo.
+            let mut rank_name = v.guild_rank_name.clone();
+            let mut my_options: u8 = 0;
+            let mut my_rank_id: u8 = 0;
+
+            for rank in &guild.ranks {
+                if rank
+                    .members
+                    .iter()
+                    .any(|m| m.name.eq_ignore_ascii_case(&v.name))
+                {
+                    rank_name = rank.name.clone();
+                    my_options = rank.options;
+                    my_rank_id = rank.index;
+                    break;
+                }
+            }
+
+            let status = SGuildStatus {
+                guild_name: guild.name.clone(),
+                guild_rank_name: rank_name,
+                level: guild.level,
+                experience: guild.experience,
+                max_experience: guild.max_experience,
+                gold: guild.gold,
+                spare_points: guild.spare_points,
+                member_count: guild.member_count,
+                max_members: guild.member_cap,
+                voting: false,
+                item_count: guild.stored_items.len() as u8,
+                buff_count: guild.buff_list.len() as u8,
+                my_options,
+                my_rank_id: my_rank_id as i32,
+            };
+
+            if let Ok(raw) = status.encode() {
+                let encoded = Self::encode_raw(raw);
+                outboxes.entry(*sid).or_default().push(encoded);
             }
         }
     }

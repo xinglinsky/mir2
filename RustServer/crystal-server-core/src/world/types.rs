@@ -316,6 +316,33 @@ impl ActorKind {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PetKind {
+    TaoistShinsu = 0,
+    TaoistHolyDeva = 1,
+    ArcherVampire = 2,
+    ArcherToad = 3,
+    ArcherSnakes = 4,
+}
+
+impl PetKind {
+    pub fn from_u8(id: u8) -> Option<PetKind> {
+        match id {
+            0 => Some(PetKind::TaoistShinsu),
+            1 => Some(PetKind::TaoistHolyDeva),
+            2 => Some(PetKind::ArcherVampire),
+            3 => Some(PetKind::ArcherToad),
+            4 => Some(PetKind::ArcherSnakes),
+            _ => None,
+        }
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+#[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Spell {
     None = 0,

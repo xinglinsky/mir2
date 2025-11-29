@@ -1,6 +1,6 @@
 use crate::stats::Stats;
 use crate::world::drop::DropInfo;
-use crate::world::types::BuffType;
+use crate::world::types::{BuffType, PetKind};
 
 #[derive(Clone, Debug)]
 pub struct MonsterInfo {
@@ -55,6 +55,9 @@ pub struct MonsterInstance {
     pub home_y: i32,
     pub direction: u8,
     pub hp: i32,
+    pub is_pet: bool,
+    pub owner_session_id: Option<u32>,
+    pub pet_kind: Option<PetKind>,
     /// Respawn index from RespawnInfo, used to update runtime respawn counts
     /// when the monster dies or despawns.
     pub respawn_index: i32,

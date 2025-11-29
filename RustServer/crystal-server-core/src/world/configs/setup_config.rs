@@ -161,11 +161,7 @@ pub struct ArchiveConfig {
 
 #[derive(Clone, Debug)]
 pub struct SetupConfig {
-    pub general: GeneralConfig,
-    pub network: NetworkConfig,
-    pub permission: PermissionConfig,
     pub optional: OptionalConfig,
-    pub database: DatabaseConfig,
     pub game: GameConfig,
     pub rested: RestedConfig,
     pub items: ItemsConfig,
@@ -180,47 +176,10 @@ pub struct SetupConfig {
 impl Default for SetupConfig {
     fn default() -> Self {
         SetupConfig {
-            general: GeneralConfig {
-                version_path: ".\\Mir2.Exe".to_string(),
-                check_version: true,
-                relog_delay: 50,
-                gm_password: "C#Mir 4.0".to_string(),
-                multithreaded: true,
-                thread_limit: 2,
-                test_server: false,
-                enforce_db_checks: true,
-                monster_process_when_alone: false,
-            },
-            network: NetworkConfig {
-                ip_address: "127.0.0.1".to_string(),
-                port: 7000,
-                timeout: 10000,
-                max_user: 50,
-                max_ip: 5,
-                max_packet: 50,
-                start_http_service: false,
-                http_ip_address: "http://127.0.0.1:5679/".to_string(),
-                http_trusted_ip_address: "127.0.0.1".to_string(),
-            },
-            permission: PermissionConfig {
-                allow_new_account: true,
-                allow_change_password: true,
-                allow_login: true,
-                allow_new_character: true,
-                allow_delete_character: true,
-                allow_start_game: false,
-                allow_create_assassin: true,
-                allow_create_archer: true,
-                max_resolution: 1024,
-            },
             optional: OptionalConfig {
                 gather_orbs_per_level: true,
                 exp_mob_level_difference: true,
                 line_message_timer: 10,
-            },
-            database: DatabaseConfig {
-                save_delay: 5,
-                credx_gold: 30,
             },
             game: GameConfig {
                 exp_rate: 1.0,
@@ -322,42 +281,6 @@ fn load_setup_config(path: &Path) -> SetupConfig {
         }
 
         match current_section.as_deref() {
-            Some("General") => match key {
-                "VersionPath" => cfg.general.version_path = value.to_string(),
-                "CheckVersion" => cfg.general.check_version = parse_bool(value, cfg.general.check_version),
-                "RelogDelay" => cfg.general.relog_delay = parse_u16(value, cfg.general.relog_delay),
-                "GMPassword" => cfg.general.gm_password = value.to_string(),
-                "Multithreaded" => cfg.general.multithreaded = parse_bool(value, cfg.general.multithreaded),
-                "ThreadLimit" => cfg.general.thread_limit = parse_i32(value, cfg.general.thread_limit),
-                "TestServer" => cfg.general.test_server = parse_bool(value, cfg.general.test_server),
-                "EnforceDBChecks" => cfg.general.enforce_db_checks = parse_bool(value, cfg.general.enforce_db_checks),
-                "MonsterProcessWhenAlone" => cfg.general.monster_process_when_alone = parse_bool(value, cfg.general.monster_process_when_alone),
-                _ => {}
-            },
-            Some("Network") => match key {
-                "IPAddress" => cfg.network.ip_address = value.to_string(),
-                "Port" => cfg.network.port = parse_u16(value, cfg.network.port),
-                "TimeOut" => cfg.network.timeout = parse_u16(value, cfg.network.timeout),
-                "MaxUser" => cfg.network.max_user = parse_u16(value, cfg.network.max_user),
-                "MaxIP" => cfg.network.max_ip = parse_u16(value, cfg.network.max_ip),
-                "MaxPacket" => cfg.network.max_packet = parse_u16(value, cfg.network.max_packet),
-                "StartHTTPService" => cfg.network.start_http_service = parse_bool(value, cfg.network.start_http_service),
-                "HTTPIPAddress" => cfg.network.http_ip_address = value.to_string(),
-                "HTTPTrustedIPAddress" => cfg.network.http_trusted_ip_address = value.to_string(),
-                _ => {}
-            },
-            Some("Permission") => match key {
-                "AllowNewAccount" => cfg.permission.allow_new_account = parse_bool(value, cfg.permission.allow_new_account),
-                "AllowChangePassword" => cfg.permission.allow_change_password = parse_bool(value, cfg.permission.allow_change_password),
-                "AllowLogin" => cfg.permission.allow_login = parse_bool(value, cfg.permission.allow_login),
-                "AllowNewCharacter" => cfg.permission.allow_new_character = parse_bool(value, cfg.permission.allow_new_character),
-                "AllowDeleteCharacter" => cfg.permission.allow_delete_character = parse_bool(value, cfg.permission.allow_delete_character),
-                "AllowStartGame" => cfg.permission.allow_start_game = parse_bool(value, cfg.permission.allow_start_game),
-                "AllowCreateAssassin" => cfg.permission.allow_create_assassin = parse_bool(value, cfg.permission.allow_create_assassin),
-                "AllowCreateArcher" => cfg.permission.allow_create_archer = parse_bool(value, cfg.permission.allow_create_archer),
-                "MaxResolution" => cfg.permission.max_resolution = parse_i32(value, cfg.permission.max_resolution),
-                _ => {}
-            },
             Some("Optional") => match key {
                 "GatherOrbsPerLevel" => {
                     cfg.optional.gather_orbs_per_level =
@@ -371,11 +294,6 @@ fn load_setup_config(path: &Path) -> SetupConfig {
                     cfg.optional.line_message_timer =
                         parse_i32(value, cfg.optional.line_message_timer)
                 }
-                _ => {}
-            },
-            Some("Database") => match key {
-                "SaveDelay" => cfg.database.save_delay = parse_i32(value, cfg.database.save_delay),
-                "CredxGold" => cfg.database.credx_gold = value.parse::<i16>().unwrap_or(cfg.database.credx_gold),
                 _ => {}
             },
             Some("Game") => match key {

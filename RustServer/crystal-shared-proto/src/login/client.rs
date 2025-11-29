@@ -1034,6 +1034,31 @@ impl CMailCost {
 }
 
 #[derive(Clone, Debug)]
+pub struct CMailLockedItem {
+    pub unique_id: u64,
+    pub locked: bool,
+}
+
+impl CMailLockedItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_bool(&mut buf, self.locked)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MailLockedItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let locked = read_bool(&mut c)?;
+        Ok(CMailLockedItem { unique_id, locked })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CCollectParcel {
     pub mail_id: u64,
 }

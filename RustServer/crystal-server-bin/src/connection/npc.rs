@@ -168,6 +168,441 @@ impl LoginConnection {
         Ok((pages, moves))
     }
 
+    /// Expand simple NPC dialog placeholders such as <$USERNAME>, <$LEVEL>,
+    /// <$MAP>, <$HP>, <$GAMEGOLD> and <$PARCELAMOUNT> in the given page
+    /// lines. This mirrors the C# NPCSegment.ReplaceValue behaviour for a
+    /// subset of placeholders that are currently supported by the Rust
+    /// server.
+    fn expand_npc_placeholders(&self, lines: Vec<String>, npc_name: Option<&str>) -> Vec<String> {
+        if lines.is_empty() {
+            return lines;
+        }
+
+        // First check which placeholders are actually present to avoid
+        // unnecessary DB/world lookups.
+        let need_username = lines.iter().any(|l| l.contains("<$USERNAME>"));
+        let need_level = lines.iter().any(|l| l.contains("<$LEVEL>"));
+        let need_class = lines.iter().any(|l| l.contains("<$CLASS>"));
+        let need_map = lines.iter().any(|l| l.contains("<$MAP>"));
+        let need_x = lines.iter().any(|l| l.contains("<$X_COORD>"));
+        let need_y = lines.iter().any(|l| l.contains("<$Y_COORD>"));
+        let need_hp = lines.iter().any(|l| l.contains("<$HP>"));
+        let need_maxhp = lines.iter().any(|l| l.contains("<$MAXHP>"));
+        let need_mp = lines.iter().any(|l| l.contains("<$MP>"));
+        let need_maxmp = lines.iter().any(|l| l.contains("<$MAXMP>"));
+        let need_gold = lines.iter().any(|l| l.contains("<$GAMEGOLD>"));
+        let need_credit = lines.iter().any(|l| l.contains("<$CREDIT>"));
+        let need_pk = lines.iter().any(|l| l.contains("<$PKPOINT>"));
+        let need_date = lines.iter().any(|l| l.contains("<$DATE>"));
+        let need_usercount = lines.iter().any(|l| l.contains("<$USERCOUNT>"));
+        let need_parcel = lines.iter().any(|l| l.contains("<$PARCELAMOUNT>"));
+        let need_npcname = lines.iter().any(|l| l.contains("<$NPCNAME>"));
+
+        // Equipment slot placeholders.
+        let need_armour = lines.iter().any(|l| l.contains("<$ARMOUR>"));
+        let need_weapon = lines.iter().any(|l| l.contains("<$WEAPON>"));
+        let need_ring_l = lines.iter().any(|l| l.contains("<$RING_L>"));
+        let need_ring_r = lines.iter().any(|l| l.contains("<$RING_R>"));
+        let need_bracelet_l = lines.iter().any(|l| l.contains("<$BRACELET_L>"));
+        let need_bracelet_r = lines.iter().any(|l| l.contains("<$BRACELET_R>"));
+        let need_necklace = lines.iter().any(|l| l.contains("<$NECKLACE>"));
+        let need_belt = lines.iter().any(|l| l.contains("<$BELT>"));
+        let need_boots = lines.iter().any(|l| l.contains("<$BOOTS>"));
+        let need_helmet = lines.iter().any(|l| l.contains("<$HELMET>"));
+        let need_amulet = lines.iter().any(|l| l.contains("<$AMULET>"));
+        let need_stone = lines.iter().any(|l| l.contains("<$STONE>"));
+        let need_torch = lines.iter().any(|l| l.contains("<$TORCH>"));
+        let need_mount = lines.iter().any(|l| l.contains("<$MOUNT>"));
+
+        // Character summary based values: USERNAME, LEVEL, CLASS.
+        let mut username: Option<String> = None;
+        let mut level: Option<String> = None;
+        let mut class_name: Option<String> = None;
+        if need_username || need_level || need_class {
+            if let Some(char_idx) = self.current_char_index {
+                if let Some(ch) = self.characters.iter().find(|c| c.index == char_idx) {
+                    if need_username {
+                        username = Some(ch.name.clone());
+                    }
+                    if need_level {
+                        level = Some(ch.level.to_string());
+                    }
+                    if need_class {
+                        let cname = match ch.class {
+                            0 => "Warrior",
+                            1 => "Wizard",
+                            2 => "Taoist",
+                            3 => "Assassin",
+                            _ => "Unknown",
+                        };
+                        class_name = Some(cname.to_string());
+                    }
+                }
+            }
+        }
+
+        // Map/position placeholders.
+        let mut map_name: Option<String> = None;
+        let mut x_str: Option<String> = None;
+        let mut y_str: Option<String> = None;
+        if need_map || need_x || need_y {
+            if need_map {
+                if let Some(info) = self
+                    .world_db
+                    .map_infos
+                    .iter()
+                    .find(|m| m.index == self.current_map_index)
+                {
+                    map_name = Some(info.file_name.clone());
+                }
+            }
+            if need_x {
+                x_str = Some(self.current_x.to_string());
+            }
+            if need_y {
+                y_str = Some(self.current_y.to_string());
+            }
+        }
+
+        // HP/MP from the world PlayerState.
+        let mut hp_str: Option<String> = None;
+        let mut maxhp_str: Option<String> = None;
+        let mut mp_str: Option<String> = None;
+        let mut maxmp_str: Option<String> = None;
+        if need_hp || need_maxhp || need_mp || need_maxmp {
+            let world = self.world.lock().unwrap();
+            if need_hp || need_mp {
+                if let Some((hp, mp)) = world.player_current_hp_mp(self.session_id) {
+                    if need_hp {
+                        hp_str = Some(hp.to_string());
+                    }
+                    if need_mp {
+                        mp_str = Some(mp.to_string());
+                    }
+                }
+            }
+            if need_maxhp || need_maxmp {
+                if let Some((max_hp, max_mp)) = world.player_max_hp_mp(self.session_id) {
+                    if need_maxhp {
+                        maxhp_str = Some(max_hp.to_string());
+                    }
+                    if need_maxmp {
+                        maxmp_str = Some(max_mp.to_string());
+                    }
+                }
+            }
+        }
+
+        // Account-level stats (gold/credit) from CharacterStats.
+        let mut gold_str: Option<String> = None;
+        let mut credit_str: Option<String> = None;
+        if (need_gold || need_credit) && self.current_stats.is_some() {
+            if let Some(stats) = &self.current_stats {
+                if need_gold {
+                    gold_str = Some(stats.gold.to_string());
+                }
+                if need_credit {
+                    credit_str = Some(stats.credit.to_string());
+                }
+            }
+        }
+
+        // PK points from world PlayerState; if not available defaults to 0.
+        let mut pk_str: Option<String> = None;
+        if need_pk {
+            let world = self.world.lock().unwrap();
+            let pk = world.player_pk_points(self.session_id).unwrap_or(0);
+            pk_str = Some(pk.to_string());
+        }
+
+        // Date and usercount are global, independent of character.
+        let mut date_str: Option<String> = None;
+        if need_date {
+            let now = chrono::Local::now();
+            date_str = Some(now.format("%Y-%m-%d").to_string());
+        }
+
+        let mut usercount_str: Option<String> = None;
+        if need_usercount {
+            let summaries = self.player_summaries.lock().unwrap();
+            usercount_str = Some(summaries.len().to_string());
+        }
+
+        // Parcel amount from stored mail, mirroring GetMailAwaitingCollectionAmount.
+        let mut parcel_str: Option<String> = None;
+        if need_parcel {
+            if let (Some(ref account_id), Some(char_idx)) =
+                (self.account_id.as_ref(), self.current_char_index)
+            {
+                if let Ok(mails) = self.store.load_character_mail(account_id, char_idx) {
+                    let count = mails.iter().filter(|m| !m.collected).count();
+                    parcel_str = Some(count.to_string());
+                }
+            }
+        }
+
+        // NPC name from the provided hint, with underscores replaced by spaces
+        // to match C# NPCNAME behaviour.
+        let npc_name_str: Option<String> = if need_npcname {
+            npc_name.map(|n| n.replace('_', " "))
+        } else {
+            None
+        };
+
+        // Equipment-slot placeholders: look up the current equipment from the
+        // world and then resolve the ItemInfoData name as a FriendlyName.
+        let mut armour_str: Option<String> = None;
+        let mut weapon_str: Option<String> = None;
+        let mut ring_l_str: Option<String> = None;
+        let mut ring_r_str: Option<String> = None;
+        let mut bracelet_l_str: Option<String> = None;
+        let mut bracelet_r_str: Option<String> = None;
+        let mut necklace_str: Option<String> = None;
+        let mut belt_str: Option<String> = None;
+        let mut boots_str: Option<String> = None;
+        let mut helmet_str: Option<String> = None;
+        let mut amulet_str: Option<String> = None;
+        let mut stone_str: Option<String> = None;
+        let mut torch_str: Option<String> = None;
+        let mut mount_str: Option<String> = None;
+
+        if need_armour
+            || need_weapon
+            || need_ring_l
+            || need_ring_r
+            || need_bracelet_l
+            || need_bracelet_r
+            || need_necklace
+            || need_belt
+            || need_boots
+            || need_helmet
+            || need_amulet
+            || need_stone
+            || need_torch
+            || need_mount
+        {
+            let world = self.world.lock().unwrap();
+            if let Some((_, equipment)) = world.player_items(self.session_id) {
+                let slot_name = |slot: usize, empty: &str| -> String {
+                    if let Some(item) = equipment.slots.get(slot).and_then(|s| s.as_ref()) {
+                        if let Some(info) = self.world_db.item_infos.iter().find(|i| i.index == item.item_index) {
+                            return info.name.clone();
+                        }
+                    }
+                    empty.to_string()
+                };
+
+                if need_armour {
+                    armour_str = Some(slot_name(1, "No Armour"));
+                }
+                if need_weapon {
+                    weapon_str = Some(slot_name(0, "No Weapon"));
+                }
+                if need_ring_l {
+                    ring_l_str = Some(slot_name(7, "No Ring"));
+                }
+                if need_ring_r {
+                    ring_r_str = Some(slot_name(8, "No Ring"));
+                }
+                if need_bracelet_l {
+                    bracelet_l_str = Some(slot_name(5, "No Bracelet"));
+                }
+                if need_bracelet_r {
+                    bracelet_r_str = Some(slot_name(6, "No Bracelet"));
+                }
+                if need_necklace {
+                    necklace_str = Some(slot_name(4, "No Necklace"));
+                }
+                if need_belt {
+                    belt_str = Some(slot_name(10, "No Belt"));
+                }
+                if need_boots {
+                    boots_str = Some(slot_name(11, "No Boots"));
+                }
+                if need_helmet {
+                    helmet_str = Some(slot_name(2, "No Helmet"));
+                }
+                if need_amulet {
+                    amulet_str = Some(slot_name(9, "No Amulet"));
+                }
+                if need_stone {
+                    stone_str = Some(slot_name(12, "No Stone"));
+                }
+                if need_torch {
+                    torch_str = Some(slot_name(3, "No Torch"));
+                }
+                if need_mount {
+                    mount_str = Some(slot_name(13, "No Mount"));
+                }
+            }
+        }
+
+        // Apply replacements line by line.
+        let mut out_lines = Vec::with_capacity(lines.len());
+        for mut line in lines {
+            if let Some(ref v) = username {
+                if line.contains("<$USERNAME>") {
+                    line = line.replace("<$USERNAME>", v);
+                }
+            }
+            if let Some(ref v) = level {
+                if line.contains("<$LEVEL>") {
+                    line = line.replace("<$LEVEL>", v);
+                }
+            }
+            if let Some(ref v) = class_name {
+                if line.contains("<$CLASS>") {
+                    line = line.replace("<$CLASS>", v);
+                }
+            }
+            if let Some(ref v) = map_name {
+                if line.contains("<$MAP>") {
+                    line = line.replace("<$MAP>", v);
+                }
+            }
+            if let Some(ref v) = x_str {
+                if line.contains("<$X_COORD>") {
+                    line = line.replace("<$X_COORD>", v);
+                }
+            }
+            if let Some(ref v) = y_str {
+                if line.contains("<$Y_COORD>") {
+                    line = line.replace("<$Y_COORD>", v);
+                }
+            }
+            if let Some(ref v) = hp_str {
+                if line.contains("<$HP>") {
+                    line = line.replace("<$HP>", v);
+                }
+            }
+            if let Some(ref v) = maxhp_str {
+                if line.contains("<$MAXHP>") {
+                    line = line.replace("<$MAXHP>", v);
+                }
+            }
+            if let Some(ref v) = mp_str {
+                if line.contains("<$MP>") {
+                    line = line.replace("<$MP>", v);
+                }
+            }
+            if let Some(ref v) = maxmp_str {
+                if line.contains("<$MAXMP>") {
+                    line = line.replace("<$MAXMP>", v);
+                }
+            }
+            if let Some(ref v) = gold_str {
+                if line.contains("<$GAMEGOLD>") {
+                    line = line.replace("<$GAMEGOLD>", v);
+                }
+            }
+            if let Some(ref v) = credit_str {
+                if line.contains("<$CREDIT>") {
+                    line = line.replace("<$CREDIT>", v);
+                }
+            }
+            if let Some(ref v) = pk_str {
+                if line.contains("<$PKPOINT>") {
+                    line = line.replace("<$PKPOINT>", v);
+                }
+            }
+            if let Some(ref v) = date_str {
+                if line.contains("<$DATE>") {
+                    line = line.replace("<$DATE>", v);
+                }
+            }
+            if let Some(ref v) = usercount_str {
+                if line.contains("<$USERCOUNT>") {
+                    line = line.replace("<$USERCOUNT>", v);
+                }
+            }
+            if let Some(ref v) = parcel_str {
+                if line.contains("<$PARCELAMOUNT>") {
+                    line = line.replace("<$PARCELAMOUNT>", v);
+                }
+            }
+            if let Some(ref v) = npc_name_str {
+                if line.contains("<$NPCNAME>") {
+                    line = line.replace("<$NPCNAME>", v);
+                }
+            }
+
+            if let Some(ref v) = armour_str {
+                if line.contains("<$ARMOUR>") {
+                    line = line.replace("<$ARMOUR>", v);
+                }
+            }
+            if let Some(ref v) = weapon_str {
+                if line.contains("<$WEAPON>") {
+                    line = line.replace("<$WEAPON>", v);
+                }
+            }
+            if let Some(ref v) = ring_l_str {
+                if line.contains("<$RING_L>") {
+                    line = line.replace("<$RING_L>", v);
+                }
+            }
+            if let Some(ref v) = ring_r_str {
+                if line.contains("<$RING_R>") {
+                    line = line.replace("<$RING_R>", v);
+                }
+            }
+            if let Some(ref v) = bracelet_l_str {
+                if line.contains("<$BRACELET_L>") {
+                    line = line.replace("<$BRACELET_L>", v);
+                }
+            }
+            if let Some(ref v) = bracelet_r_str {
+                if line.contains("<$BRACELET_R>") {
+                    line = line.replace("<$BRACELET_R>", v);
+                }
+            }
+            if let Some(ref v) = necklace_str {
+                if line.contains("<$NECKLACE>") {
+                    line = line.replace("<$NECKLACE>", v);
+                }
+            }
+            if let Some(ref v) = belt_str {
+                if line.contains("<$BELT>") {
+                    line = line.replace("<$BELT>", v);
+                }
+            }
+            if let Some(ref v) = boots_str {
+                if line.contains("<$BOOTS>") {
+                    line = line.replace("<$BOOTS>", v);
+                }
+            }
+            if let Some(ref v) = helmet_str {
+                if line.contains("<$HELMET>") {
+                    line = line.replace("<$HELMET>", v);
+                }
+            }
+            if let Some(ref v) = amulet_str {
+                if line.contains("<$AMULET>") {
+                    line = line.replace("<$AMULET>", v);
+                }
+            }
+            if let Some(ref v) = stone_str {
+                if line.contains("<$STONE>") {
+                    line = line.replace("<$STONE>", v);
+                }
+            }
+            if let Some(ref v) = torch_str {
+                if line.contains("<$TORCH>") {
+                    line = line.replace("<$TORCH>", v);
+                }
+            }
+            if let Some(ref v) = mount_str {
+                if line.contains("<$MOUNT>") {
+                    line = line.replace("<$MOUNT>", v);
+                }
+            }
+
+            out_lines.push(line);
+        }
+
+        out_lines
+    }
+
     pub(crate) fn extract_paid_teleport_info(path: &Path, key: &str) -> Option<(i64, Option<String>)> {
         let text = fs::read_to_string(path).ok()?;
         let lines: Vec<&str> = text.lines().collect();
@@ -605,7 +1040,8 @@ impl LoginConnection {
                     }
                 }
 
-                let page = maybe_page.unwrap_or_else(|| vec![npc.name.clone()]);
+                let page_raw = maybe_page.unwrap_or_else(|| vec![npc.name.clone()]);
+                let page = self.expand_npc_placeholders(page_raw, Some(&npc.name));
                 let resp = SNpcResponse { page };
                 if let Ok(raw) = resp.encode() {
                     out.push(Self::encode_raw(raw));
@@ -733,7 +1169,8 @@ impl LoginConnection {
                 }
             }
 
-            if let Some(page) = maybe_page {
+            if let Some(page_raw) = maybe_page {
+                let page = self.expand_npc_placeholders(page_raw, None);
                 let resp = SNpcResponse { page };
                 if let Ok(raw) = resp.encode() {
                     out.push(Self::encode_raw(raw));

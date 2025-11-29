@@ -5,16 +5,17 @@ use crate::stats::{Stat, Stats};
 use crate::world::{BuffProperty, BuffStackType, BuffType, Spell};
 use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
 use crate::guild::{GuildInfo, GuildManager};
-use super::configs::{guild_max_experience_for_level, guild_member_cap_for_level, guild_settings};
+use super::configs::{guild_max_experience_for_level, guild_member_cap_for_level, guild_settings, pet_template};
 use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
 use crate::world::map_item::MapItem;
 use crate::world::magic::UserMagic;
-use crate::world::monster::MonsterInstance;
+use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::monster_runtime::RespawnRuntime;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
+use crate::world::types::PetKind;
 use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 
 pub type SessionId = u32;
@@ -1233,6 +1234,109 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    pub fn spawn_pet_for_player(
+        &mut self,
+        session_id: SessionId,
+        pet_kind: PetKind,
+    ) -> Option<u64> {
+        let (map_index, x, y, direction, job, current_pet) = {
+            let player = self.players.get(&session_id)?;
+            (
+                player.map_index,
+                player.x,
+                player.y,
+                player.direction,
+                player.job,
+                player.main_pet_id,
+            )
+        };
+
+        if job != Job::Taoist {
+            return None;
+        }
+
+        if current_pet.is_some() {
+            return None;
+        }
+
+        let template = pet_template(pet_kind)?;
+        if template.monster_index <= 0 {
+            return None;
+        }
+
+        let info = match self.provider.get_monster_info(template.monster_index) {
+            Some(i) => i,
+            None => return None,
+        };
+
+        self.next_monster_id = self.next_monster_id.wrapping_add(1);
+        let hp = info.stats.get(Stat::HP).max(1);
+
+        let instance = MonsterInstance {
+            id: self.next_monster_id,
+            monster_index: template.monster_index,
+            map_index,
+            x,
+            y,
+            home_x: x,
+            home_y: y,
+            direction,
+            hp,
+            is_pet: true,
+            owner_session_id: Some(session_id),
+            pet_kind: Some(pet_kind),
+            respawn_index: 0,
+            ai_state: MonsterAiState::Idle,
+            target_session_id: None,
+            next_move_time_ms: 0,
+            next_attack_time_ms: 0,
+            search_time_ms: 0,
+            roam_time_ms: 0,
+            route_index: 0,
+            route_wait_until_ms: 0,
+            alone: false,
+            alone_time_ms: 0,
+            buff_stats: Stats::default(),
+            buffs: Vec::new(),
+        };
+
+        self.add_monster_to_occupancy(instance.id, map_index, instance.x, instance.y);
+
+        let monsters = self.monsters.entry(map_index).or_default();
+        monsters.push(instance);
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.main_pet_id = Some(self.next_monster_id);
+        }
+
+        Some(self.next_monster_id)
+    }
+
+    pub fn remove_all_pets_for_session(&mut self, session_id: SessionId) {
+        let mut to_remove = Vec::new();
+
+        for (map_index, monsters) in &self.monsters {
+            for m in monsters {
+                if m.is_pet && m.owner_session_id == Some(session_id) {
+                    to_remove.push((*map_index, m.id, m.x, m.y));
+                }
+            }
+        }
+
+        for (map_index, monster_id, x, y) in to_remove {
+            if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                if let Some(idx) = monsters.iter().position(|m| m.id == monster_id) {
+                    monsters.remove(idx);
+                }
+            }
+            self.remove_monster_from_occupancy(monster_id, map_index, x, y);
+        }
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.main_pet_id = None;
+        }
+    }
+
     pub(crate) fn clear_player_from_occupancy(&mut self, session_id: SessionId) {
         for map in self.occupancy.values_mut() {
             let mut to_remove = Vec::new();
@@ -1747,7 +1851,7 @@ impl<P: WorldProvider> World<P> {
                                 }
                             }
 
-                            tracing::debug!(
+                            tracing::trace!(
                                 "[pickup] MapItemRemoved queued: object_id={} map={} pos=({}, {})",
                                 map_item.id,
                                 map_index,

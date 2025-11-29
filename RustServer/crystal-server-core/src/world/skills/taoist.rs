@@ -1,7 +1,7 @@
 use crate::stats::{Stat, Stats};
 use crate::world::magic::{magic_damage, magic_power};
 use crate::world::skills::compute_magic_mana_cost;
-use crate::world::types::BuffType;
+use crate::world::types::{BuffType, PetKind};
 use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
 use crate::world::Spell;
 use rand::{thread_rng, Rng};
@@ -748,23 +748,115 @@ pub fn cast_poison_cloud<P: WorldProvider>(
 }
 
 pub fn cast_summon_shinsu<P: WorldProvider>(
-    _world: &mut World<P>,
-    _session_id: SessionId,
-    _spell: u8,
-    _direction: u8,
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
     _x: i32,
     _y: i32,
-    _events: &mut Vec<WorldEvent>,
+    events: &mut Vec<WorldEvent>,
 ) {
+    let (map_index, caster_x, caster_y, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (player.map_index, player.x, player.y, level)
+    };
+
+    if world
+        .spawn_pet_for_player(session_id, PetKind::TaoistShinsu)
+        .is_none()
+    {
+        return;
+    }
+
+    world.level_up_magic_for_player(session_id, Spell::SummonShinsu as u8, events);
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
 }
 
 pub fn cast_summon_holy_deva<P: WorldProvider>(
-    _world: &mut World<P>,
-    _session_id: SessionId,
-    _spell: u8,
-    _direction: u8,
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
     _x: i32,
     _y: i32,
-    _events: &mut Vec<WorldEvent>,
+    events: &mut Vec<WorldEvent>,
 ) {
+    let (map_index, caster_x, caster_y, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (player.map_index, player.x, player.y, level)
+    };
+
+    if world
+        .spawn_pet_for_player(session_id, PetKind::TaoistHolyDeva)
+        .is_none()
+    {
+        return;
+    }
+
+    world.level_up_magic_for_player(session_id, Spell::SummonHolyDeva as u8, events);
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
 }
