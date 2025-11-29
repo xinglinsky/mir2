@@ -472,6 +472,221 @@ impl LoginConnection {
             return;
         }
 
+        // Both sides have their TradeLocked flags set. Before finalising the
+        // trade, mirror the C# CanGainItems semantics and ensure that each
+        // side has enough inventory capacity to accept the other's offered
+        // trade items.
+        let (self_can_gain_items, partner_can_gain_items) = {
+            let world = self.world.lock().unwrap();
+            let self_can_gain =
+                world.can_gain_items_from_trade(self.session_id, partner_id);
+            let partner_can_gain =
+                world.can_gain_items_from_trade(partner_id, self.session_id);
+            (self_can_gain, partner_can_gain)
+        };
+
+        if !self_can_gain_items || !partner_can_gain_items {
+            {
+                let mut world = self.world.lock().unwrap();
+                world.trade_unlock(self.session_id);
+            }
+
+            let mut events = Vec::new();
+
+            if !partner_can_gain_items {
+                // Our partner cannot accept all of our items.
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: self.session_id,
+                    message: "Trading partner cannot accept all items.".to_string(),
+                });
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: partner_id,
+                    message: "Unable to accept all items.".to_string(),
+                });
+            }
+
+            if !self_can_gain_items {
+                // We cannot accept all of our partner's items.
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: partner_id,
+                    message: "Trading partner cannot accept all items.".to_string(),
+                });
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: self.session_id,
+                    message: "Unable to accept all items.".to_string(),
+                });
+            }
+
+            if !events.is_empty() {
+                let _ = self.handle_world_events(events, out);
+            }
+
+            let pkt_self = STradeCancel { unlock: true };
+            if let Ok(raw) = pkt_self.encode() {
+                out.push(LoginConnection::encode_raw(raw));
+            }
+
+            let pkt_other = STradeCancel { unlock: true };
+            if let Ok(raw) = pkt_other.encode() {
+                let encoded = LoginConnection::encode_raw(raw);
+                if partner_id == self.session_id {
+                    out.push(encoded);
+                } else {
+                    let mut outboxes = self.outboxes.lock().unwrap();
+                    outboxes.entry(partner_id).or_default().push(encoded);
+                }
+            }
+
+            tracing::debug!(
+                "TradeConfirm: cancelled due to insufficient inventory capacity (self_can_gain_items={} partner_can_gain_items={}) for session_id={} partner_id={}",
+                self_can_gain_items,
+                partner_can_gain_items,
+                self.session_id,
+                partner_id,
+            );
+
+            return;
+        }
+
+        // Gold capacity checks for both participants, approximating the C#
+        // CanGainGold(uint) semantics. We ensure that:
+        // - this player can accept partner_gold
+        // - the partner can accept self_gold
+        // before applying any transfers. On failure we unlock the trade,
+        // notify both sides, and send S.TradeCancel(unlock=true) so they can
+        // adjust their offers.
+        let mut self_can_gain_gold = true;
+        let mut partner_can_gain_gold = true;
+
+        if partner_gold > 0 {
+            self_can_gain_gold = match self.current_stats.clone() {
+                Some(stats) => {
+                    let current_u64 = if stats.gold <= 0 {
+                        0u64
+                    } else {
+                        stats.gold as u64
+                    };
+                    let new_total_u64 = current_u64.saturating_add(partner_gold as u64);
+                    new_total_u64 <= u32::MAX as u64
+                }
+                None => false,
+            };
+        }
+
+        if self_gold > 0 {
+            // Resolve the partner's account_id from the shared online_accounts
+            // map and their character_index from the world state so that we
+            // can load up-to-date CharacterStats for the gold cap check.
+            let partner_account_id_opt: Option<String> = {
+                let online_map = self.online_accounts.lock().unwrap();
+                online_map
+                    .iter()
+                    .find_map(|(acc, sid)| if *sid == partner_id {
+                        Some(acc.clone())
+                    } else {
+                        None
+                    })
+            };
+
+            let partner_char_idx_opt = {
+                let world = self.world.lock().unwrap();
+                world.player_character_index(partner_id)
+            };
+
+            if let (Some(acc_id), Some(char_idx)) = (partner_account_id_opt, partner_char_idx_opt)
+            {
+                let partner_stats_opt = self
+                    .store
+                    .load_character_stats(&acc_id, char_idx)
+                    .ok()
+                    .flatten();
+
+                if let Some(stats) = partner_stats_opt {
+                    let current_u64 = if stats.gold <= 0 {
+                        0u64
+                    } else {
+                        stats.gold as u64
+                    };
+                    let new_total_u64 = current_u64.saturating_add(self_gold as u64);
+                    if new_total_u64 > u32::MAX as u64 {
+                        partner_can_gain_gold = false;
+                    }
+                } else {
+                    partner_can_gain_gold = false;
+                }
+            } else {
+                partner_can_gain_gold = false;
+            }
+        }
+
+        if !self_can_gain_gold || !partner_can_gain_gold {
+            {
+                let mut world = self.world.lock().unwrap();
+                world.trade_unlock(self.session_id);
+            }
+
+            let mut events = Vec::new();
+
+            if !partner_can_gain_gold {
+                // Our partner cannot accept our gold offer.
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: self.session_id,
+                    message: "Trading partner cannot accept any more gold.".to_string(),
+                });
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: partner_id,
+                    message: "Unable to accept any more gold.".to_string(),
+                });
+            }
+
+            if !self_can_gain_gold {
+                // We cannot accept the partner's gold offer.
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: partner_id,
+                    message: "Trading partner cannot accept any more gold.".to_string(),
+                });
+                events.push(world::WorldEvent::PartySystemMessage {
+                    session_id: self.session_id,
+                    message: "Unable to accept any more gold.".to_string(),
+                });
+            }
+
+            if !events.is_empty() {
+                let _ = self.handle_world_events(events, out);
+            }
+
+            let pkt_self = STradeCancel { unlock: true };
+            if let Ok(raw) = pkt_self.encode() {
+                out.push(LoginConnection::encode_raw(raw));
+            }
+
+            let pkt_other = STradeCancel { unlock: true };
+            if let Ok(raw) = pkt_other.encode() {
+                let encoded = LoginConnection::encode_raw(raw);
+                if partner_id == self.session_id {
+                    out.push(encoded);
+                } else {
+                    let mut outboxes = self.outboxes.lock().unwrap();
+                    outboxes.entry(partner_id).or_default().push(encoded);
+                }
+            }
+
+            tracing::debug!(
+                "TradeConfirm: cancelled due to gold cap (self_can_gain_gold={} partner_can_gain_gold={}) for session_id={} partner_id={} self_gold={} partner_gold={}",
+                self_can_gain_gold,
+                partner_can_gain_gold,
+                self.session_id,
+                partner_id,
+                self_gold,
+                partner_gold,
+            );
+
+            return;
+        }
+
+        // At this point both sides are locked and have enough capacity to
+        // accept the other's items and gold. Apply the gold and item transfers
+        // and then clear the trade session.
         let mut events = Vec::new();
         if partner_gold > 0 {
             events.push(world::WorldEvent::PlayerGainedGold {
@@ -486,6 +701,12 @@ impl LoginConnection {
             });
         }
 
+        {
+            let mut world = self.world.lock().unwrap();
+            world.apply_trade_items_for_pair(self.session_id, partner_id, &mut events);
+            world.clear_trade_session(self.session_id);
+        }
+
         events.push(world::WorldEvent::PartySystemMessage {
             session_id: self.session_id,
             message: "交易成功。".to_string(),
@@ -497,11 +718,6 @@ impl LoginConnection {
 
         if !events.is_empty() {
             let _ = self.handle_world_events(events, out);
-        }
-
-        {
-            let mut world = self.world.lock().unwrap();
-            world.clear_trade_session(self.session_id);
         }
 
         let pkt_self = STradeConfirm;
@@ -552,21 +768,31 @@ impl LoginConnection {
         };
 
         let mut events = Vec::new();
-        if self_gold > 0 {
-            events.push(world::WorldEvent::PlayerGainedGold {
-                session_id: self.session_id,
-                amount: self_gold,
-            });
-        }
-        if partner_gold > 0 {
-            events.push(world::WorldEvent::PlayerGainedGold {
-                session_id: partner_id,
-                amount: partner_gold,
-            });
-        }
 
         {
             let mut world = self.world.lock().unwrap();
+
+            if self_gold > 0 {
+                events.push(world::WorldEvent::PlayerGainedGold {
+                    session_id: self.session_id,
+                    amount: self_gold,
+                });
+            }
+            if partner_gold > 0 {
+                events.push(world::WorldEvent::PlayerGainedGold {
+                    session_id: partner_id,
+                    amount: partner_gold,
+                });
+            }
+
+            // Roll back any items that were placed into the trade grid for
+            // both participants. Items are moved back into their own
+            // inventories where possible and otherwise dropped on the ground
+            // near the owner, matching the intent of the C# TradeCancel logic
+            // which ensures items are not silently lost.
+            world.rollback_trade_items_for_player(self.session_id, &mut events);
+            world.rollback_trade_items_for_player(partner_id, &mut events);
+
             world.clear_trade_session(self.session_id);
         }
 

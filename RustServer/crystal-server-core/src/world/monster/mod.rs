@@ -94,4 +94,10 @@ pub struct MonsterInstance {
     pub alone_time_ms: i64,
     pub buff_stats: Stats,
     pub buffs: Vec<MonsterBuff>,
+    /// Generic per-instance mode flag and timers used by certain special
+    /// monsters such as Taoist Shinsu to model C#-style Mode/ModeTime
+    /// behaviour (visible/hidden states).
+    pub special_mode: bool,
+    pub special_mode_until_ms: i64,
+    pub special_mode_action_time_ms: i64,
 }

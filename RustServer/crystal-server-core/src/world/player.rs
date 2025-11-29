@@ -183,6 +183,10 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    pub fn player_guild_name(&self, session_id: SessionId) -> Option<String> {
+        self.players.get(&session_id).map(|p| p.guild_name.clone())
+    }
+
     pub fn set_player_attack_mode(&mut self, session_id: SessionId, mode: u8) {
         let amode = AttackMode::from_u8(mode);
         if let Some(player) = self.players.get_mut(&session_id) {

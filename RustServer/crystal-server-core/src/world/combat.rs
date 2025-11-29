@@ -29,6 +29,7 @@ use crate::world::skills::warrior::{
 };
 use crate::world::skills::wizard::{
     cast_fire_bang_ice_storm,
+    cast_fire_wall,
     cast_magic_shield,
     cast_thunder_storm_flame_field,
 };
@@ -158,30 +159,40 @@ impl<P: WorldProvider> World<P> {
         y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
-        if let Some(p) = self.players.get(&session_id) {
-            tracing::debug!(
-                "handle_magic_command: session_id={} job={:?} spell_id={}",
-                session_id,
-                p.job,
-                spell,
-            );
-        }
-
         let (player_map, player_x, player_y, has_magic) = match self.players.get(&session_id) {
             Some(p) => {
-                let has_magic = p
-                    .magics
-                    .iter()
-                    .any(|m| m.spell == spell && m.level > 0);
+                let has_magic = p.magics.iter().any(|m| m.spell == spell);
                 (p.map_index, p.x, p.y, has_magic)
             }
             None => return,
         };
 
-        // Notify the client that this magic has been cast so it can update the
-        // per-spell CastTime used for button cooldowns. We only emit this when
-        // the player actually knows the spell (level > 0).
+        // If the player knows this magic, enforce a simple cooldown based on
+        // the MagicInfo delay parameters and the per-magic UserMagic.cast_time
+        // field. This mirrors the C# behaviour where repeated CMagic packets
+        // while a spell is still on cooldown are ignored server-side.
+        //
+        // Only after passing the cooldown check do we emit MagicCast so the
+        // client can update its per-spell CastTime and log the accepted cast.
         if has_magic {
+            if !self.check_and_update_magic_cooldown(session_id, spell) {
+                tracing::debug!(
+                    "handle_magic_command: session_id={} spell_id={} ignored (on cooldown)",
+                    session_id,
+                    spell,
+                );
+                return;
+            }
+
+            if let Some(p) = self.players.get(&session_id) {
+                tracing::debug!(
+                    "handle_magic_command: session_id={} job={:?} spell_id={} accepted",
+                    session_id,
+                    p.job,
+                    spell,
+                );
+            }
+
             events.push(WorldEvent::MagicCast {
                 session_id,
                 spell_id: spell,
@@ -210,6 +221,11 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::FireBang as u8 || spell == Spell::IceStorm as u8 {
             cast_fire_bang_ice_storm(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::FireWall as u8 {
+            cast_fire_wall(self, session_id, spell, direction, x, y, events);
             return;
         }
 

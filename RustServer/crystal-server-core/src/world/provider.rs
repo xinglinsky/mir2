@@ -51,6 +51,13 @@ pub trait WorldProvider {
         self.monster_infos().iter().find(|m| m.index == index)
     }
 
+    fn get_monster_info_by_name(&self, name: &str) -> Option<&MonsterInfo> {
+        self
+            .monster_infos()
+            .iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
+    }
+
     fn get_npc_info(&self, index: i32) -> Option<&NpcInfo> {
         self.npc_infos().iter().find(|n| n.index == index)
     }

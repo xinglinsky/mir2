@@ -68,6 +68,13 @@ pub struct GuildExpGainResult {
 }
 
 #[derive(Clone, Debug)]
+pub enum GuildGoldChangeError {
+    NotFound,
+    Overflow,
+    InsufficientGuildGold,
+}
+
+#[derive(Clone, Debug)]
 pub enum WorldCommand {
     StartGame {
         session_id: SessionId,
@@ -206,6 +213,21 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
         direction: u8,
+    },
+    /// Toggle visibility for an object (typically a monster) on the client,
+    /// mirroring C# S.ObjectShow / S.ObjectHide used by Shinsu and similar
+    /// special monsters.
+    ObjectShow {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+    },
+    ObjectHide {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
     },
     MonsterHitPlayer {
         attacker_monster_id: u64,
@@ -426,6 +448,73 @@ impl<P: WorldProvider> World<P> {
         });
     }
 
+    /// Check whether the given magic is off cooldown for this player and, if
+    /// so, update its UserMagic.cast_time using the MagicInfo delay
+    /// parameters. Returns true if the cast should proceed, or false if the
+    /// spell is still on cooldown and the command should be ignored.
+    pub(crate) fn check_and_update_magic_cooldown(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+    ) -> bool {
+        let now = self.time_ms;
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let magic = match player.magics.iter_mut().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return false,
+        };
+
+        // If we have a non-zero cast_time and the current world time is still
+        // before it, treat this command as a no-op; the client may have sent
+        // extra CMagic packets while the key is held down.
+        if now > 0 && magic.cast_time > 0 && now < magic.cast_time {
+            tracing::debug!(
+                "magic: spell={} session_id={} on cooldown now={} cast_time={}",
+                spell,
+                session_id,
+                now,
+                magic.cast_time,
+            );
+            return false;
+        }
+
+        // Compute the per-cast delay from MagicInfo if available, mirroring
+        // the Delay field used by the original C# server. When MagicInfo is
+        // missing (for example, if MagicInfoList failed to load from MirDB),
+        // fall back to a conservative default delay so that repeated CMagic
+        // packets from a single key press do not result in uncontrolled rapid
+        // casting.
+        if let Some(info) = self.provider.get_magic_info(spell) {
+            let delay: i64 = info.delay_base as i64
+                - (magic.level as i64 * info.delay_reduction as i64);
+            let delay = delay.max(0);
+
+            if now > 0 {
+                magic.cast_time = now.saturating_add(delay);
+            } else {
+                magic.cast_time = delay;
+            }
+        } else {
+            // Default to a 1500ms cooldown window when no static MagicInfo is
+            // available for this spell. This is in the same ballpark as many
+            // core wizard attack spells (e.g. FireBall) and is only used as a
+            // safety net when MirDB does not provide data.
+            let fallback_delay_ms: i64 = 1_500;
+            if now > 0 {
+                magic.cast_time = now.saturating_add(fallback_delay_ms);
+            } else {
+                magic.cast_time = fallback_delay_ms;
+            }
+        }
+
+        true
+    }
+
     pub fn snapshot_metrics(&self, connections: u32) -> CoreMetrics {
         let players = self.players.len() as u32;
         let monsters = self
@@ -481,9 +570,26 @@ impl<P: WorldProvider> World<P> {
             .map(|p| (p.map_index, p.x, p.y, p.direction))
     }
 
+    pub fn player_in_safe_zone(&self, session_id: SessionId) -> bool {
+        if let Some(player) = self.players.get(&session_id) {
+            if let Some(info) = self.provider.get_map_info(player.map_index) {
+                return Self::point_in_safe_zone(info, player.x, player.y);
+            }
+        }
+        false
+    }
+
     /// Look up the canonical player name for a given session.
     pub fn player_name(&self, session_id: SessionId) -> Option<String> {
         self.players.get(&session_id).map(|p| p.name.clone())
+    }
+
+    /// Look up the character_index for a given session. This is used by the
+    /// connection layer when it needs to resolve CharacterStats for another
+    /// online player (e.g. for trade gold capacity checks mirroring the C#
+    /// CanGainGold behaviour).
+    pub fn player_character_index(&self, session_id: SessionId) -> Option<i32> {
+        self.players.get(&session_id).map(|p| p.character_index)
     }
 
     /// Find a player session by character name using a case-insensitive
@@ -652,6 +758,240 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    /// Mirror C# HumanObject.CanGainItems for trade: check whether `dst_session_id`
+    /// can accept all items currently offered in `src_session_id`'s trade grid.
+    /// This uses the same free-space + stack-offset heuristic as the C# code,
+    /// based on StackSize and existing stacks, without mutating any state.
+    pub fn can_gain_items_from_trade(
+        &self,
+        dst_session_id: SessionId,
+        src_session_id: SessionId,
+    ) -> bool {
+        let dst = match self.players.get(&dst_session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let src = match self.players.get(&src_session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let items: Vec<&UserItemData> = src.trade.iter().filter_map(|o| o.as_ref()).collect();
+        let item_count = items.len();
+        if item_count == 0 {
+            return true;
+        }
+
+        let mut stack_offset: u16 = 0;
+
+        for item in items {
+            let info = match self.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.stack_size > 1 {
+                let count = item.count;
+
+                for bag_slot in &dst.inventory.slots {
+                    let bag_item = match bag_slot.as_ref() {
+                        Some(b) => b,
+                        None => continue,
+                    };
+
+                    if bag_item.item_index != item.item_index {
+                        continue;
+                    }
+
+                    let bag_count = bag_item.count as u32;
+                    let incoming = count as u32;
+
+                    if bag_count + incoming > info.stack_size as u32 {
+                        stack_offset = stack_offset.saturating_add(1);
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        let free_space = dst
+            .inventory
+            .slots
+            .iter()
+            .filter(|s| s.is_none())
+            .count();
+
+        let needed = item_count.saturating_add(stack_offset as usize);
+        free_space >= needed
+    }
+
+    /// Internal helper: take and clear all items from the trade grid for the
+    /// given session, returning them as a Vec.
+    fn take_trade_items_for_player(&mut self, session_id: SessionId) -> Vec<UserItemData> {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let mut out = Vec::new();
+            for slot in &mut player.trade {
+                if let Some(item) = slot.take() {
+                    out.push(item);
+                }
+            }
+            out
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Internal helper: give a list of items to the specified player by
+    /// choosing inventory slots using the same rules as AddItem/pickup
+    /// (potion/amulet belts first, then main bag), pushing PlayerGainedItem
+    /// events for each successfully stored item.
+    fn give_items_to_player_from_trade(
+        &mut self,
+        dst_session_id: SessionId,
+        items: Vec<UserItemData>,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+
+        let player = match self.players.get_mut(&dst_session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        for item in items {
+            let info = match self.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if let Some(slot) = Self::pickup_slot_for_item(player, info) {
+                player.inventory.slots[slot] = Some(item.clone());
+
+                events.push(WorldEvent::PlayerGainedItem {
+                    session_id: dst_session_id,
+                    item: item.clone(),
+                });
+            } else {
+                // Should not happen if callers validated capacity ahead of
+                // time, but avoid panicking in release builds.
+                tracing::debug!(
+                    "give_items_to_player_from_trade: no free slot for item_index={} dst_session_id={}",
+                    item.item_index,
+                    dst_session_id
+                );
+            }
+        }
+    }
+
+    /// Move all items from each player's trade grid into the other player's
+    /// inventory, pushing PlayerGainedItem events for the recipients. This
+    /// assumes callers have already validated capacity via
+    /// `can_gain_items_from_trade` for both directions.
+    pub fn apply_trade_items_for_pair(
+        &mut self,
+        a_session_id: SessionId,
+        b_session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let a_items = self.take_trade_items_for_player(a_session_id);
+        let b_items = self.take_trade_items_for_player(b_session_id);
+
+        self.give_items_to_player_from_trade(b_session_id, a_items, events);
+        self.give_items_to_player_from_trade(a_session_id, b_items, events);
+    }
+
+    /// Roll back all items currently present in a player's trade grid back to
+    /// their own inventory where possible. When the inventory is full and no
+    /// suitable slot can be found, any remaining items are dropped on the
+    /// ground near the player using the same drop location search as
+    /// WorldCommand::DropItem. This is used by TradeCancel to ensure that
+    /// trade items are not lost when a trade is aborted.
+    pub fn rollback_trade_items_for_player(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Snapshot the player's current map/position first to avoid holding
+        // a mutable borrow while searching for drop locations.
+        let (map_index, px, py) = match self.players.get(&session_id) {
+            Some(p) => (p.map_index, p.x, p.y),
+            None => return,
+        };
+
+        let mut overflow: Vec<UserItemData> = Vec::new();
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            for slot in &mut player.trade {
+                if let Some(item) = slot.take() {
+                    // Try to return the item to the first free inventory slot.
+                    let mut placed = false;
+                    for inv_slot in &mut player.inventory.slots {
+                        if inv_slot.is_none() {
+                            *inv_slot = Some(item.clone());
+                            placed = true;
+                            break;
+                        }
+                    }
+
+                    if !placed {
+                        overflow.push(item);
+                    }
+                }
+            }
+        } else {
+            return;
+        }
+
+        if overflow.is_empty() {
+            return;
+        }
+
+        // For any items that could not be placed back into the inventory,
+        // fall back to dropping them on the ground near the player. This
+        // mirrors the general ItemDropped behaviour so that items remain
+        // recoverable instead of being silently lost.
+        for item in overflow {
+            let info = match self.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if let Some((dx, dy)) = self.find_drop_location(map_index, px, py, 4) {
+                let entry = self.map_items.entry(map_index).or_default();
+                let map_item_id = self.next_map_item_id;
+                self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+
+                // Match the default 5 minute timeout used for other dropped
+                // items.
+                let item_timeout_ms: i64 = 300_000;
+                entry.push(MapItem {
+                    id: map_item_id,
+                    map_index,
+                    x: dx,
+                    y: dy,
+                    item_index: Some(info.index),
+                    gold: 0,
+                    count: item.count,
+                    item: Some(item.clone()),
+                    expire_time_ms: self.time_ms + item_timeout_ms,
+                });
+
+                events.push(WorldEvent::ItemDropped {
+                    object_id: map_item_id,
+                    map_index,
+                    x: dx,
+                    y: dy,
+                    item_index: info.index,
+                    count: item.count,
+                });
+            }
+        }
+    }
+
     /// Helper to snapshot current party members (online only) for a given
     /// session, returning a list of (SessionId, Name) pairs.
     pub fn party_members_for_session(
@@ -812,6 +1152,45 @@ impl<P: WorldProvider> World<P> {
             exp_gained: exp_amount,
             leveled,
         })
+    }
+
+    pub fn guild_add_gold(
+        &mut self,
+        guild_name: &str,
+        amount: u32,
+    ) -> Result<GuildInfo, GuildGoldChangeError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildGoldChangeError::NotFound),
+        };
+
+        let current = guild.gold as u64;
+        let add = amount as u64;
+        let new_total = current.saturating_add(add);
+        if new_total > u32::MAX as u64 {
+            return Err(GuildGoldChangeError::Overflow);
+        }
+
+        guild.gold = new_total as u32;
+        Ok(guild.clone())
+    }
+
+    pub fn guild_subtract_gold(
+        &mut self,
+        guild_name: &str,
+        amount: u32,
+    ) -> Result<GuildInfo, GuildGoldChangeError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildGoldChangeError::NotFound),
+        };
+
+        if guild.gold < amount {
+            return Err(GuildGoldChangeError::InsufficientGuildGold);
+        }
+
+        guild.gold = guild.gold.saturating_sub(amount);
+        Ok(guild.clone())
     }
 
     pub fn guild_add_member_by_name(
@@ -1239,7 +1618,7 @@ impl<P: WorldProvider> World<P> {
         session_id: SessionId,
         pet_kind: PetKind,
     ) -> Option<u64> {
-        let (map_index, x, y, direction, job, current_pet) = {
+        let (map_index, x, y, direction, job) = {
             let player = self.players.get(&session_id)?;
             (
                 player.map_index,
@@ -1247,7 +1626,6 @@ impl<P: WorldProvider> World<P> {
                 player.y,
                 player.direction,
                 player.job,
-                player.main_pet_id,
             )
         };
 
@@ -1255,18 +1633,48 @@ impl<P: WorldProvider> World<P> {
             return None;
         }
 
-        if current_pet.is_some() {
-            return None;
-        }
-
         let template = pet_template(pet_kind)?;
-        if template.monster_index <= 0 {
+
+        let mut total_pets: usize = 0;
+        let mut pets_of_kind: usize = 0;
+
+        for monsters in self.monsters.values() {
+            for m in monsters {
+                if !m.is_pet || m.owner_session_id != Some(session_id) {
+                    continue;
+                }
+
+                total_pets = total_pets.saturating_add(1);
+
+                if m.pet_kind == Some(pet_kind) {
+                    pets_of_kind = pets_of_kind.saturating_add(1);
+                }
+            }
+        }
+
+        const MAX_MONSTER_PETS_PER_OWNER: usize = 2;
+        if total_pets >= MAX_MONSTER_PETS_PER_OWNER {
             return None;
         }
 
-        let info = match self.provider.get_monster_info(template.monster_index) {
-            Some(i) => i,
-            None => return None,
+        if pets_of_kind >= template.max_count_per_owner as usize {
+            return None;
+        }
+
+        let (monster_index, info) = if template.monster_index > 0 {
+            match self.provider.get_monster_info(template.monster_index) {
+                Some(i) => (template.monster_index, i),
+                None => return None,
+            }
+        } else {
+            let info = match self
+                .provider
+                .get_monster_info_by_name(template.monster_name)
+            {
+                Some(i) => i,
+                None => return None,
+            };
+            (info.index, info)
         };
 
         self.next_monster_id = self.next_monster_id.wrapping_add(1);
@@ -1274,7 +1682,7 @@ impl<P: WorldProvider> World<P> {
 
         let instance = MonsterInstance {
             id: self.next_monster_id,
-            monster_index: template.monster_index,
+            monster_index,
             map_index,
             x,
             y,
@@ -1298,6 +1706,9 @@ impl<P: WorldProvider> World<P> {
             alone_time_ms: 0,
             buff_stats: Stats::default(),
             buffs: Vec::new(),
+            special_mode: false,
+            special_mode_until_ms: 0,
+            special_mode_action_time_ms: 0,
         };
 
         self.add_monster_to_occupancy(instance.id, map_index, instance.x, instance.y);
@@ -1310,6 +1721,63 @@ impl<P: WorldProvider> World<P> {
         }
 
         Some(self.next_monster_id)
+    }
+
+    pub fn recall_pet_for_player(
+        &mut self,
+        session_id: SessionId,
+        pet_kind: PetKind,
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        let (player_map, player_x, player_y) = match self.players.get(&session_id) {
+            Some(p) => (p.map_index, p.x, p.y),
+            None => return false,
+        };
+
+        let mut moved: Option<(u64, i32, i32, i32, u8)> = None;
+
+        'outer: for (map_index, monsters) in &mut self.monsters {
+            for m in monsters.iter_mut() {
+                if !m.is_pet || m.owner_session_id != Some(session_id) {
+                    continue;
+                }
+                if m.pet_kind != Some(pet_kind) {
+                    continue;
+                }
+
+                let old_map = *map_index;
+                let old_x = m.x;
+                let old_y = m.y;
+
+                if old_map == player_map && old_x == player_x && old_y == player_y {
+                    return true;
+                }
+
+                m.map_index = player_map;
+                m.x = player_x;
+                m.y = player_y;
+
+                moved = Some((m.id, old_map, old_x, old_y, m.direction));
+                break 'outer;
+            }
+        }
+
+        if let Some((id, old_map, old_x, old_y, direction)) = moved {
+            self.remove_monster_from_occupancy(id, old_map, old_x, old_y);
+            self.add_monster_to_occupancy(id, player_map, player_x, player_y);
+
+            events.push(WorldEvent::ObjectLocation {
+                object_id: id,
+                map_index: player_map,
+                x: player_x,
+                y: player_y,
+                direction,
+            });
+
+            true
+        } else {
+            false
+        }
     }
 
     pub fn remove_all_pets_for_session(&mut self, session_id: SessionId) {

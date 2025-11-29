@@ -33,7 +33,12 @@ pub struct GuildBuff {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuildStorageItem {
-    pub item_id: i64,
+    /// Character index (Info.Index in C#) of the user who stored the item.
+    pub user_id: i64,
+    /// Binary-encoded UserItemData, using the same layout as
+    /// UserItemData::encode. This mirrors the C# GuildStorageItem.Save
+    /// which writes UserItem.Save followed by UserId.
+    pub item_bytes: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -51,7 +56,10 @@ pub struct GuildInfo {
     pub flag_image: u16,
     pub flag_colour_argb: i32,
     pub ranks: Vec<GuildRank>,
-    pub stored_items: Vec<GuildStorageItem>,
+    /// Fixed-size guild storage slots (112 in the legacy C# server). A None
+    /// entry represents an empty slot; Some(GuildStorageItem) holds a stored
+    /// item together with the last storing user's id.
+    pub stored_items: Vec<Option<GuildStorageItem>>,
     pub buff_list: Vec<GuildBuff>,
     pub notice: Vec<String>,
     pub gt_rent_ticks: i64,
@@ -165,7 +173,7 @@ impl GuildManager {
             flag_image: 1000,
             flag_colour_argb: 0x00ff_ffff,
             ranks: Vec::new(),
-            stored_items: Vec::new(),
+            stored_items: vec![None; 112],
             buff_list: Vec::new(),
             notice: Vec::new(),
             gt_rent_ticks: 0,

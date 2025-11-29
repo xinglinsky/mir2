@@ -429,6 +429,58 @@ pub fn cast_thunder_storm_flame_field<P: WorldProvider>(
     });
 }
 
+pub fn cast_fire_wall<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, player_x, player_y, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (player.map_index, player.x, player.y, level)
+    };
+
+    world.level_up_magic_for_player(session_id, Spell::FireWall as u8, events);
+
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x: player_x,
+        y: player_y,
+        direction,
+        spell,
+        level,
+        target_id: 0,
+        target_x,
+        target_y,
+    });
+}
+
 /// Cast MagicShield for a wizard, applying a temporary damage reduction buff
 /// and training the magic on success. This mirrors the original
 /// handle_magic_shield_spell logic from combat.rs.

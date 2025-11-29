@@ -36,6 +36,8 @@ use crystal_shared_proto::scene::{
     SAddBuff,
     SRemoveBuff,
     SPauseBuff,
+    SObjectShow,
+    SObjectHide,
 };
 use crystal_shared_proto::user::{SUserLocation, SHealthChanged, SUserSlotsRefresh};
 
@@ -424,6 +426,36 @@ impl LoginConnection {
                         location_y: y,
                         direction,
                         death_type: 0,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        out.push(bytes.clone());
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::ObjectShow {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                } => {
+                    let pkt = SObjectShow {
+                        object_id: object_id as u32,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        out.push(bytes.clone());
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::ObjectHide {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                } => {
+                    let pkt = SObjectHide {
+                        object_id: object_id as u32,
                     };
                     if let Ok(raw) = pkt.encode() {
                         let bytes = Self::encode_raw(raw);

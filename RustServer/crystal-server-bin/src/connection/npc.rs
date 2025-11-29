@@ -213,6 +213,15 @@ impl LoginConnection {
         let need_stone = lines.iter().any(|l| l.contains("<$STONE>"));
         let need_torch = lines.iter().any(|l| l.contains("<$TORCH>"));
         let need_mount = lines.iter().any(|l| l.contains("<$MOUNT>"));
+        let need_mount_loyalty = lines.iter().any(|l| l.contains("<$MOUNTLOYALTY>"));
+
+        // Guild / guild war placeholders.
+        let need_guild_war_time = lines.iter().any(|l| l.contains("<$GUILDWARTIME>"));
+        let need_guild_war_fee = lines.iter().any(|l| l.contains("<$GUILDWARFEE>"));
+        let need_guild_name = lines.iter().any(|l| l.contains("<$GUILDNAME>"));
+        let need_agit_guild_name = lines.iter().any(|l| l.contains("<$AGITGUILDNAME>"));
+        let need_guild_rental_days_left =
+            lines.iter().any(|l| l.contains("<$GUILDGTRENTALDAYSLEFT>"));
 
         // Character summary based values: USERNAME, LEVEL, CLASS.
         let mut username: Option<String> = None;
@@ -365,6 +374,7 @@ impl LoginConnection {
         let mut stone_str: Option<String> = None;
         let mut torch_str: Option<String> = None;
         let mut mount_str: Option<String> = None;
+        let mut mount_loyalty_str: Option<String> = None;
 
         if need_armour
             || need_weapon
@@ -380,6 +390,7 @@ impl LoginConnection {
             || need_stone
             || need_torch
             || need_mount
+            || need_mount_loyalty
         {
             let world = self.world.lock().unwrap();
             if let Some((_, equipment)) = world.player_items(self.session_id) {
@@ -433,6 +444,72 @@ impl LoginConnection {
                 }
                 if need_mount {
                     mount_str = Some(slot_name(13, "No Mount"));
+                }
+                if need_mount_loyalty {
+                    if let Some(item) = equipment.slots.get(13).and_then(|s| s.as_ref()) {
+                        mount_loyalty_str =
+                            Some(format!("{} ({})", item.current_dura, item.max_dura));
+                    } else {
+                        mount_loyalty_str = Some("No Mount".to_string());
+                    }
+                }
+            }
+        }
+
+        // Guild-related placeholders.
+        let mut guild_war_time_str: Option<String> = None;
+        let mut guild_war_fee_str: Option<String> = None;
+        let mut guild_name_str: Option<String> = None;
+        let mut agit_guild_name_str: Option<String> = None;
+        let mut guild_rental_days_left_str: Option<String> = None;
+
+        if need_guild_war_time || need_guild_war_fee {
+            let cfg = world::configs::guild_settings();
+            if need_guild_war_time {
+                guild_war_time_str = Some(cfg.war_time.to_string());
+            }
+            if need_guild_war_fee {
+                guild_war_fee_str = Some(cfg.war_cost.to_string());
+            }
+        }
+
+        if need_guild_name || need_agit_guild_name || need_guild_rental_days_left {
+            let world = self.world.lock().unwrap();
+            let player_guild = world
+                .player_guild_name(self.session_id)
+                .unwrap_or_default();
+
+            if need_guild_name {
+                if player_guild.is_empty() {
+                    guild_name_str = Some("No Guild".to_string());
+                } else {
+                    guild_name_str = Some(format!("{} Guild", player_guild));
+                }
+            }
+
+            if need_agit_guild_name {
+                if player_guild.is_empty() {
+                    agit_guild_name_str = Some("NO GUILD".to_string());
+                } else {
+                    agit_guild_name_str = Some(player_guild.clone());
+                }
+            }
+
+            if need_guild_rental_days_left {
+                if player_guild.is_empty() {
+                    guild_rental_days_left_str = Some("0".to_string());
+                } else if let Some(guild) = world.get_guild_info_by_name(&player_guild) {
+                    let now_ticks = Self::unix_ms_to_dotnet_binary(Self::now_millis());
+                    const TICKS_PER_DAY: i64 = 24 * 60 * 60 * 10_000_000;
+                    let delta = guild.gt_rent_ticks - now_ticks;
+                    let days = if TICKS_PER_DAY > 0 {
+                        delta / TICKS_PER_DAY
+                    } else {
+                        0
+                    };
+                    guild_rental_days_left_str = Some(days.to_string());
+                } else {
+                    guild_rental_days_left_str = Some("0".to_string());
                 }
             }
         }
@@ -526,6 +603,32 @@ impl LoginConnection {
                 }
             }
 
+            if let Some(ref v) = guild_war_time_str {
+                if line.contains("<$GUILDWARTIME>") {
+                    line = line.replace("<$GUILDWARTIME>", v);
+                }
+            }
+            if let Some(ref v) = guild_war_fee_str {
+                if line.contains("<$GUILDWARFEE>") {
+                    line = line.replace("<$GUILDWARFEE>", v);
+                }
+            }
+            if let Some(ref v) = guild_name_str {
+                if line.contains("<$GUILDNAME>") {
+                    line = line.replace("<$GUILDNAME>", v);
+                }
+            }
+            if let Some(ref v) = agit_guild_name_str {
+                if line.contains("<$AGITGUILDNAME>") {
+                    line = line.replace("<$AGITGUILDNAME>", v);
+                }
+            }
+            if let Some(ref v) = guild_rental_days_left_str {
+                if line.contains("<$GUILDGTRENTALDAYSLEFT>") {
+                    line = line.replace("<$GUILDGTRENTALDAYSLEFT>", v);
+                }
+            }
+
             if let Some(ref v) = armour_str {
                 if line.contains("<$ARMOUR>") {
                     line = line.replace("<$ARMOUR>", v);
@@ -594,6 +697,12 @@ impl LoginConnection {
             if let Some(ref v) = mount_str {
                 if line.contains("<$MOUNT>") {
                     line = line.replace("<$MOUNT>", v);
+                }
+            }
+
+            if let Some(ref v) = mount_loyalty_str {
+                if line.contains("<$MOUNTLOYALTY>") {
+                    line = line.replace("<$MOUNTLOYALTY>", v);
                 }
             }
 

@@ -4,7 +4,12 @@ use std::time::Instant;
 
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
-use crystal_shared_proto::guild::{CEditGuildMember, CEditGuildNotice, CRequestGuildInfo};
+use crystal_shared_proto::guild::{
+    CEditGuildMember,
+    CEditGuildNotice,
+    CRequestGuildInfo,
+    CGuildStorageGoldChange,
+};
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::CDropItem;
 use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
@@ -311,14 +316,17 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::GuildStorageGoldChange => {
-                tracing::debug!(
-                    "GuildStorageGoldChange packet received but not implemented yet",
-                );
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "行会仓库金币变更功能尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                match CGuildStorageGoldChange::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_guild_storage_gold_change(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CGuildStorageGoldChange from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
                 }
             }
             ClientPacketId::GuildStorageItemChange => {

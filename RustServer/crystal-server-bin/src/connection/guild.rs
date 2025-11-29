@@ -4,14 +4,20 @@ use crystal_shared_proto::guild::{
     SGuildMemberChange,
     SGuildNoticeChange,
     SGuildExpGain,
+    SGuildStorageGoldChange,
     CRequestGuildInfo,
     CEditGuildNotice,
+    CGuildStorageGoldChange,
 };
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_i64_le, write_string};
 use crystal_shared_proto::login::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
-use crystal_shared_proto::scene::SObjectGuildNameChanged;
+use crystal_shared_proto::scene::{
+    SObjectGuildNameChanged,
+    SGainedGold,
+    SLoseGold,
+};
 use crystal_server_core::guild::{GuildInfo as CoreGuildInfo, GuildRank as CoreGuildRank};
-use crystal_server_core::world::world::{GuildJoinError, SessionId};
+use crystal_server_core::world::world::{GuildGoldChangeError, GuildJoinError, SessionId};
 use crystal_server_core::world::configs::guild_settings;
 
 use super::{LoginConnection, Stage};
@@ -127,6 +133,37 @@ impl LoginConnection {
     /// guild is accumulating experience within the same level.
     pub(crate) fn broadcast_guild_exp_gain(&self, guild_name: &str, amount: u32) {
         let pkt = SGuildExpGain { amount };
+
+        let Ok(raw) = pkt.encode() else {
+            return;
+        };
+        let encoded = Self::encode_raw(raw);
+
+        let summaries = self.player_summaries.lock().unwrap();
+        let mut outboxes = self.outboxes.lock().unwrap();
+
+        for (sid, v) in summaries.iter() {
+            if v.guild_name.eq_ignore_ascii_case(guild_name) {
+                outboxes.entry(*sid).or_default().push(encoded.clone());
+            }
+        }
+    }
+
+    /// Broadcast a GuildStorageGoldChange packet to all online members of the
+    /// specified guild. This mirrors the C# GuildObject.GuildStorageGoldChange
+    /// behaviour where all members see who donated/withdrew and how much.
+    fn broadcast_guild_storage_gold_change(
+        &self,
+        guild_name: &str,
+        change_type: u8,
+        amount: u32,
+        actor_name: &str,
+    ) {
+        let pkt = SGuildStorageGoldChange {
+            amount,
+            change_type,
+            name: actor_name.to_string(),
+        };
 
         let Ok(raw) = pkt.encode() else {
             return;
@@ -586,6 +623,232 @@ impl LoginConnection {
         // will receive GuildNoticeChange(update=-1) and then request the
         // updated notice via CRequestGuildInfo.
         self.broadcast_guild_notice_changed(&guild_name);
+    }
+
+    /// Handle guild storage gold changes (donate/retrieve) initiated by the
+    /// client. This mirrors the C# PlayerObject.GuildStorageGoldChange logic
+    /// for Type 0 (donate) and Type 1 (retrieve), including safe-zone checks,
+    /// leader-only retrieval, and guild/player gold caps.
+    pub(crate) fn handle_guild_storage_gold_change(
+        &mut self,
+        msg: CGuildStorageGoldChange,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Resolve current guild and player name from the cached PlayerVisual.
+        let (guild_name, player_name) = {
+            let map = self.player_summaries.lock().unwrap();
+            match map.get(&self.session_id) {
+                Some(v) => (v.guild_name.clone(), v.name.clone()),
+                None => (String::new(), String::new()),
+            }
+        };
+
+        if guild_name.is_empty() {
+            self.send_system_chat("You are not part of a guild.", out);
+            return;
+        }
+
+        // Enforce safe-zone restriction for guild storage usage.
+        let in_safe_zone = {
+            let world = self.world.lock().unwrap();
+            world.player_in_safe_zone(self.session_id)
+        };
+        if !in_safe_zone {
+            self.send_system_chat(
+                "You cannot use guild storage outside safezones.",
+                out,
+            );
+            return;
+        }
+
+        let amount = msg.amount;
+        if amount == 0 {
+            // Nothing to do; mirror C# by silently ignoring zero changes.
+            return;
+        }
+
+        match msg.change_type {
+            // Type 0 = donate gold from player to guild bank.
+            0 => {
+                let stats = match self.current_stats.clone() {
+                    Some(s) => s,
+                    None => {
+                        self.send_system_chat(
+                            "Character stats not available, cannot change guild gold.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                let amount_i64 = amount as i64;
+                if stats.gold < amount_i64 {
+                    self.send_system_chat("Insufficient gold.", out);
+                    return;
+                }
+
+                let guild_result = {
+                    let mut world = self.world.lock().unwrap();
+                    world.guild_add_gold(&guild_name, amount)
+                };
+
+                let updated_guild = match guild_result {
+                    Ok(g) => g,
+                    Err(GuildGoldChangeError::NotFound) => {
+                        self.send_system_chat("Guild not found.", out);
+                        return;
+                    }
+                    Err(GuildGoldChangeError::Overflow) => {
+                        self.send_system_chat("Guild gold limit reached.", out);
+                        return;
+                    }
+                    Err(GuildGoldChangeError::InsufficientGuildGold) => {
+                        // Should not occur on add path; treat as generic failure.
+                        self.send_system_chat("Guild gold limit reached.", out);
+                        return;
+                    }
+                };
+
+                // Persist updated guild snapshot.
+                let _ = self.store.save_guild(&updated_guild);
+
+                // Deduct gold from the player and persist CharacterStats.
+                let mut new_stats = stats.clone();
+                new_stats.gold = new_stats.gold.saturating_sub(amount_i64);
+
+                if let (Some(ref account_id), Some(char_idx)) =
+                    (self.account_id.as_ref(), self.current_char_index)
+                {
+                    let _ = self
+                        .store
+                        .save_character_stats(account_id, char_idx, &new_stats);
+                }
+
+                self.current_stats = Some(new_stats.clone());
+
+                // Notify the caller about the gold deduction.
+                let lose = SLoseGold { gold: amount };
+                if let Ok(raw) = lose.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
+                // Broadcast guild storage gold change to all online guild members.
+                self.broadcast_guild_storage_gold_change(
+                    &guild_name,
+                    0,
+                    amount,
+                    &player_name,
+                );
+            }
+            // Type 1 = retrieve gold from guild bank to player. Leader-only.
+            1 => {
+                let (rank_index, _options) = match self
+                    .get_kicker_rank_index_and_options(&guild_name)
+                {
+                    Some(v) => v,
+                    None => {
+                        self.send_system_chat(
+                            "Guild data not found for gold operation.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                // Only the leader (rank index 0) may retrieve guild gold.
+                if rank_index != 0 {
+                    self.send_system_chat("Insufficient rank.", out);
+                    return;
+                }
+
+                let stats = match self.current_stats.clone() {
+                    Some(s) => s,
+                    None => {
+                        self.send_system_chat(
+                            "Character stats not available, cannot change guild gold.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                // Mirror C# CanGainGold(uint): ensure resulting gold does not
+                // exceed the legacy uint.MaxValue cap.
+                let current_gold_u64 = if stats.gold <= 0 {
+                    0u64
+                } else {
+                    stats.gold as u64
+                };
+                let new_total_u64 = current_gold_u64.saturating_add(amount as u64);
+                if new_total_u64 > u32::MAX as u64 {
+                    self.send_system_chat("Gold limit reached.", out);
+                    return;
+                }
+
+                let guild_result = {
+                    let mut world = self.world.lock().unwrap();
+                    world.guild_subtract_gold(&guild_name, amount)
+                };
+
+                let updated_guild = match guild_result {
+                    Ok(g) => g,
+                    Err(GuildGoldChangeError::NotFound) => {
+                        self.send_system_chat("Guild not found.", out);
+                        return;
+                    }
+                    Err(GuildGoldChangeError::InsufficientGuildGold) => {
+                        self.send_system_chat("Insufficient gold.", out);
+                        return;
+                    }
+                    Err(GuildGoldChangeError::Overflow) => {
+                        // Not expected on subtract path; treat as generic failure.
+                        self.send_system_chat("Guild gold operation failed.", out);
+                        return;
+                    }
+                };
+
+                // Persist updated guild snapshot.
+                let _ = self.store.save_guild(&updated_guild);
+
+                // Add gold to the player and persist CharacterStats.
+                let mut new_stats = stats.clone();
+                new_stats.gold = (new_stats.gold.saturating_add(amount as i64))
+                    .min(u32::MAX as i64);
+
+                if let (Some(ref account_id), Some(char_idx)) =
+                    (self.account_id.as_ref(), self.current_char_index)
+                {
+                    let _ = self
+                        .store
+                        .save_character_stats(account_id, char_idx, &new_stats);
+                }
+
+                self.current_stats = Some(new_stats.clone());
+
+                // Notify the caller about the gold gain.
+                let gain = SGainedGold { gold: amount };
+                if let Ok(raw) = gain.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
+                // Broadcast guild storage gold change to all online guild members.
+                self.broadcast_guild_storage_gold_change(
+                    &guild_name,
+                    1,
+                    amount,
+                    &player_name,
+                );
+            }
+            _ => {
+                // Other change types (2,3) are currently driven by server-side
+                // guild territory / war flows and are not expected from the
+                // client. Ignore them here.
+            }
+        }
     }
 
     pub(crate) fn handle_edit_guild_member(

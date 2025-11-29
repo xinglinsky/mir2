@@ -17,6 +17,7 @@ pub mod recipe;
 pub mod configs;
 pub mod player;
 pub mod player_stats;
+pub mod player_runtime;
 pub mod movement;
 pub mod monster_runtime;
 pub mod combat;

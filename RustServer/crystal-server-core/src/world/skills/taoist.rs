@@ -6,6 +6,10 @@ use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
 use crate::world::Spell;
 use rand::{thread_rng, Rng};
 
+const ITEM_TYPE_AMULET: u8 = 8;
+const SHINSU_AMULET_COUNT: u16 = 5;
+const HOLY_DEVA_AMULET_COUNT: u16 = 2;
+const DEFAULT_AMULET_SHAPE: i16 = 0;
 pub fn cast_healing<P: WorldProvider>(
     world: &mut World<P>,
     session_id: SessionId,
@@ -756,7 +760,14 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
     _y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, caster_x, caster_y, level) = {
+    // First try to recall an existing Shinsu pet for this player, mirroring
+    // the C# behaviour where a second cast recalls instead of summoning a
+    // new instance.
+    if world.recall_pet_for_player(session_id, PetKind::TaoistShinsu, events) {
+        return;
+    }
+
+    let (map_index, caster_x, caster_y, level, amulet_slot) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -778,9 +789,51 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
             return;
         }
 
+        let mut amulet_slot: Option<usize> = None;
+
+        for (idx, slot) in player.inventory.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= SHINSU_AMULET_COUNT as u32 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
         player.mp -= cost;
 
-        (player.map_index, player.x, player.y, level)
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            amulet_slot,
+        )
     };
 
     if world
@@ -788,6 +841,18 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
         .is_none()
     {
         return;
+    }
+
+    if let Some(player) = world.players.get_mut(&session_id) {
+        if let Some(slot) = player.inventory.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > SHINSU_AMULET_COUNT {
+                    item.count = item.count.saturating_sub(SHINSU_AMULET_COUNT);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
     }
 
     world.level_up_magic_for_player(session_id, Spell::SummonShinsu as u8, events);
@@ -813,7 +878,13 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
     _y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, caster_x, caster_y, level) = {
+    // As with Shinsu, recast behaves as a recall for an existing HolyDeva
+    // pet when present.
+    if world.recall_pet_for_player(session_id, PetKind::TaoistHolyDeva, events) {
+        return;
+    }
+
+    let (map_index, caster_x, caster_y, level, amulet_slot) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -835,9 +906,51 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
             return;
         }
 
+        let mut amulet_slot: Option<usize> = None;
+
+        for (idx, slot) in player.inventory.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= HOLY_DEVA_AMULET_COUNT as u32 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
         player.mp -= cost;
 
-        (player.map_index, player.x, player.y, level)
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            amulet_slot,
+        )
     };
 
     if world
@@ -845,6 +958,18 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
         .is_none()
     {
         return;
+    }
+
+    if let Some(player) = world.players.get_mut(&session_id) {
+        if let Some(slot) = player.inventory.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > HOLY_DEVA_AMULET_COUNT {
+                    item.count = item.count.saturating_sub(HOLY_DEVA_AMULET_COUNT);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
     }
 
     world.level_up_magic_for_player(session_id, Spell::SummonHolyDeva as u8, events);
