@@ -203,16 +203,16 @@ impl<P: WorldProvider> World<P> {
             cur_y = ty;
         }
 
-        println!(
-            "[move] apply_step: map {} dir {} dist {} from ({}, {}) to ({}, {})",
-            player.map_index,
-            direction,
-            distance,
-            player.x,
-            player.y,
-            cur_x,
-            cur_y,
-        );
+        // println!(
+        //     "[move] apply_step: map {} dir {} dist {} from ({}, {}) to ({}, {})",
+        //     player.map_index,
+        //     direction,
+        //     distance,
+        //     player.x,
+        //     player.y,
+        //     cur_x,
+        //     cur_y,
+        // );
 
         player.x = cur_x;
         player.y = cur_y;

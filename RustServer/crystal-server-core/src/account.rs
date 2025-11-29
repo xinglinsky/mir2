@@ -219,6 +219,12 @@ pub trait AccountStore: Send + Sync {
     fn save_guild(&self, guild: &GuildInfo) -> Result<(), StoreError>;
 
     fn delete_guild(&self, id: i32) -> Result<(), StoreError>;
+
+    /// Look up a character by exact name, returning (account_id, idx) if
+    /// found. This is used for guild operations such as kicking members by
+    /// name, mirroring the C# server's ability to operate on offline
+    /// characters.
+    fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError>;
 }
 
 pub fn hash_password(password: &str) -> String {

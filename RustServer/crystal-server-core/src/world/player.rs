@@ -8,6 +8,7 @@ use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
 
 use super::{Job, PlayerStats, SessionId, World};
+use crate::world::types::AttackMode;
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
@@ -22,6 +23,7 @@ pub struct PlayerState {
     pub experience: i64,
     pub job: Job,
     pub gender: u8,
+    pub guild_name: String,
     pub allow_group: bool,
     pub party_id: Option<PartyId>,
     pub pending_group_invite_from: Option<SessionId>,
@@ -42,6 +44,10 @@ pub struct PlayerState {
     pub trade_gold: u32,
     pub trade_locked: bool,
     pub trade: Vec<Option<UserItemData>>,
+    pub pk_points: i32,
+    pub brown_time_ms: i64,
+    pub next_pk_decay_ms: i64,
+    pub attack_mode: u8,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -109,6 +115,7 @@ impl<P: WorldProvider> World<P> {
                     experience,
                     job,
                     gender,
+                    guild_name: String::new(),
                     allow_group: true,
                     party_id: None,
                     pending_group_invite_from: None,
@@ -129,6 +136,10 @@ impl<P: WorldProvider> World<P> {
                     trade_gold: 0,
                     trade_locked: false,
                     trade: vec![None; 10],
+                    pk_points: 0,
+                    brown_time_ms: 0,
+                    next_pk_decay_ms: 0,
+                    attack_mode: 5,
                 }
             });
 
@@ -158,6 +169,19 @@ impl<P: WorldProvider> World<P> {
         player.hp = max_hp;
         player.mp = max_mp;
         Some(())
+    }
+
+    pub fn set_player_guild_name(&mut self, session_id: SessionId, guild_name: &str) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.guild_name = guild_name.to_string();
+        }
+    }
+
+    pub fn set_player_attack_mode(&mut self, session_id: SessionId, mode: u8) {
+        let amode = AttackMode::from_u8(mode);
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.attack_mode = amode.as_u8();
+        }
     }
 
     /// Learn a new magic for the given player session. If the magic is already
@@ -672,22 +696,6 @@ impl<P: WorldProvider> World<P> {
         // for compatibility with existing data.
         if item.soul_bound_id > 0 && item.soul_bound_id != player.character_index {
             return false;
-        }
-
-        if let Some(dest) = player.equipment.get(slot) {
-            if dest.cursed {
-                return false;
-            }
-
-            if dest.wedding_ring != -1 {
-                return false;
-            }
-
-            if let Some(info) = self.provider.get_item_info(dest.item_index) {
-                if (info.bind & 0x0008i16) != 0 {
-                    return false;
-                }
-            }
         }
 
         self.can_equip_item_for_player(player, item, slot)

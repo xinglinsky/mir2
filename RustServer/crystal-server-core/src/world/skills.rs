@@ -1,6 +1,9 @@
 use rand::thread_rng;
 
 pub mod warrior;
+pub mod wizard;
+pub mod assassin;
+pub mod taoist;
 
 use crate::stats::{Stat, Stats};
 use crate::world::magic::magic_damage;
@@ -154,7 +157,11 @@ pub fn compute_pure_magic_attack_damage<P: WorldProvider>(
         let dmg = magic_damage(info, level, damage_base, &mut rng);
         dmg.max(0)
     } else {
-        0
+        // If there is no MagicInfo entry for this spell, fall back to using
+        // the sampled magic attack power directly so that pure magic spells
+        // such as SoulFireBall still deal damage instead of silently
+        // failing.
+        damage_base.max(0)
     }
 }
 

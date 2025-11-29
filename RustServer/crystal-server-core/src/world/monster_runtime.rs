@@ -144,6 +144,8 @@ impl<P: WorldProvider> World<P> {
         // stats). This runs independently of SafeZone healing.
         self.process_player_regen(now_ms, &mut events);
 
+        self.process_player_pk(now_ms);
+
         // SafeZoneHealing: periodically heal players standing inside any
         // configured SafeZone when Settings.SafeZoneHealing is enabled. This
         // mirrors the effect of C# Healing spell objects placed by
@@ -396,6 +398,14 @@ impl<P: WorldProvider> World<P> {
     fn process_monster_buffs(&mut self, now_ms: i64) {
         for monsters in self.monsters.values_mut() {
             for monster in monsters.iter_mut() {
+                // Skip any monsters that have already been reduced to 0 HP by
+                // previous combat logic (player skills, guards, etc.). Dead
+                // monsters remain in the monsters list so that the client can
+                // continue to render their corpses, but they should not run
+                // further AI.
+                if monster.hp <= 0 {
+                    continue;
+                }
                 if monster.buffs.is_empty() {
                     continue;
                 }
@@ -508,6 +518,21 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    fn process_player_pk(&mut self, now_ms: i64) {
+        const PK_DECAY_INTERVAL_MS: i64 = 12_000;
+
+        for player in self.players.values_mut() {
+            if player.pk_points > 0 {
+                if player.next_pk_decay_ms == 0 || now_ms >= player.next_pk_decay_ms {
+                    player.pk_points = player.pk_points.saturating_sub(1);
+                    player.next_pk_decay_ms = now_ms.saturating_add(PK_DECAY_INTERVAL_MS);
+                }
+            } else {
+                player.next_pk_decay_ms = 0;
+            }
+        }
+    }
+
     fn process_monster_ai(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
         let player_positions: Vec<(u32, i32, i32, i32, u8)> = self
             .players
@@ -537,6 +562,12 @@ impl<P: WorldProvider> World<P> {
             };
 
             for monster in monsters.iter_mut() {
+                if monster.hp <= 0 {
+                    monster.ai_state = MonsterAiState::Idle;
+                    monster.target_session_id = None;
+                    continue;
+                }
+
                 let (ai, view_range, move_speed, attack_speed) = {
                     let Some(info) = self.provider.get_monster_info(monster.monster_index) else {
                         monster.ai_state = MonsterAiState::Idle;
@@ -810,6 +841,17 @@ impl<P: WorldProvider> World<P> {
                         };
                         monster.direction = dir;
 
+                        events.push(WorldEvent::ObjectAttack {
+                            session_id: monster.id as u32,
+                            map_index,
+                            x: monster.x,
+                            y: monster.y,
+                            direction: dir,
+                            spell: 0,
+                            level: 0,
+                            attack_type: 0,
+                        });
+
                         pending_attacks.push((
                             monster.id,
                             map_index,
@@ -1049,6 +1091,13 @@ impl<P: WorldProvider> World<P> {
         const GUARD_AIS: [u8; 8] = [6, 57, 58, 102, 103, 104, 105, 113];
         let map_indices: Vec<i32> = self.monsters.keys().cloned().collect();
         let mut pending_kills: Vec<(i32, u64, i32, i32, u8)> = Vec::new();
+        let player_positions: Vec<(u32, i32, i32, i32, u8, i32)> = self
+            .players
+            .iter()
+            .filter(|(_, p)| !p.dead && p.hp > 0)
+            .map(|(&sid, p)| (sid, p.map_index, p.x, p.y, p.direction, p.pk_points))
+            .collect();
+        let mut pending_guard_hits: Vec<(u64, i32, u32, i32)> = Vec::new();
 
         for map_index in map_indices {
             let Some(monsters) = self.monsters.get_mut(&map_index) else {
@@ -1057,7 +1106,7 @@ impl<P: WorldProvider> World<P> {
 
             let len = monsters.len();
             for i in 0..len {
-                let (attack_range, attack_delay_ms, guard_x, guard_y) = {
+                let (attack_range, attack_delay_ms, guard_x, guard_y, guard_ai, guard_monster_index) = {
                     let m = &monsters[i];
 
                     if m.hp <= 0 {
@@ -1080,14 +1129,15 @@ impl<P: WorldProvider> World<P> {
 
                     let delay_ms = Self::compute_monster_attack_delay_ms(info.attack_speed);
 
-                    (range, delay_ms, m.x, m.y)
+                    (range, delay_ms, m.x, m.y, info.ai, m.monster_index)
                 };
 
                 if now_ms < monsters[i].next_attack_time_ms {
                     continue;
                 }
 
-                let mut best_target: Option<(usize, i32)> = None;
+                // Select the best monster target within range (for instant kills).
+                let mut best_monster: Option<(usize, i32)> = None;
 
                 for j in 0..len {
                     if j == i {
@@ -1114,25 +1164,102 @@ impl<P: WorldProvider> World<P> {
                         continue;
                     }
 
-                    match best_target {
-                        None => best_target = Some((j, dist)),
+                    match best_monster {
+                        None => best_monster = Some((j, dist)),
                         Some((_, best_dist)) if dist < best_dist => {
-                            best_target = Some((j, dist));
+                            best_monster = Some((j, dist));
                         }
                         _ => {}
                     }
                 }
 
-                let (target_id, target_x, target_y, target_dir) = match best_target {
-                    Some((idx, _)) => {
-                        let t = &monsters[idx];
-                        (t.id, t.x, t.y, t.direction)
-                    }
-                    None => continue,
-                };
+                // Optionally select the best red-name player target for PK guards.
+                let mut best_player: Option<(u32, i32, i32, u8, i32)> = None;
+                let can_attack_players = matches!(guard_ai, 6 | 58 | 113);
 
+                if can_attack_players {
+                    for (sid, p_map, px, py, p_dir, pk_points) in
+                        player_positions.iter().copied()
+                    {
+                        if p_map != map_index {
+                            continue;
+                        }
+
+                        if pk_points < 200 {
+                            continue;
+                        }
+
+                        let dx = px - guard_x;
+                        let dy = py - guard_y;
+                        let dist = dx.abs().max(dy.abs());
+                        if dist == 0 || dist > attack_range {
+                            continue;
+                        }
+
+                        match best_player {
+                            None => best_player = Some((sid, px, py, p_dir, dist)),
+                            Some((_, _, _, _, best_dist)) if dist < best_dist => {
+                                best_player = Some((sid, px, py, p_dir, dist));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // Choose between a monster or player target based on distance
+                // (prefer the closer one; on ties, prefer players to punish PK).
+                let mut target_is_player = false;
+                let mut target_id: u64 = 0;
+                let mut target_sid: u32 = 0;
+                let target_x: i32;
+                let target_y: i32;
+                let target_dir: u8;
+
+                match (best_player, best_monster) {
+                    (Some((sid, px, py, p_dir, p_dist)), Some((m_idx, m_dist))) => {
+                        if p_dist <= m_dist {
+                            target_is_player = true;
+                            target_sid = sid;
+                            target_x = px;
+                            target_y = py;
+                            target_dir = p_dir;
+                        } else {
+                            let t = &monsters[m_idx];
+                            target_id = t.id;
+                            target_x = t.x;
+                            target_y = t.y;
+                            target_dir = t.direction;
+                        }
+                    }
+                    (Some((sid, px, py, p_dir, _)), None) => {
+                        target_is_player = true;
+                        target_sid = sid;
+                        target_x = px;
+                        target_y = py;
+                        target_dir = p_dir;
+                    }
+                    (None, Some((m_idx, _))) => {
+                        let t = &monsters[m_idx];
+                        target_id = t.id;
+                        target_x = t.x;
+                        target_y = t.y;
+                        target_dir = t.direction;
+                    }
+                    (None, None) => {
+                        continue;
+                    }
+                }
+
+                let guard_id;
+                let guard_x;
+                let guard_y;
+                let guard_dir;
                 {
                     let guard = &mut monsters[i];
+                    guard_id = guard.id;
+                    guard_x = guard.x;
+                    guard_y = guard.y;
+
                     let dx = target_x - guard.x;
                     let dy = target_y - guard.y;
                     let sx = dx.clamp(-1, 1);
@@ -1149,19 +1276,133 @@ impl<P: WorldProvider> World<P> {
                         _ => guard.direction,
                     };
                     guard.next_attack_time_ms = now_ms.saturating_add(attack_delay_ms);
+                    guard_dir = guard.direction;
                 }
 
-                pending_kills.push((map_index, target_id, target_x, target_y, target_dir));
+                // Emit the guard's attack using its own position and facing,
+                // mirroring C# where ObjectAttack carries the attacker's
+                // location and direction rather than the strike tile. The
+                // client derives hit cells from this data.
+                events.push(WorldEvent::ObjectAttack {
+                    session_id: guard_id as u32,
+                    map_index,
+                    x: guard_x,
+                    y: guard_y,
+                    direction: guard_dir,
+                    spell: 0,
+                    level: 0,
+                    attack_type: 0,
+                });
+
+                if target_is_player {
+                    pending_guard_hits.push((
+                        guard_id,
+                        map_index,
+                        target_sid,
+                        guard_monster_index,
+                    ));
+                } else {
+                    pending_kills.push((map_index, target_id, target_x, target_y, target_dir));
+                }
             }
         }
         for (map_index, target_id, x, y, direction) in pending_kills {
-            self.mark_monster_dead(map_index, target_id);
+            // For guard-instakilled monsters, mark them as dead and clear
+            // their AI/target state, but keep the MonsterInstance in the
+            // monsters list so the client can continue to render a corpse
+            // after receiving SObjectDied. We also remove dynamic occupancy so
+            // that the corpse no longer blocks movement.
+            if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                if let Some(m) = monsters.iter_mut().find(|m| m.id == target_id) {
+                    if m.hp > 0 {
+                        m.hp = 0;
+                    }
+                    m.ai_state = MonsterAiState::Idle;
+                    m.target_session_id = None;
+                }
+            }
+
+            // Use the strike coordinates captured in pending_kills for
+            // occupancy removal to avoid needing a second mutable borrow of
+            // self.monsters here.
+            self.remove_monster_from_occupancy(target_id, map_index, x, y);
+
             events.push(WorldEvent::MonsterDied {
                 object_id: target_id,
                 map_index,
                 x,
                 y,
                 direction,
+            });
+        }
+
+        // Resolve pending guard hits against players using the same
+        // MonsterHitPlayer model as generic monster AI.
+        for (monster_id, map_index, target_sid, monster_index) in pending_guard_hits {
+            let Some(player) = self.players.get_mut(&target_sid) else {
+                continue;
+            };
+
+            if player.dead || player.hp <= 0 {
+                continue;
+            }
+
+            let defender_stats: Stats = player.stats.total.clone();
+            let max_hp = defender_stats.get(Stat::HP).max(1);
+            if max_hp <= 0 {
+                continue;
+            }
+
+            let Some(info) = self.provider.get_monster_info(monster_index) else {
+                continue;
+            };
+
+            let mut attacker_stats: Stats = info.stats.clone();
+            if let Some(monsters) = self.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == monster_id) {
+                    attacker_stats.add(&m.buff_stats);
+                }
+            }
+
+            let (hit, raw_damage, raw_damage_type) =
+                compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+
+            let (damage, damage_type, new_hp) = if !hit {
+                let old_hp = player.hp.max(0);
+                (0, 1_u8, old_hp)
+            } else {
+                if raw_damage <= 0 {
+                    continue;
+                }
+
+                let damage = raw_damage;
+                let old_hp = player.hp.max(0);
+                let new_hp = old_hp.saturating_sub(damage).max(0);
+                if new_hp == old_hp {
+                    continue;
+                }
+
+                player.hp = new_hp;
+                if new_hp <= 0 {
+                    player.dead = true;
+                }
+
+                (damage, raw_damage_type, new_hp)
+            };
+
+            let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
+                .clamp(0, 100) as u8;
+
+            events.push(WorldEvent::MonsterHitPlayer {
+                attacker_monster_id: monster_id,
+                session_id: target_sid,
+                map_index,
+                x: player.x,
+                y: player.y,
+                direction: player.direction,
+                damage,
+                damage_type,
+                health_percent,
             });
         }
     }

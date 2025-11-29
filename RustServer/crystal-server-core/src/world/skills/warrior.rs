@@ -1,4 +1,13 @@
+use crate::stats::{Stat, Stats};
+use crate::world::buff::PlayerBuff;
+use crate::world::monster::MonsterAiState;
+use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
+use crate::world::skills::compute_magic_mana_cost;
+use crate::world::types::BuffType;
+use crate::world::{SessionId, Spell, World, WorldEvent};
+use crate::combat::compute_physical_melee_with_crit;
+use rand::{thread_rng, Rng};
 
 const SPELL_HALF_MOON: u8 = crate::world::Spell::HalfMoon as u8;
 const SPELL_THRUSTING: u8 = crate::world::Spell::Thrusting as u8;
@@ -217,4 +226,778 @@ pub fn thrusting_max_range<P: WorldProvider>(provider: &P, _level: u8) -> i32 {
     // If we ever want to scale Thrusting range by level, we can do so here.
     // For now we keep it at the static MagicInfo range.
     base
+}
+
+/// Resolve the Slaying (刺杀剑术) charge/consume behaviour for a single
+/// melee attack. This mirrors the logic embedded in combat.rs, updating the
+/// effective spell and level as well as the player's slaying_charged flag
+/// and whether a SpellToggle event should be emitted.
+pub fn resolve_slaying_for_attack(
+    player: &mut PlayerState,
+    effective_spell: &mut u8,
+    level: &mut u8,
+    slaying_toggled_on: &mut bool,
+) {
+    // If the player explicitly attempts to use Slaying, require an existing
+    // charge; otherwise fall back to a plain melee swing.
+    if *level > 0 && *effective_spell == Spell::Slaying as u8 {
+        if !player.slaying_charged {
+            *effective_spell = 0;
+            *level = 0;
+        } else {
+            // Consume the one-shot Slaying charge for this swing but do not
+            // emit a SpellToggle(false) event. The original C# implementation
+            // only sends SpellToggle when Slaying becomes available, not when
+            // it is spent, so the icon may remain lit until the next refresh.
+            player.slaying_charged = false;
+        }
+    }
+
+    // If Slaying is not currently charged, roll for a new charge using the
+    // same pattern as the C# server:
+    //   if (magic != null && Random.Next(12) <= magic.Level)
+    //       Slaying = true;
+    if !player.slaying_charged {
+        if let Some(magic) = player
+            .magics
+            .iter()
+            .find(|m| m.spell == Spell::Slaying as u8)
+        {
+            let mut rng = thread_rng();
+            let roll: i32 = rng.gen_range(0..12);
+            if roll <= magic.level as i32 {
+                player.slaying_charged = true;
+                *slaying_toggled_on = true;
+            }
+        }
+    }
+}
+
+/// Cast HalfMoon for a warrior, applying physical damage,
+/// FatalSword/undead modifiers, experience and drops to all monsters hit
+/// by the arc. This mirrors the logic previously embedded in combat.rs.
+pub fn cast_half_moon<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    map_index: i32,
+    x: i32,
+    y: i32,
+    direction: u8,
+    level: u8,
+    fatal_level: Option<u8>,
+    attacker_stats: &Stats,
+    events: &mut Vec<WorldEvent>,
+) {
+    let targets = compute_half_moon_targets(x, y, direction);
+
+    for (tx, ty, is_primary) in targets {
+        let target_info = match world.monsters.get(&map_index) {
+            Some(monsters) => monsters
+                .iter()
+                .find(|m| m.x == tx && m.y == ty)
+                .map(|m| (m.id, m.monster_index)),
+            None => None,
+        };
+
+        if let Some((id, monster_index)) = target_info {
+            let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
+                u32,
+                bool,
+                i32,
+                Stats,
+                Vec<crate::world::drop::DropInfo>,
+            ) = if let Some(info) = world.provider.get_monster_info(monster_index) {
+                let max_hp = info.stats.get(Stat::HP).max(1);
+                (
+                    info.experience,
+                    info.undead,
+                    max_hp,
+                    info.stats.clone(),
+                    info.drops.clone(),
+                )
+            } else {
+                (0, false, 1, Stats::default(), Vec::new())
+            };
+
+            let (hit, mut raw_damage, damage_type) =
+                compute_physical_melee_with_crit(attacker_stats, &defender_stats);
+
+            if hit && raw_damage > 0 {
+                raw_damage = compute_half_moon_damage_for_target(
+                    &world.provider,
+                    raw_damage,
+                    level,
+                    is_primary,
+                );
+
+                raw_damage = super::apply_fatal_sword_and_undead(
+                    &world.provider,
+                    fatal_level,
+                    undead,
+                    raw_damage,
+                );
+            }
+
+            let mut strike_x = tx;
+            let mut strike_y = ty;
+            let mut strike_dir = direction;
+            let mut damage_done: i32 = 0;
+            let mut health_percent: u8 = 100;
+            let mut dead = false;
+
+            if let Some(monsters) = world.monsters.get_mut(&map_index) {
+                if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                    m.target_session_id = Some(session_id);
+                    m.ai_state = MonsterAiState::Chase;
+
+                    strike_x = m.x;
+                    strike_y = m.y;
+                    strike_dir = m.direction;
+
+                    let old_hp = m.hp.max(0);
+                    let mut new_hp = old_hp;
+
+                    if hit && raw_damage > 0 {
+                        damage_done = raw_damage;
+
+                        if raw_damage >= m.hp {
+                            m.hp = 0;
+                            dead = true;
+                        } else {
+                            m.hp -= raw_damage;
+                        }
+
+                        new_hp = if dead { 0 } else { m.hp.max(0) };
+                    }
+
+                    if max_hp > 0 {
+                        let pct = (new_hp as i64 * 100 / max_hp as i64)
+                            .clamp(0, 100) as u8;
+                        health_percent = pct;
+                    } else {
+                        health_percent = 0;
+                    }
+                }
+            }
+
+            if hit {
+                if damage_done > 0 {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: id,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: damage_done,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+            } else {
+                events.push(WorldEvent::ObjectStruck {
+                    attacker_id: session_id,
+                    target_id: id,
+                    map_index,
+                    x: strike_x,
+                    y: strike_y,
+                    direction: strike_dir,
+                    damage: 0,
+                    damage_type,
+                    health_percent,
+                });
+            }
+
+            if dead {
+                world.mark_monster_dead(map_index, id);
+
+                if let Some(info) = world.provider.get_monster_info(monster_index) {
+                    println!(
+                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                        monster_index,
+                        info.name,
+                        info.drop_path,
+                        monster_drops.len(),
+                    );
+                }
+
+                if !monster_drops.is_empty() {
+                    let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
+                    let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
+                    let mut rng = thread_rng();
+                    let mut total = crate::world::drop::DropRewardInfo {
+                        items: Vec::new(),
+                        gold: 0,
+                    };
+
+                    for d in &monster_drops {
+                        if d.quest_required {
+                            continue;
+                        }
+
+                        if let Some(r) = d.attempt_drop(
+                            world.drop_rate,
+                            item_offset,
+                            gold_offset,
+                            &mut rng,
+                        ) {
+                            total.gold = total.gold.saturating_add(r.gold);
+                            if !r.items.is_empty() {
+                                total.items.extend(r.items);
+                            }
+                        }
+                    }
+
+                    println!(
+                        "[drop-total] monster_index={} gold={} items_len={}",
+                        monster_index,
+                        total.gold,
+                        total.items.len(),
+                    );
+
+                    if total.gold > 0 || !total.items.is_empty() {
+                        let entry = world.map_items.entry(map_index).or_default();
+                        let item_timeout_ms: i64 = 300_000;
+
+                        if total.gold > 0 {
+                            let item_id = world.next_map_item_id;
+                            world.next_map_item_id =
+                                world.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: None,
+                                gold: total.gold,
+                                count: 0,
+                                item: None,
+                                expire_time_ms: world.time_ms + item_timeout_ms,
+                            });
+
+                            events.push(WorldEvent::GoldDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                gold: total.gold,
+                            });
+                        }
+
+                        for item_index in total.items {
+                            let item_id = world.next_map_item_id;
+                            world.next_map_item_id =
+                                world.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: Some(item_index),
+                                gold: 0,
+                                count: 1,
+                                item: None,
+                                expire_time_ms: world.time_ms + item_timeout_ms,
+                            });
+
+                            events.push(WorldEvent::ItemDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index,
+                                count: 1,
+                            });
+                        }
+                    }
+                }
+
+                if monster_exp > 0 {
+                    if let Some(p) = world.players.get_mut(&session_id) {
+                        p.experience = p
+                            .experience
+                            .saturating_add(monster_exp as i64);
+                    }
+
+                    events.push(WorldEvent::GainExperience {
+                        session_id,
+                        amount: monster_exp,
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Cast CrossHalfMoon for a warrior in the same fashion as the original
+/// combat.rs implementation, including drops and experience.
+pub fn cast_cross_half_moon<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    map_index: i32,
+    x: i32,
+    y: i32,
+    direction: u8,
+    level: u8,
+    fatal_level: Option<u8>,
+    attacker_stats: &Stats,
+    events: &mut Vec<WorldEvent>,
+) {
+    let targets = compute_cross_half_moon_targets(x, y, direction);
+
+    for (tx, ty, is_primary) in targets {
+        let target_info = match world.monsters.get(&map_index) {
+            Some(monsters) => monsters
+                .iter()
+                .find(|m| m.x == tx && m.y == ty)
+                .map(|m| (m.id, m.monster_index)),
+            None => None,
+        };
+
+        if let Some((id, monster_index)) = target_info {
+            let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
+                u32,
+                bool,
+                i32,
+                Stats,
+                Vec<crate::world::drop::DropInfo>,
+            ) = if let Some(info) = world.provider.get_monster_info(monster_index) {
+                let max_hp = info.stats.get(Stat::HP).max(1);
+                (
+                    info.experience,
+                    info.undead,
+                    max_hp,
+                    info.stats.clone(),
+                    info.drops.clone(),
+                )
+            } else {
+                (0, false, 1, Stats::default(), Vec::new())
+            };
+
+            let (hit, mut raw_damage, damage_type) =
+                compute_physical_melee_with_crit(attacker_stats, &defender_stats);
+
+            if hit && raw_damage > 0 {
+                raw_damage = compute_cross_half_moon_damage_for_target(
+                    &world.provider,
+                    raw_damage,
+                    level,
+                    is_primary,
+                );
+
+                raw_damage = super::apply_fatal_sword_and_undead(
+                    &world.provider,
+                    fatal_level,
+                    undead,
+                    raw_damage,
+                );
+            }
+
+            let mut strike_x = tx;
+            let mut strike_y = ty;
+            let mut strike_dir = direction;
+            let mut damage_done: i32 = 0;
+            let mut health_percent: u8 = 100;
+            let mut dead = false;
+
+            if let Some(monsters) = world.monsters.get_mut(&map_index) {
+                if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
+                    m.target_session_id = Some(session_id);
+                    m.ai_state = MonsterAiState::Chase;
+
+                    strike_x = m.x;
+                    strike_y = m.y;
+                    strike_dir = m.direction;
+
+                    let old_hp = m.hp.max(0);
+                    let mut new_hp = old_hp;
+
+                    if hit && raw_damage > 0 {
+                        damage_done = raw_damage;
+
+                        if raw_damage >= m.hp {
+                            m.hp = 0;
+                            dead = true;
+                        } else {
+                            m.hp -= raw_damage;
+                        }
+
+                        new_hp = if dead { 0 } else { m.hp.max(0) };
+                    }
+
+                    if max_hp > 0 {
+                        let pct = (new_hp as i64 * 100 / max_hp as i64)
+                            .clamp(0, 100) as u8;
+                        health_percent = pct;
+                    } else {
+                        health_percent = 0;
+                    }
+                }
+            }
+
+            if hit {
+                if damage_done > 0 {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: id,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: damage_done,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+            } else {
+                events.push(WorldEvent::ObjectStruck {
+                    attacker_id: session_id,
+                    target_id: id,
+                    map_index,
+                    x: strike_x,
+                    y: strike_y,
+                    direction: strike_dir,
+                    damage: 0,
+                    damage_type,
+                    health_percent,
+                });
+            }
+
+            if dead {
+                world.mark_monster_dead(map_index, id);
+
+                if let Some(info) = world.provider.get_monster_info(monster_index) {
+                    println!(
+                        "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                        monster_index,
+                        info.name,
+                        info.drop_path,
+                        monster_drops.len(),
+                    );
+                }
+
+                if !monster_drops.is_empty() {
+                    let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
+                    let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
+                    let mut rng = thread_rng();
+                    let mut total = crate::world::drop::DropRewardInfo {
+                        items: Vec::new(),
+                        gold: 0,
+                    };
+
+                    for d in &monster_drops {
+                        if d.quest_required {
+                            continue;
+                        }
+
+                        if let Some(r) = d.attempt_drop(
+                            world.drop_rate,
+                            item_offset,
+                            gold_offset,
+                            &mut rng,
+                        ) {
+                            total.gold = total.gold.saturating_add(r.gold);
+                            if !r.items.is_empty() {
+                                total.items.extend(r.items);
+                            }
+                        }
+                    }
+
+                    println!(
+                        "[drop-total] monster_index={} gold={} items_len={}",
+                        monster_index,
+                        total.gold,
+                        total.items.len(),
+                    );
+
+                    if total.gold > 0 || !total.items.is_empty() {
+                        let entry = world.map_items.entry(map_index).or_default();
+                        let item_timeout_ms: i64 = 300_000;
+
+                        if total.gold > 0 {
+                            let item_id = world.next_map_item_id;
+                            world.next_map_item_id =
+                                world.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: None,
+                                gold: total.gold,
+                                count: 0,
+                                item: None,
+                                expire_time_ms: world.time_ms + item_timeout_ms,
+                            });
+
+                            events.push(WorldEvent::GoldDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                gold: total.gold,
+                            });
+                        }
+
+                        for item_index in total.items {
+                            let item_id = world.next_map_item_id;
+                            world.next_map_item_id =
+                                world.next_map_item_id.wrapping_add(1);
+                            entry.push(crate::world::map_item::MapItem {
+                                id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index: Some(item_index),
+                                gold: 0,
+                                count: 1,
+                                item: None,
+                                expire_time_ms: world.time_ms + item_timeout_ms,
+                            });
+
+                            events.push(WorldEvent::ItemDropped {
+                                object_id: item_id,
+                                map_index,
+                                x: strike_x,
+                                y: strike_y,
+                                item_index,
+                                count: 1,
+                            });
+                        }
+                    }
+                }
+
+                if monster_exp > 0 {
+                    if let Some(p) = world.players.get_mut(&session_id) {
+                        p.experience = p
+                            .experience
+                            .saturating_add(monster_exp as i64);
+                    }
+
+                    events.push(WorldEvent::GainExperience {
+                        session_id,
+                        amount: monster_exp,
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// Cast FlamingSword for a warrior, applying the temporary weapon buff and
+/// training the magic if successful. This mirrors the logic previously
+/// in combat.rs, but is kept here with other warrior-specific helpers.
+pub fn cast_flaming_sword<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::FlamingSword as u8;
+    if let Some(player) = world.players.get_mut(&session_id) {
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        if player
+            .active_buffs
+            .iter()
+            .any(|b| b.buff_type == BuffType::FlamingSword)
+        {
+            return;
+        }
+
+        player.mp -= cost;
+
+        let duration_ms = 10_000;
+        let mut buff = PlayerBuff::new(BuffType::FlamingSword, world.time_ms + duration_ms);
+        buff.visible = false;
+        buff.values = vec![];
+        player.active_buffs.push(buff);
+
+        events.push(WorldEvent::SpellToggle {
+            session_id,
+            spell_id,
+            enabled: true,
+        });
+
+        world.level_up_magic_for_player(session_id, spell_id, events);
+    }
+}
+
+/// Cast Rage, granting a temporary DC buff via a player buff entry.
+pub fn cast_rage<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::Rage as u8;
+    let (duration_ms, stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        let duration_sec = 18 + 6 * level as i64;
+        let duration_ms = duration_sec.saturating_mul(1_000);
+
+        let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
+        let multiplier = 0.12 + 0.03 * level as f32;
+        let add_value = (max_dc * multiplier).round() as i32;
+
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxDC, add_value);
+        stats.set(Stat::MinDC, add_value);
+
+        (duration_ms, stats)
+    };
+
+    world.add_player_buff(
+        session_id,
+        BuffType::Rage,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+}
+
+/// Cast ImmortalSkin, trading DC for AC via a timed buff.
+pub fn cast_immortal_skin<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::ImmortalSkin as u8;
+    let (duration_ms, stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        let duration_sec = 60 + level as i64;
+        let duration_ms = duration_sec.saturating_mul(1_000);
+
+        let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
+        let max_ac = player.stats.total.get(Stat::MaxAC) as f32;
+
+        let dc_loss = (max_dc * (0.05 + 0.01 * level as f32)).round() as i32;
+        let ac_gain = (max_ac * (0.10 + 0.07 * level as f32)).round() as i32;
+
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxDC, -dc_loss);
+        stats.set(Stat::MaxAC, ac_gain);
+
+        (duration_ms, stats)
+    };
+
+    world.add_player_buff(
+        session_id,
+        BuffType::ImmortalSkin,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+}
+
+/// Cast CounterAttack, applying a temporary AC/MAC buff.
+pub fn cast_counter_attack<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::CounterAttack as u8;
+    let (duration_ms, stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        let duration_sec = 7_i64;
+        let duration_ms = duration_sec.saturating_mul(1_000);
+
+        let bonus = 11 + level as i32 * 3;
+        let mut stats = Stats::default();
+        stats.set(Stat::MinAC, bonus);
+        stats.set(Stat::MaxAC, bonus);
+        stats.set(Stat::MinMAC, bonus);
+        stats.set(Stat::MaxMAC, bonus);
+
+        (duration_ms, stats)
+    };
+
+    world.add_player_buff(
+        session_id,
+        BuffType::CounterAttack,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
 }

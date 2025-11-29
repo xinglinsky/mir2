@@ -14,7 +14,7 @@ use crate::world::monster::MonsterInstance;
 use crate::world::monster_runtime::RespawnRuntime;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
-use crystal_shared_proto::item_types::UserItemData;
+use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 
 pub type SessionId = u32;
 
@@ -669,6 +669,19 @@ impl<P: WorldProvider> World<P> {
         Ok(guild.clone())
     }
 
+    /// Remove a member with the given name from the specified guild. Returns
+    /// the updated GuildInfo and the rank index from which the member was
+    /// removed on success.
+    pub fn guild_remove_member_by_name(
+        &mut self,
+        guild_name: &str,
+        member_name: &str,
+    ) -> Option<(GuildInfo, u8)> {
+        let guild = self.guilds.get_guild_by_name_mut(guild_name)?;
+        let (rank_index, _member) = guild.remove_member_by_name(member_name)?;
+        Some((guild.clone(), rank_index))
+    }
+
     pub fn set_spawn_config(
         &mut self,
         spawn_multiplier: u16,
@@ -790,6 +803,74 @@ impl<P: WorldProvider> World<P> {
         }
 
         best_location
+    }
+
+    /// Choose an inventory slot for a newly gained item, mirroring the C#
+    /// HumanObject.AddItem behaviour:
+    ///
+    /// - Potions, scrolls and scripts with Effect == 1 prefer the potion
+    ///   belt slots.
+    /// - Amulets prefer the amulet belt slots.
+    /// - All other items prefer the main bag region first (slots at or above
+    ///   BeltSize), only falling back to belt slots when the bag is full.
+    fn pickup_slot_for_item(player: &PlayerState, info: &ItemInfoData) -> Option<usize> {
+        // Item type numeric values mirrored from C# ItemType enum.
+        const ITEM_TYPE_AMULET: u8 = 8;
+        const ITEM_TYPE_POTION: u8 = 13;
+        const ITEM_TYPE_SCROLL: u8 = 17;
+        const ITEM_TYPE_SCRIPT: u8 = 21;
+
+        // Belt layout mirrored from C# HumanObject.PotionBeltMinimum /
+        // PotionBeltMaximum / AmuletBeltMinimum / AmuletBeltMaximum /
+        // BeltSize for players (not heroes):
+        // - Potion belt: indices 0..4
+        // - Amulet belt: indices 4..6
+        // - Main bag:    indices 6..inventory.len()
+        const POTION_BELT_MIN: usize = 0;
+        const POTION_BELT_MAX: usize = 4; // exclusive
+        const AMULET_BELT_MIN: usize = 4;
+        const AMULET_BELT_MAX: usize = 6; // exclusive
+        const BELT_SIZE: usize = 6;
+
+        let slots = &player.inventory.slots;
+
+        let is_quick_potion_scroll_or_script = info.item_type == ITEM_TYPE_POTION
+            || info.item_type == ITEM_TYPE_SCROLL
+            || (info.item_type == ITEM_TYPE_SCRIPT && info.effect == 1);
+
+        if is_quick_potion_scroll_or_script {
+            // First preference: potion belt slots.
+            for idx in POTION_BELT_MIN..POTION_BELT_MAX {
+                if idx < slots.len() && slots[idx].is_none() {
+                    return Some(idx);
+                }
+            }
+        } else if info.item_type == ITEM_TYPE_AMULET {
+            // Amulets prefer the dedicated amulet belt slots.
+            for idx in AMULET_BELT_MIN..AMULET_BELT_MAX {
+                if idx < slots.len() && slots[idx].is_none() {
+                    return Some(idx);
+                }
+            }
+        } else {
+            // All other items (equipment, etc.) prefer the main bag region
+            // first, to avoid filling belt quick-slots with gear.
+            for idx in BELT_SIZE..slots.len() {
+                if slots[idx].is_none() {
+                    return Some(idx);
+                }
+            }
+        }
+
+        // Fallback: any free slot, including belt, when the preferred region
+        // is full. This matches the final loop in C# AddItem.
+        for (idx, slot) in slots.iter().enumerate() {
+            if slot.is_none() {
+                return Some(idx);
+            }
+        }
+
+        None
     }
 
     pub(crate) fn get_or_load_map(&self, map_index: i32) -> Option<map::Map> {
@@ -1362,16 +1443,26 @@ impl<P: WorldProvider> World<P> {
                                 create_fresh_user_item(info, unique_id, count)
                             };
 
+                            // Choose an inventory slot based on item type so
+                            // that consumables go to the belt quick-slots and
+                            // equipment/general items go to the main bag
+                            // first, mirroring the C# AddItem logic.
+                            let info = match self
+                                .provider
+                                .get_item_info(user_item.item_index)
+                            {
+                                Some(i) => i.clone(),
+                                None => return events,
+                            };
+
                             if let Some(player_state) =
                                 self.players.get_mut(&session_id)
                             {
-                                if let Some(slot) = player_state
-                                    .inventory
-                                    .slots
-                                    .iter()
-                                    .position(|s| s.is_none())
+                                if let Some(slot) =
+                                    Self::pickup_slot_for_item(player_state, &info)
                                 {
-                                    player_state.inventory.slots[slot] = Some(user_item.clone());
+                                    player_state.inventory.slots[slot] =
+                                        Some(user_item.clone());
 
                                     if let Some(items) =
                                         self.map_items.get_mut(&map_index)

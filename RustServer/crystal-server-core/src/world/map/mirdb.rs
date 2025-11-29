@@ -20,7 +20,7 @@ use self::map::*;
 use self::item::*;
 use self::monster::*;
 use self::npc::*;
-use self::quest::*;
+pub use self::quest::*;
 
 /// Load MapInfo records directly from a C# Server.MirDB database file.
 ///
@@ -360,6 +360,132 @@ pub fn load_npc_infos_from_mirdb<P: AsRef<Path>>(path: P) -> io::Result<Vec<NpcI
     }
 
     Ok(npc_infos)
+}
+
+/// Load GameShopItem records from the GameShopList section of a C# Server.MirDB
+/// file, mirroring the layout produced by Envir.SaveDB and
+/// Shared/Data/GameShopItem.Save (packet: false).
+pub fn load_game_shop_items_from_mirdb<P: AsRef<Path>>(
+    path: P,
+) -> io::Result<Vec<GameShopItemRecord>> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+
+    // Header written by Envir.SaveDB
+    let version = read_i32(&mut reader)?;
+    let custom_version = read_i32(&mut reader)?;
+
+    // Various index counters (max indices), currently ignored.
+    let _map_index = read_i32(&mut reader)?;
+    let _item_index = read_i32(&mut reader)?;
+    let _monster_index = read_i32(&mut reader)?;
+    let _npc_index = read_i32(&mut reader)?;
+    let _quest_index = read_i32(&mut reader)?;
+    let _gameshop_index = read_i32(&mut reader)?;
+    let _conquest_index = read_i32(&mut reader)?;
+    let _respawn_index = read_i32(&mut reader)?;
+
+    if version < 60 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported Server.MirDB version {} (expected >= 60)", version),
+        ));
+    }
+
+    // MapInfoList
+    let map_count = read_i32(&mut reader)?;
+    if map_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MapInfo count {} in Server.MirDB", map_count),
+        ));
+    }
+    for _ in 0..map_count {
+        let _ = read_map_info(&mut reader)?;
+    }
+
+    // ItemInfoList
+    let item_count = read_i32(&mut reader)?;
+    if item_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ItemInfo count {} in Server.MirDB", item_count),
+        ));
+    }
+    for _ in 0..item_count {
+        skip_item_info(&mut reader, version, custom_version)?;
+    }
+
+    // MonsterInfoList
+    let monster_count = read_i32(&mut reader)?;
+    if monster_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MonsterInfo count {} in Server.MirDB", monster_count),
+        ));
+    }
+    for _ in 0..monster_count {
+        skip_monster_info(&mut reader, version, custom_version)?;
+    }
+
+    // NPCInfoList – walked using read_npc_info to keep the stream in sync.
+    let npc_count = read_i32(&mut reader)?;
+    if npc_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative NPCInfo count {} in Server.MirDB", npc_count),
+        ));
+    }
+    for _ in 0..npc_count {
+        let _ = read_npc_info(&mut reader)?;
+    }
+
+    // QuestInfoList
+    let quest_count = read_i32(&mut reader)?;
+    if quest_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative QuestInfo count {} in Server.MirDB", quest_count),
+        ));
+    }
+    for _ in 0..quest_count {
+        skip_quest_info(&mut reader, version, custom_version)?;
+    }
+
+    // DragonInfo – single record.
+    skip_dragon_info(&mut reader, version, custom_version)?;
+
+    // MagicInfoList
+    let magic_count = read_i32(&mut reader)?;
+    if magic_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative MagicInfo count {} in Server.MirDB", magic_count),
+        ));
+    }
+    for _ in 0..magic_count {
+        skip_magic_info(&mut reader, version, custom_version)?;
+    }
+
+    // GameShopList – only present for DB versions >= 63.
+    let mut result = Vec::new();
+    if version >= 63 {
+        let shop_count = read_i32(&mut reader)?;
+        if shop_count < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("negative GameShopItem count {} in Server.MirDB", shop_count),
+            ));
+        }
+
+        result = Vec::with_capacity(shop_count as usize);
+        for _ in 0..shop_count {
+            let rec = read_game_shop_item(&mut reader, version, custom_version)?;
+            result.push(rec);
+        }
+    }
+
+    Ok(result)
 }
 
 /// Load MagicInfo records from a C# Server.MirDB file.

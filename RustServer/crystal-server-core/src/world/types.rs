@@ -30,6 +30,35 @@ impl Job {
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AttackMode {
+    Peace = 0,
+    Group = 1,
+    Guild = 2,
+    EnemyGuild = 3,
+    RedBrown = 4,
+    All = 5,
+}
+
+impl AttackMode {
+    pub fn from_u8(id: u8) -> AttackMode {
+        match id {
+            0 => AttackMode::Peace,
+            1 => AttackMode::Group,
+            2 => AttackMode::Guild,
+            3 => AttackMode::EnemyGuild,
+            4 => AttackMode::RedBrown,
+            5 => AttackMode::All,
+            _ => AttackMode::All,
+        }
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BuffProperty {
     None = 0,
     RemoveOnDeath = 1,

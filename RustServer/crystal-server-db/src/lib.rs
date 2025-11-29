@@ -854,6 +854,22 @@ impl AccountStore for SqliteAccountStore {
             Ok(())
         })
     }
+
+    fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT account_id, idx FROM characters WHERE name = ?1 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query([name]))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let account_id: String = Self::map_sql_err(row.get(0))?;
+                let idx: i64 = Self::map_sql_err(row.get(1))?;
+                Ok(Some((account_id, idx as i32)))
+            } else {
+                Ok(None)
+            }
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1326,5 +1342,10 @@ impl AccountStore for AsyncAccountStore {
         self.tx
             .send(task)
             .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async delete_guild failed: {}", e))))
+    }
+
+    fn find_character_by_name(&self, name: &str) -> Result<Option<(String, i32)>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::find_character_by_name(&inner, name)
     }
 }

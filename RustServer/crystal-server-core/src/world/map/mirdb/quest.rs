@@ -4,6 +4,24 @@ use crate::world::magic::MagicInfo;
 
 use super::header::*;
 
+#[derive(Clone, Debug)]
+pub struct GameShopItemRecord {
+    pub item_index: i32,
+    pub g_index: i32,
+    pub gold_price: u32,
+    pub credit_price: u32,
+    pub count: u16,
+    pub class: String,
+    pub category: String,
+    pub stock: i32,
+    pub i_stock: bool,
+    pub deal: bool,
+    pub top_item: bool,
+    pub date_binary: i64,
+    pub can_buy_credit: bool,
+    pub can_buy_gold: bool,
+}
+
 pub(super) fn skip_quest_info<R: Read>(r: &mut R, _version: i32, _custom_version: i32) -> io::Result<()> {
     // QuestInfo.Save layout from Server/MirDatabase/QuestInfo.cs
     let _index = read_i32(r)?;
@@ -71,6 +89,44 @@ pub(super) fn skip_magic_info<R: Read>(r: &mut R, _version: i32, _custom_version
     let _multiplier_bonus = read_f32(r)?;
 
     Ok(())
+}
+
+pub(super) fn read_game_shop_item<R: Read>(
+    r: &mut R,
+    _version: i32,
+    _custom_version: i32,
+) -> io::Result<GameShopItemRecord> {
+    let item_index = read_i32(r)?;
+    let g_index = read_i32(r)?;
+    let gold_price = read_u32(r)?;
+    let credit_price = read_u32(r)?;
+    let count = read_u16(r)?;
+    let class = read_string(r)?;
+    let category = read_string(r)?;
+    let stock = read_i32(r)?;
+    let i_stock = read_bool(r)?;
+    let deal = read_bool(r)?;
+    let top_item = read_bool(r)?;
+    let date_binary = read_i64(r)?;
+    let can_buy_credit = read_bool(r)?;
+    let can_buy_gold = read_bool(r)?;
+
+    Ok(GameShopItemRecord {
+        item_index,
+        g_index,
+        gold_price,
+        credit_price,
+        count,
+        class,
+        category,
+        stock,
+        i_stock,
+        deal,
+        top_item,
+        date_binary,
+        can_buy_credit,
+        can_buy_gold,
+    })
 }
 
 pub(super) fn skip_game_shop_item<R: Read>(r: &mut R, _version: i32, _custom_version: i32) -> io::Result<()> {

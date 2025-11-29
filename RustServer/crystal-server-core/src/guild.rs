@@ -74,6 +74,40 @@ impl GuildInfo {
             true
         }
     }
+
+    /// Remove a member with the given name from this guild, searching all
+    /// ranks. Returns the rank index and removed member on success. If no
+    /// structured member entry is found, this still decrements member_count
+    /// as a best-effort to keep counts in sync for guilds managed purely via
+    /// Rust.
+    pub fn remove_member_by_name(&mut self, member_name: &str) -> Option<(u8, GuildMember)> {
+        for rank in &mut self.ranks {
+            if let Some(idx) = rank
+                .members
+                .iter()
+                .position(|m| m.name.eq_ignore_ascii_case(member_name))
+            {
+                let member = rank.members.remove(idx);
+                self.member_count = self.member_count.saturating_sub(1);
+                return Some((rank.index, member));
+            }
+        }
+
+        if self.member_count > 0 {
+            self.member_count = self.member_count.saturating_sub(1);
+            let stub = GuildMember {
+                id: 0,
+                name: member_name.to_string(),
+                level: 0,
+                class: Job::Warrior,
+                last_login_ticks: 0,
+                online: false,
+            };
+            return Some((0, stub));
+        }
+
+        None
+    }
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]

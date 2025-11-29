@@ -1,8 +1,8 @@
-use rand::{thread_rng, Rng};
+use rand::thread_rng;
 
 use crate::combat::compute_physical_melee_with_crit;
-use crate::stats::{Stat, Stats};
 use crate::world::magic::magic_power;
+use crate::stats::{Stat, Stats};
 use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
@@ -15,14 +15,32 @@ use crate::world::skills::{
     is_pure_magic_attack,
     resolve_attack_spell_and_level_for_player,
 };
+use crate::world::skills::assassin::{apply_moon_dark_bonus, resolve_moon_dark_opening};
 use crate::world::skills::warrior::{
-    compute_cross_half_moon_targets,
-    compute_half_moon_targets,
+    cast_counter_attack,
+    cast_cross_half_moon,
+    cast_flaming_sword,
+    cast_half_moon,
+    cast_immortal_skin,
+    cast_rage,
     is_thrusting_spell,
+    resolve_slaying_for_attack,
     thrusting_max_range,
 };
-use crate::world::buff::PlayerBuff;
-use crate::world::types::BuffType;
+use crate::world::skills::wizard::{
+    cast_fire_bang_ice_storm,
+    cast_magic_shield,
+    cast_thunder_storm_flame_field,
+};
+use crate::world::skills::taoist::{
+    cast_blessed_armour,
+    cast_ultimate_enhancer,
+    cast_energy_shield,
+    cast_healing,
+    cast_mass_healing,
+    cast_soul_shield,
+};
+use crate::world::types::{AttackMode, BuffType};
 use crate::world::Spell;
 
 use super::{SessionId, World, WorldEvent};
@@ -30,6 +48,90 @@ use super::{SessionId, World, WorldEvent};
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
         true
+    }
+
+    /// Determine whether `attacker_sid` is allowed to attack `target_sid`
+    /// according to the C# PlayerObject.IsAttackTarget(HumanObject attacker)
+    /// rules. This inspects map NoFight, SafeZone membership and the
+    /// attacker's AttackMode, together with party and guild membership and
+    /// the target's PK status (red/brown).
+    fn can_attack_player(&self, attacker_sid: SessionId, target_sid: SessionId) -> bool {
+        if attacker_sid == target_sid {
+            return false;
+        }
+
+        let attacker = match self.players.get(&attacker_sid) {
+            Some(p) => p,
+            None => return false,
+        };
+        let target = match self.players.get(&target_sid) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if attacker.dead || target.dead || attacker.hp <= 0 || target.hp <= 0 {
+            return false;
+        }
+
+        if attacker.map_index != target.map_index {
+            return false;
+        }
+        let map_index = attacker.map_index;
+
+        let map_info = match self.provider.get_map_info(map_index) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Mirror C# CurrentMap.Info.NoFight and InSafeZone checks.
+        if map_info.no_fight {
+            return false;
+        }
+
+        let attacker_in_safe = Self::point_in_safe_zone(map_info, attacker.x, attacker.y);
+        let target_in_safe = Self::point_in_safe_zone(map_info, target.x, target.y);
+        if attacker_in_safe || target_in_safe {
+            return false;
+        }
+
+        let mode = AttackMode::from_u8(attacker.attack_mode);
+
+        match mode {
+            AttackMode::Peace => false,
+            AttackMode::All => true,
+            AttackMode::Group => {
+                // C#: Group => GroupMembers == null || !GroupMembers.Contains(attacker)
+                // Here: only disallow when both are in the same party.
+                if let (Some(a_pid), Some(t_pid)) = (attacker.party_id, target.party_id) {
+                    a_pid != t_pid
+                } else {
+                    true
+                }
+            }
+            AttackMode::Guild => {
+                // C#: Guild => MyGuild == null || MyGuild != attacker.MyGuild
+                // i.e. cannot attack same-guild members when both have guilds.
+                if target.guild_name.is_empty() || attacker.guild_name.is_empty() {
+                    true
+                } else {
+                    attacker.guild_name != target.guild_name
+                }
+            }
+            AttackMode::EnemyGuild => {
+                // C#: EnemyGuild => MyGuild != null && MyGuild.IsEnemy(attacker.MyGuild)
+                // Until full guild war state is implemented, approximate this
+                // as: both have non-empty, different guild names.
+                if target.guild_name.is_empty() || attacker.guild_name.is_empty() {
+                    false
+                } else {
+                    attacker.guild_name != target.guild_name
+                }
+            }
+            AttackMode::RedBrown => {
+                // C#: RedBrown => PKPoints >= 200 || Envir.Time < BrownTime
+                target.pk_points >= 200 || self.time_ms < target.brown_time_ms
+            }
+        }
     }
 
     #[allow(dead_code)]
@@ -50,8 +152,8 @@ impl<P: WorldProvider> World<P> {
         spell: u8,
         direction: u8,
         _target_id: u32,
-        _x: i32,
-        _y: i32,
+        x: i32,
+        y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
         let (player_map, player_x, player_y) = match self.players.get(&session_id) {
@@ -60,22 +162,32 @@ impl<P: WorldProvider> World<P> {
         };
 
         if spell == Spell::FlamingSword as u8 {
-            self.handle_flaming_sword_spell(session_id, events);
+            cast_flaming_sword(self, session_id, events);
             return;
         }
 
         if spell == Spell::Rage as u8 {
-            self.handle_rage_spell(session_id, events);
+            cast_rage(self, session_id, events);
             return;
         }
 
         if spell == Spell::ImmortalSkin as u8 {
-            self.handle_immortal_skin_spell(session_id, events);
+            cast_immortal_skin(self, session_id, events);
             return;
         }
 
         if spell == Spell::CounterAttack as u8 {
-            self.handle_counter_attack_spell(session_id, events);
+            cast_counter_attack(self, session_id, events);
+            return;
+        }
+
+        if spell == Spell::FireBang as u8 || spell == Spell::IceStorm as u8 {
+            cast_fire_bang_ice_storm(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::ThunderStorm as u8 || spell == Spell::FlameField as u8 {
+            cast_thunder_storm_flame_field(self, session_id, spell, direction, events);
             return;
         }
 
@@ -89,7 +201,37 @@ impl<P: WorldProvider> World<P> {
         }
 
         if spell == Spell::MagicShield as u8 {
-            self.handle_magic_shield_spell(session_id, events);
+            cast_magic_shield(self, session_id, events);
+            return;
+        }
+
+        if spell == Spell::SoulShield as u8 {
+            cast_soul_shield(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::BlessedArmour as u8 {
+            cast_blessed_armour(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::EnergyShield as u8 {
+            cast_energy_shield(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::UltimateEnhancer as u8 {
+            cast_ultimate_enhancer(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Healing as u8 {
+            cast_healing(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::MassHealing as u8 {
+            cast_mass_healing(self, session_id, spell, direction, x, y, events);
             return;
         }
 
@@ -107,330 +249,7 @@ impl<P: WorldProvider> World<P> {
         });
     }
 
-    fn handle_flaming_sword_spell(
-        &mut self,
-        session_id: SessionId,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let spell_id = Spell::FlamingSword as u8;
-        if let Some(player) = self.players.get_mut(&session_id) {
-            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
-                Some(m) => m,
-                None => return,
-            };
-
-            let level = magic.level;
-            let cost = match compute_magic_mana_cost(
-                &self.provider,
-                &player.stats.total,
-                spell_id,
-                level,
-            ) {
-                Some(c) => c,
-                None => return,
-            };
-
-            if player.mp < cost {
-                return;
-            }
-
-            // Check if already active (C# checks flamingSword bool or time)
-            // We'll check if the buff exists in active_buffs.
-            if player.active_buffs.iter().any(|b| b.buff_type == BuffType::FlamingSword) {
-                return;
-            }
-
-            // Apply cost
-            player.mp -= cost;
-
-            // Add buff
-            let duration_ms = 10000;
-            let mut buff = PlayerBuff::new(BuffType::FlamingSword, self.time_ms + duration_ms);
-            // FlamingSword uses SpellToggle packet, so we don't necessarily need SAddBuff for client visualization
-            // if the client relies solely on SpellToggle.
-            // However, we track it as a buff for server-side state/expiration.
-            // We set visible=false to avoid sending SAddBuff if we were to implement generic buff sending?
-            // Actually, let's keep it consistent. If we don't send SAddBuff, we need to handle SpellToggle manually.
-            buff.visible = false; 
-            buff.values = vec![]; // No values needed for FlamingSword logic yet?
-            
-            player.active_buffs.push(buff);
-
-            // Emit SpellToggle
-            events.push(WorldEvent::SpellToggle {
-                session_id,
-                spell_id,
-                enabled: true,
-            });
-
-            // Train FlamingSword on successful activation.
-            self.level_up_magic_for_player(session_id, spell_id, events);
-        }
-    }
-
-    fn handle_rage_spell(
-        &mut self,
-        session_id: SessionId,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let spell_id = Spell::Rage as u8;
-        let (duration_ms, stats) = {
-            let player = match self.players.get_mut(&session_id) {
-                Some(p) => p,
-                None => return,
-            };
-
-            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
-                Some(m) => m,
-                None => return,
-            };
-
-            let level = magic.level;
-            // Rage cost isn't explicitly in C# snippet but usually follows standard formula or MagicInfo.
-            // We'll use MagicInfo cost.
-            let cost = match compute_magic_mana_cost(
-                &self.provider,
-                &player.stats.total,
-                spell_id,
-                level,
-            ) {
-                Some(c) => c,
-                None => return,
-            };
-
-            if player.mp < cost {
-                return;
-            }
-
-            player.mp -= cost;
-
-            // duration = 18 + (6 * magic.Level) seconds
-            let duration_sec = 18 + 6 * level as i64;
-            let duration_ms = duration_sec.saturating_mul(1_000);
-
-            let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
-            let multiplier = 0.12 + 0.03 * level as f32;
-            let add_value = (max_dc * multiplier).round() as i32;
-
-            let mut stats = Stats::default();
-            stats.set(Stat::MaxDC, add_value);
-            stats.set(Stat::MinDC, add_value);
-
-            (duration_ms, stats)
-        };
-
-        self.add_player_buff(
-            session_id,
-            BuffType::Rage,
-            duration_ms,
-            stats,
-            Vec::new(),
-            events,
-        );
-    }
-
-    fn handle_immortal_skin_spell(
-        &mut self,
-        session_id: SessionId,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let spell_id = Spell::ImmortalSkin as u8;
-        let (duration_ms, stats) = {
-            let player = match self.players.get_mut(&session_id) {
-                Some(p) => p,
-                None => return,
-            };
-
-            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
-                Some(m) => m,
-                None => return,
-            };
-
-            let level = magic.level;
-            let cost = match compute_magic_mana_cost(
-                &self.provider,
-                &player.stats.total,
-                spell_id,
-                level,
-            ) {
-                Some(c) => c,
-                None => return,
-            };
-
-            if player.mp < cost {
-                return;
-            }
-
-            player.mp -= cost;
-
-            // Duration: 60 + level seconds
-            let duration_sec = 60 + level as i64;
-            let duration_ms = duration_sec.saturating_mul(1_000);
-            
-            // Stats:
-            // MaxDC -= MaxDC * (0.05 + 0.01 * level)
-            // MaxAC += MaxAC * (0.10 + 0.07 * level)
-            let max_dc = player.stats.total.get(Stat::MaxDC) as f32;
-            let max_ac = player.stats.total.get(Stat::MaxAC) as f32;
-            
-            let dc_loss = (max_dc * (0.05 + 0.01 * level as f32)).round() as i32;
-            let ac_gain = (max_ac * (0.10 + 0.07 * level as f32)).round() as i32;
-
-            let mut stats = Stats::default();
-            stats.set(Stat::MaxDC, -dc_loss);
-            stats.set(Stat::MaxAC, ac_gain);
-
-            (duration_ms, stats)
-        };
-
-        self.add_player_buff(
-            session_id,
-            BuffType::ImmortalSkin,
-            duration_ms,
-            stats,
-            Vec::new(),
-            events,
-        );
-    }
-
-    fn handle_counter_attack_spell(
-        &mut self,
-        session_id: SessionId,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let spell_id = Spell::CounterAttack as u8;
-        let (duration_ms, stats) = {
-            let player = match self.players.get_mut(&session_id) {
-                Some(p) => p,
-                None => return,
-            };
-
-            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
-                Some(m) => m,
-                None => return,
-            };
-
-            let level = magic.level;
-            let cost = match compute_magic_mana_cost(
-                &self.provider,
-                &player.stats.total,
-                spell_id,
-                level,
-            ) {
-                Some(c) => c,
-                None => return,
-            };
-
-            if player.mp < cost {
-                return;
-            }
-
-            player.mp -= cost;
-
-            // Duration: 7 seconds? C# says Settings.Second * 7.
-            let duration_sec = 7_i64;
-            let duration_ms = duration_sec.saturating_mul(1_000);
-
-            // Stats: MinAC/MaxAC/MinMAC/MaxMAC += 11 + level * 3
-            let bonus = 11 + level as i32 * 3;
-            let mut stats = Stats::default();
-            stats.set(Stat::MinAC, bonus);
-            stats.set(Stat::MaxAC, bonus);
-            stats.set(Stat::MinMAC, bonus);
-            stats.set(Stat::MaxMAC, bonus);
-
-            (duration_ms, stats)
-        };
-
-        self.add_player_buff(
-            session_id,
-            BuffType::CounterAttack,
-            duration_ms,
-            stats,
-            Vec::new(),
-            events,
-        );
-    }
-
-    fn handle_magic_shield_spell(
-        &mut self,
-        session_id: SessionId,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let spell_id = Spell::MagicShield as u8;
-        let (duration_ms, stats) = {
-            let player = match self.players.get_mut(&session_id) {
-                Some(p) => p,
-                None => return,
-            };
-
-            // Do not stack MagicShield: if already active, ignore the cast
-            // without consuming MP, mirroring the C# behaviour.
-            if player
-                .active_buffs
-                .iter()
-                .any(|b| b.buff_type == BuffType::MagicShield)
-            {
-                return;
-            }
-
-            let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
-                Some(m) => m,
-                None => return,
-            };
-
-            let level = magic.level;
-            let cost = match compute_magic_mana_cost(
-                &self.provider,
-                &player.stats.total,
-                spell_id,
-                level,
-            ) {
-                Some(c) => c,
-                None => return,
-            };
-
-            if player.mp < cost {
-                return;
-            }
-
-            player.mp -= cost;
-
-            // Approximate C# MagicShield duration by using the magic's power
-            // value as a number of seconds. This mirrors the intent of
-            // magic.GetPower(GetAttackPower(MinMC, MaxMC) + 15) without
-            // re-implementing the full delayed-action pipeline.
-            let mut duration_sec: i64 = 0;
-            if let Some(info) = self.provider.get_magic_info(spell_id) {
-                let mut rng = thread_rng();
-                let power = magic_power(info, level, &mut rng).max(1);
-                duration_sec = power as i64;
-            }
-            if duration_sec <= 0 {
-                duration_sec = 60;
-            }
-            let duration_ms = duration_sec.saturating_mul(1_000);
-
-            let mut stats = Stats::default();
-            let dr = (level as i32 + 2) * 10;
-            stats.set(Stat::DamageReductionPercent, dr);
-
-            (duration_ms, stats)
-        };
-
-        self.add_player_buff(
-            session_id,
-            BuffType::MagicShield,
-            duration_ms,
-            stats,
-            Vec::new(),
-            events,
-        );
-
-        // Train MagicShield on successful application, mirroring C#
-        // LevelMagic(magic) in the completion handler.
-        self.level_up_magic_for_player(session_id, spell_id, events);
-    }
+    
 
     pub(super) fn handle_attack_command(
         &mut self,
@@ -466,55 +285,16 @@ impl<P: WorldProvider> World<P> {
                     let mut consumed_flaming_sword = false;
                     let mut slaying_toggled_on = false;
 
-                    // Mirror the C# HumanObject.Attack behaviour for MoonLight /
-                    // DarkBody: if the player is emerging from a hidden state
-                    // with one of these buffs active, the very next physical
-                    // attack receives a DamageBase bonus equal to
-                    // magic.GetPower() for the corresponding spell. We
-                    // approximate Hidden by the presence of the buff itself
-                    // and remove the buffs immediately so the bonus is
-                    // one-shot.
-                    let mut moon_dark_spell: u8 = 0;
-                    let mut moon_dark_level: u8 = 0;
-
-                    let mut had_moon_light = false;
-                    let mut had_dark_body = false;
-                    for buff in &p.active_buffs {
-                        match buff.buff_type {
-                            BuffType::MoonLight => had_moon_light = true,
-                            BuffType::DarkBody => had_dark_body = true,
-                            _ => {}
-                        }
-                    }
-
-                    if had_moon_light {
-                        if let Some(m) = p
-                            .magics
-                            .iter()
-                            .find(|m| m.spell == Spell::MoonLight as u8)
-                        {
-                            moon_dark_spell = Spell::MoonLight as u8;
-                            moon_dark_level = m.level;
-                        }
-                    }
-
-                    if moon_dark_spell == 0 && had_dark_body {
-                        if let Some(m) = p
-                            .magics
-                            .iter()
-                            .find(|m| m.spell == Spell::DarkBody as u8)
-                        {
-                            moon_dark_spell = Spell::DarkBody as u8;
-                            moon_dark_level = m.level;
-                        }
-                    }
-
-                    if had_moon_light || had_dark_body {
-                        p.active_buffs.retain(|b| {
-                            b.buff_type != BuffType::MoonLight
-                                && b.buff_type != BuffType::DarkBody
-                        });
-                    }
+                    // Mirror the C# HumanObject.Attack behaviour for
+                    // MoonLight/DarkBody via the assassin-specific helper: if
+                    // the player is emerging from a hidden state with one of
+                    // these buffs active, the very next physical attack
+                    // receives a DamageBase bonus equal to magic.GetPower()
+                    // for the corresponding spell. We approximate Hidden by
+                    // the presence of the buff itself and remove the buffs
+                    // immediately so the bonus is one-shot.
+                    let (moon_dark_spell, moon_dark_level) =
+                        resolve_moon_dark_opening(p);
 
                     // If it's a basic attack (spell 0) and we have FlamingSword buff
                     // active, treat this swing as FlamingSword and consume the buff.
@@ -572,48 +352,15 @@ impl<P: WorldProvider> World<P> {
                         }
                     }
 
-                    // Handle Slaying activation/consumption and random charge, mirroring
-                    // the C# HumanObject.Attack flow. Slaying is a one-shot charged
-                    // strike: when the client requests Slaying while a charge is
-                    // available, we consume the charge and apply the Slaying magic
-                    // scaling for this swing. Separately, each attack has a chance to
-                    // grant a new Slaying charge based on the learned magic level.
-
-                    // If the player explicitly attempts to use Slaying, require an
-                    // existing charge; otherwise fall back to a plain melee swing.
-                    if level > 0 && effective_spell == Spell::Slaying as u8 {
-                        if !p.slaying_charged {
-                            effective_spell = 0;
-                            level = 0;
-                        } else {
-                            // Consume the one-shot Slaying charge for this
-                            // swing but do not emit a SpellToggle(false)
-                            // event. The original C# implementation only
-                            // sends SpellToggle when Slaying becomes
-                            // available, not when it is spent, so the icon
-                            // may remain lit until the next refresh.
-                            p.slaying_charged = false;
-                        }
-                    }
-
-                    // If Slaying is not currently charged, roll for a new charge using
-                    // the same pattern as the C# server:
-                    //   if (magic != null && Random.Next(12) <= magic.Level)
-                    //       Slaying = true;
-                    if !p.slaying_charged {
-                        if let Some(magic) = p
-                            .magics
-                            .iter()
-                            .find(|m| m.spell == Spell::Slaying as u8)
-                        {
-                            let mut rng = thread_rng();
-                            let roll: i32 = rng.gen_range(0..12);
-                            if roll <= magic.level as i32 {
-                                p.slaying_charged = true;
-                                slaying_toggled_on = true;
-                            }
-                        }
-                    }
+                    // Handle Slaying activation/consumption and random charge
+                    // via the warrior-specific helper, mirroring the C#
+                    // HumanObject.Attack flow.
+                    resolve_slaying_for_attack(
+                        p,
+                        &mut effective_spell,
+                        &mut level,
+                        &mut slaying_toggled_on,
+                    );
 
                     let fatal_level = fatal_sword_level_for_player(p);
                     let attacker_stats = p.stats.total.clone();
@@ -661,7 +408,8 @@ impl<P: WorldProvider> World<P> {
             // Train HalfMoon when the attack is actually executed.
             self.level_up_magic_for_player(session_id, Spell::HalfMoon as u8, events);
 
-            self.handle_half_moon_attack(
+            cast_half_moon(
+                self,
                 session_id,
                 map_index,
                 x,
@@ -699,7 +447,8 @@ impl<P: WorldProvider> World<P> {
             // Train CrossHalfMoon when the attack is actually executed.
             self.level_up_magic_for_player(session_id, Spell::CrossHalfMoon as u8, events);
 
-            self.handle_cross_half_moon_attack(
+            cast_cross_half_moon(
+                self,
                 session_id,
                 map_index,
                 x,
@@ -748,6 +497,198 @@ impl<P: WorldProvider> World<P> {
         // Default melee target: one tile in front of the player.
         let mut target_x = x + dx;
         let mut target_y = y + dy;
+
+        // First try to hit a player standing on the front tile before
+        // looking for monsters. This keeps PVP path separate from the
+        // monster-targeting logic below and mirrors C# HumanObject.Attack
+        // semantics, where player targets are resolved first.
+        if !is_pure_magic_attack(effective_spell) {
+            let mut player_target: Option<SessionId> = None;
+            for (&sid, p) in &self.players {
+                if sid == session_id {
+                    continue;
+                }
+                if p.map_index != map_index || p.x != target_x || p.y != target_y {
+                    continue;
+                }
+                if self.can_attack_player(session_id, sid) {
+                    player_target = Some(sid);
+                    break;
+                }
+            }
+
+            if let Some(target_session_id) = player_target {
+                // Snapshot defender stats for damage calculation.
+                let (defender_stats, max_hp) = {
+                    if let Some(t) = self.players.get(&target_session_id) {
+                        let max_hp = t.stats.total.get(Stat::HP).max(1);
+                        (t.stats.total.clone(), max_hp)
+                    } else {
+                        return;
+                    }
+                };
+
+                let (hit, mut raw_damage, damage_type) =
+                    compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+
+                if hit && raw_damage > 0 {
+                    // Apply MoonLight/DarkBody opening bonus if present.
+                    if moon_dark_spell != 0 && moon_dark_level > 0 {
+                        if let Some(info) = self.provider.get_magic_info(moon_dark_spell) {
+                            let mut rng = thread_rng();
+                            let bonus = magic_power(info, moon_dark_level, &mut rng);
+                            if bonus > 0 {
+                                raw_damage = raw_damage.saturating_add(bonus);
+                            }
+                        }
+                    }
+
+                    // Apply active attack spell scaling except for the
+                    // Thrusting extended tile case (not used for adjacent
+                    // player hits here).
+                    if !is_thrusting_spell(effective_spell) {
+                        raw_damage = apply_attack_spell_scaling(
+                            &self.provider,
+                            effective_spell,
+                            level,
+                            raw_damage,
+                        );
+                    }
+                }
+
+                // Apply passive FatalSword and undead tweaks; players are not
+                // undead so we always pass false for undead.
+                raw_damage = apply_fatal_sword_and_undead(
+                    &self.provider,
+                    fatal_level,
+                    false,
+                    raw_damage,
+                );
+
+                // Approximate multi-hit skills by doubling final damage.
+                if effective_spell == Spell::DoubleSlash as u8
+                    || effective_spell == Spell::TwinDrakeBlade as u8
+                {
+                    raw_damage = raw_damage.saturating_mul(2);
+                }
+
+                let mut strike_x = target_x;
+                let mut strike_y = target_y;
+                let mut strike_dir = direction;
+                let mut damage_done: i32 = 0;
+                let mut health_percent: u8 = 100;
+                let mut dead = false;
+                let mut old_pk_points = 0;
+                let mut old_brown_time = 0;
+
+                if let Some(t) = self.players.get(&target_session_id) {
+                    old_pk_points = t.pk_points;
+                    old_brown_time = t.brown_time_ms;
+                }
+
+                if let Some(t) = self.players.get_mut(&target_session_id) {
+                    strike_x = t.x;
+                    strike_y = t.y;
+                    strike_dir = t.direction;
+
+                    let old_hp = t.hp.max(0);
+                    let mut new_hp = old_hp;
+
+                    if hit && raw_damage > 0 {
+                        damage_done = raw_damage;
+
+                        if raw_damage >= t.hp {
+                            t.hp = 0;
+                            dead = true;
+                        } else {
+                            t.hp -= raw_damage;
+                        }
+
+                        new_hp = t.hp.max(0);
+                    }
+
+                    if max_hp > 0 {
+                        let pct = (new_hp as i64 * 100 / max_hp as i64)
+                            .clamp(0, 100) as u8;
+                        health_percent = pct;
+                    } else {
+                        health_percent = 0;
+                    }
+                }
+
+                if hit {
+                    if damage_done > 0 {
+                        events.push(WorldEvent::ObjectStruck {
+                            attacker_id: session_id,
+                            target_id: target_session_id as u64,
+                            map_index,
+                            x: strike_x,
+                            y: strike_y,
+                            direction: strike_dir,
+                            damage: damage_done,
+                            damage_type,
+                            health_percent,
+                        });
+                    }
+                } else {
+                    events.push(WorldEvent::ObjectStruck {
+                        attacker_id: session_id,
+                        target_id: target_session_id as u64,
+                        map_index,
+                        x: strike_x,
+                        y: strike_y,
+                        direction: strike_dir,
+                        damage: 0,
+                        damage_type,
+                        health_percent,
+                    });
+                }
+
+                if dead {
+                    // Mirror the core PK rules: when a player kills another
+                    // outside Fight maps, award PKPoints if the victim is not
+                    // already red/brown, and always refresh the victim's
+                    // BrownTime.
+                    if let Some(t) = self.players.get_mut(&target_session_id) {
+                        t.brown_time_ms = self.time_ms;
+                    }
+
+                    if let Some(map_info) = self.provider.get_map_info(map_index) {
+                        if !map_info.fight {
+                            let eligible = old_pk_points < 200 && self.time_ms > old_brown_time;
+                            if eligible {
+                                if let Some(att) = self.players.get_mut(&session_id) {
+                                    att.pk_points = att.pk_points.saturating_add(100);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Emit the usual attack animation and position events for the
+                // attacker, then stop; monster handling below is skipped.
+                events.push(WorldEvent::UserLocation {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                });
+
+                events.push(WorldEvent::ObjectAttack {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    spell: effective_spell,
+                    level,
+                    attack_type: 0,
+                });
+
+                return;
+            }
+        }
 
         let target_info = match self.monsters.get(&map_index) {
             Some(monsters) => {
@@ -873,22 +814,26 @@ impl<P: WorldProvider> World<P> {
             let use_pure_magic = is_pure_magic_attack(effective_spell);
 
             if use_pure_magic {
-                // Apply MP cost for pure magic attack spells (FireBall, SoulFireBall)
-                let cost = match compute_magic_mana_cost(
+                // Apply MP cost for pure magic attack spells (FireBall,
+                // SoulFireBall). If there is no MagicInfo entry, treat the
+                // cost as zero rather than aborting the spell so that the
+                // cast still animates and can deal damage using the fallback
+                // path in compute_pure_magic_attack_damage.
+                let cost = compute_magic_mana_cost(
                     &self.provider,
                     &attacker_stats,
                     effective_spell,
                     level,
-                ) {
-                    Some(c) => c,
-                    None => return,
-                };
+                )
+                .unwrap_or(0);
 
                 if let Some(player) = self.players.get_mut(&session_id) {
                     if player.mp < cost {
                         return;
                     }
-                    player.mp -= cost;
+                    if cost > 0 {
+                        player.mp -= cost;
+                    }
                 } else {
                     return;
                 }
@@ -911,20 +856,22 @@ impl<P: WorldProvider> World<P> {
             };
 
             if hit && raw_damage > 0 {
-                if !use_pure_magic {
-                    // Apply MoonLight / DarkBody opening strike bonus by
-                    // adding magic.GetPower() to the physical DamageBase
-                    // before any active attack spell scaling, mirroring the
-                    // C# HumanObject.Attack flow.
-                    if moon_dark_spell != 0 && moon_dark_level > 0 {
-                        if let Some(info) = self.provider.get_magic_info(moon_dark_spell) {
-                            let mut rng = thread_rng();
-                            let bonus = magic_power(info, moon_dark_level, &mut rng);
-                            if bonus > 0 {
-                                raw_damage = raw_damage.saturating_add(bonus);
-                            }
-                        }
+                if use_pure_magic {
+                    // ThunderBolt deals 1.5x damage to undead targets, mirroring
+                    // the C# HumanObject.ThunderBolt implementation.
+                    if effective_spell == Spell::ThunderBolt as u8 && undead {
+                        let scaled = (raw_damage as f32 * 1.5) as i32;
+                        raw_damage = scaled.max(1);
                     }
+                } else {
+                    // Apply MoonLight / DarkBody opening strike bonus before
+                    // any active attack spell scaling.
+                    raw_damage = apply_moon_dark_bonus(
+                        &self.provider,
+                        moon_dark_spell,
+                        moon_dark_level,
+                        raw_damage,
+                    );
 
                     // First apply the active attack spell (if any) using the
                     // MagicInfo parameters for that spell and the learned
@@ -1207,510 +1154,5 @@ impl<P: WorldProvider> World<P> {
         });
     }
 
-    fn handle_half_moon_attack(
-        &mut self,
-        session_id: SessionId,
-        map_index: i32,
-        x: i32,
-        y: i32,
-        direction: u8,
-        level: u8,
-        fatal_level: Option<u8>,
-        attacker_stats: &Stats,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let targets = compute_half_moon_targets(x, y, direction);
-
-        for (tx, ty, is_primary) in targets {
-            let target_info = match self.monsters.get(&map_index) {
-                Some(monsters) => monsters
-                    .iter()
-                    .find(|m| m.x == tx && m.y == ty)
-                    .map(|m| (m.id, m.monster_index)),
-                None => None,
-            };
-
-            if let Some((id, monster_index)) = target_info {
-                let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
-                    u32,
-                    bool,
-                    i32,
-                    Stats,
-                    Vec<crate::world::drop::DropInfo>,
-                ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
-                    let max_hp = info.stats.get(Stat::HP).max(1);
-                    (
-                        info.experience,
-                        info.undead,
-                        max_hp,
-                        info.stats.clone(),
-                        info.drops.clone(),
-                    )
-                } else {
-                    (0, false, 1, Stats::default(), Vec::new())
-                };
-
-                let (hit, mut raw_damage, damage_type) =
-                    compute_physical_melee_with_crit(attacker_stats, &defender_stats);
-
-                if hit && raw_damage > 0 {
-                    raw_damage = crate::world::skills::warrior::compute_half_moon_damage_for_target(
-                        &self.provider,
-                        raw_damage,
-                        level,
-                        is_primary,
-                    );
-
-                    raw_damage = apply_fatal_sword_and_undead(
-                        &self.provider,
-                        fatal_level,
-                        undead,
-                        raw_damage,
-                    );
-                }
-
-                let mut strike_x = tx;
-                let mut strike_y = ty;
-                let mut strike_dir = direction;
-                let mut damage_done: i32 = 0;
-                let mut health_percent: u8 = 100;
-                let mut dead = false;
-
-                if let Some(monsters) = self.monsters.get_mut(&map_index) {
-                    if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
-                        m.target_session_id = Some(session_id);
-                        m.ai_state = MonsterAiState::Chase;
-
-                        strike_x = m.x;
-                        strike_y = m.y;
-                        strike_dir = m.direction;
-
-                        let old_hp = m.hp.max(0);
-                        let mut new_hp = old_hp;
-
-                        if hit && raw_damage > 0 {
-                            damage_done = raw_damage;
-
-                            if raw_damage >= m.hp {
-                                m.hp = 0;
-                                dead = true;
-                            } else {
-                                m.hp -= raw_damage;
-                            }
-
-                            new_hp = if dead { 0 } else { m.hp.max(0) };
-                        }
-
-                        if max_hp > 0 {
-                            let pct = (new_hp as i64 * 100 / max_hp as i64)
-                                .clamp(0, 100) as u8;
-                            health_percent = pct;
-                        } else {
-                            health_percent = 0;
-                        }
-                    }
-                }
-
-                if hit {
-                    if damage_done > 0 {
-                        events.push(WorldEvent::ObjectStruck {
-                            attacker_id: session_id,
-                            target_id: id,
-                            map_index,
-                            x: strike_x,
-                            y: strike_y,
-                            direction: strike_dir,
-                            damage: damage_done,
-                            damage_type,
-                            health_percent,
-                        });
-                    }
-                } else {
-                    events.push(WorldEvent::ObjectStruck {
-                        attacker_id: session_id,
-                        target_id: id,
-                        map_index,
-                        x: strike_x,
-                        y: strike_y,
-                        direction: strike_dir,
-                        damage: 0,
-                        damage_type,
-                        health_percent,
-                    });
-                }
-
-                if dead {
-                    self.mark_monster_dead(map_index, id);
-
-                    if let Some(info) = self.provider.get_monster_info(monster_index) {
-                        println!(
-                            "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
-                            monster_index,
-                            info.name,
-                            info.drop_path,
-                            monster_drops.len(),
-                        );
-                    }
-
-                    if !monster_drops.is_empty() {
-                        let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
-                        let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
-                        let mut rng = thread_rng();
-                        let mut total = crate::world::drop::DropRewardInfo {
-                            items: Vec::new(),
-                            gold: 0,
-                        };
-
-                        for d in &monster_drops {
-                            if d.quest_required {
-                                continue;
-                            }
-
-                            if let Some(r) = d.attempt_drop(
-                                self.drop_rate,
-                                item_offset,
-                                gold_offset,
-                                &mut rng,
-                            ) {
-                                total.gold = total.gold.saturating_add(r.gold);
-                                if !r.items.is_empty() {
-                                    total.items.extend(r.items);
-                                }
-                            }
-                        }
-
-                        println!(
-                            "[drop-total] monster_index={} gold={} items_len={}",
-                            monster_index,
-                            total.gold,
-                            total.items.len(),
-                        );
-
-                        if total.gold > 0 || !total.items.is_empty() {
-                            let entry = self.map_items.entry(map_index).or_default();
-                            let item_timeout_ms: i64 = 300_000;
-
-                            if total.gold > 0 {
-                                let item_id = self.next_map_item_id;
-                                self.next_map_item_id =
-                                    self.next_map_item_id.wrapping_add(1);
-                                entry.push(crate::world::map_item::MapItem {
-                                    id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index: None,
-                                    gold: total.gold,
-                                    count: 0,
-                                    item: None,
-                                    expire_time_ms: self.time_ms + item_timeout_ms,
-                                });
-
-                                events.push(WorldEvent::GoldDropped {
-                                    object_id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    gold: total.gold,
-                                });
-                            }
-
-                            for item_index in total.items {
-                                let item_id = self.next_map_item_id;
-                                self.next_map_item_id =
-                                    self.next_map_item_id.wrapping_add(1);
-                                entry.push(crate::world::map_item::MapItem {
-                                    id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index: Some(item_index),
-                                    gold: 0,
-                                    count: 1,
-                                    item: None,
-                                    expire_time_ms: self.time_ms + item_timeout_ms,
-                                });
-
-                                events.push(WorldEvent::ItemDropped {
-                                    object_id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index,
-                                    count: 1,
-                                });
-                            }
-                        }
-                    }
-
-                    if monster_exp > 0 {
-                        if let Some(p) = self.players.get_mut(&session_id) {
-                            p.experience = p
-                                .experience
-                                .saturating_add(monster_exp as i64);
-                        }
-
-                        events.push(WorldEvent::GainExperience {
-                            session_id,
-                            amount: monster_exp,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    fn handle_cross_half_moon_attack(
-        &mut self,
-        session_id: SessionId,
-        map_index: i32,
-        x: i32,
-        y: i32,
-        direction: u8,
-        level: u8,
-        fatal_level: Option<u8>,
-        attacker_stats: &Stats,
-        events: &mut Vec<WorldEvent>,
-    ) {
-        let targets = compute_cross_half_moon_targets(x, y, direction);
-
-        for (tx, ty, is_primary) in targets {
-            let target_info = match self.monsters.get(&map_index) {
-                Some(monsters) => monsters
-                    .iter()
-                    .find(|m| m.x == tx && m.y == ty)
-                    .map(|m| (m.id, m.monster_index)),
-                None => None,
-            };
-
-            if let Some((id, monster_index)) = target_info {
-                let (monster_exp, undead, max_hp, defender_stats, monster_drops): (
-                    u32,
-                    bool,
-                    i32,
-                    Stats,
-                    Vec<crate::world::drop::DropInfo>,
-                ) = if let Some(info) = self.provider.get_monster_info(monster_index) {
-                    let max_hp = info.stats.get(Stat::HP).max(1);
-                    (
-                        info.experience,
-                        info.undead,
-                        max_hp,
-                        info.stats.clone(),
-                        info.drops.clone(),
-                    )
-                } else {
-                    (0, false, 1, Stats::default(), Vec::new())
-                };
-
-                let (hit, mut raw_damage, damage_type) =
-                    compute_physical_melee_with_crit(attacker_stats, &defender_stats);
-
-                if hit && raw_damage > 0 {
-                    raw_damage = crate::world::skills::warrior::compute_cross_half_moon_damage_for_target(
-                        &self.provider,
-                        raw_damage,
-                        level,
-                        is_primary,
-                    );
-
-                    raw_damage = apply_fatal_sword_and_undead(
-                        &self.provider,
-                        fatal_level,
-                        undead,
-                        raw_damage,
-                    );
-                }
-
-                let mut strike_x = tx;
-                let mut strike_y = ty;
-                let mut strike_dir = direction;
-                let mut damage_done: i32 = 0;
-                let mut health_percent: u8 = 100;
-                let mut dead = false;
-
-                if let Some(monsters) = self.monsters.get_mut(&map_index) {
-                    if let Some(m) = monsters.iter_mut().find(|m| m.id == id) {
-                        m.target_session_id = Some(session_id);
-                        m.ai_state = MonsterAiState::Chase;
-
-                        strike_x = m.x;
-                        strike_y = m.y;
-                        strike_dir = m.direction;
-
-                        let old_hp = m.hp.max(0);
-                        let mut new_hp = old_hp;
-
-                        if hit && raw_damage > 0 {
-                            damage_done = raw_damage;
-
-                            if raw_damage >= m.hp {
-                                m.hp = 0;
-                                dead = true;
-                            } else {
-                                m.hp -= raw_damage;
-                            }
-
-                            new_hp = if dead { 0 } else { m.hp.max(0) };
-                        }
-
-                        if max_hp > 0 {
-                            let pct = (new_hp as i64 * 100 / max_hp as i64)
-                                .clamp(0, 100) as u8;
-                            health_percent = pct;
-                        } else {
-                            health_percent = 0;
-                        }
-                    }
-                }
-
-                if hit {
-                    if damage_done > 0 {
-                        events.push(WorldEvent::ObjectStruck {
-                            attacker_id: session_id,
-                            target_id: id,
-                            map_index,
-                            x: strike_x,
-                            y: strike_y,
-                            direction: strike_dir,
-                            damage: damage_done,
-                            damage_type,
-                            health_percent,
-                        });
-                    }
-                } else {
-                    events.push(WorldEvent::ObjectStruck {
-                        attacker_id: session_id,
-                        target_id: id,
-                        map_index,
-                        x: strike_x,
-                        y: strike_y,
-                        direction: strike_dir,
-                        damage: 0,
-                        damage_type,
-                        health_percent,
-                    });
-                }
-
-                if dead {
-                    self.mark_monster_dead(map_index, id);
-
-                    if let Some(info) = self.provider.get_monster_info(monster_index) {
-                        println!(
-                            "[drop-debug] monster_index={} name='{}' drop_path='{}' drops_len={}",
-                            monster_index,
-                            info.name,
-                            info.drop_path,
-                            monster_drops.len(),
-                        );
-                    }
-
-                    if !monster_drops.is_empty() {
-                        let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
-                        let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
-                        let mut rng = thread_rng();
-                        let mut total = crate::world::drop::DropRewardInfo {
-                            items: Vec::new(),
-                            gold: 0,
-                        };
-
-                        for d in &monster_drops {
-                            if d.quest_required {
-                                continue;
-                            }
-
-                            if let Some(r) = d.attempt_drop(
-                                self.drop_rate,
-                                item_offset,
-                                gold_offset,
-                                &mut rng,
-                            ) {
-                                total.gold = total.gold.saturating_add(r.gold);
-                                if !r.items.is_empty() {
-                                    total.items.extend(r.items);
-                                }
-                            }
-                        }
-
-                        println!(
-                            "[drop-total] monster_index={} gold={} items_len={}",
-                            monster_index,
-                            total.gold,
-                            total.items.len(),
-                        );
-
-                        if total.gold > 0 || !total.items.is_empty() {
-                            let entry = self.map_items.entry(map_index).or_default();
-                            let item_timeout_ms: i64 = 300_000;
-
-                            if total.gold > 0 {
-                                let item_id = self.next_map_item_id;
-                                self.next_map_item_id =
-                                    self.next_map_item_id.wrapping_add(1);
-                                entry.push(crate::world::map_item::MapItem {
-                                    id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index: None,
-                                    gold: total.gold,
-                                    count: 0,
-                                    item: None,
-                                    expire_time_ms: self.time_ms + item_timeout_ms,
-                                });
-
-                                events.push(WorldEvent::GoldDropped {
-                                    object_id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    gold: total.gold,
-                                });
-                            }
-
-                            for item_index in total.items {
-                                let item_id = self.next_map_item_id;
-                                self.next_map_item_id =
-                                    self.next_map_item_id.wrapping_add(1);
-                                entry.push(crate::world::map_item::MapItem {
-                                    id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index: Some(item_index),
-                                    gold: 0,
-                                    count: 1,
-                                    item: None,
-                                    expire_time_ms: self.time_ms + item_timeout_ms,
-                                });
-
-                                events.push(WorldEvent::ItemDropped {
-                                    object_id: item_id,
-                                    map_index,
-                                    x: strike_x,
-                                    y: strike_y,
-                                    item_index,
-                                    count: 1,
-                                });
-                            }
-                        }
-                    }
-
-                    if monster_exp > 0 {
-                        if let Some(p) = self.players.get_mut(&session_id) {
-                            p.experience = p
-                                .experience
-                                .saturating_add(monster_exp as i64);
-                        }
-
-                        events.push(WorldEvent::GainExperience {
-                            session_id,
-                            amount: monster_exp,
-                        });
-                    }
-                }
-            }
-        }
-    }
 }
 

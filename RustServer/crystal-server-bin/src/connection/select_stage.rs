@@ -373,7 +373,7 @@ impl LoginConnection {
             // Initialise / update player in world first.
             let events = {
                 let mut world = self.world.lock().unwrap();
-                world.handle_command(world::WorldCommand::StartGame {
+                let events = world.handle_command(world::WorldCommand::StartGame {
                     session_id: self.session_id,
                     character_index: ch.index,
                     name: ch.name.clone(),
@@ -386,7 +386,13 @@ impl LoginConnection {
                     level: ch.level,
                     experience: experience_for_world,
                     magics: user_magics,
-                })
+                });
+
+                if !guild_name.is_empty() {
+                    world.set_player_guild_name(self.session_id, &guild_name);
+                }
+
+                events
             };
             self.handle_world_events(events, out);
 

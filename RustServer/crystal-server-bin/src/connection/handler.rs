@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crystal_server_core::account::CharacterPosition;
 use crystal_server_net::ConnectionHandler;
-use crystal_shared_proto::guild::CEditGuildMember;
+use crystal_shared_proto::guild::{CEditGuildMember, CRequestGuildInfo};
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::CDropItem;
 use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
@@ -37,6 +37,7 @@ use crystal_shared_proto::login::{
     CSearchMap,
     CMagic,
     CMagicKey,
+    CChangeAMode,
     CGuildInvite,
     CGuildNameReturn,
     CTradeRequest,
@@ -236,6 +237,11 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_magic_key(msg, &mut out);
                 }
             }
+            ClientPacketId::ChangeAMode => {
+                if let Ok(msg) = CChangeAMode::decode(&packet.payload) {
+                    self.handle_change_attack_mode(msg, &mut out);
+                }
+            }
             ClientPacketId::Magic => {
                 if let Ok(msg) = CMagic::decode(&packet.payload) {
                     self.handle_magic(msg, &mut out);
@@ -298,12 +304,8 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::RequestGuildInfo => {
-                tracing::debug!("RequestGuildInfo packet received but not implemented yet");
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "行会信息查询功能尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CRequestGuildInfo::decode(&packet.payload) {
+                    self.handle_request_guild_info(msg, &mut out);
                 }
             }
             ClientPacketId::GuildStorageGoldChange => {

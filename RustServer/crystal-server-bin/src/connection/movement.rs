@@ -9,6 +9,7 @@ use crystal_shared_proto::login::{
     CRun,
     CMagicKey,
     CMagic,
+    CChangeAMode,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::magic::SObjectSpell;
@@ -52,6 +53,20 @@ impl LoginConnection {
                 outboxes.entry(sid).or_default().push(raw.clone());
             }
         }
+    }
+
+    pub(crate) fn handle_change_attack_mode(
+        &mut self,
+        msg: CChangeAMode,
+        _out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let mode = msg.mode;
+        let mut world = self.world.lock().unwrap();
+        world.set_player_attack_mode(self.session_id, mode);
     }
 
     pub(crate) fn handle_turn(&mut self, msg: CTurn, out: &mut Vec<Vec<u8>>) {
@@ -341,7 +356,57 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
-                world::WorldEvent::MonsterHitPlayer { .. } => {}
+                world::WorldEvent::MonsterHitPlayer {
+                    attacker_monster_id,
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    damage,
+                    damage_type,
+                    health_percent,
+                } => {
+                    if session_id == self.session_id {
+                        let object_id = self.session_id;
+                        let attacker_id = attacker_monster_id as u32;
+
+                        let struck = SObjectStruck {
+                            object_id,
+                            attacker_id,
+                            location_x: x,
+                            location_y: y,
+                            direction,
+                        };
+                        if let Ok(pkt) = struck.encode() {
+                            let raw = Self::encode_raw(pkt);
+                            out.push(raw.clone());
+                            self.enqueue_for_viewers(map_index, x, y, raw);
+                        }
+
+                        let dmg = SDamageIndicator {
+                            damage,
+                            damage_type,
+                            object_id,
+                        };
+                        if let Ok(pkt) = dmg.encode() {
+                            let raw = Self::encode_raw(pkt);
+                            out.push(raw.clone());
+                            self.enqueue_for_viewers(map_index, x, y, raw);
+                        }
+
+                        let health = SObjectHealth {
+                            object_id,
+                            percent: health_percent,
+                            expire: 5,
+                        };
+                        if let Ok(pkt) = health.encode() {
+                            let raw = Self::encode_raw(pkt);
+                            out.push(raw.clone());
+                            self.enqueue_for_viewers(map_index, x, y, raw);
+                        }
+                    }
+                }
                 world::WorldEvent::ItemDropped {
                     object_id,
                     map_index,

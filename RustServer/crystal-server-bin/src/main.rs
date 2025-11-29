@@ -218,6 +218,25 @@ async fn main() -> io::Result<()> {
         }
     }
 
+    // Load GameShopList so that the game shop can use the same data as the
+    // original C# server's Envir.GameShopList, keeping the mir.db format as
+    // the single source of truth for shop entries.
+    match world::map::load_game_shop_items_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(shop_items) => {
+            println!(
+                "[core] Loaded {} GameShopItem entries from Server.MirDB",
+                shop_items.len()
+            );
+            world_db.game_shop_items = shop_items;
+        }
+        Err(e) => {
+            println!(
+                "[core] Failed to load Server.MirDB (GameShopList): {} (continuing without GameShop DB)",
+                e
+            );
+        }
+    }
+
     // Load ItemInfoList so that systems like NPC shops can construct
     // concrete UserItemData payloads for goods, mirroring C# Envir.ItemInfoList.
     match world::map::load_item_infos_from_mirdb(&cfg.server_mirdb_path) {
@@ -551,12 +570,92 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
-                        world::WorldEvent::MonsterDied { .. } => {
-                            // Monster death broadcasting is handled per-connection
-                            // in LoginConnection::handle_world_events within
-                            // connection/movement.rs, where we emit SObjectDied to
-                            // the local player and nearby viewers. The tick
-                            // thread does not need to handle this event.
+                        world::WorldEvent::ObjectAttack {
+                            session_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                            spell,
+                            level,
+                            attack_type,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectAttack {
+                                object_id: session_id,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                                spell,
+                                level,
+                                attack_type,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::MonsterDied {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectDied {
+                                object_id: object_id as u32,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                                death_type: 0,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
                         }
                         world::WorldEvent::MonsterHitPlayer {
                             attacker_monster_id,

@@ -1,4 +1,4 @@
-use crate::world::map::MapInfo;
+use crate::world::map::{GameShopItemRecord, MapInfo};
 use crate::world::monster::MonsterInfo;
 use crate::world::npc::NpcInfo;
 use crate::world::magic::MagicInfo;
@@ -19,6 +19,7 @@ pub struct WorldDatabase {
     pub magic_infos: Vec<MagicInfo>,
     pub buff_infos: Vec<BuffInfo>,
     pub recipe_infos: Vec<RecipeInfo>,
+    pub game_shop_items: Vec<GameShopItemRecord>,
 }
 
 pub trait WorldProvider {
