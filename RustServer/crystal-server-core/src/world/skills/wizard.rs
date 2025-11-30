@@ -5,6 +5,7 @@ use crate::world::skills::{
 };
 use crate::world::magic::magic_power_with_base;
 use crate::world::types::BuffType;
+use crate::world::world::PendingMagicHit;
 use crate::world::{SessionId, Spell, World, WorldEvent, WorldProvider};
 use rand::{thread_rng, Rng};
 
@@ -65,130 +66,124 @@ pub fn cast_fire_bang_ice_storm<P: WorldProvider>(
 
     let mut trained = false;
 
-    // Identify targets within the AoE area.
-    // Note: We collect IDs first to avoid holding the monsters borrow while mutating world state.
-    let mut targets = Vec::new();
-    if let Some(monsters) = world.monsters.get(&map_index) {
-        for m in monsters {
-            if m.x >= min_x && m.x <= max_x && m.y >= min_y && m.y <= max_y {
-                if m.hp > 0 {
-                    targets.push((m.id, m.monster_index));
+    // Route monster damage through the unified PendingMagicHit pipeline so
+    // that HP, experience and drops are handled consistently with other
+    // spells (FireWall, single-target magic, etc.), while still matching the
+    // C# Map.FireBang/IceStorm 3x3 AoE and IsAttackTarget rules.
+    if damage_base > 0 {
+        let base_time = world.time_ms.max(0);
+
+        if let Some(monsters) = world.monsters.get(&map_index) {
+            for m in monsters.iter() {
+                if m.hp <= 0 {
+                    continue;
                 }
+
+                if m.x < min_x || m.x > max_x || m.y < min_y || m.y > max_y {
+                    continue;
+                }
+
+                // Respect pet/AttackMode rules via can_attack_monster,
+                // approximating target.IsAttackTarget(player).
+                if !world.can_attack_monster(session_id, map_index, m.id) {
+                    continue;
+                }
+
+                let damage = damage_base;
+                if damage <= 0 {
+                    continue;
+                }
+
+                trained = true;
+
+                let due_time_ms = base_time;
+                world.pending_magic_hits.push(PendingMagicHit {
+                    due_time_ms,
+                    attacker_session_id: session_id,
+                    map_index,
+                    target_monster_id: m.id,
+                    monster_index: m.monster_index,
+                    spell_id: spell,
+                    damage,
+                    damage_type: 0,
+                });
             }
         }
     }
 
-    // Apply damage to each target.
-    for (monster_id, monster_index) in targets {
-        let (_damage_done, dead, exp, _drops) = {
-            let monsters = match world.monsters.get_mut(&map_index) {
-                Some(m) => m,
-                None => continue,
-            };
-            let m = match monsters.iter_mut().find(|x| x.id == monster_id) {
-                Some(m) => m,
-                None => continue,
-            };
+    // Damage players within the 3x3 AoE, mirroring the C# Map.FireBang/IceStorm
+    // behaviour where both monsters and players that satisfy IsAttackTarget are
+    // hit using DefenceType.MAC. We approximate MAC/DR using the same logic as
+    // FireWall's player damage and route HP/death/PK via the unified
+    // apply_player_hit_from_player helper.
+    if damage_base > 0 {
+        let mut player_targets: Vec<SessionId> = Vec::new();
 
-            // C# logic: damage is applied using MAC defence.
-            // Simplified here: use raw magic damage vs magic defence (MAC).
-            // For now we use a direct application since compute_pure_magic_attack_damage
-            // already includes the caster's roll.
-            // We should subtract target MAC ideally, but for now we apply pure damage
-            // to ensure it works, similar to how the pure_magic branch started.
-            // TODO: Add proper MAC reduction.
-
-            let damage = damage_base; // In future: (damage_base - m.stats.MinMAC).max(0) etc.
-
-            if damage > 0 {
-                m.target_session_id = Some(session_id);
-                m.ai_state = MonsterAiState::Chase;
-
-                let old_hp = m.hp;
-                if damage >= m.hp {
-                    m.hp = 0;
-                } else {
-                    m.hp -= damage;
-                }
-                let dead = m.hp == 0 && old_hp > 0;
-
-                // For now we skip tracking the precise HP percent for AoE
-                // strikes; the client will still receive damage numbers and
-                // death events. This avoids needing a separate max HP lookup
-                // here.
-                let hp_percent: u8 = 0;
-
-                events.push(WorldEvent::ObjectStruck {
-                    attacker_id: session_id,
-                    target_id: monster_id,
-                    map_index,
-                    x: m.x,
-                    y: m.y,
-                    direction: m.direction,
-                    damage,
-                    damage_type: 0, // Magic hit
-                    health_percent: hp_percent,
-                });
-
-                trained = true;
-
-                let mut drops = Vec::new();
-                let mut exp = 0;
-                if dead {
-                    if let Some(info) = world.provider.get_monster_info(monster_index) {
-                        exp = info.experience;
-                        drops = info.drops.clone();
-                    }
-                }
-
-                (damage, dead, exp, drops)
-            } else {
-                (0, false, 0, Vec::new())
+        for (&sid, p) in &world.players {
+            if p.map_index != map_index || p.dead || p.hp <= 0 {
+                continue;
             }
-        };
 
-        if dead {
-            world.mark_monster_dead(map_index, monster_id);
-            
-            // Get death coordinates from previous event or assume current position logic handled in Struck?
-            // Actually we need position for drop. We can look it up or assume it hasn't moved since Struck.
-            // Let's rely on the Struck event's position which we just emitted? No, we need it for Drop.
-            // We can't re-borrow monster. But we know it was at (center_x, center_y) roughly.
-            // Better: we need to look up the monster's position BEFORE removing it?
-            // mark_monster_dead removes it. So we lost the coord.
-            // Wait, mark_monster_dead in Rust implementation removes from `monsters` map.
-            // We should have cached x/y.
-            // Let's re-find the monster position before marking dead, or modify the flow.
-            // Since we are in a loop, we can't hold the reference.
-            // Simpler: The ObjectStruck event contained the position.
-            // But for DropItem we need it.
-            // Let's assume the monster is at the position we found it.
-            // We iterate `targets`, but we didn't save their (x,y).
-            // Let's refine `targets` to include (x,y).
+            if p.x < min_x || p.x > max_x || p.y < min_y || p.y > max_y {
+                continue;
+            }
+
+            if !world.can_attack_player(session_id, sid) {
+                continue;
+            }
+
+            player_targets.push(sid);
         }
-        
-        if dead {
-             events.push(WorldEvent::MonsterDied {
-                object_id: monster_id,
-                map_index,
-                x: center_x, // Approximation if we don't save it. 
-                             // Ideally we save (x,y) in targets list.
-                y: center_y,
-                direction: 0,
-            });
 
-            if exp > 0 {
-                if let Some(p) = world.players.get_mut(&session_id) {
-                    p.experience = p.experience.saturating_add(exp as i64);
+        for sid in player_targets {
+            let dmg = {
+                let p = match world.players.get(&sid) {
+                    Some(p) => p,
+                    None => continue,
+                };
+
+                let stats = &p.stats.total;
+
+                let min_mac = stats.get(Stat::MinMAC).max(0);
+                let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+                let mut dmg = damage_base;
+
+                if max_mac > 0 {
+                    let mut rng = thread_rng();
+                    let armour = rng.gen_range(min_mac..=max_mac);
+                    dmg = dmg.saturating_sub(armour);
                 }
-                events.push(WorldEvent::GainExperience {
-                    session_id,
-                    amount: exp,
-                });
+
+                if dmg <= 0 {
+                    0
+                } else {
+                    let dr_percent = stats.get(Stat::DamageReductionPercent);
+                    if dr_percent > 0 {
+                        let clamped = dr_percent.clamp(0, 95);
+                        dmg = dmg.saturating_mul(100 - clamped) / 100;
+                    }
+                    dmg
+                }
+            };
+
+            if dmg <= 0 {
+                continue;
             }
-            
-            // Handle Drops (simplified for now, mirroring combat.rs structure)
-            // ... (omitted for brevity in this turn, but should be here)
+
+            trained = true;
+
+            world.apply_player_hit_from_player(
+                session_id,
+                sid,
+                map_index,
+                dmg,
+                0,
+                None,
+                None,
+                None,
+                true,
+                events,
+            );
         }
     }
 
@@ -260,155 +255,538 @@ pub fn cast_thunder_storm_flame_field<P: WorldProvider>(
     let max_y = player_y + range;
 
     let mut trained = false;
-    let mut targets = Vec::new();
 
-    if let Some(monsters) = world.monsters.get(&map_index) {
-        for m in monsters {
-            if m.x >= min_x && m.x <= max_x && m.y >= min_y && m.y <= max_y {
-                if m.hp > 0 {
-                    // Save x,y for drop logic
-                    targets.push((m.id, m.monster_index, m.x, m.y));
+    // As with FireBang/IceStorm, route monster damage through
+    // PendingMagicHit so that death, experience and drops are handled by the
+    // shared monster-runtime pipeline. Apply the C# ThunderStorm special
+    // rule (1/10 damage to non-undead) per monster before scheduling the hit.
+    if damage_base > 0 {
+        let base_time = world.time_ms.max(0);
+
+        if let Some(monsters) = world.monsters.get(&map_index) {
+            for m in monsters.iter() {
+                if m.hp <= 0 {
+                    continue;
                 }
+
+                if m.x < min_x || m.x > max_x || m.y < min_y || m.y > max_y {
+                    continue;
+                }
+
+                if !world.can_attack_monster(session_id, map_index, m.id) {
+                    continue;
+                }
+
+                let mut damage = damage_base;
+
+                if spell == Spell::ThunderStorm as u8 {
+                    let is_undead = if let Some(info) = world
+                        .provider
+                        .get_monster_info(m.monster_index)
+                    {
+                        info.undead
+                    } else {
+                        false
+                    };
+
+                    if !is_undead {
+                        damage = damage / 10;
+                    }
+                }
+
+                if damage <= 0 {
+                    continue;
+                }
+
+                trained = true;
+
+                let due_time_ms = base_time;
+                world.pending_magic_hits.push(PendingMagicHit {
+                    due_time_ms,
+                    attacker_session_id: session_id,
+                    map_index,
+                    target_monster_id: m.id,
+                    monster_index: m.monster_index,
+                    spell_id: spell,
+                    damage,
+                    damage_type: 0,
+                });
             }
         }
     }
 
-    for (monster_id, monster_index, mx, my) in targets {
-        let (_damage_done, dead, exp, drops) = {
-            let monsters = match world.monsters.get_mut(&map_index) {
-                Some(m) => m,
-                None => continue,
-            };
-            let m = match monsters.iter_mut().find(|x| x.id == monster_id) {
-                Some(m) => m,
-                None => continue,
-            };
+    if trained {
+        world.level_up_magic_for_player(session_id, spell, events);
+    }
 
-            let mut damage = damage_base;
-            
-            // ThunderStorm special rule: 1/10 damage to non-undead
-            if spell == Spell::ThunderStorm as u8 {
-                let is_undead = if let Some(info) = world.provider.get_monster_info(monster_index) {
-                    info.undead
-                } else {
-                    false
-                };
-                
-                if !is_undead {
-                    damage = damage / 10;
-                }
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: player_x,
+        y: player_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
+
+pub fn cast_lightning<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, player_x, player_y, level, attacker_stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            player.stats.total.clone(),
+        )
+    };
+
+    let damage_base =
+        compute_pure_magic_attack_damage(&world.provider, &attacker_stats, spell, level);
+
+    if damage_base <= 0 {
+        return;
+    }
+
+    // Drive the Lightning spell animation and effects on the C# client by
+    // mirroring the original server's S.Magic + S.ObjectMagic pattern: send
+    // a Magic event to the caster and an ObjectMagic event to nearby
+    // viewers. Lightning itself does not rely on a specific target point for
+    // visuals, only the caster's location and facing direction.
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x: player_x,
+        y: player_y,
+        direction,
+        spell,
+        level,
+        target_id: 0,
+        target_x: player_x,
+        target_y: player_y,
+    });
+
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id: spell,
+        target_id: 0,
+        x: player_x,
+        y: player_y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
+    });
+
+    // Map Lightning range: up to 6 tiles in a straight line from the caster,
+    // using the current facing direction. This mirrors the C# Map.Lightning
+    // logic which walks 6 steps via Functions.PointMove.
+    let (dx, dy) = match direction {
+        0 => (0, -1),
+        1 => (1, -1),
+        2 => (1, 0),
+        3 => (1, 1),
+        4 => (0, 1),
+        5 => (-1, 1),
+        6 => (-1, 0),
+        7 => (-1, -1),
+        _ => (0, 0),
+    };
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+    let width = map.width;
+    let height = map.height;
+
+    let mut trained = false;
+    let mut monster_hits: Vec<(u64, i32)> = Vec::new();
+    let mut player_hits: Vec<SessionId> = Vec::new();
+
+    let mut cx = player_x;
+    let mut cy = player_y;
+
+    // Walk up to 6 tiles along the direction, attempting to hit the first
+    // Monster or Player in each tile that satisfies IsAttackTarget.
+    for _ in 0..6 {
+        cx = cx.saturating_add(dx);
+        cy = cy.saturating_add(dy);
+
+        if cx < 0 || cy < 0 {
+            continue;
+        }
+
+        let ux = cx as u16;
+        let uy = cy as u16;
+        if ux >= width || uy >= height {
+            continue;
+        }
+
+        let mut hit_any = false;
+
+        if let Some(monsters) = world.monsters.get(&map_index) {
+            if let Some(m) = monsters
+                .iter()
+                .find(|m| {
+                    m.hp > 0
+                        && m.x == cx
+                        && m.y == cy
+                        && world.can_attack_monster(session_id, map_index, m.id)
+                })
+            {
+                monster_hits.push((m.id, m.monster_index));
+                hit_any = true;
+            }
+        }
+
+        if hit_any {
+            continue;
+        }
+
+        let mut target_player: Option<SessionId> = None;
+        for (&sid, p) in &world.players {
+            if p.map_index != map_index || p.dead || p.hp <= 0 {
+                continue;
             }
 
-            if damage > 0 {
-                m.target_session_id = Some(session_id);
-                m.ai_state = MonsterAiState::Chase;
+            if p.x != cx || p.y != cy {
+                continue;
+            }
 
-                let old_hp = m.hp;
-                if damage >= m.hp {
-                    m.hp = 0;
-                } else {
-                    m.hp -= damage;
-                }
-                let dead = m.hp == 0 && old_hp > 0;
+            if !world.can_attack_player(session_id, sid) {
+                continue;
+            }
 
-                // For now we skip tracking precise HP percent here as well,
-                // since AoE strikes will still communicate damage and death
-                // via ObjectStruck/MonsterDied events.
-                let hp_percent: u8 = 0;
+            target_player = Some(sid);
+            break;
+        }
 
-                events.push(WorldEvent::ObjectStruck {
-                    attacker_id: session_id,
-                    target_id: monster_id,
-                    map_index,
-                    x: m.x,
-                    y: m.y,
-                    direction: m.direction,
-                    damage,
-                    damage_type: 0,
-                    health_percent: hp_percent,
-                });
+        if let Some(sid) = target_player {
+            player_hits.push(sid);
+        }
+    }
 
-                trained = true;
+    let base_time = world.time_ms.max(0);
+    // C# HumanObject.Lightning schedules a DelayedAction at
+    // Envir.Time + 500; mirror that here so that damage, death and
+    // drops are applied ~500ms after the cast, keeping them in sync
+    // with the spell animation on the client.
+    let delay_ms: i64 = 500;
+    let due_time_ms = base_time.saturating_add(delay_ms);
 
-                let mut drops = Vec::new();
-                let mut exp = 0;
-                if dead {
-                    if let Some(info) = world.provider.get_monster_info(monster_index) {
-                        exp = info.experience;
-                        drops = info.drops.clone();
-                    }
-                }
+    for (monster_id, monster_index) in monster_hits {
+        trained = true;
+        world.pending_magic_hits.push(PendingMagicHit {
+            due_time_ms,
+            attacker_session_id: session_id,
+            map_index,
+            target_monster_id: monster_id,
+            monster_index,
+            spell_id: spell,
+            damage: damage_base,
+            damage_type: 0,
+        });
+    }
 
-                (damage, dead, exp, drops)
+    for sid in player_hits {
+        let dmg = {
+            let p = match world.players.get(&sid) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            let stats = &p.stats.total;
+
+            let min_mac = stats.get(Stat::MinMAC).max(0);
+            let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+            let mut dmg = damage_base;
+
+            if max_mac > 0 {
+                let mut rng = thread_rng();
+                let armour = rng.gen_range(min_mac..=max_mac);
+                dmg = dmg.saturating_sub(armour);
+            }
+
+            if dmg <= 0 {
+                0
             } else {
-                (0, false, 0, Vec::new())
+                let dr_percent = stats.get(Stat::DamageReductionPercent);
+                if dr_percent > 0 {
+                    let clamped = dr_percent.clamp(0, 95);
+                    dmg = dmg.saturating_mul(100 - clamped) / 100;
+                }
+                dmg
             }
         };
 
-        if dead {
-            world.mark_monster_dead(map_index, monster_id);
-            
-            events.push(WorldEvent::MonsterDied {
-                object_id: monster_id,
-                map_index,
-                x: mx,
-                y: my,
-                direction: 0,
-            });
+        if dmg <= 0 {
+            continue;
+        }
 
-            if exp > 0 {
-                if let Some(p) = world.players.get_mut(&session_id) {
-                    p.experience = p.experience.saturating_add(exp as i64);
-                }
-                events.push(WorldEvent::GainExperience {
-                    session_id,
-                    amount: exp,
-                });
+        trained = true;
+
+        world.apply_player_hit_from_player(
+            session_id,
+            sid,
+            map_index,
+            dmg,
+            0,
+            None,
+            None,
+            None,
+            true,
+            events,
+        );
+    }
+
+    if trained {
+        world.level_up_magic_for_player(session_id, spell, events);
+    }
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: player_x,
+        y: player_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
+
+pub fn cast_hell_fire<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, player_x, player_y, level, attacker_stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            player.stats.total.clone(),
+        )
+    };
+
+    let damage_base =
+        compute_pure_magic_attack_damage(&world.provider, &attacker_stats, spell, level);
+
+    if damage_base <= 0 {
+        return;
+    }
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+    let width = map.width;
+    let height = map.height;
+
+    // Primary direction plus side directions at level 3, mirroring the C#
+    // HellFire behaviour where level 3 also emits rays at Direction+1 and
+    // Direction-1.
+    let mut dirs: Vec<u8> = vec![direction];
+    if level == 3 {
+        dirs.push(direction.wrapping_add(1) & 7);
+        dirs.push(direction.wrapping_add(7) & 7);
+    }
+
+    let base_time = world.time_ms.max(0);
+    // C# HumanObject.HellFire also uses a fixed 500ms delay between
+    // cast and Map.HellFire damage application. Use the same delay
+    // here so that line damage and visual effects remain aligned.
+    let delay_ms: i64 = 500;
+    let due_time_ms = base_time.saturating_add(delay_ms);
+
+    let mut trained = false;
+
+    for dir in dirs {
+        let (dx, dy) = match dir {
+            0 => (0, -1),
+            1 => (1, -1),
+            2 => (1, 0),
+            3 => (1, 1),
+            4 => (0, 1),
+            5 => (-1, 1),
+            6 => (-1, 0),
+            7 => (-1, -1),
+            _ => (0, 0),
+        };
+
+        let mut cx = player_x;
+        let mut cy = player_y;
+
+        // Up to 4 tiles along each ray, matching the count parameter used by
+        // the C# HumanObject.HellFire/Map.HellFire path.
+        for _ in 0..4 {
+            cx = cx.saturating_add(dx);
+            cy = cy.saturating_add(dy);
+
+            if cx < 0 || cy < 0 {
+                break;
             }
-            
-            // Handle drops (using mx, my)
-            if !drops.is_empty() {
-                 let item_offset = attacker_stats.get(Stat::ItemDropRatePercent);
-                 let gold_offset = attacker_stats.get(Stat::GoldDropRatePercent);
-                 let mut rng = thread_rng();
-                 let mut total = crate::world::drop::DropRewardInfo {
-                     items: Vec::new(),
-                     gold: 0,
-                 };
-                 
-                 for d in &drops {
-                     if d.quest_required { continue; }
-                     if let Some(r) = d.attempt_drop(drop_rate, item_offset, gold_offset, &mut rng) {
-                         total.gold = total.gold.saturating_add(r.gold);
-                         if !r.items.is_empty() {
-                             total.items.extend(r.items);
-                         }
-                     }
-                 }
-                 
-                 if total.gold > 0 || !total.items.is_empty() {
-                     let item_timeout_ms: i64 = 300_000;
-                     if total.gold > 0 {
-                         if let Some((dx, dy)) = world.find_drop_location(map_index, mx, my, 4) {
-                             let item_id = world.next_map_item_id;
-                             world.next_map_item_id = world.next_map_item_id.wrapping_add(1);
-                             world.map_items.entry(map_index).or_default().push(crate::world::map_item::MapItem {
-                                 id: item_id, map_index, x: dx, y: dy, item_index: None, gold: total.gold, count: 0, item: None, expire_time_ms: world.time_ms + item_timeout_ms
-                             });
-                             events.push(WorldEvent::GoldDropped { object_id: item_id, map_index, x: dx, y: dy, gold: total.gold });
-                         }
-                     }
-                     for item_idx in total.items {
-                         if let Some((dx, dy)) = world.find_drop_location(map_index, mx, my, 4) {
-                             let item_id = world.next_map_item_id;
-                             world.next_map_item_id = world.next_map_item_id.wrapping_add(1);
-                             world.map_items.entry(map_index).or_default().push(crate::world::map_item::MapItem {
-                                 id: item_id, map_index, x: dx, y: dy, item_index: Some(item_idx), gold: 0, count: 1, item: None, expire_time_ms: world.time_ms + item_timeout_ms
-                             });
-                             events.push(WorldEvent::ItemDropped { object_id: item_id, map_index, x: dx, y: dy, item_index: item_idx, count: 1 });
-                         }
-                     }
-                 }
+
+            let ux = cx as u16;
+            let uy = cy as u16;
+            if ux >= width || uy >= height {
+                break;
+            }
+
+            let mut hit_any = false;
+
+            if let Some(monsters) = world.monsters.get(&map_index) {
+                if let Some(m) = monsters
+                    .iter()
+                    .find(|m| {
+                        m.hp > 0
+                            && m.x == cx
+                            && m.y == cy
+                            && world.can_attack_monster(session_id, map_index, m.id)
+                    })
+                {
+                    trained = true;
+                    world.pending_magic_hits.push(PendingMagicHit {
+                        due_time_ms,
+                        attacker_session_id: session_id,
+                        map_index,
+                        target_monster_id: m.id,
+                        monster_index: m.monster_index,
+                        spell_id: spell,
+                        damage: damage_base,
+                        damage_type: 0,
+                    });
+                    hit_any = true;
+                }
+            }
+
+            if hit_any {
+                continue;
+            }
+
+            let mut target_player: Option<SessionId> = None;
+            for (&sid, p) in &world.players {
+                if p.map_index != map_index || p.dead || p.hp <= 0 {
+                    continue;
+                }
+
+                if p.x != cx || p.y != cy {
+                    continue;
+                }
+
+                if !world.can_attack_player(session_id, sid) {
+                    continue;
+                }
+
+                target_player = Some(sid);
+                break;
+            }
+
+            if let Some(sid) = target_player {
+                let dmg = {
+                    let p = match world.players.get(&sid) {
+                        Some(p) => p,
+                        None => continue,
+                    };
+
+                    let stats = &p.stats.total;
+
+                    let min_mac = stats.get(Stat::MinMAC).max(0);
+                    let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+                    let mut dmg = damage_base;
+
+                    if max_mac > 0 {
+                        let mut rng = thread_rng();
+                        let armour = rng.gen_range(min_mac..=max_mac);
+                        dmg = dmg.saturating_sub(armour);
+                    }
+
+                    if dmg <= 0 {
+                        0
+                    } else {
+                        let dr_percent = stats.get(Stat::DamageReductionPercent);
+                        if dr_percent > 0 {
+                            let clamped = dr_percent.clamp(0, 95);
+                            dmg = dmg.saturating_mul(100 - clamped) / 100;
+                        }
+                        dmg
+                    }
+                };
+
+                if dmg <= 0 {
+                    continue;
+                }
+
+                trained = true;
+
+                world.apply_player_hit_from_player(
+                    session_id,
+                    sid,
+                    map_index,
+                    dmg,
+                    0,
+                    None,
+                    None,
+                    None,
+                    true,
+                    events,
+                );
             }
         }
     }

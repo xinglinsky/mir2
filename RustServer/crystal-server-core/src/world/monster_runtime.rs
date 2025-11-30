@@ -349,6 +349,13 @@ impl<P: WorldProvider> World<P> {
 
         self.process_pending_magic_hits(now_ms, &mut events);
 
+        // After processing combat and AI for this tick, remove any monsters
+        // whose corpses have expired. This mirrors C# MonsterObject.Dead /
+        // DeadTime behaviour: monsters remain in the world as corpses for a
+        // short period (so the client can render them) before being removed
+        // from the map and respawn counts updated.
+        self.cleanup_dead_monsters(now_ms);
+
         events
     }
 
@@ -373,6 +380,15 @@ impl<P: WorldProvider> World<P> {
             };
 
             if !caster_ok {
+                tracing::debug!(
+                    "[firewall] removed because caster invalid: map_index={} caster_session_id={} value={} now_ms={} expire_time_ms={} cell_count={}",
+                    fw.map_index,
+                    fw.caster_session_id,
+                    fw.value,
+                    now_ms,
+                    fw.expire_time_ms,
+                    fw.cells.len(),
+                );
                 for &(x, y) in &fw.cells {
                     self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
                     events.push(WorldEvent::MapSpellRemoved {
@@ -386,6 +402,15 @@ impl<P: WorldProvider> World<P> {
             }
 
             if now_ms > fw.expire_time_ms {
+                tracing::debug!(
+                    "[firewall] removed because expired: map_index={} caster_session_id={} value={} now_ms={} expire_time_ms={} cell_count={}",
+                    fw.map_index,
+                    fw.caster_session_id,
+                    fw.value,
+                    now_ms,
+                    fw.expire_time_ms,
+                    fw.cells.len(),
+                );
                 for &(x, y) in &fw.cells {
                     self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
                     events.push(WorldEvent::MapSpellRemoved {
@@ -696,6 +721,23 @@ impl<P: WorldProvider> World<P> {
                     }
                 }
             }
+
+            if let Some(info) = self.provider.get_monster_info(monster_index) {
+                trace!(
+                    "[drop] monster_index={} name='{}' drop_path='{}' drops_len={}",
+                    monster_index,
+                    info.name,
+                    info.drop_path,
+                    monster_drops.len(),
+                );
+            }
+
+            debug!(
+                "[drop-total-pending-magic] monster_index={} gold={} items_len={}",
+                monster_index,
+                total.gold,
+                total.items.len(),
+            );
 
             if total.gold > 0 || !total.items.is_empty() {
                 let item_timeout_ms: i64 = 300_000; // 5 minutes
@@ -2435,9 +2477,9 @@ impl<P: WorldProvider> World<P> {
                     map_index: map.info.index,
                     x,
                     y,
-                    home_x: respawn.location_x,
-                    home_y: respawn.location_y,
-                    direction: respawn.direction,
+                    home_x: x,
+                    home_y: y,
+                    direction: 0,
                     hp: base_hp,
                     is_pet: false,
                     owner_session_id: None,
@@ -2449,7 +2491,7 @@ impl<P: WorldProvider> World<P> {
                     next_attack_time_ms: 0,
                     search_time_ms: 0,
                     roam_time_ms: 0,
-                    route_index: 0,
+                    route_index: -1,
                     route_wait_until_ms: 0,
                     alone: false,
                     alone_time_ms: 0,
@@ -2461,6 +2503,8 @@ impl<P: WorldProvider> World<P> {
                     special_mode: false,
                     special_mode_until_ms: 0,
                     special_mode_action_time_ms: 0,
+                    dead: false,
+                    dead_until_ms: 0,
                 });
 
                 placed = true;
@@ -2521,28 +2565,77 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
-    /// Record that a monster has died or despawned, removing it from the
-    /// world state and decrementing the corresponding RespawnRuntime
-    /// current_count if we can locate a matching respawn_index.
+    /// Record that a monster has died. Instead of immediately removing it
+    /// from the monsters list, flag it as dead and set a corpse timeout so
+    /// that the client can render the corpse for a short period, mirroring C#
+    /// MonsterObject.Dead / DeadTime behaviour.
     pub fn mark_monster_dead(&mut self, map_index: i32, monster_id: u64) {
+        // First, locate the monster instance and mark it as dead while we
+        // hold a mutable borrow to the monsters list. Extract the position
+        // and respawn_index we need for subsequent occupancy / respawn
+        // updates, then drop the borrow before mutating other fields on self.
+        let mut corpse_meta: Option<(i32, i32, i32)> = None;
+
         if let Some(monsters) = self.monsters.get_mut(&map_index) {
-            if let Some(pos) = monsters.iter().position(|m| m.id == monster_id) {
-                let inst = monsters.remove(pos);
+            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                // Mark as dead and set a corpse timeout similar to C#
+                // MonsterObject.DeadTime = Envir.Time + DeadDelay. We
+                // approximate DeadDelay with a fixed 10 seconds window so
+                // that corpses remain visible for a short time before being
+                // removed from the world.
+                m.hp = 0;
+                m.dead = true;
+                let base_time = self.time_ms.max(0);
+                let corpse_lifetime_ms: i64 = 10_000;
+                m.dead_until_ms = base_time.saturating_add(corpse_lifetime_ms);
 
-                // Clear dynamic occupancy so that the cell is no longer
-                // blocking for players or other monsters, mirroring C# where
-                // Dead monsters do not block movement.
-                self.remove_monster_from_occupancy(monster_id, map_index, inst.x, inst.y);
+                corpse_meta = Some((m.x, m.y, m.respawn_index));
+            }
+        }
 
-                if let Some(runtimes) = self.respawns.get_mut(&map_index) {
-                    if let Some(rt) = runtimes
-                        .iter_mut()
-                        .find(|rt| rt.info.respawn_index == inst.respawn_index)
-                    {
-                        if rt.current_count > 0 {
-                            rt.current_count -= 1;
-                        }
+        if let Some((x, y, respawn_index)) = corpse_meta {
+            // Clear dynamic occupancy so that the cell is no longer blocking
+            // for players or other monsters, but keep the monster instance in
+            // the list so that visibility can still see it as a corpse.
+            self.remove_monster_from_occupancy(monster_id, map_index, x, y);
+
+            // Decrement respawn runtime counts immediately so that spawn logic
+            // can consider this monster slot free, matching the C# behaviour
+            // where the respawn system reacts to death rather than corpse
+            // removal time.
+            if let Some(runtimes) = self.respawns.get_mut(&map_index) {
+                if let Some(rt) = runtimes
+                    .iter_mut()
+                    .find(|rt| rt.info.respawn_index == respawn_index)
+                {
+                    if rt.current_count > 0 {
+                        rt.current_count -= 1;
                     }
+                }
+            }
+        }
+    }
+
+    /// Remove monsters whose corpse timeout has expired. This is called from
+    /// World::update after combat/AI so that dead monsters linger as corpses
+    /// for a short time but are eventually cleaned up and no longer sent to
+    /// clients via visibility updates.
+    fn cleanup_dead_monsters(&mut self, now_ms: i64) {
+        let map_indices: Vec<i32> = self.monsters.keys().cloned().collect();
+
+        for map_index in map_indices {
+            if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                let mut to_remove: Vec<usize> = Vec::new();
+
+                for (idx, m) in monsters.iter().enumerate() {
+                    if m.dead && m.dead_until_ms > 0 && now_ms >= m.dead_until_ms {
+                        to_remove.push(idx);
+                    }
+                }
+
+                // Remove in reverse order to keep indices stable.
+                for idx in to_remove.into_iter().rev() {
+                    monsters.remove(idx);
                 }
             }
         }

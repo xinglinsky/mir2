@@ -232,6 +232,21 @@ pub enum WorldEvent {
         level: u8,
         attack_type: u8,
     },
+    /// Ranged object attack, mirroring C# S.ObjectRangeAttack, used by
+    /// monsters such as HolyDeva for pet skills.
+    ObjectRangeAttack {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+        target_id: u64,
+        target_x: i32,
+        target_y: i32,
+        spell: u8,
+        level: u8,
+        attack_type: u8,
+    },
     ObjectMagic {
         session_id: SessionId,
         map_index: i32,
@@ -2230,6 +2245,8 @@ impl<P: WorldProvider> World<P> {
             special_mode: false,
             special_mode_until_ms: 0,
             special_mode_action_time_ms: 0,
+            dead: false,
+            dead_until_ms: 0,
         };
 
         self.add_monster_to_occupancy(instance.id, map_index, instance.x, instance.y);

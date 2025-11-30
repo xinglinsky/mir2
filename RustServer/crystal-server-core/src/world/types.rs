@@ -344,6 +344,23 @@ impl PetKind {
     }
 }
 
+/// High-level pet skill identifiers used by the pet AI to decide how a pet
+/// should attack. These are not network-visible and are purely an internal
+/// representation so that behaviour can be driven from configuration instead
+/// of hard-coded per-PetKind logic.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PetSkillId {
+    /// Simple 1-tile melee attack used by Skeleton/BoneFamiliar and other
+    /// basic melee pets.
+    SkeletonMelee,
+    /// Shinsu's special close-range claw attack, which uses a custom
+    /// InAttackRange shape and a 2-tile LineAttack in front of the pet.
+    ShinsuClaw,
+    /// HolyDeva's ranged bolt attack, which in C# uses ObjectRangeAttack with
+    /// a 6-tile range and delayed MAC-based damage.
+    HolyDevaBolt,
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Spell {

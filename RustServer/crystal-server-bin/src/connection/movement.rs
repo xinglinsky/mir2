@@ -13,7 +13,15 @@ use crystal_shared_proto::login::{
     CChangeAMode,
 };
 use crystal_shared_proto::map::SMapChanged;
-use crystal_shared_proto::magic::{SMagic, SMagicCast, SMagicDelay, SObjectEffect, SObjectMagic, SObjectSpell};
+use crystal_shared_proto::magic::{
+    SMagic,
+    SMagicCast,
+    SMagicDelay,
+    SObjectEffect,
+    SObjectMagic,
+    SObjectRangeAttack,
+    SObjectSpell,
+};
 use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectRun,
@@ -320,6 +328,36 @@ impl LoginConnection {
                         spell,
                         level,
                         attack_type,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::ObjectRangeAttack {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    target_id,
+                    target_x,
+                    target_y,
+                    spell,
+                    level,
+                    attack_type,
+                } => {
+                    let pkt = SObjectRangeAttack {
+                        object_id: object_id as u32,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                        target_id: target_id as u32,
+                        target_x,
+                        target_y,
+                        attack_type,
+                        spell,
+                        level,
                     };
                     if let Ok(raw) = pkt.encode() {
                         let bytes = Self::encode_raw(raw);

@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-use crate::world::types::PetKind;
+use crate::world::types::{PetKind, PetSkillId};
 
 #[derive(Clone, Debug)]
 pub struct PetTemplate {
@@ -12,6 +12,8 @@ pub struct PetTemplate {
     pub life_time_ms: i64,
     pub follow_distance: i32,
     pub leash_distance: i32,
+    pub attack_range: i32,
+    pub primary_skill: PetSkillId,
     pub persistent: bool,
 }
 
@@ -33,6 +35,9 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             // Match C# pet recall distance based on Globals.DataRange (16)
             // so pets do not rubber-band while chasing.
             leash_distance: 16,
+            // HolyDeva uses a 6-tile attack range in C#.
+            attack_range: 6,
+            primary_skill: PetSkillId::HolyDevaBolt,
             persistent: false,
         },
     );
@@ -50,6 +55,10 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             life_time_ms: 0,
             follow_distance: 3,
             leash_distance: 16,
+            // Shinsu's effective attack pattern fits within a 2-tile Chebyshev
+            // radius; the detailed shape is enforced in pet_runtime.
+            attack_range: 2,
+            primary_skill: PetSkillId::ShinsuClaw,
             persistent: false,
         },
     );
@@ -68,6 +77,9 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             life_time_ms: 0,
             follow_distance: 3,
             leash_distance: 16,
+            // Skeleton/BoneFamiliar is a true 1-tile melee pet.
+            attack_range: 1,
+            primary_skill: PetSkillId::SkeletonMelee,
             persistent: false,
         },
     );

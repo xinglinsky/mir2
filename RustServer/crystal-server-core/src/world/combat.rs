@@ -34,6 +34,8 @@ use crate::world::skills::warrior::{
 use crate::world::skills::wizard::{
     cast_fire_bang_ice_storm,
     cast_fire_wall,
+    cast_lightning,
+    cast_hell_fire,
     cast_magic_shield,
     cast_thunder_storm_flame_field,
 };
@@ -748,6 +750,16 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::ThunderStorm as u8 || spell == Spell::FlameField as u8 {
             cast_thunder_storm_flame_field(self, session_id, spell, direction, events);
+            return;
+        }
+
+        if spell == Spell::Lightning as u8 {
+            cast_lightning(self, session_id, spell, direction, events);
+            return;
+        }
+
+        if spell == Spell::HellFire as u8 {
+            cast_hell_fire(self, session_id, spell, direction, events);
             return;
         }
 

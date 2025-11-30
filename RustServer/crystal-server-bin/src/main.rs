@@ -479,6 +479,45 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
+                        world::WorldEvent::MapSpellRemoved {
+                            map_index,
+                            x,
+                            y,
+                            spell: _,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let mi = map_index as u32 & 0x0FFF;
+                            let ux = x.max(0) as u32 & 0x03FF;
+                            let uy = y.max(0) as u32 & 0x03FF;
+                            let object_id = (mi << 20) | (ux << 10) | uy;
+
+                            let pkt = SObjectRemove { object_id };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
                         world::WorldEvent::ObjectAttack {
                             session_id,
                             map_index,

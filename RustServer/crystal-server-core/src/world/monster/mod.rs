@@ -107,4 +107,14 @@ pub struct MonsterInstance {
     pub special_mode: bool,
     pub special_mode_until_ms: i64,
     pub special_mode_action_time_ms: i64,
+    /// Whether this monster has been killed (HP has reached 0) and is now a
+    /// corpse on the map. Mirroring C# MonsterObject.Dead: dead monsters stay
+    /// in the world for a short time so that the client can render their
+    /// corpses before they are removed.
+    pub dead: bool,
+    /// Time (in ms since epoch) when this monster's corpse should be removed
+    /// from the world, approximating C# MonsterObject.DeadTime. Until this
+    /// time passes, the monster remains in the monsters list but is skipped
+    /// by AI and treated as non-blocking.
+    pub dead_until_ms: i64,
 }

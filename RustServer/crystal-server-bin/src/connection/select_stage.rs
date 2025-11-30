@@ -527,6 +527,11 @@ impl LoginConnection {
                 }
             }
 
+            self.current_map_index = map_info_core.index;
+            self.current_x = spawn_x;
+            self.current_y = spawn_y;
+            self.direction = initial_direction;
+
             let map = SMapInformation {
                 map_index: map_info_core.index,
                 file_name: map_info_core.file_name.clone(),
@@ -709,23 +714,6 @@ impl LoginConnection {
                 expiry_time_binary: account_storage.expanded_storage_expiry_binary,
             };
             if let Ok(raw) = resize_pkt.encode() {
-                out.push(Self::encode_raw(raw));
-            }
-           let map_changed = SMapChanged {
-                map_index: map_info_core.index,
-                file_name: map_info_core.file_name.clone(),
-                title: map_info_core.title.clone(),
-                mini_map: map_info_core.mini_map,
-                big_map: map_info_core.big_map,
-                lights: map_info_core.light,
-                location_x: spawn_x,
-                location_y: spawn_y,
-                direction: initial_direction,
-                map_dark_light: map_info_core.map_dark_light,
-                music: map_info_core.music,
-                weather: map_info_core.weather_particles,
-            };
-            if let Ok(raw) = map_changed.encode() {
                 out.push(Self::encode_raw(raw));
             }
 
