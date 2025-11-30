@@ -85,7 +85,7 @@ pub use crate::user::{
 
 pub use crate::npc::{
     SConsignItem, SDefaultNpc, SMarketFail, SMarketSuccess, SObjectNpc, SNpcConsign,
-    SNpcImageUpdate, SNpcMarket, SNpcMarketPage, SNpcResponse, SNpcUpdate,
+    SNpcImageUpdate, SNpcMarket, SNpcMarketPage, SNpcResponse, SNpcUpdate, SRoll,
 };
 pub use crate::magic::{
     SNewMagic,

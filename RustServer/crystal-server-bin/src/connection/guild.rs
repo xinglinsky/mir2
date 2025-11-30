@@ -524,6 +524,16 @@ impl LoginConnection {
             }
             // Type 3: request full guild storage list.
             3 => {
+                // Mirror C# PlayerObject.GuildStorageItemChange type 3
+                // behaviour: only allow a single successful list request per
+                // guild join/create, guarded by a boolean flag. Subsequent
+                // requests are ignored until the player joins or creates a
+                // guild again.
+                if !self.guild_can_request_items {
+                    return;
+                }
+                self.guild_can_request_items = false;
+
                 let items = {
                     let mut world = self.world.lock().unwrap();
                     match world.guild_storage_list(&guild_name) {
@@ -949,6 +959,11 @@ impl LoginConnection {
         if name.is_empty() {
             return;
         }
+
+        // Guild creation succeeds will set up a new GuildInfo and mark this
+        // player as leader. Mirror C# by allowing a fresh guild storage list
+        // request after creation.
+        self.guild_can_request_items = true;
 
         self.handle_create_guild_command(name, out);
     }
@@ -2043,6 +2058,11 @@ impl LoginConnection {
 
                 let ok = format!("You have joined guild {}.", guild_name);
                 self.send_system_chat(&ok, out);
+
+                // Mirror C# PlayerObject.GuildInvite(accept=true) which sets
+                // GuildCanRequestItems = true so that the client can request a
+                // fresh guild storage list once after joining.
+                self.guild_can_request_items = true;
             }
         }
 

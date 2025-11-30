@@ -640,6 +640,42 @@ impl SNPCPearlGoods {
 }
 
 #[derive(Clone, Debug)]
+pub struct SRoll {
+    pub roll_type: i32,
+    pub page: String,
+    pub result: i32,
+    pub auto_roll: bool,
+}
+
+impl SRoll {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.roll_type)?;
+        write_string(&mut buf, &self.page)?;
+        write_i32_le(&mut buf, self.result)?;
+        write_bool(&mut buf, self.auto_roll)?;
+        Ok(RawPacket {
+            id: ServerPacketId::Roll as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let roll_type = read_i32_le(&mut c)?;
+        let page = read_string(&mut c)?;
+        let result = read_i32_le(&mut c)?;
+        let auto_roll = read_bool(&mut c)?;
+        Ok(SRoll {
+            roll_type,
+            page,
+            result,
+            auto_roll,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SNPCRequestInput {
     pub npc_id: u32,
     pub page_name: String,

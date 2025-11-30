@@ -27,6 +27,7 @@ namespace Client.MirScenes
 
             Characters = characters;
             SortList();
+            _selected = Characters.Count > 0 ? 0 : -1;
 
             KeyPress += SelectScene_KeyPress;
 
@@ -214,6 +215,9 @@ namespace Client.MirScenes
                 Border = true,
             };
             UpdateInterface();
+
+            if (Characters.Count == 0)
+                OpenNewCharacterDialog();
         }
 
         private void SelectScene_KeyPress(object sender, KeyPressEventArgs e)

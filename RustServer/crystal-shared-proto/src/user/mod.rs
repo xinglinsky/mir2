@@ -22,5 +22,12 @@ pub use location::{
     SUserDashAttack,
     SUserAttackMove,
 };
-pub use status::{SDamageIndicator, SHealthChanged, SHeroHealthChanged, SStruck, SColourChanged};
+pub use status::{
+    SChangeAMode,
+    SDamageIndicator,
+    SHealthChanged,
+    SHeroHealthChanged,
+    SStruck,
+    SColourChanged,
+};
 pub use flat::*;

@@ -39,7 +39,7 @@ use crystal_shared_proto::scene::{
     SObjectShow,
     SObjectHide,
 };
-use crystal_shared_proto::user::{SUserLocation, SHealthChanged, SUserSlotsRefresh};
+use crystal_shared_proto::user::{SChangeAMode, SUserLocation, SHealthChanged, SUserSlotsRefresh};
 
 use super::{LoginConnection, Stage};
 
@@ -61,7 +61,7 @@ impl LoginConnection {
     pub(crate) fn handle_change_attack_mode(
         &mut self,
         msg: CChangeAMode,
-        _out: &mut Vec<Vec<u8>>,
+        out: &mut Vec<Vec<u8>>,
     ) {
         if self.stage != Stage::InGame {
             return;
@@ -70,6 +70,14 @@ impl LoginConnection {
         let mode = msg.mode;
         let mut world = self.world.lock().unwrap();
         world.set_player_attack_mode(self.session_id, mode);
+        drop(world);
+
+        // Notify the client so its local AMode and attack-mode UI stay in
+        // sync with the server-side value, mirroring the original C#
+        // MirConnection.ChangeAMode behaviour.
+        let pkt = SChangeAMode { mode };
+        let raw = pkt.encode();
+        out.push(Self::encode_raw(raw));
     }
 
     pub(crate) fn handle_turn(&mut self, msg: CTurn, out: &mut Vec<Vec<u8>>) {

@@ -145,7 +145,7 @@ impl<P: WorldProvider> World<P> {
                     pk_points: 0,
                     brown_time_ms: 0,
                     next_pk_decay_ms: 0,
-                    attack_mode: 5,
+                    attack_mode: 0,
                     gs_purchases: HashMap::new(),
                     npc_data: HashMap::new(),
                 }

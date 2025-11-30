@@ -55,6 +55,18 @@ pub struct BuyBackEntry {
 }
 
 #[derive(Clone, Debug)]
+pub struct PendingMagicHit {
+    pub due_time_ms: i64,
+    pub attacker_session_id: SessionId,
+    pub map_index: i32,
+    pub target_monster_id: u64,
+    pub monster_index: i32,
+    pub spell_id: u8,
+    pub damage: i32,
+    pub damage_type: u8,
+}
+
+#[derive(Clone, Debug)]
 pub enum GuildJoinError {
     NotFound,
     Full,
@@ -372,6 +384,7 @@ pub struct World<P: WorldProvider> {
     pub(crate) respawn_base_spawn_rate_minutes: u8,
     pub(crate) spawn_multiplier: u16,
     pub(crate) drop_rate: f32,
+    pub(crate) pending_magic_hits: Vec<PendingMagicHit>,
     pub(crate) guilds: GuildManager,
     pub(crate) parties: PartyManager,
     /// In-memory GameShop purchase log keyed by GameShopItem GIndex.
@@ -406,6 +419,7 @@ impl<P: WorldProvider> World<P> {
             respawn_base_spawn_rate_minutes,
             spawn_multiplier,
             drop_rate,
+            pending_magic_hits: Vec::new(),
             guilds: GuildManager::new(),
             parties: PartyManager::new(),
             gameshop_log: HashMap::new(),
@@ -1958,6 +1972,9 @@ impl<P: WorldProvider> World<P> {
             route_wait_until_ms: 0,
             alone: false,
             alone_time_ms: 0,
+            shock_time_ms: 0,
+            rage_time_ms: 0,
+            hallucination_time_ms: 0,
             buff_stats: Stats::default(),
             buffs: Vec::new(),
             special_mode: false,
@@ -2293,8 +2310,13 @@ impl<P: WorldProvider> World<P> {
 
     /// Remove a player from the world and occupancy tracking. This is used
     /// when a connection fully disconnects so that offline characters no
-    /// longer block movement.
+    /// longer block movement. Any pets owned by this session are also
+    /// despawned so they do not linger without an owner.
     pub fn remove_player_from_world(&mut self, session_id: SessionId) {
+        // Despawn all pets owned by this session across all maps before
+        // removing the player itself.
+        self.remove_all_pets_for_session(session_id);
+
         if let Some(p) = self.players.remove(&session_id) {
             self.remove_player_from_occupancy(session_id, p.map_index, p.x, p.y);
         }
@@ -2318,6 +2340,7 @@ impl<P: WorldProvider> World<P> {
                 experience,
                 magics,
             } => {
+                self.remove_all_pets_for_session(session_id);
                 // Remove any existing occupancy entry for this session, then
                 // upsert the player and re-add occupancy using a separate
                 // scope to satisfy the borrow checker.

@@ -95,6 +95,12 @@ pub struct GameConfig {
     pub pk_delay: i32,
     pub newbie_guild: String,
     pub newbie_guild_max_size: i32,
+    /// Base gold required to rent a Guild Territory (BuyGTGold in C# Settings).
+    pub buy_gt_gold: i32,
+    /// Gold required to extend an existing Guild Territory rental (ExtendGT in C# Settings).
+    pub extend_gt_gold: i32,
+    /// Number of days added when extending a Guild Territory rental (GTDays in C# Settings).
+    pub gt_days: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +195,9 @@ impl Default for SetupConfig {
                 pk_delay: 12,
                 newbie_guild: "NewbieGuild".to_string(),
                 newbie_guild_max_size: 1000,
+                buy_gt_gold: 10_000_000,
+                extend_gt_gold: 1_000_000,
+                gt_days: 30,
             },
             rested: RestedConfig {
                 period: 60,
@@ -309,6 +318,15 @@ fn load_setup_config(path: &Path) -> SetupConfig {
                 "NewbieGuildMaxSize" => {
                     cfg.game.newbie_guild_max_size =
                         parse_i32(value, cfg.game.newbie_guild_max_size)
+                }
+                "BuyGTGold" => {
+                    cfg.game.buy_gt_gold = parse_i32(value, cfg.game.buy_gt_gold)
+                }
+                "ExtendGT" => {
+                    cfg.game.extend_gt_gold = parse_i32(value, cfg.game.extend_gt_gold)
+                }
+                "GTDays" => {
+                    cfg.game.gt_days = parse_i32(value, cfg.game.gt_days)
                 }
                 _ => {}
             },

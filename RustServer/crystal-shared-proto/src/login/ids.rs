@@ -380,6 +380,8 @@ pub enum ServerPacketId {
     LogOutFailed = 57,
     ReturnToLogin = 58,
     TimeOfDay = 59,
+    ChangeAMode = 60,
+    ChangePMode = 61,
     ObjectItem = 62,
     ObjectGold = 63,
     GainedItem = 64,
@@ -566,8 +568,31 @@ pub enum ServerPacketId {
     NPCRequestInput = 247,
     GameShopInfo = 248,
     GameShopStock = 249,
-    // Additional packet IDs following the C# ServerPacketIds ordering.
-    // We only need UpdateNotice for now, but we assign its value explicitly
-    // to keep compatibility with the legacy client.
+    // Tail of the C# ServerPacketIds enum, kept in lockstep for
+    // compatibility with the legacy client.
+    Rankings = 250,
+    Opendoor = 251,
+    GetRentedItems = 252,
+    ItemRentalRequest = 253,
+    ItemRentalFee = 254,
+    ItemRentalPeriod = 255,
+    DepositRentalItem = 256,
+    RetrieveRentalItem = 257,
+    UpdateRentalItem = 258,
+    CancelItemRental = 259,
+    ItemRentalLock = 260,
+    ItemRentalPartnerLock = 261,
+    CanConfirmItemRental = 262,
+    ConfirmItemRental = 263,
+    NewRecipeInfo = 264,
+    OpenBrowser = 265,
+    PlaySound = 266,
+    SetTimer = 267,
+    ExpireTimer = 268,
     UpdateNotice = 269,
+    Roll = 270,
+    SetCompass = 271,
+    GroupMembersMap = 272,
+    SendMemberLocation = 273,
+    GuildTerritoryPage = 274,
 }

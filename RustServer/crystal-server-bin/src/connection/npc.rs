@@ -9,9 +9,11 @@ use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
 use crystal_shared_proto::item::{SUserStorage};
 use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 use crystal_shared_proto::login::{CCallNPC, SDisconnect};
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll};
 use crystal_shared_proto::scene::SNpcResponse;
+use crystal_shared_proto::notice::{SOpenBrowser, SPlaySound, SSetTimer, SExpireTimer};
 use crystal_shared_proto::user::SLoseGold;
+use rand::{thread_rng, Rng};
 
 use super::{LoginConnection, Stage};
 
@@ -77,6 +79,265 @@ impl LoginConnection {
                     }
                 }
             }
+        }
+
+        None
+    }
+
+    /// Scan the #ACT block for the given key for an OPENBROWSER command and
+    /// return its URL parameter if present.
+    pub(crate) fn extract_open_browser_url(path: &Path, key: &str) -> Option<String> {
+        let text = fs::read_to_string(path).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut current_label: Option<String> = None;
+        let mut in_act = false;
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    let key = label_inner.to_ascii_uppercase();
+                    current_label = Some(key);
+                    in_act = false;
+                } else {
+                    current_label = None;
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_label.as_deref() != Some(&target_key) {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ACT") {
+                in_act = true;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                if in_act {
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if in_act && !trimmed.is_empty() {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 2 && parts[0].eq_ignore_ascii_case("OPENBROWSER") {
+                    // In C#, parts[1] is stored as the Url parameter.
+                    return Some(parts[1].to_string());
+                }
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    /// Scan the #ACT block for the given key for a SETTIMER command and
+    /// return its first occurrence as (key, seconds, type_id, global).
+    pub(crate) fn extract_set_timer(
+        path: &Path,
+        key: &str,
+    ) -> Option<(String, i32, u8, bool)> {
+        let text = fs::read_to_string(path).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut current_label: Option<String> = None;
+        let mut in_act = false;
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    let key = label_inner.to_ascii_uppercase();
+                    current_label = Some(key);
+                    in_act = false;
+                } else {
+                    current_label = None;
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_label.as_deref() != Some(&target_key) {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ACT") {
+                in_act = true;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                if in_act {
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if in_act && !trimmed.is_empty() {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 4 && parts[0].eq_ignore_ascii_case("SETTIMER") {
+                    let timer_key = parts[1].to_string();
+                    if let (Ok(sec), Ok(ty)) = (parts[2].parse::<i32>(), parts[3].parse::<u8>()) {
+                        let seconds = sec.max(0);
+                        let global = if parts.len() >= 5 {
+                            parts[4].eq_ignore_ascii_case("true")
+                        } else {
+                            false
+                        };
+                        return Some((timer_key, seconds, ty, global));
+                    }
+                }
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    /// Scan the #ACT block for the given key for an EXPIRETIMER command and
+    /// return its first timer key parameter if present.
+    pub(crate) fn extract_expire_timer(path: &Path, key: &str) -> Option<String> {
+        let text = fs::read_to_string(path).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut current_label: Option<String> = None;
+        let mut in_act = false;
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    let key = label_inner.to_ascii_uppercase();
+                    current_label = Some(key);
+                    in_act = false;
+                } else {
+                    current_label = None;
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_label.as_deref() != Some(&target_key) {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ACT") {
+                in_act = true;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                if in_act {
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if in_act && !trimmed.is_empty() {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 2 && parts[0].eq_ignore_ascii_case("EXPIRETIMER") {
+                    return Some(parts[1].to_string());
+                }
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    /// Scan the #ACT block for the given key for a PLAYSOUND command and
+    /// return its sound id parameter if present.
+    pub(crate) fn extract_play_sound(path: &Path, key: &str) -> Option<i32> {
+        let text = fs::read_to_string(path).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut current_label: Option<String> = None;
+        let mut in_act = false;
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    let key = label_inner.to_ascii_uppercase();
+                    current_label = Some(key);
+                    in_act = false;
+                } else {
+                    current_label = None;
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_label.as_deref() != Some(&target_key) {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ACT") {
+                in_act = true;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                if in_act {
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if in_act && !trimmed.is_empty() {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 2 && parts[0].eq_ignore_ascii_case("PLAYSOUND") {
+                    if let Ok(id) = parts[1].parse::<i32>() {
+                        return Some(id);
+                    }
+                }
+            }
+
+            i += 1;
         }
 
         None
@@ -225,6 +486,10 @@ impl LoginConnection {
         let need_agit_guild_name = lines.iter().any(|l| l.contains("<$AGITGUILDNAME>"));
         let need_guild_rental_days_left =
             lines.iter().any(|l| l.contains("<$GUILDGTRENTALDAYSLEFT>"));
+        let need_guild_extend_fee =
+            lines.iter().any(|l| l.contains("<$GUILDEXTENDFEE>"));
+        let need_guild_rent_fee =
+            lines.iter().any(|l| l.contains("<$GUILDRENTFEE>"));
 
         // Character summary based values: USERNAME, LEVEL, CLASS.
         let mut username: Option<String> = None;
@@ -472,6 +737,8 @@ impl LoginConnection {
         let mut guild_name_str: Option<String> = None;
         let mut agit_guild_name_str: Option<String> = None;
         let mut guild_rental_days_left_str: Option<String> = None;
+        let mut guild_extend_fee_str: Option<String> = None;
+        let mut guild_rent_fee_str: Option<String> = None;
 
         if need_guild_war_time || need_guild_war_fee {
             let cfg = world::configs::guild_settings();
@@ -483,7 +750,17 @@ impl LoginConnection {
             }
         }
 
-        if need_guild_name || need_agit_guild_name || need_guild_rental_days_left {
+        // Global GT rent fee does not depend on the player's guild state.
+        if need_guild_rent_fee {
+            let scfg = crate::world::configs::setup_config::setup_config();
+            guild_rent_fee_str = Some(scfg.game.buy_gt_gold.to_string());
+        }
+
+        if need_guild_name
+            || need_agit_guild_name
+            || need_guild_rental_days_left
+            || need_guild_extend_fee
+        {
             let world = self.world.lock().unwrap();
             let player_guild = world
                 .player_guild_name(self.session_id)
@@ -520,6 +797,43 @@ impl LoginConnection {
                     guild_rental_days_left_str = Some(days.to_string());
                 } else {
                     guild_rental_days_left_str = Some("0".to_string());
+                }
+            }
+
+            if need_guild_extend_fee {
+                if player_guild.is_empty() {
+                    guild_extend_fee_str = Some("None".to_string());
+                } else if let Some(guild) = world.get_guild_info_by_name(&player_guild) {
+                    let now_ticks = Self::unix_ms_to_dotnet_binary(Self::now_millis());
+                    if guild.has_gt(now_ticks) {
+                        // Convert stored .NET ticks into a human-readable local
+                        // date/time string, approximating C# GTRent.ToString().
+                        let rent_ms = Self::dotnet_binary_to_unix_ms(guild.gt_rent_ticks);
+                        let expire_str = if rent_ms <= 0 {
+                            "Never".to_string()
+                        } else if let Some(naive) =
+                            chrono::NaiveDateTime::from_timestamp_millis(rent_ms)
+                        {
+                            let dt: chrono::DateTime<chrono::Local> =
+                                chrono::DateTime::from_utc(
+                                    naive,
+                                    chrono::Local::now().offset().clone(),
+                                );
+                            dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                        } else {
+                            rent_ms.to_string()
+                        };
+
+                        let scfg = crate::world::configs::setup_config::setup_config();
+                        guild_extend_fee_str = Some(format!(
+                            "Expire On: {} ,Extend fee: {}",
+                            expire_str, scfg.game.extend_gt_gold
+                        ));
+                    } else {
+                        guild_extend_fee_str = Some("None".to_string());
+                    }
+                } else {
+                    guild_extend_fee_str = Some("None".to_string());
                 }
             }
         }
@@ -642,6 +956,18 @@ impl LoginConnection {
             if let Some(ref v) = guild_rental_days_left_str {
                 if line.contains("<$GUILDGTRENTALDAYSLEFT>") {
                     line = line.replace("<$GUILDGTRENTALDAYSLEFT>", v);
+                }
+            }
+
+            if let Some(ref v) = guild_extend_fee_str {
+                if line.contains("<$GUILDEXTENDFEE>") {
+                    line = line.replace("<$GUILDEXTENDFEE>", v);
+                }
+            }
+
+            if let Some(ref v) = guild_rent_fee_str {
+                if line.contains("<$GUILDRENTFEE>") {
+                    line = line.replace("<$GUILDRENTFEE>", v);
                 }
             }
 
@@ -814,11 +1140,8 @@ impl LoginConnection {
         }
     }
 
-    pub(crate) fn page_has_roll_action(path: &Path, key: &str) -> bool {
-        let text = match fs::read_to_string(path) {
-            Ok(t) => t,
-            Err(_) => return false,
-        };
+    pub(crate) fn extract_roll_action(path: &Path, key: &str) -> Option<(i32, String, bool)> {
+        let text = fs::read_to_string(path).ok()?;
         let lines: Vec<&str> = text.lines().collect();
 
         let target_key = key.to_ascii_uppercase();
@@ -862,22 +1185,27 @@ impl LoginConnection {
                 continue;
             }
 
-            if in_act {
-                if !trimmed.is_empty() {
-                    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-                    if !parts.is_empty()
-                        && (parts[0].eq_ignore_ascii_case("ROLLDIE")
-                            || parts[0].eq_ignore_ascii_case("ROLLYUT"))
-                    {
-                        return true;
-                    }
+            if in_act && !trimmed.is_empty() {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 3
+                    && (parts[0].eq_ignore_ascii_case("ROLLDIE")
+                        || parts[0].eq_ignore_ascii_case("ROLLYUT"))
+                {
+                    let roll_type = if parts[0].eq_ignore_ascii_case("ROLLDIE") {
+                        0
+                    } else {
+                        1
+                    };
+                    let page = parts[1].to_string();
+                    let auto_roll = parts[2].eq_ignore_ascii_case("true");
+                    return Some((roll_type, page, auto_roll));
                 }
             }
 
             i += 1;
         }
 
-        false
+        None
     }
 
     /// Build the raw goods_bytes payload for an SNpcGoods packet, mirroring the
@@ -1222,12 +1550,13 @@ impl LoginConnection {
                                 }
                             }
 
-                            if Self::page_has_roll_action(&script_path, &key) {
-                                let now = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default();
-                                let nanos = now.subsec_nanos();
-                                let result = (nanos % 6) + 1;
+                            if let Some((roll_type, roll_page, auto_roll)) =
+                                Self::extract_roll_action(&script_path, &key)
+                            {
+                                // Mirror C# Envir.Random.Next(1, 7): sample an
+                                // integer in the inclusive range [1, 6].
+                                let mut rng = thread_rng();
+                                let result: i32 = rng.gen_range(1..=6);
 
                                 {
                                     let mut world = self.world.lock().unwrap();
@@ -1236,6 +1565,60 @@ impl LoginConnection {
                                         "NPCRollResult",
                                         result.to_string(),
                                     );
+                                }
+
+                                let pkt = SRoll {
+                                    roll_type,
+                                    page: roll_page,
+                                    result,
+                                    auto_roll,
+                                };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            if let Some(url) =
+                                Self::extract_open_browser_url(&script_path, &key)
+                            {
+                                let pkt = SOpenBrowser { url };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            if let Some(sound_id) =
+                                Self::extract_play_sound(&script_path, &key)
+                            {
+                                let pkt = SPlaySound { sound: sound_id };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            // Per-player timer UI, mirroring the C#
+                            // ActionType.SetTimer/ExpireTimer behaviour on the
+                            // client. We currently ignore the global timer
+                            // flag and only drive the local TimerDialog.
+                            if let Some((timer_key, seconds, type_id, _global)) =
+                                Self::extract_set_timer(&script_path, &key)
+                            {
+                                let pkt = SSetTimer {
+                                    key: timer_key,
+                                    type_id,
+                                    seconds,
+                                };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            if let Some(expire_key) =
+                                Self::extract_expire_timer(&script_path, &key)
+                            {
+                                let pkt = SExpireTimer { key: expire_key };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
                                 }
                             }
 

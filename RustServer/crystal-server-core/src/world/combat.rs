@@ -45,9 +45,7 @@ use crate::world::skills::taoist::{
     cast_summon_skeleton,
 };
 use crate::world::types::{AttackMode, BuffType};
-use crate::world::Spell;
-
-use super::{SessionId, World, WorldEvent};
+use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell};
 
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
@@ -135,6 +133,102 @@ impl<P: WorldProvider> World<P> {
                 // C#: RedBrown => PKPoints >= 200 || Envir.Time < BrownTime
                 target.pk_points >= 200 || self.time_ms < target.brown_time_ms
             }
+        }
+    }
+
+    /// Determine whether `attacker_sid` is allowed to attack the specified
+    /// monster according to the C# MonsterObject.IsAttackTarget(HumanObject
+    /// attacker) rules. This primarily affects pets (monsters with a player
+    /// owner) and mirrors the interaction with AttackMode/party/guild/PK
+    /// state, while leaving wild monsters unrestricted by AttackMode.
+    fn can_attack_monster(&self, attacker_sid: SessionId, map_index: i32, monster_id: u64) -> bool {
+        let attacker = match self.players.get(&attacker_sid) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let monsters = match self.monsters.get(&map_index) {
+            Some(ms) => ms,
+            None => return false,
+        };
+
+        let monster = match monsters.iter().find(|m| m.id == monster_id && m.hp > 0) {
+            Some(m) => m,
+            None => return false,
+        };
+
+        // Wild monsters (no owner) are always valid targets regardless of
+        // AttackMode; map-level NoFight/SafeZone rules are handled elsewhere.
+        let owner_sid = match monster.owner_session_id {
+            Some(sid) => sid,
+            None => return true,
+        };
+
+        let owner = match self.players.get(&owner_sid) {
+            Some(p) => p,
+            // If the owner is missing from world state, fall back to treating
+            // this as a wild monster.
+            None => return true,
+        };
+
+        let mode = AttackMode::from_u8(attacker.attack_mode);
+
+        // C#: if (attacker.AMode == AttackMode.Peace) return false; (for pets)
+        if mode == AttackMode::Peace {
+            return false;
+        }
+
+        // C#: if (Master == attacker) return attacker.AMode == AttackMode.All;
+        if owner_sid == attacker_sid {
+            return mode == AttackMode::All;
+        }
+
+        // Approximate the C# safe-zone rule for pets:
+        // if (Master.Race == ObjectType.Player && (attacker.InSafeZone || InSafeZone)) return false;
+        if let Some(map_info) = self.provider.get_map_info(map_index) {
+            let attacker_in_safe =
+                Self::point_in_safe_zone(map_info, attacker.x, attacker.y);
+            let monster_in_safe =
+                Self::point_in_safe_zone(map_info, monster.x, monster.y);
+            if attacker_in_safe || monster_in_safe {
+                return false;
+            }
+        }
+
+        match mode {
+            AttackMode::All => true,
+            AttackMode::Group => {
+                // C#: Group => Master.GroupMembers == null || !Master.GroupMembers.Contains(attacker)
+                // Approximate via shared PartyId: disallow when both are in
+                // the same party.
+                if let (Some(a_pid), Some(o_pid)) = (attacker.party_id, owner.party_id) {
+                    a_pid != o_pid
+                } else {
+                    true
+                }
+            }
+            AttackMode::Guild => {
+                // C#: Guild => master.MyGuild == null || master.MyGuild != attacker.MyGuild
+                if owner.guild_name.is_empty() || attacker.guild_name.is_empty() {
+                    true
+                } else {
+                    owner.guild_name != attacker.guild_name
+                }
+            }
+            AttackMode::EnemyGuild => {
+                // C#: EnemyGuild => master.MyGuild != null && attacker.MyGuild != null && master.MyGuild.IsEnemy(attacker.MyGuild)
+                // Approximate as: both have non-empty, different guild names.
+                if owner.guild_name.is_empty() || attacker.guild_name.is_empty() {
+                    false
+                } else {
+                    owner.guild_name != attacker.guild_name
+                }
+            }
+            AttackMode::RedBrown => {
+                // C#: RedBrown => Master.PKPoints >= 200 || Envir.Time < Master.BrownTime
+                owner.pk_points >= 200 || self.time_ms < owner.brown_time_ms
+            }
+            AttackMode::Peace => false, // already handled above
         }
     }
 
@@ -797,7 +891,11 @@ impl<P: WorldProvider> World<P> {
                     if packet_target_id != 0 {
                         if let Some(m) = monsters
                             .iter()
-                            .find(|m| m.hp > 0 && m.id == packet_target_id as u64)
+                            .find(|m| {
+                                m.hp > 0
+                                    && m.id == packet_target_id as u64
+                                    && self.can_attack_monster(session_id, map_index, m.id)
+                            })
                         {
                             let dx_t = m.x - x;
                             let dy_t = m.y - y;
@@ -812,7 +910,12 @@ impl<P: WorldProvider> World<P> {
                     if found.is_none() && (packet_target_x != 0 || packet_target_y != 0) {
                         if let Some(m) = monsters
                             .iter()
-                            .find(|m| m.hp > 0 && m.x == packet_target_x && m.y == packet_target_y)
+                            .find(|m| {
+                                m.hp > 0
+                                    && m.x == packet_target_x
+                                    && m.y == packet_target_y
+                                    && self.can_attack_monster(session_id, map_index, m.id)
+                            })
                         {
                             let dx_t = m.x - x;
                             let dy_t = m.y - y;
@@ -832,7 +935,12 @@ impl<P: WorldProvider> World<P> {
                             let ty = y + dy * step;
                             if let Some(m) = monsters
                                 .iter()
-                                .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                                .find(|m| {
+                                    m.hp > 0
+                                        && m.x == tx
+                                        && m.y == ty
+                                        && self.can_attack_monster(session_id, map_index, m.id)
+                                })
                             {
                                 found = Some((m.id, m.monster_index, tx, ty));
                                 break;
@@ -858,7 +966,12 @@ impl<P: WorldProvider> World<P> {
                         let ty = y + dy * step;
                         if let Some(m) = monsters
                             .iter()
-                            .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                            .find(|m| {
+                                m.hp > 0
+                                    && m.x == tx
+                                    && m.y == ty
+                                    && self.can_attack_monster(session_id, map_index, m.id)
+                            })
                         {
                             found = Some((m.id, m.monster_index, tx, ty));
                             break;
@@ -875,7 +988,12 @@ impl<P: WorldProvider> World<P> {
                 } else {
                     monsters
                         .iter()
-                        .find(|m| m.hp > 0 && m.x == target_x && m.y == target_y)
+                        .find(|m| {
+                            m.hp > 0
+                                && m.x == target_x
+                                && m.y == target_y
+                                && self.can_attack_monster(session_id, map_index, m.id)
+                        })
                         .map(|m| (m.id, m.monster_index))
                 }
             }
@@ -1075,6 +1193,72 @@ impl<P: WorldProvider> World<P> {
                 || effective_spell == Spell::TwinDrakeBlade as u8
             {
                 raw_damage = raw_damage.saturating_mul(2);
+            }
+
+            if use_pure_magic {
+                // For pure magic attacks (FireBall/GreatFireBall/ThunderBolt/SoulFireBall),
+                // schedule a delayed hit instead of applying damage
+                // immediately so that the damage and visual hit effect
+                // (projectile or lightning) stay in sync on the client.
+                if hit && raw_damage > 0 {
+                    let delay_ms: i64 = if let Some(spell_enum) = Spell::from_u8(effective_spell) {
+                        use Spell as S;
+                        match spell_enum {
+                            // ThunderBolt uses a fixed 500ms delay in C#
+                            S::ThunderBolt => 500,
+                            // FireBall/GreatFireBall/SoulFireBall use
+                            // MaxDistance * 50 + 500ms.
+                            S::FireBall | S::GreatFireBall | S::SoulFireBall => {
+                                let dx = target_x - x;
+                                let dy = target_y - y;
+                                let dist = dx.abs().max(dy.abs());
+                                (dist as i64) * 50 + 500
+                            }
+                            _ => 500,
+                        }
+                    } else {
+                        500
+                    };
+
+                    let base_time = self.time_ms.max(0);
+                    let due_time_ms = base_time.saturating_add(delay_ms);
+
+                    self.pending_magic_hits.push(PendingMagicHit {
+                        due_time_ms,
+                        attacker_session_id: session_id,
+                        map_index,
+                        target_monster_id: id,
+                        monster_index,
+                        spell_id: effective_spell,
+                        damage: raw_damage,
+                        damage_type,
+                    });
+                }
+
+                // For pure magic we still emit the usual attacker
+                // animation/location events, but skip immediate HP
+                // changes and ObjectStruck; those will be handled when
+                // the PendingMagicHit fires in World::update.
+                events.push(WorldEvent::UserLocation {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                });
+
+                events.push(WorldEvent::ObjectAttack {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                    spell: effective_spell,
+                    level,
+                    attack_type: 0,
+                });
+
+                return;
             }
 
             let mut strike_x = target_x;

@@ -29,7 +29,7 @@ use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
 use crystal_shared_proto::notice::{NoticeData, SUpdateNotice};
 use crystal_shared_proto::shop::SGameShopInfo;
 use crystal_shared_proto::mail::SReceiveMail;
-use crystal_shared_proto::user::{SUserInformation, SUserLocation, SUserSlotsRefresh};
+use crystal_shared_proto::user::{SChangeAMode, SUserInformation, SUserLocation, SUserSlotsRefresh};
 use crystal_shared_proto::io::{
     write_bool,
     write_i32_le,
@@ -618,6 +618,14 @@ impl LoginConnection {
             if let Ok(raw) = user.encode() {
                 out.push(Self::encode_raw(raw));
             }
+
+            // Initialise the client-side attack mode UI to match the
+            // server-side default (Peace/0), mirroring the C#
+            // PlayerObject.StartGame behaviour which enqueues
+            // S.ChangeAMode with the current AMode.
+            let amode_pkt = SChangeAMode { mode: 0 };
+            let amode_raw = amode_pkt.encode();
+            out.push(Self::encode_raw(amode_raw));
 
             let slots_refresh = {
                 let world = self.world.lock().unwrap();

@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crystal_server_core::world;
 use crystal_server_core::world::WorldProvider;
 use crystal_shared_proto::scene::{
+    SObjectHealth,
     SObjectMonster,
     SObjectNpc,
     SObjectRemove,
@@ -22,10 +23,41 @@ impl LoginConnection {
 
         for monster in monsters {
             if let Some(info) = self.world_db.get_monster_info(monster.monster_index) {
+                // Mirror C# MonsterObject.Name and the Extra flag used for
+                // summoned pets: when a monster is a pet owned by a player,
+                // show its name as "GameName(OwnerName)" and mark
+                // extra=true so the client can treat it as a pet.
+                let (name, name_colour_argb, extra) = if monster.is_pet {
+                    let base_name = info.name.clone();
+
+                    let owner_name = monster.owner_session_id.and_then(|sid| {
+                        let map = self.player_summaries.lock().ok()?;
+                        map.get(&sid).map(|p| p.name.clone())
+                    });
+
+                    let name = match owner_name {
+                        Some(owner) if !owner.is_empty() => {
+                            format!("{}({})", base_name, owner)
+                        }
+                        _ => base_name,
+                    };
+
+                    let owner_colour = monster.owner_session_id.and_then(|sid| {
+                        let map = self.player_summaries.lock().ok()?;
+                        map.get(&sid).map(|p| p.name_colour_argb)
+                    });
+
+                    let name_colour_argb = owner_colour.unwrap_or(-1);
+
+                    (name, name_colour_argb, true)
+                } else {
+                    (info.name.clone(), -1, false)
+                };
+
                 let packet = SObjectMonster {
                     object_id: monster.id as u32,
-                    name: info.name.clone(),
-                    name_colour_argb: -1,
+                    name,
+                    name_colour_argb,
                     location_x: monster.x,
                     location_y: monster.y,
                     image: info.image,
@@ -39,7 +71,7 @@ impl LoginConnection {
                     hidden: false,
                     shock_time: 0,
                     binding_shot_center: false,
-                    extra: false,
+                    extra,
                     extra_byte: 0,
                     buffs: Vec::new(),
                 };
@@ -99,6 +131,35 @@ impl LoginConnection {
 
             if !self.known_monsters.contains(&monster.id) {
                 if let Some(info) = self.world_db.get_monster_info(monster.monster_index) {
+                    // As in send_monsters_for_map, mark summoned pets and
+                    // include the owner's name in the pet's display name.
+                    let (name, name_colour_argb, extra) = if monster.is_pet {
+                        let base_name = info.name.clone();
+
+                        let owner_name = monster.owner_session_id.and_then(|sid| {
+                            let map = self.player_summaries.lock().ok()?;
+                            map.get(&sid).map(|p| p.name.clone())
+                        });
+
+                        let name = match owner_name {
+                            Some(owner) if !owner.is_empty() => {
+                                format!("{}({})", base_name, owner)
+                            }
+                            _ => base_name,
+                        };
+
+                        let owner_colour = monster.owner_session_id.and_then(|sid| {
+                            let map = self.player_summaries.lock().ok()?;
+                            map.get(&sid).map(|p| p.name_colour_argb)
+                        });
+
+                        let name_colour_argb = owner_colour.unwrap_or(-1);
+
+                        (name, name_colour_argb, true)
+                    } else {
+                        (info.name.clone(), -1, false)
+                    };
+
                     debug!(
                         "update_visibility: session_id={} new monster id={} index={} name={} is_pet={} map={} pos=({}, {})",
                         self.session_id,
@@ -112,8 +173,8 @@ impl LoginConnection {
                     );
                     let packet = SObjectMonster {
                         object_id: monster.id as u32,
-                        name: info.name.clone(),
-                        name_colour_argb: -1,
+                        name,
+                        name_colour_argb,
                         location_x: monster.x,
                         location_y: monster.y,
                         image: info.image,
@@ -127,12 +188,30 @@ impl LoginConnection {
                         hidden: false,
                         shock_time: 0,
                         binding_shot_center: false,
-                        extra: false,
+                        extra,
                         extra_byte: 0,
                         buffs: Vec::new(),
                     };
                     if let Ok(raw) = packet.encode() {
                         out.push(Self::encode_raw(raw));
+                    }
+
+                    // For summoned pets, also send an initial ObjectHealth so
+                    // the client can render the pet HP bar, approximating the
+                    // C# MapObject.BroadcastHealthChange behaviour for
+                    // monsters with Master=player.
+                    if monster.is_pet {
+                        let health = SObjectHealth {
+                            object_id: monster.id as u32,
+                            percent: 100,
+                            // Use a small expire window; the client will
+                            // refresh this when the pet actually takes
+                            // damage.
+                            expire: 5,
+                        };
+                        if let Ok(pkt) = health.encode() {
+                            out.push(Self::encode_raw(pkt));
+                        }
                     }
                 }
             }

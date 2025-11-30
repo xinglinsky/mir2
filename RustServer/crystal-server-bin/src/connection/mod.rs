@@ -84,6 +84,11 @@ pub(crate) struct LoginConnection {
     pub(crate) gm_login: bool,
     #[allow(dead_code)]
     pub(crate) pending_guild_invite: Option<String>,
+    /// Whether the client is currently allowed to request a full guild
+    /// storage item list. This mirrors the C# PlayerObject.GuildCanRequestItems
+    /// flag, which is set to true on guild join/create and set to false
+    /// after the client issues a Type=3 GuildStorageItemChange request.
+    pub(crate) guild_can_request_items: bool,
     /// Whether SWorldMapSetupInfo has been sent to this client.
     pub(crate) world_map_setup_sent: bool,
     /// Set of map indices for which SNewMapInfo has already been sent.

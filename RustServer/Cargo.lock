@@ -247,6 +247,7 @@ dependencies = [
  "crystal-server-db",
  "crystal-server-net",
  "crystal-shared-proto",
+ "rand",
  "reqwest",
  "serde",
  "tokio",

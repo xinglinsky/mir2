@@ -7,11 +7,11 @@ use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
-use crate::world::types::{BuffProperty, BuffType, PetKind};
+use crate::world::types::{AttackMode, BuffProperty, BuffType, PetKind};
 use crate::world::configs::pet_template;
 use crate::world::Spell;
 
-use super::{World, WorldEvent};
+use super::{World, WorldEvent, PendingMagicHit};
 
 #[derive(Clone, Debug)]
 pub struct RoutePoint {
@@ -344,7 +344,256 @@ impl<P: WorldProvider> World<P> {
         self.process_monster_ai(now_ms, &mut events);
         self.process_guard_ai(now_ms, &mut events);
 
+        self.process_pending_magic_hits(now_ms, &mut events);
+
         events
+    }
+
+    fn process_pending_magic_hits(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        if self.pending_magic_hits.is_empty() {
+            return;
+        }
+
+        let mut remaining: Vec<PendingMagicHit> = Vec::new();
+        let hits = std::mem::take(&mut self.pending_magic_hits);
+
+        for hit in hits {
+            if hit.due_time_ms > now_ms {
+                remaining.push(hit);
+                continue;
+            }
+
+            self.apply_pending_magic_hit(hit, events);
+        }
+
+        self.pending_magic_hits = remaining;
+    }
+
+    fn apply_pending_magic_hit(&mut self, hit: PendingMagicHit, events: &mut Vec<WorldEvent>) {
+        let PendingMagicHit {
+            due_time_ms: _,
+            attacker_session_id,
+            map_index,
+            target_monster_id,
+            monster_index,
+            spell_id: _,
+            damage,
+            damage_type,
+        } = hit;
+
+        if damage <= 0 {
+            return;
+        }
+
+        // Look up monster definition for max HP, undead flag and drops/experience.
+        let (monster_exp, max_hp, monster_drops) = if let Some(info) =
+            self.provider.get_monster_info(monster_index)
+        {
+            (
+                info.experience,
+                info.stats.get(Stat::HP).max(1),
+                info.drops.clone(),
+            )
+        } else {
+            (0, 1, Vec::new())
+        };
+
+        let mut strike_x = 0;
+        let mut strike_y = 0;
+        let mut strike_dir: u8 = 0;
+        let mut damage_done: i32 = 0;
+        let mut health_percent: u8 = 100;
+        let mut dead = false;
+
+        if let Some(monsters) = self.monsters.get_mut(&map_index) {
+            if let Some(m) = monsters.iter_mut().find(|m| m.id == target_monster_id) {
+                // If the monster is already dead or has zero HP, there is
+                // nothing left to apply.
+                if m.hp <= 0 {
+                    return;
+                }
+
+                m.target_session_id = Some(attacker_session_id);
+                m.ai_state = MonsterAiState::Chase;
+
+                strike_x = m.x;
+                strike_y = m.y;
+                strike_dir = m.direction;
+
+                let old_hp = m.hp.max(0);
+                let mut new_hp = old_hp;
+
+                if damage > 0 {
+                    damage_done = damage;
+
+                    if damage >= m.hp {
+                        m.hp = 0;
+                        dead = true;
+                    } else {
+                        m.hp -= damage;
+                    }
+
+                    new_hp = if dead { 0 } else { m.hp.max(0) };
+                }
+
+                if max_hp > 0 {
+                    let pct = (new_hp as i64 * 100 / max_hp as i64)
+                        .clamp(0, 100) as u8;
+                    health_percent = pct;
+                } else {
+                    health_percent = 0;
+                }
+            } else {
+                // Target monster no longer exists on this map.
+                return;
+            }
+        } else {
+            // Map has no monsters; nothing to do.
+            return;
+        }
+
+        if damage_done <= 0 {
+            return;
+        }
+
+        events.push(WorldEvent::ObjectStruck {
+            attacker_id: attacker_session_id,
+            target_id: target_monster_id,
+            map_index,
+            x: strike_x,
+            y: strike_y,
+            direction: strike_dir,
+            damage: damage_done,
+            damage_type,
+            health_percent,
+        });
+
+        if !dead {
+            return;
+        }
+
+        // Monster death: update respawn counts, drops and experience.
+        self.mark_monster_dead(map_index, target_monster_id);
+
+        if !monster_drops.is_empty() {
+            let (item_offset, gold_offset) = if let Some(p) = self.players.get(&attacker_session_id)
+            {
+                (
+                    p.stats.total.get(Stat::ItemDropRatePercent),
+                    p.stats.total.get(Stat::GoldDropRatePercent),
+                )
+            } else {
+                (0, 0)
+            };
+
+            let mut rng = thread_rng();
+            let mut total = crate::world::drop::DropRewardInfo {
+                items: Vec::new(),
+                gold: 0,
+            };
+
+            for d in &monster_drops {
+                // Mirror C# MonsterObject.Drop quest-required behaviour:
+                // skip quest-only drops when placing map items.
+                if d.quest_required {
+                    continue;
+                }
+
+                if let Some(r) = d.attempt_drop(
+                    self.drop_rate,
+                    item_offset,
+                    gold_offset,
+                    &mut rng,
+                ) {
+                    total.gold = total.gold.saturating_add(r.gold);
+                    if !r.items.is_empty() {
+                        total.items.extend(r.items);
+                    }
+                }
+            }
+
+            if total.gold > 0 || !total.items.is_empty() {
+                let item_timeout_ms: i64 = 300_000; // 5 minutes
+
+                if total.gold > 0 {
+                    if let Some((drop_x, drop_y)) =
+                        self.find_drop_location(map_index, strike_x, strike_y, 4)
+                    {
+                        let item_id = self.next_map_item_id;
+                        self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+                        let entry = self.map_items.entry(map_index).or_default();
+                        entry.push(crate::world::map_item::MapItem {
+                            id: item_id,
+                            map_index,
+                            x: drop_x,
+                            y: drop_y,
+                            item_index: None,
+                            gold: total.gold,
+                            count: 0,
+                            item: None,
+                            expire_time_ms: self.time_ms + item_timeout_ms,
+                        });
+
+                        events.push(WorldEvent::GoldDropped {
+                            object_id: item_id,
+                            map_index,
+                            x: drop_x,
+                            y: drop_y,
+                            gold: total.gold,
+                        });
+                    }
+                }
+
+                for item_index in total.items {
+                    if let Some((drop_x, drop_y)) =
+                        self.find_drop_location(map_index, strike_x, strike_y, 4)
+                    {
+                        let item_id = self.next_map_item_id;
+                        self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+                        let entry = self.map_items.entry(map_index).or_default();
+                        entry.push(crate::world::map_item::MapItem {
+                            id: item_id,
+                            map_index,
+                            x: drop_x,
+                            y: drop_y,
+                            item_index: Some(item_index),
+                            gold: 0,
+                            count: 1,
+                            item: None,
+                            expire_time_ms: self.time_ms + item_timeout_ms,
+                        });
+
+                        events.push(WorldEvent::ItemDropped {
+                            object_id: item_id,
+                            map_index,
+                            x: drop_x,
+                            y: drop_y,
+                            item_index,
+                            count: 1,
+                        });
+                    }
+                }
+            }
+        }
+
+        if monster_exp > 0 {
+            if let Some(p) = self.players.get_mut(&attacker_session_id) {
+                p.experience = p.experience.saturating_add(monster_exp as i64);
+            }
+
+            events.push(WorldEvent::GainExperience {
+                session_id: attacker_session_id,
+                amount: monster_exp,
+            });
+        }
+
+        events.push(WorldEvent::MonsterDied {
+            object_id: target_monster_id,
+            map_index,
+            x: strike_x,
+            y: strike_y,
+            direction: strike_dir,
+        });
     }
 
     fn process_monster_buffs(&mut self, now_ms: i64) {
@@ -452,362 +701,20 @@ impl<P: WorldProvider> World<P> {
                     )
                 };
 
-                // Pet-specific AI: summoned pets stay near their owner and
-                // automatically attack nearby hostile monsters. They do not
-                // use the generic monster search/chase/roam behaviour.
+                // Pet-specific AI is delegated to pet_runtime to keep this
+                // module focused on generic monster behaviour.
                 if monster.is_pet {
-                    let owner_sid = match monster.owner_session_id {
-                        Some(sid) => sid,
-                        None => {
-                            monster.ai_state = MonsterAiState::Idle;
-                            monster.target_session_id = None;
-                            continue;
-                        }
-                    };
-
-                    let (owner_x, owner_y) = {
-                        let p = match self.players.get(&owner_sid) {
-                            Some(p) if !p.dead && p.hp > 0 && p.map_index == map_index => p,
-                            _ => {
-                                monster.ai_state = MonsterAiState::Idle;
-                                monster.target_session_id = None;
-                                continue;
-                            }
-                        };
-                        (p.x, p.y)
-                    };
-
-                    let pet_kind = match monster.pet_kind {
-                        Some(k) => k,
-                        None => {
-                            monster.ai_state = MonsterAiState::Idle;
-                            monster.target_session_id = None;
-                            continue;
-                        }
-                    };
-
-                    let template = match pet_template(pet_kind) {
-                        Some(t) => t,
-                        None => {
-                            monster.ai_state = MonsterAiState::Idle;
-                            monster.target_session_id = None;
-                            continue;
-                        }
-                    };
-
-                    let mut handled = false;
-
-                    // Taoist Shinsu has a custom Mode/attack-range behaviour in
-                    // C#: when a target exists, it toggles a 30s Mode window
-                    // during which the pet is visible (ObjectShow) and allowed
-                    // to attack using a special InAttackRange pattern.
-                    if pet_kind == PetKind::TaoistShinsu {
-                        // Compute the best target within the Shinsu
-                        // InAttackRange shape:
-                        //   if (x > 2 || y > 2) return false;
-                        //   return (x <= 1 && y <= 1) || (x == y || x % 2 == y % 2);
-                        let mut best: Option<(u64, i32, i32, i32, i32, i32, i32)> = None;
-
-                        for &(tid, t_index, tx, ty) in &hostile_monsters {
-                            let dx = tx - monster.x;
-                            let dy = ty - monster.y;
-                            let ax = dx.abs();
-                            let ay = dy.abs();
-
-                            if ax == 0 && ay == 0 {
-                                continue;
-                            }
-                            if ax > 2 || ay > 2 {
-                                continue;
-                            }
-
-                            if !((ax <= 1 && ay <= 1) || (ax == ay || (ax % 2 == ay % 2))) {
-                                continue;
-                            }
-
-                            let dist = ax.max(ay);
-                            match best {
-                                None => best = Some((tid, t_index, tx, ty, dx, dy, dist)),
-                                Some((_, _, _, _, _, _, best_dist)) if dist < best_dist => {
-                                    best = Some((tid, t_index, tx, ty, dx, dy, dist));
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        let has_target = best.is_some();
-
-                        // Update Shinsu Mode timers and emit ObjectShow/
-                        // ObjectHide, mirroring Shinsu.ProcessAI.
-                        const MODE_DURATION_MS: i64 = 30_000;
-                        const MODE_ACTION_INTERVAL_MS: i64 = 1_000;
-
-                        if now_ms > monster.special_mode_action_time_ms {
-                            if has_target {
-                                monster.special_mode_until_ms =
-                                    now_ms.saturating_add(MODE_DURATION_MS);
-                            }
-
-                            if !monster.special_mode
-                                && now_ms > 0
-                                && now_ms < monster.special_mode_until_ms
-                            {
-                                monster.special_mode = true;
-                                monster.special_mode_action_time_ms = now_ms
-                                    .saturating_add(MODE_ACTION_INTERVAL_MS);
-
-                                events.push(WorldEvent::ObjectShow {
-                                    object_id: monster.id,
-                                    map_index,
-                                    x: monster.x,
-                                    y: monster.y,
-                                });
-                            } else if monster.special_mode
-                                && (monster.special_mode_until_ms > 0
-                                    && now_ms > monster.special_mode_until_ms)
-                            {
-                                monster.special_mode = false;
-                                monster.special_mode_action_time_ms = now_ms
-                                    .saturating_add(MODE_ACTION_INTERVAL_MS);
-
-                                events.push(WorldEvent::ObjectHide {
-                                    object_id: monster.id,
-                                    map_index,
-                                    x: monster.x,
-                                    y: monster.y,
-                                });
-                            }
-                        }
-
-                        // Only allow Shinsu to attack while Mode is active,
-                        // approximating the C# CanAttack && Mode property.
-                        if monster.special_mode && now_ms >= monster.next_attack_time_ms {
-                            if let Some((
-                                target_id,
-                                target_monster_index,
-                                tx,
-                                ty,
-                                dx,
-                                dy,
-                                _,
-                            )) = best
-                            {
-                                let sx = dx.clamp(-1, 1);
-                                let sy = dy.clamp(-1, 1);
-                                let dir = match (sx, sy) {
-                                    (0, -1) => 0,
-                                    (1, -1) => 1,
-                                    (1, 0) => 2,
-                                    (1, 1) => 3,
-                                    (0, 1) => 4,
-                                    (-1, 1) => 5,
-                                    (-1, 0) => 6,
-                                    (-1, -1) => 7,
-                                    _ => monster.direction,
-                                };
-                                monster.direction = dir;
-
-                                events.push(WorldEvent::ObjectAttack {
-                                    session_id: monster.id as u32,
-                                    map_index,
-                                    x: monster.x,
-                                    y: monster.y,
-                                    direction: dir,
-                                    spell: 0,
-                                    level: 0,
-                                    attack_type: 0,
-                                });
-
-                                pending_pet_attacks.push((
-                                    monster.id,
-                                    map_index,
-                                    target_id,
-                                    target_monster_index,
-                                    owner_sid,
-                                    monster.monster_index,
-                                ));
-
-                                let delay_ms =
-                                    Self::compute_monster_attack_delay_ms(attack_speed);
-                                monster.next_attack_time_ms =
-                                    now_ms.saturating_add(delay_ms);
-
-                                handled = true;
-                            }
-                        }
-                    } else {
-                        // Generic pet behaviour: attack the closest hostile
-                        // monster within a simple Chebyshev range.
-                        if now_ms >= monster.next_attack_time_ms {
-                            let attack_range: i32 = 2;
-                            let mut best: Option<(u64, i32, i32, i32, i32)> = None;
-
-                            for &(tid, t_index, tx, ty) in &hostile_monsters {
-                                let dx = tx - monster.x;
-                                let dy = ty - monster.y;
-
-                                if dx == 0 && dy == 0 {
-                                    continue;
-                                }
-
-                                if dx.abs() > attack_range || dy.abs() > attack_range {
-                                    continue;
-                                }
-
-                                let dist = dx.abs().max(dy.abs());
-                                match best {
-                                    None => best = Some((tid, t_index, tx, ty, dist)),
-                                    Some((_, _, _, _, best_dist)) if dist < best_dist => {
-                                        best = Some((tid, t_index, tx, ty, dist));
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            if let Some((target_id, target_monster_index, tx, ty, _)) = best {
-                                let sx = (tx - monster.x).clamp(-1, 1);
-                                let sy = (ty - monster.y).clamp(-1, 1);
-                                let dir = match (sx, sy) {
-                                    (0, -1) => 0,
-                                    (1, -1) => 1,
-                                    (1, 0) => 2,
-                                    (1, 1) => 3,
-                                    (0, 1) => 4,
-                                    (-1, 1) => 5,
-                                    (-1, 0) => 6,
-                                    (-1, -1) => 7,
-                                    _ => monster.direction,
-                                };
-                                monster.direction = dir;
-
-                                events.push(WorldEvent::ObjectAttack {
-                                    session_id: monster.id as u32,
-                                    map_index,
-                                    x: monster.x,
-                                    y: monster.y,
-                                    direction: dir,
-                                    spell: 0,
-                                    level: 0,
-                                    attack_type: 0,
-                                });
-
-                                pending_pet_attacks.push((
-                                    monster.id,
-                                    map_index,
-                                    target_id,
-                                    target_monster_index,
-                                    owner_sid,
-                                    monster.monster_index,
-                                ));
-
-                                let delay_ms =
-                                    Self::compute_monster_attack_delay_ms(attack_speed);
-                                monster.next_attack_time_ms =
-                                    now_ms.saturating_add(delay_ms);
-
-                                handled = true;
-                            }
-                        }
-                    }
-
-                    let dx = owner_x - monster.x;
-                    let dy = owner_y - monster.y;
-                    let dist = dx.abs().max(dy.abs());
-
-                    let follow_distance = template.follow_distance.max(1);
-                    let leash_distance = template.leash_distance.max(follow_distance);
-
-                    // If the pet has strayed too far from its owner, snap it
-                    // back to the owner's current tile.
-                    if !handled && dist > leash_distance {
-                        self.remove_monster_from_occupancy(
-                            monster.id,
-                            map_index,
-                            monster.x,
-                            monster.y,
-                        );
-                        monster.x = owner_x;
-                        monster.y = owner_y;
-                        self.add_monster_to_occupancy(
-                            monster.id,
-                            map_index,
-                            monster.x,
-                            monster.y,
-                        );
-
-                        events.push(WorldEvent::ObjectLocation {
-                            object_id: monster.id,
-                            map_index,
-                            x: monster.x,
-                            y: monster.y,
-                            direction: monster.direction,
-                        });
-
-                        handled = true;
-                    }
-
-                    // When outside the preferred follow distance, take a
-                    // single step toward the owner if movement cooldown and
-                    // map/occupancy allow it.
-                    if !handled && dist > follow_distance {
-                        if monster.next_move_time_ms == 0 || now_ms >= monster.next_move_time_ms {
-                            let step_x = dx.clamp(-1, 1);
-                            let step_y = dy.clamp(-1, 1);
-
-                            let new_x = monster.x.saturating_add(step_x);
-                            let new_y = monster.y.saturating_add(step_y);
-
-                            if new_x >= 0 && new_y >= 0 {
-                                let from_x = monster.x as u16;
-                                let from_y = monster.y as u16;
-                                let to_x = new_x as u16;
-                                let to_y = new_y as u16;
-
-                                if to_x < map.width
-                                    && to_y < map.height
-                                    && map.can_move(from_x, from_y, to_x, to_y)
-                                    && !self.is_cell_blocked(map_index, new_x, new_y)
-                                {
-                                    self.remove_monster_from_occupancy(
-                                        monster.id,
-                                        map_index,
-                                        monster.x,
-                                        monster.y,
-                                    );
-                                    self.add_monster_to_occupancy(
-                                        monster.id,
-                                        map_index,
-                                        new_x,
-                                        new_y,
-                                    );
-
-                                    monster.x = new_x;
-                                    monster.y = new_y;
-
-                                    let delay_ms =
-                                        Self::compute_monster_move_delay_ms(move_speed);
-                                    monster.next_move_time_ms =
-                                        now_ms.saturating_add(delay_ms);
-
-                                    events.push(WorldEvent::ObjectLocation {
-                                        object_id: monster.id,
-                                        map_index,
-                                        x: monster.x,
-                                        y: monster.y,
-                                        direction: monster.direction,
-                                    });
-                                }
-                            }
-                        }
-
-                        handled = true;
-                    }
-
-                    // Within follow distance (or after handling attack/leash):
-                    // stay near the owner for this tick. Combat resolution for
-                    // any scheduled attacks will run after the AI loop.
-                    monster.ai_state = MonsterAiState::Idle;
-                    monster.target_session_id = None;
+                    self.process_pet_ai_for_monster(
+                        now_ms,
+                        map_index,
+                        &map,
+                        move_speed,
+                        attack_speed,
+                        monster,
+                        &hostile_monsters,
+                        &mut pending_pet_attacks,
+                        events,
+                    );
                     continue;
                 }
 
@@ -1433,8 +1340,15 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
+            // Attribute the visual hit and HP-bar update to the pet's owner
+            // rather than the pet's own monster id so that the connection
+            // layer (which keys off attacker_id == session_id) will emit
+            // SObjectStruck/SDamageIndicator/SObjectHealth exactly as if the
+            // player had performed the attack directly. This mirrors the C#
+            // behaviour where pet damage is effectively shown as coming from
+            // the owning player for client-side UI purposes.
             events.push(WorldEvent::ObjectStruck {
-                attacker_id: pet_id as u32,
+                attacker_id: owner_sid,
                 target_id,
                 map_index,
                 x: strike_x,
@@ -1661,6 +1575,54 @@ impl<P: WorldProvider> World<P> {
 
                     if GUARD_AIS.contains(&t_info.ai) {
                         continue;
+                    }
+
+                    // Mirror C# MonsterObject.IsAttackTarget(MonsterObject
+                    // attacker) rules for guards and TaoGuards when deciding
+                    // which monsters may be attacked:
+                    //
+                    // - Deer/Hen/Tree types (AI 1/2/3) are never targeted.
+                    // - Guard (AI 6/113) only attack wild monsters or pets
+                    //   whose master is red (PKPoints >= 200).
+                    // - TaoGuard (AI 58) attack wild monsters and pets whose
+                    //   master is not in Peace attack mode.
+                    if matches!(t_info.ai, 1 | 2 | 3) {
+                        continue;
+                    }
+
+                    if matches!(guard_ai, 6 | 113) {
+                        let mut allowed = false;
+                        if let Some(owner_sid) = t.owner_session_id {
+                            if let Some(owner) = self.players.get(&owner_sid) {
+                                if owner.pk_points >= 200 {
+                                    allowed = true;
+                                }
+                            }
+                        } else {
+                            // Wild monster (no master) is always valid.
+                            allowed = true;
+                        }
+
+                        if !allowed {
+                            continue;
+                        }
+                    } else if guard_ai == 58 {
+                        let mut allowed = false;
+                        if let Some(owner_sid) = t.owner_session_id {
+                            if let Some(owner) = self.players.get(&owner_sid) {
+                                let mode = AttackMode::from_u8(owner.attack_mode);
+                                if mode != AttackMode::Peace {
+                                    allowed = true;
+                                }
+                            }
+                        } else {
+                            // Wild monster is always valid for TaoGuard.
+                            allowed = true;
+                        }
+
+                        if !allowed {
+                            continue;
+                        }
                     }
 
                     let dx = t.x - guard_x;
@@ -2181,7 +2143,7 @@ impl<P: WorldProvider> World<P> {
         minutes.saturating_mul(60_000)
     }
 
-    fn compute_monster_move_delay_ms(move_speed: u16) -> i64 {
+    pub(crate) fn compute_monster_move_delay_ms(move_speed: u16) -> i64 {
         let speed = i64::from(move_speed.max(400));
         if speed <= 0 {
             400
@@ -2190,7 +2152,7 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
-    fn compute_monster_attack_delay_ms(attack_speed: u16) -> i64 {
+    pub(crate) fn compute_monster_attack_delay_ms(attack_speed: u16) -> i64 {
         // AttackSpeed in C# is in milliseconds and clamped to a minimum of
         // 400. We mirror that behaviour here.
         let speed = i64::from(attack_speed.max(400));
@@ -2293,6 +2255,9 @@ impl<P: WorldProvider> World<P> {
                     route_wait_until_ms: 0,
                     alone: false,
                     alone_time_ms: 0,
+                    shock_time_ms: 0,
+                    rage_time_ms: 0,
+                    hallucination_time_ms: 0,
                     buff_stats: Stats::default(),
                     buffs: Vec::new(),
                     special_mode: false,

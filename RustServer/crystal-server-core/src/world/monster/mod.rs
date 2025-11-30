@@ -92,6 +92,13 @@ pub struct MonsterInstance {
     /// re-run its "alone" check, mirroring C# MonsterObject.AloneTime and
     /// AloneDelay.
     pub alone_time_ms: i64,
+    /// Mirror C# MonsterObject.ShockTime / RageTime / HallucinationTime. These
+    /// timestamps are compared against the global world time to implement
+    /// temporary behaviour changes such as stunned/berserk/hallucinating
+    /// monsters.
+    pub shock_time_ms: i64,
+    pub rage_time_ms: i64,
+    pub hallucination_time_ms: i64,
     pub buff_stats: Stats,
     pub buffs: Vec<MonsterBuff>,
     /// Generic per-instance mode flag and timers used by certain special

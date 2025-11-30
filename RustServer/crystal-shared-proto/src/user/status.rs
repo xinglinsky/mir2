@@ -19,6 +19,32 @@ use crate::packet::RawPacket;
 use super::flat;
 
 #[derive(Clone, Debug)]
+pub struct SChangeAMode {
+    pub mode: u8,
+}
+
+impl SChangeAMode {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.mode);
+        RawPacket {
+            id: ServerPacketId::ChangeAMode as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SChangeAMode payload must be exactly 1 byte",
+            ));
+        }
+        Ok(SChangeAMode { mode: payload[0] })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SStruck {
     pub attacker_id: u32,
 }

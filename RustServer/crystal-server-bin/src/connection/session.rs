@@ -69,6 +69,7 @@ impl LoginConnection {
             is_gm: false,
             gm_login: false,
             pending_guild_invite: None,
+            guild_can_request_items: true,
             world_map_setup_sent: false,
             sent_map_infos: HashSet::new(),
             trade_partner: None,

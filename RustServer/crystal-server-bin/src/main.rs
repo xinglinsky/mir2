@@ -526,6 +526,97 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
+                        world::WorldEvent::ObjectStruck {
+                            attacker_id,
+                            target_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                            damage,
+                            damage_type,
+                            health_percent,
+                        } => {
+                            // Delayed hits from World::update (pure magic
+                            // attacks, pet attacks, etc.) surface here via
+                            // ObjectStruck. Forward them to all nearby
+                            // sessions as SObjectStruck / SDamageIndicator /
+                            // SObjectHealth so the client can render hit
+                            // animations, damage numbers and monster HP bars.
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let object_id = target_id as u32;
+
+                            let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
+                                object_id,
+                                // The client only needs attacker_id as an
+                                // object reference; here attacker_id is a
+                                // SessionId for players, which matches the
+                                // object_id used for player objects on the
+                                // client.
+                                attacker_id,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                            };
+                            if let Ok(pkt) = struck_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(raw.clone());
+                                }
+                            }
+
+                            let dmg_pkt = crystal_shared_proto::scene::SDamageIndicator {
+                                damage,
+                                damage_type,
+                                object_id,
+                            };
+                            if let Ok(pkt) = dmg_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(raw.clone());
+                                }
+                            }
+
+                            let health_pkt = crystal_shared_proto::scene::SObjectHealth {
+                                object_id,
+                                percent: health_percent,
+                                expire: 5,
+                            };
+                            if let Ok(pkt) = health_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(raw.clone());
+                                }
+                            }
+                        }
                         world::WorldEvent::MonsterDied {
                             object_id,
                             map_index,
