@@ -20,10 +20,13 @@ use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectDied,
     SObjectGold,
+    SObjectItem,
     SObjectRemove,
+    SObjectShow,
+    SObjectHide,
     SStruck,
 };
-use crystal_shared_proto::magic::{SObjectEffect, SRemoveBuff};
+use crystal_shared_proto::magic::{SObjectEffect, SObjectRangeAttack, SRemoveBuff};
 use crystal_shared_proto::user::SHealthChanged;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -327,6 +330,7 @@ async fn main() -> io::Result<()> {
         let world_for_tick = Arc::clone(&world);
         let outboxes_for_world_events: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>> =
             Arc::clone(&outboxes);
+        let world_db_for_tick = Arc::clone(&world_db);
         thread::spawn(move || {
             let tick = Duration::from_millis(50);
             let start = Instant::now();
@@ -379,10 +383,71 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
-                        world::WorldEvent::ItemDropped { .. } => {
-                            // Item drop scene packets are emitted from the
-                            // connection layer (movement.rs) when handling
-                            // WorldEvent::ItemDropped for a given session.
+                        world::WorldEvent::ItemDropped {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            item_index,
+                            count,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            tracing::trace!(
+                                "[drop-send] ItemDropped: object_id={} map={} pos=({}, {}) \
+                                 item_index={} count={} viewers={}",
+                                object_id,
+                                map_index,
+                                x,
+                                y,
+                                item_index,
+                                count,
+                                viewers.len(),
+                            );
+
+                            if viewers.is_empty() || count == 0 {
+                                continue;
+                            }
+
+                            if let Some(info) = world_db_for_tick.get_item_info(item_index) {
+                                let base_name = info.friendly_name();
+                                let name = if count > 1 {
+                                    format!("{} ({})", base_name, count)
+                                } else {
+                                    base_name
+                                };
+
+                                let pkt = SObjectItem {
+                                    object_id: object_id as u32,
+                                    name,
+                                    name_colour_argb:
+                                        LoginConnection::item_name_colour_for_grade(info.grade),
+                                    location_x: x,
+                                    location_y: y,
+                                    image: info.image,
+                                    grade: info.grade,
+                                };
+
+                                if let Ok(raw) = pkt.encode() {
+                                    let encoded = raw.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    for sid in &viewers {
+                                        outboxes
+                                            .entry(*sid)
+                                            .or_default()
+                                            .push(encoded.clone());
+                                    }
+                                }
+                            }
                         }
                         world::WorldEvent::GoldDropped {
                             object_id,
@@ -505,6 +570,130 @@ async fn main() -> io::Result<()> {
                             let object_id = (mi << 20) | (ux << 10) | uy;
 
                             let pkt = SObjectRemove { object_id };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::ObjectShow {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectShow {
+                                object_id: object_id as u32,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::ObjectRangeAttack {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            direction,
+                            target_id,
+                            target_x,
+                            target_y,
+                            spell,
+                            level,
+                            attack_type,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectRangeAttack {
+                                object_id: object_id as u32,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                                target_id: target_id as u32,
+                                target_x,
+                                target_y,
+                                attack_type,
+                                spell,
+                                level,
+                            };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::ObjectHide {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectHide {
+                                object_id: object_id as u32,
+                            };
 
                             if let Ok(raw) = pkt.encode() {
                                 let encoded = raw.encode();

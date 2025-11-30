@@ -16,6 +16,8 @@ const SPELL_FIRE_BALL: u8 = crate::world::Spell::FireBall as u8;
 const SPELL_GREAT_FIRE_BALL: u8 = crate::world::Spell::GreatFireBall as u8;
 const SPELL_THUNDER_BOLT: u8 = crate::world::Spell::ThunderBolt as u8;
 const SPELL_SOUL_FIRE_BALL: u8 = crate::world::Spell::SoulFireBall as u8;
+const SPELL_FLAME_DISRUPTOR: u8 = crate::world::Spell::FlameDisruptor as u8;
+const SPELL_FROST_CRUNCH: u8 = crate::world::Spell::FrostCrunch as u8;
 
 // Approximation of C# Settings.MaxLuck used by MapObject.GetAttackPower when
 // sampling between MinMC/MaxMC or MinSC/MaxSC. We reuse the same magnitude as
@@ -91,6 +93,8 @@ pub fn is_pure_magic_attack(spell: u8) -> bool {
         || spell == SPELL_GREAT_FIRE_BALL
         || spell == SPELL_THUNDER_BOLT
         || spell == SPELL_SOUL_FIRE_BALL
+        || spell == SPELL_FLAME_DISRUPTOR
+        || spell == SPELL_FROST_CRUNCH
 }
 
 /// Compute damage for a pure magic attack spell by combining the caster's

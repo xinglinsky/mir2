@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crystal_server_core::world;
 use crystal_server_core::world::WorldProvider;
+use crystal_server_core::world::types::{Monster, PetKind};
 use crystal_shared_proto::scene::{
     SObjectHealth,
     SObjectMonster,
@@ -54,13 +55,34 @@ impl LoginConnection {
                     (info.name.clone(), -1, false)
                 };
 
+                // For Taoist pets, override the Image field to match the
+                // client Monster enum used for visuals instead of relying
+                // purely on the DB image. This ensures Shinsu/HolyDeva use the
+                // correct sprite IDs for their special animations.
+                let image: u16 = if monster.is_pet {
+                    match monster.pet_kind {
+                        Some(PetKind::TaoistShinsu) => {
+                            if monster.special_mode {
+                                Monster::Shinsu1.as_u16()
+                            } else {
+                                Monster::Shinsu.as_u16()
+                            }
+                        }
+                        Some(PetKind::TaoistHolyDeva) => Monster::HolyDeva.as_u16(),
+                        Some(PetKind::TaoistSkeleton) => Monster::BoneFamiliar.as_u16(),
+                        _ => info.image,
+                    }
+                } else {
+                    info.image
+                };
+
                 let packet = SObjectMonster {
                     object_id: monster.id as u32,
                     name,
                     name_colour_argb,
                     location_x: monster.x,
                     location_y: monster.y,
-                    image: info.image,
+                    image,
                     direction: monster.direction,
                     effect: info.effect,
                     ai: info.ai,
@@ -190,13 +212,34 @@ impl LoginConnection {
                         monster.x,
                         monster.y
                     );
+
+                    // Mirror the pet image override used in
+                    // send_monsters_for_map so that Taoist pets use the
+                    // correct Monster enum IDs for client-side animations.
+                    let image: u16 = if monster.is_pet {
+                        match monster.pet_kind {
+                            Some(PetKind::TaoistShinsu) => {
+                                if monster.special_mode {
+                                    Monster::Shinsu1.as_u16()
+                                } else {
+                                    Monster::Shinsu.as_u16()
+                                }
+                            }
+                            Some(PetKind::TaoistHolyDeva) => Monster::HolyDeva.as_u16(),
+                            Some(PetKind::TaoistSkeleton) => Monster::BoneFamiliar.as_u16(),
+                            _ => info.image,
+                        }
+                    } else {
+                        info.image
+                    };
+
                     let packet = SObjectMonster {
                         object_id: monster.id as u32,
                         name,
                         name_colour_argb,
                         location_x: monster.x,
                         location_y: monster.y,
-                        image: info.image,
+                        image,
                         direction: monster.direction,
                         effect: info.effect,
                         ai: info.ai,

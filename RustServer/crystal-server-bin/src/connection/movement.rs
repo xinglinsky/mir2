@@ -48,6 +48,7 @@ use crystal_shared_proto::scene::{
     SObjectHide,
 };
 use crystal_shared_proto::user::{SChangeAMode, SUserLocation, SHealthChanged, SUserSlotsRefresh};
+use tracing::debug;
 
 use super::{LoginConnection, Stage};
 
@@ -488,6 +489,14 @@ impl LoginConnection {
                     x,
                     y,
                 } => {
+                    debug!(
+                        "movement: ObjectShow object_id={} map={} pos=({}, {})",
+                        object_id,
+                        map_index,
+                        x,
+                        y
+                    );
+
                     let pkt = SObjectShow {
                         object_id: object_id as u32,
                     };
@@ -503,6 +512,14 @@ impl LoginConnection {
                     x,
                     y,
                 } => {
+                    debug!(
+                        "movement: ObjectHide object_id={} map={} pos=({}, {})",
+                        object_id,
+                        map_index,
+                        x,
+                        y
+                    );
+
                     let pkt = SObjectHide {
                         object_id: object_id as u32,
                     };

@@ -77,19 +77,6 @@ impl<P: WorldProvider> World<P> {
             let follow_distance = template.follow_distance.max(1);
             let leash_distance = template.leash_distance.max(follow_distance);
 
-            // debug!(
-            //     "pet_ai_shinsu_tick: pet_id={} map={} pos=({}, {}) owner=({}, {}) special_mode={} until_ms={} now_ms={}",
-            //     monster.id,
-            //     map_index,
-            //     monster.x,
-            //     monster.y,
-            //     owner_x,
-            //     owner_y,
-            //     monster.special_mode,
-            //     monster.special_mode_until_ms,
-            //     now_ms,
-            // );
-
             // Separate targets for attack vs. chase. Attack candidates must be
             // inside the Shinsu InAttackRange shape, while chase candidates
             // only need to be within leash distance so Shinsu will move toward
@@ -153,6 +140,15 @@ impl<P: WorldProvider> World<P> {
             // expiring and triggering a hide while the pet is still in
             // combat.
             let has_target = best_attack.is_some() || best_chase.is_some();
+
+            debug!(
+                "pet_ai_shinsu_targets: pet_id={} map={} best_attack_present={} best_chase_present={} has_target={}",
+                monster.id,
+                map_index,
+                best_attack.is_some(),
+                best_chase.is_some(),
+                has_target,
+            );
 
             // Update Shinsu Mode timers and emit ObjectShow/ObjectHide,
             // mirroring Shinsu.ProcessAI.

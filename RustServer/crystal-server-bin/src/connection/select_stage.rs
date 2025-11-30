@@ -16,7 +16,7 @@ use crystal_shared_proto::login::{
     SNewCharacter,
     SStartGame,
 };
-use crystal_shared_proto::map::{SMapChanged, SMapInformation};
+use crystal_shared_proto::map::SMapInformation;
 use crystal_shared_proto::item::{SNewItemInfo, SUserStorage, SResizeStorage};
 use crystal_shared_proto::scene::{
     SBaseStatsInfo,
