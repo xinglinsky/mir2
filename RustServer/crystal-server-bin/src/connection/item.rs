@@ -1,7 +1,19 @@
 use std::path::Path;
 
+use crystal_server_core::account::AccountStorage;
 use crystal_server_core::world::{self, WorldProvider};
-use crystal_shared_proto::item::{CDropItem, SDropItem, SEquipItem, SMoveItem, SRemoveItem, SUseItem};
+use crystal_shared_proto::item::{
+    CDropItem,
+    CStoreItem,
+    CTakeBackItem,
+    SDropItem,
+    SEquipItem,
+    SMoveItem,
+    SRemoveItem,
+    SStoreItem,
+    STakeBackItem,
+    SUseItem,
+};
 use crystal_shared_proto::login::{CEquipItem, CMoveItem, CRemoveItem, CUseItem};
 use crystal_shared_proto::npc::SNpcUpdate;
 use crystal_shared_proto::scene::{
@@ -776,6 +788,345 @@ impl LoginConnection {
             if let Ok(raw) = refresh.encode() {
                 out.push(Self::encode_raw(raw));
             }
+        }
+    }
+
+    pub(crate) fn handle_store_item(&mut self, msg: CStoreItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let mut pkt = SStoreItem {
+            from: msg.from,
+            to: msg.to,
+            success: false,
+        };
+
+        // Mirror C# behaviour: only allow storing items while interacting
+        // with a storage NPC and remaining within DataRange of that NPC.
+        let storage_npc_id = match self.current_storage_npc_id {
+            Some(id) => id,
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if let Some(info) = self.world_db.get_npc_info(storage_npc_id as i32) {
+            let dx = info.location_x - self.current_x;
+            let dy = info.location_y - self.current_y;
+            if info.map_index != self.current_map_index
+                || dx.abs() > Self::DATA_RANGE
+                || dy.abs() > Self::DATA_RANGE
+            {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        } else {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let account_id = match &self.account_id {
+            Some(id) => id.clone(),
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if msg.from < 0 || msg.to < 0 {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let from = msg.from as usize;
+        let to = msg.to as usize;
+
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        if from >= inv.slots.len() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let mut storage = match self.store.load_account_storage(&account_id) {
+            Ok(Some(s)) => s,
+            Ok(None) => AccountStorage {
+                slots: vec![None; 80],
+                has_expanded_storage: false,
+                expanded_storage_expiry_binary: 0,
+            },
+            Err(_) => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if to >= storage.slots.len() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Mirror AccountInfo.IsValidStorageIndex behaviour.
+        const STORAGE_GRID_SIZE: usize = 80;
+        if to >= STORAGE_GRID_SIZE {
+            let level = to / STORAGE_GRID_SIZE;
+            let max_level = if storage.has_expanded_storage { 1 } else { 0 };
+            if level > max_level {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        }
+
+        let item = match inv.slots.get(from).and_then(|s| s.clone()) {
+            Some(it) => it,
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if storage.slots[to].is_some() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Enforce BindMode.DontStore (0x0008) like guild storage.
+        if let Some(info) = self.world_db.get_item_info(item.item_index) {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (info.bind & BIND_DONT_STORE) != 0 {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        } else {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        if let Some(ref rental) = item.rental_information {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (rental.binding_flags & BIND_DONT_STORE) != 0 {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        }
+
+        // Perform move Inventory -> Storage.
+        storage.slots[to] = Some(item);
+        inv.slots[from] = None;
+
+        let _ = self.store.save_account_storage(&account_id, &storage);
+
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+        }
+
+        pkt.success = true;
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        let refresh = SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: eq.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_take_back_item(&mut self, msg: CTakeBackItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let mut pkt = STakeBackItem {
+            from: msg.from,
+            to: msg.to,
+            success: false,
+        };
+
+        // Mirror C# behaviour: only allow taking items back while
+        // interacting with a storage NPC and remaining within DataRange of
+        // that NPC.
+        let storage_npc_id = match self.current_storage_npc_id {
+            Some(id) => id,
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if let Some(info) = self.world_db.get_npc_info(storage_npc_id as i32) {
+            let dx = info.location_x - self.current_x;
+            let dy = info.location_y - self.current_y;
+            if info.map_index != self.current_map_index
+                || dx.abs() > Self::DATA_RANGE
+                || dy.abs() > Self::DATA_RANGE
+            {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        } else {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let account_id = match &self.account_id {
+            Some(id) => id.clone(),
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if msg.from < 0 || msg.to < 0 {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let from = msg.from as usize;
+        let to = msg.to as usize;
+
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        if to >= inv.slots.len() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let mut storage = match self.store.load_account_storage(&account_id) {
+            Ok(Some(s)) => s,
+            Ok(None) => AccountStorage {
+                slots: vec![None; 80],
+                has_expanded_storage: false,
+                expanded_storage_expiry_binary: 0,
+            },
+            Err(_) => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        if from >= storage.slots.len() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Mirror AccountInfo.IsValidStorageIndex behaviour.
+        const STORAGE_GRID_SIZE: usize = 80;
+        if from >= STORAGE_GRID_SIZE {
+            let level = from / STORAGE_GRID_SIZE;
+            let max_level = if storage.has_expanded_storage { 1 } else { 0 };
+            if level > max_level {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        }
+
+        if inv.slots[to].is_some() {
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let item = match storage.slots.get(from).and_then(|s| s.clone()) {
+            Some(it) => it,
+            None => {
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        // Perform move Storage -> Inventory.
+        inv.slots[to] = Some(item);
+        storage.slots[from] = None;
+
+        let _ = self.store.save_account_storage(&account_id, &storage);
+
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+        }
+
+        pkt.success = true;
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        let refresh = SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: eq.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
         }
     }
 

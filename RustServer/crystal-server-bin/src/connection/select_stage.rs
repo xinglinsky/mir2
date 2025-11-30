@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crystal_server_core::account::{CharacterPosition, CharacterStats, CharacterSummary, StoredMail};
+use crystal_server_core::account::{AccountStorage, CharacterPosition, CharacterStats, CharacterSummary, StoredMail};
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::configs::base_stats;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
@@ -17,7 +17,7 @@ use crystal_shared_proto::login::{
     SStartGame,
 };
 use crystal_shared_proto::map::{SMapChanged, SMapInformation};
-use crystal_shared_proto::item::SNewItemInfo;
+use crystal_shared_proto::item::{SNewItemInfo, SUserStorage, SResizeStorage};
 use crystal_shared_proto::scene::{
     SBaseStatsInfo,
     SObjectTeleportIn,
@@ -223,6 +223,53 @@ impl LoginConnection {
                 None
             };
 
+            let mut account_storage = if let Some(ref account_id) = self.account_id {
+                match self.store.load_account_storage(account_id) {
+                    Ok(Some(s)) => s,
+                    Ok(None) => {
+                        let s = AccountStorage {
+                            slots: vec![None; 80],
+                            has_expanded_storage: false,
+                            expanded_storage_expiry_binary: 0,
+                        };
+                        let _ = self.store.save_account_storage(account_id, &s);
+                        s
+                    }
+                    Err(_) => AccountStorage {
+                        slots: vec![None; 80],
+                        has_expanded_storage: false,
+                        expanded_storage_expiry_binary: 0,
+                    },
+                }
+            } else {
+                AccountStorage {
+                    slots: vec![None; 80],
+                    has_expanded_storage: false,
+                    expanded_storage_expiry_binary: 0,
+                }
+            };
+
+            // If expanded storage has expired while the account was offline,
+            // clear the flag before sending UserInformation/ResizeStorage so
+            // the client does not see stale expanded pages. This mirrors the
+            // C# PlayerObject.Process expiry behaviour at login time.
+            if account_storage.has_expanded_storage
+                && account_storage.expanded_storage_expiry_binary > 0
+            {
+                let expiry_ms = super::LoginConnection::dotnet_binary_to_unix_ms(
+                    account_storage.expanded_storage_expiry_binary,
+                );
+                let now_ms = super::LoginConnection::now_millis();
+                if expiry_ms > 0 && now_ms > expiry_ms {
+                    account_storage.has_expanded_storage = false;
+                    if let Some(ref account_id) = self.account_id {
+                        let _ = self
+                            .store
+                            .save_account_storage(account_id, &account_storage);
+                    }
+                }
+            }
+
             let experience_for_world = stats_opt
                 .as_ref()
                 .map(|s| s.experience)
@@ -392,7 +439,7 @@ impl LoginConnection {
                 }
             }
 
-            let user_magics: Vec<WorldUserMagic> = if let Some(ref account_id) = self.account_id {
+            let mut user_magics: Vec<WorldUserMagic> = if let Some(ref account_id) = self.account_id {
                 self
                     .store
                     .load_character_magics(account_id, ch.index)
@@ -401,10 +448,25 @@ impl LoginConnection {
                 Vec::new()
             };
 
+            // Mirror the C# CharacterInfo loader behaviour where UserMagic.CastTime
+            // is reset on login (magic.CastTime = int.MinValue). Our cooldown
+            // gate in World::check_and_update_magic_cooldown only treats
+            // positive cast_time values as active cooldowns, so setting this to
+            // zero ensures that all spells start without an artificial
+            // cross-session cooldown window after a server restart.
+            for um in &mut user_magics {
+                um.cast_time = 0;
+            }
+
             let mut magic_bytes = Vec::new();
             for um in &user_magics {
                 if let Some(mi) = self.world_db.get_magic_info(um.spell) {
-                    if let Ok(bytes) = encode_client_magic_bytes(mi, um, 0) {
+                    // Use the magic's current cast_time value as the `now` parameter so that
+                    // the encoded CastTime offset is always zero on login. This avoids
+                    // situations where a persisted absolute cast_time from a previous
+                    // server session results in excessively long client-side cooldowns
+                    // (e.g. "You cannot cast ThunderBolt for another 110 seconds.").
+                    if let Ok(bytes) = encode_client_magic_bytes(mi, um, um.cast_time) {
                         magic_bytes.push(bytes);
                     }
                 }
@@ -545,8 +607,8 @@ impl LoginConnection {
                 hero_behaviour: 0,
                 gold: stats.gold as u32,
                 credit: stats.credit as u32,
-                has_expanded_storage: false,
-                expanded_storage_expiry_binary: 0,
+                has_expanded_storage: account_storage.has_expanded_storage,
+                expanded_storage_expiry_binary: account_storage.expanded_storage_expiry_binary,
                 magics: magic_bytes,
                 summoned_creature_type: 0,
                 creature_summoned: false,
@@ -571,6 +633,37 @@ impl LoginConnection {
                 }
             };
             if let Ok(raw) = slots_refresh.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let mut storage_bytes = Vec::new();
+            let has_storage_array = !account_storage.slots.is_empty();
+            let _ = write_bool(&mut storage_bytes, has_storage_array);
+            if has_storage_array {
+                let _ = write_i32_le(&mut storage_bytes, account_storage.slots.len() as i32);
+                for slot in &account_storage.slots {
+                    let _ = write_bool(&mut storage_bytes, slot.is_some());
+                    if let Some(item) = slot {
+                        if let Ok(bytes) = item.encode_to_bytes() {
+                            storage_bytes.extend_from_slice(&bytes);
+                        }
+                    }
+                }
+            }
+
+            let storage_pkt = SUserStorage {
+                storage_bytes,
+            };
+            if let Ok(raw) = storage_pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let resize_pkt = SResizeStorage {
+                size: account_storage.slots.len() as i32,
+                has_expanded_storage: account_storage.has_expanded_storage,
+                expiry_time_binary: account_storage.expanded_storage_expiry_binary,
+            };
+            if let Ok(raw) = resize_pkt.encode() {
                 out.push(Self::encode_raw(raw));
             }
 

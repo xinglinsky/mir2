@@ -4,7 +4,7 @@ use super::Job;
 use crate::stats::{Stat, Stats};
 use crate::world::{BuffProperty, BuffStackType, BuffType, Spell};
 use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
-use crate::guild::{GuildInfo, GuildManager};
+use crate::guild::{GuildInfo, GuildManager, GuildStorageItem};
 use super::configs::{guild_max_experience_for_level, guild_member_cap_for_level, guild_settings, pet_template};
 use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
@@ -72,6 +72,17 @@ pub enum GuildGoldChangeError {
     NotFound,
     Overflow,
     InsufficientGuildGold,
+}
+
+#[derive(Clone, Debug)]
+pub enum GuildStorageError {
+    GuildNotFound,
+    InvalidSlot,
+    SlotOccupied,
+    SlotEmpty,
+    ItemBound,
+    EncodingFailed,
+    DecodingFailed,
 }
 
 #[derive(Clone, Debug)]
@@ -276,6 +287,20 @@ pub enum WorldEvent {
         y: i32,
         amount: i32,
         new_hp: i32,
+    },
+    /// Notify a specific player about the result of a magic cast, including
+    /// target information, mirroring the legacy C# S.Magic packet. The
+    /// legacy client uses this to drive local spell animations and
+    /// projectiles (e.g. FireBall, ThunderBolt).
+    Magic {
+        session_id: SessionId,
+        spell_id: u8,
+        target_id: u32,
+        x: i32,
+        y: i32,
+        cast: bool,
+        level: u8,
+        secondary_target_ids: Vec<u32>,
     },
     MagicLeveled {
         session_id: SessionId,
@@ -1193,6 +1218,157 @@ impl<P: WorldProvider> World<P> {
         Ok(guild.clone())
     }
 
+    pub fn guild_storage_store_item(
+        &mut self,
+        guild_name: &str,
+        to_slot: usize,
+        item: UserItemData,
+        user_id: i64,
+    ) -> Result<GuildInfo, GuildStorageError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildStorageError::GuildNotFound),
+        };
+
+        if to_slot >= guild.stored_items.len() {
+            return Err(GuildStorageError::InvalidSlot);
+        }
+
+        if guild.stored_items[to_slot].is_some() {
+            return Err(GuildStorageError::SlotOccupied);
+        }
+
+        // Enforce BindMode.DontStore (0x0008) using static ItemInfo and any
+        // rental BindingFlags. This mirrors the C# checks against
+        // Item.Info.Bind and RentalInformation.BindingFlags.
+        if let Some(info) = self.provider.get_item_info(item.item_index) {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (info.bind & BIND_DONT_STORE) != 0 {
+                return Err(GuildStorageError::ItemBound);
+            }
+        } else {
+            // When no static info is available, treat the item as
+            // non-storable to avoid persisting potentially invalid data.
+            return Err(GuildStorageError::ItemBound);
+        }
+
+        if let Some(ref rental) = item.rental_information {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (rental.binding_flags & BIND_DONT_STORE) != 0 {
+                return Err(GuildStorageError::ItemBound);
+            }
+        }
+
+        let item_bytes = match item.encode_to_bytes() {
+            Ok(b) => b,
+            Err(_) => return Err(GuildStorageError::EncodingFailed),
+        };
+
+        let storage_item = GuildStorageItem { user_id, item_bytes };
+
+        guild.stored_items[to_slot] = Some(storage_item);
+        Ok(guild.clone())
+    }
+
+    pub fn guild_storage_retrieve_item(
+        &mut self,
+        guild_name: &str,
+        from_slot: usize,
+    ) -> Result<(GuildInfo, UserItemData), GuildStorageError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildStorageError::GuildNotFound),
+        };
+
+        if from_slot >= guild.stored_items.len() {
+            return Err(GuildStorageError::InvalidSlot);
+        }
+
+        let storage_item_ref = match guild.stored_items[from_slot].as_ref() {
+            Some(it) => it,
+            None => return Err(GuildStorageError::SlotEmpty),
+        };
+
+        let item = match UserItemData::decode_from_bytes(&storage_item_ref.item_bytes) {
+            Ok(it) => it,
+            Err(_) => return Err(GuildStorageError::DecodingFailed),
+        };
+
+        // Mirror the C# safety check against StoredItems[from].Item.Info.Bind
+        // so that legacy databases containing DontStore items do not allow
+        // retrieval.
+        if let Some(info) = self.provider.get_item_info(item.item_index) {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (info.bind & BIND_DONT_STORE) != 0 {
+                return Err(GuildStorageError::ItemBound);
+            }
+        }
+
+        // Now that validation has passed, take the item out of storage.
+        let storage_item = guild.stored_items[from_slot]
+            .take()
+            .expect("storage_item must exist after as_ref check");
+
+        let item = match UserItemData::decode_from_bytes(&storage_item.item_bytes) {
+            Ok(it) => it,
+            Err(_) => return Err(GuildStorageError::DecodingFailed),
+        };
+
+        Ok((guild.clone(), item))
+    }
+
+    pub fn guild_storage_move_item(
+        &mut self,
+        guild_name: &str,
+        from_slot: usize,
+        to_slot: usize,
+    ) -> Result<GuildInfo, GuildStorageError> {
+        let guild = match self.guilds.get_guild_by_name_mut(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildStorageError::GuildNotFound),
+        };
+
+        if from_slot >= guild.stored_items.len() || to_slot >= guild.stored_items.len() {
+            return Err(GuildStorageError::InvalidSlot);
+        }
+
+        if from_slot == to_slot {
+            return Ok(guild.clone());
+        }
+
+        let storage_item = match guild.stored_items[from_slot].as_ref() {
+            Some(it) => it,
+            None => return Err(GuildStorageError::SlotEmpty),
+        };
+
+        let item = match UserItemData::decode_from_bytes(&storage_item.item_bytes) {
+            Ok(it) => it,
+            Err(_) => return Err(GuildStorageError::DecodingFailed),
+        };
+
+        if let Some(info) = self.provider.get_item_info(item.item_index) {
+            const BIND_DONT_STORE: i16 = 0x0008;
+            if (info.bind & BIND_DONT_STORE) != 0 {
+                return Err(GuildStorageError::ItemBound);
+            }
+        }
+
+        guild.stored_items.swap(from_slot, to_slot);
+        Ok(guild.clone())
+    }
+
+    pub fn guild_storage_list(
+        &self,
+        guild_name: &str,
+    ) -> Result<Vec<Option<GuildStorageItem>>, GuildStorageError> {
+        let guild = match self.guilds.get_guild_by_name(guild_name) {
+            Some(g) => g,
+            None => return Err(GuildStorageError::GuildNotFound),
+        };
+
+        Ok(guild.stored_items.clone())
+    }
+
     pub fn guild_add_member_by_name(
         &mut self,
         guild_name: &str,
@@ -1618,6 +1794,12 @@ impl<P: WorldProvider> World<P> {
         session_id: SessionId,
         pet_kind: PetKind,
     ) -> Option<u64> {
+        tracing::debug!(
+            "spawn_pet_for_player: session_id={} pet_kind={:?} entering",
+            session_id,
+            pet_kind
+        );
+
         let (map_index, x, y, direction, job) = {
             let player = self.players.get(&session_id)?;
             (
@@ -1629,11 +1811,42 @@ impl<P: WorldProvider> World<P> {
             )
         };
 
+        tracing::debug!(
+            "spawn_pet_for_player: session_id={} job={:?} map={} pos=({}, {})",
+            session_id,
+            job,
+            map_index,
+            x,
+            y
+        );
+
         if job != Job::Taoist {
+            tracing::debug!(
+                "spawn_pet_for_player: session_id={} job={:?} is not Taoist, aborting",
+                session_id,
+                job
+            );
             return None;
         }
 
-        let template = pet_template(pet_kind)?;
+        let template = match pet_template(pet_kind) {
+            Some(t) => t,
+            None => {
+                tracing::debug!(
+                    "spawn_pet_for_player: session_id={} no PetTemplate for kind {:?}",
+                    session_id,
+                    pet_kind
+                );
+                return None;
+            }
+        };
+
+        tracing::debug!(
+            "spawn_pet_for_player: session_id={} template_monster_index={} max_per_owner={}",
+            session_id,
+            template.monster_index,
+            template.max_count_per_owner
+        );
 
         let mut total_pets: usize = 0;
         let mut pets_of_kind: usize = 0;
@@ -1654,17 +1867,42 @@ impl<P: WorldProvider> World<P> {
 
         const MAX_MONSTER_PETS_PER_OWNER: usize = 2;
         if total_pets >= MAX_MONSTER_PETS_PER_OWNER {
+            tracing::debug!(
+                "spawn_pet_for_player: session_id={} total_pets {} reached MAX_MONSTER_PETS_PER_OWNER {}",
+                session_id,
+                total_pets,
+                MAX_MONSTER_PETS_PER_OWNER
+            );
             return None;
         }
 
         if pets_of_kind >= template.max_count_per_owner as usize {
+            tracing::debug!(
+                "spawn_pet_for_player: session_id={} pets_of_kind {} reached max_count_per_owner {}",
+                session_id,
+                pets_of_kind,
+                template.max_count_per_owner
+            );
             return None;
         }
 
         let (monster_index, info) = if template.monster_index > 0 {
-            match self.provider.get_monster_info(template.monster_index) {
-                Some(i) => (template.monster_index, i),
-                None => return None,
+            if let Some(i) = self.provider.get_monster_info(template.monster_index) {
+                (template.monster_index, i)
+            } else if let Some(i) = self
+                .provider
+                .get_monster_info_by_name(template.monster_name)
+            {
+                (i.index, i)
+            } else {
+                tracing::debug!(
+                    "spawn_pet_for_player: session_id={} could not resolve MonsterInfo for kind {:?} (index={} name={})",
+                    session_id,
+                    pet_kind,
+                    template.monster_index,
+                    template.monster_name
+                );
+                return None;
             }
         } else {
             let info = match self
@@ -1672,10 +1910,26 @@ impl<P: WorldProvider> World<P> {
                 .get_monster_info_by_name(template.monster_name)
             {
                 Some(i) => i,
-                None => return None,
+                None => {
+                    tracing::debug!(
+                        "spawn_pet_for_player: session_id={} could not resolve MonsterInfo by name '{}' for kind {:?}",
+                        session_id,
+                        template.monster_name,
+                        pet_kind
+                    );
+                    return None;
+                }
             };
             (info.index, info)
         };
+
+        tracing::debug!(
+            "spawn_pet_for_player: session_id={} using monster_index={} name={} for pet_kind={:?}",
+            session_id,
+            monster_index,
+            info.name,
+            pet_kind
+        );
 
         self.next_monster_id = self.next_monster_id.wrapping_add(1);
         let hp = info.stats.get(Stat::HP).max(1);
@@ -1720,6 +1974,16 @@ impl<P: WorldProvider> World<P> {
             player.main_pet_id = Some(self.next_monster_id);
         }
 
+        tracing::debug!(
+            "spawn_pet_for_player: session_id={} spawned pet_id={} monster_index={} map={} pos=({}, {})",
+            session_id,
+            self.next_monster_id,
+            monster_index,
+            map_index,
+            x,
+            y
+        );
+
         Some(self.next_monster_id)
     }
 
@@ -1729,9 +1993,22 @@ impl<P: WorldProvider> World<P> {
         pet_kind: PetKind,
         events: &mut Vec<WorldEvent>,
     ) -> bool {
+        tracing::debug!(
+            "recall_pet_for_player: session_id={} pet_kind={:?} entering",
+            session_id,
+            pet_kind
+        );
+
         let (player_map, player_x, player_y) = match self.players.get(&session_id) {
             Some(p) => (p.map_index, p.x, p.y),
-            None => return false,
+            None => {
+                tracing::debug!(
+                    "recall_pet_for_player: session_id={} pet_kind={:?} no player found",
+                    session_id,
+                    pet_kind
+                );
+                return false;
+            }
         };
 
         let mut moved: Option<(u64, i32, i32, i32, u8)> = None;
@@ -1750,8 +2027,30 @@ impl<P: WorldProvider> World<P> {
                 let old_y = m.y;
 
                 if old_map == player_map && old_x == player_x && old_y == player_y {
+                    tracing::debug!(
+                        "recall_pet_for_player: session_id={} pet_kind={:?} pet_id={} already at player location (map={} x={} y={})",
+                        session_id,
+                        pet_kind,
+                        m.id,
+                        player_map,
+                        player_x,
+                        player_y
+                    );
                     return true;
                 }
+
+                tracing::debug!(
+                    "recall_pet_for_player: session_id={} pet_kind={:?} moving pet_id={} from map={} pos=({}, {}) to map={} pos=({}, {})",
+                    session_id,
+                    pet_kind,
+                    m.id,
+                    old_map,
+                    old_x,
+                    old_y,
+                    player_map,
+                    player_x,
+                    player_y
+                );
 
                 m.map_index = player_map;
                 m.x = player_x;
@@ -1774,8 +2073,23 @@ impl<P: WorldProvider> World<P> {
                 direction,
             });
 
+            tracing::debug!(
+                "recall_pet_for_player: session_id={} pet_kind={:?} completed recall for pet_id={} to map={} pos=({}, {})",
+                session_id,
+                pet_kind,
+                id,
+                player_map,
+                player_x,
+                player_y
+            );
+
             true
         } else {
+            tracing::debug!(
+                "recall_pet_for_player: session_id={} pet_kind={:?} no matching pet found",
+                session_id,
+                pet_kind
+            );
             false
         }
     }
@@ -2107,7 +2421,18 @@ impl<P: WorldProvider> World<P> {
                 direction,
                 spell,
             } => {
-                self.handle_attack_command(session_id, direction, spell, &mut events);
+                // Basic melee / attack-initiated skills do not carry an
+                // explicit target in the packet, so pass zeroed target
+                // information to the unified attack handler.
+                self.handle_attack_command(
+                    session_id,
+                    direction,
+                    spell,
+                    0,
+                    0,
+                    0,
+                    &mut events,
+                );
             }
             WorldCommand::Magic {
                 session_id,

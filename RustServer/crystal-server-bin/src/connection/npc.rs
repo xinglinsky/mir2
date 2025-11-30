@@ -3,11 +3,13 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crystal_server_core::account::AccountStorage;
 use crystal_server_core::world;
 use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
+use crystal_shared_proto::item::{SUserStorage};
 use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 use crystal_shared_proto::login::{CCallNPC, SDisconnect};
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcRepair, SNpcsRepair};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair};
 use crystal_shared_proto::scene::SNpcResponse;
 use crystal_shared_proto::user::SLoseGold;
 
@@ -197,6 +199,7 @@ impl LoginConnection {
         let need_usercount = lines.iter().any(|l| l.contains("<$USERCOUNT>"));
         let need_parcel = lines.iter().any(|l| l.contains("<$PARCELAMOUNT>"));
         let need_npcname = lines.iter().any(|l| l.contains("<$NPCNAME>"));
+        let need_roll_result = lines.iter().any(|l| l.contains("<$ROLLRESULT>"));
 
         // Equipment slot placeholders.
         let need_armour = lines.iter().any(|l| l.contains("<$ARMOUR>"));
@@ -357,6 +360,13 @@ impl LoginConnection {
         } else {
             None
         };
+
+        let mut roll_result_str: Option<String> = None;
+        if need_roll_result {
+            let world = self.world.lock().unwrap();
+            let val = world.get_player_npc_data(self.session_id, "NPCRollResult");
+            roll_result_str = Some(val.unwrap_or_else(|| "Not Rolled".to_string()));
+        }
 
         // Equipment-slot placeholders: look up the current equipment from the
         // world and then resolve the ItemInfoData name as a FriendlyName.
@@ -603,6 +613,12 @@ impl LoginConnection {
                 }
             }
 
+            if let Some(ref v) = roll_result_str {
+                if line.contains("<$ROLLRESULT>") {
+                    line = line.replace("<$ROLLRESULT>", v);
+                }
+            }
+
             if let Some(ref v) = guild_war_time_str {
                 if line.contains("<$GUILDWARTIME>") {
                     line = line.replace("<$GUILDWARTIME>", v);
@@ -798,6 +814,72 @@ impl LoginConnection {
         }
     }
 
+    pub(crate) fn page_has_roll_action(path: &Path, key: &str) -> bool {
+        let text = match fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut current_label: Option<String> = None;
+        let mut in_act = false;
+
+        let mut i: usize = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    current_label = Some(label_inner.to_ascii_uppercase());
+                    in_act = false;
+                } else {
+                    current_label = None;
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_label.as_deref() != Some(&target_key) {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ACT") {
+                in_act = true;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                if in_act {
+                    in_act = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            if in_act {
+                if !trimmed.is_empty() {
+                    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                    if !parts.is_empty()
+                        && (parts[0].eq_ignore_ascii_case("ROLLDIE")
+                            || parts[0].eq_ignore_ascii_case("ROLLYUT"))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            i += 1;
+        }
+
+        false
+    }
+
     /// Build the raw goods_bytes payload for an SNpcGoods packet, mirroring the
     /// C# ServerPackets.NPCGoods.WritePacket layout:
     ///   count (i32)
@@ -947,6 +1029,10 @@ impl LoginConnection {
             let dy = npc.location_y - self.current_y;
 
             if dx.abs() <= Self::DATA_RANGE && dy.abs() <= Self::DATA_RANGE {
+                // Reset storage NPC context by default; it will be set again
+                // below if this call opens the @STORAGE page.
+                self.current_storage_npc_id = None;
+
                 let key = Self::normalize_npc_key(&msg.key);
                 let key_upper = key.as_str();
 
@@ -1136,6 +1222,23 @@ impl LoginConnection {
                                 }
                             }
 
+                            if Self::page_has_roll_action(&script_path, &key) {
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default();
+                                let nanos = now.subsec_nanos();
+                                let result = (nanos % 6) + 1;
+
+                                {
+                                    let mut world = self.world.lock().unwrap();
+                                    world.set_player_npc_data(
+                                        self.session_id,
+                                        "NPCRollResult",
+                                        result.to_string(),
+                                    );
+                                }
+                            }
+
                             if key.eq_ignore_ascii_case("@MAIN") {
                                 if let Some(page_alt) = pages.get("@MAIN-1") {
                                     maybe_page = Some(page_alt.clone());
@@ -1154,6 +1257,61 @@ impl LoginConnection {
                 let resp = SNpcResponse { page };
                 if let Ok(raw) = resp.encode() {
                     out.push(Self::encode_raw(raw));
+                }
+
+                // Special-case the storage page: when the player clicks an
+                // [@STORAGE] entry, mirror the C# behaviour of sending the
+                // current account Storage contents followed by an NPCStorage
+                // packet to open the warehouse dialog.
+                if key_upper == "@STORAGE" {
+                    // Remember which NPC index opened the storage page so
+                    // that subsequent StoreItem/TakeBackItem requests can be
+                    // validated against NPC proximity, similar to C#
+                    // PlayerObject.NPCPage/NPCObjectID.
+                    self.current_storage_npc_id = Some(msg.object_id);
+
+                    if let Some(ref account_id) = self.account_id {
+                        let account_storage = match self.store.load_account_storage(account_id) {
+                            Ok(Some(s)) => s,
+                            Ok(None) => AccountStorage {
+                                slots: vec![None; 80],
+                                has_expanded_storage: false,
+                                expanded_storage_expiry_binary: 0,
+                            },
+                            Err(_) => AccountStorage {
+                                slots: vec![None; 80],
+                                has_expanded_storage: false,
+                                expanded_storage_expiry_binary: 0,
+                            },
+                        };
+
+                        let mut storage_bytes = Vec::new();
+                        let has_storage_array = !account_storage.slots.is_empty();
+                        let _ = write_bool(&mut storage_bytes, has_storage_array);
+                        if has_storage_array {
+                            let _ = write_i32_le(
+                                &mut storage_bytes,
+                                account_storage.slots.len() as i32,
+                            );
+                            for slot in &account_storage.slots {
+                                let _ = write_bool(&mut storage_bytes, slot.is_some());
+                                if let Some(item) = slot {
+                                    if let Ok(bytes) = item.encode_to_bytes() {
+                                        storage_bytes.extend_from_slice(&bytes);
+                                    }
+                                }
+                            }
+                        }
+
+                        let storage_pkt = SUserStorage { storage_bytes };
+                        if let Ok(raw) = storage_pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        let npc_storage = SNpcStorage;
+                        let raw = npc_storage.encode();
+                        out.push(Self::encode_raw(raw));
+                    }
                 }
 
                 if let Some((goods_items, panel_type)) = shop_goods {

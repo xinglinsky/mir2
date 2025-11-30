@@ -5,8 +5,10 @@ use crate::world::types::{BuffType, PetKind};
 use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
 use crate::world::Spell;
 use rand::{thread_rng, Rng};
+use tracing::debug;
 
 const ITEM_TYPE_AMULET: u8 = 8;
+const SKELETON_AMULET_COUNT: u16 = 1;
 const SHINSU_AMULET_COUNT: u16 = 5;
 const HOLY_DEVA_AMULET_COUNT: u16 = 2;
 const DEFAULT_AMULET_SHAPE: i16 = 0;
@@ -23,7 +25,13 @@ pub fn cast_healing<P: WorldProvider>(
     let (map_index, caster_x, caster_y, level, heal_value) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
         };
 
         // Look up the learned level of Healing for this player if present;
@@ -43,6 +51,12 @@ pub fn cast_healing<P: WorldProvider>(
             .unwrap_or(0);
 
         if player.mp < cost {
+            debug!(
+                "cast_summon_shinsu: session_id={} mp={} < cost={}",
+                session_id,
+                player.mp,
+                cost
+            );
             return;
         }
 
@@ -171,6 +185,12 @@ pub fn cast_soul_shield<P: WorldProvider>(
     _y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
+    debug!(
+        "cast_summon_shinsu: session_id={} spell={} dir={} starting",
+        session_id,
+        spell,
+        direction
+    );
     let (map_index, caster_x, caster_y, level, duration_ms, stats) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
@@ -179,14 +199,35 @@ pub fn cast_soul_shield<P: WorldProvider>(
 
         let magic = match player.magics.iter().find(|m| m.spell == spell) {
             Some(m) => m,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
         };
 
         let level = magic.level;
+        debug!(
+            "cast_summon_shinsu: session_id={} magic_level={} mp_before={}",
+            session_id,
+            level,
+            player.mp
+        );
         let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
         {
             Some(c) => c,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} no MagicInfo / cost for spell {} level {}",
+                    session_id,
+                    spell,
+                    level
+                );
+                return;
+            }
         };
 
         if player.mp < cost {
@@ -751,6 +792,182 @@ pub fn cast_poison_cloud<P: WorldProvider>(
 ) {
 }
 
+pub fn cast_summon_skeleton<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    _x: i32,
+    _y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    debug!(
+        "cast_summon_skeleton: session_id={} spell={} dir={} starting",
+        session_id,
+        spell,
+        direction
+    );
+
+    // First try to recall an existing skeleton pet for this player.
+    if world.recall_pet_for_player(session_id, PetKind::TaoistSkeleton, events) {
+        debug!(
+            "cast_summon_skeleton: session_id={} recalled existing pet and returning",
+            session_id
+        );
+        return;
+    }
+
+    let (map_index, caster_x, caster_y, level, amulet_slot) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => {
+                debug!(
+                    "cast_summon_skeleton: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => {
+                debug!(
+                    "cast_summon_skeleton: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
+        };
+
+        let level = magic.level;
+        debug!(
+            "cast_summon_skeleton: session_id={} magic_level={} mp_before={}",
+            session_id,
+            level,
+            player.mp
+        );
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => {
+                debug!(
+                    "cast_summon_skeleton: session_id={} no MagicInfo / cost for spell {} level {}",
+                    session_id,
+                    spell,
+                    level
+                );
+                return;
+            }
+        };
+
+        if player.mp < cost {
+            debug!(
+                "cast_summon_skeleton: session_id={} mp={} < cost={}",
+                session_id,
+                player.mp,
+                cost
+            );
+            return;
+        }
+
+        let mut amulet_slot: Option<usize> = None;
+
+        // Mirror C# HumanObject.GetAmulet(1): search equipped amulets.
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= SKELETON_AMULET_COUNT as u32 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    "cast_summon_skeleton: session_id={} has no suitable Skeleton amulet",
+                    session_id
+                );
+                return;
+            }
+        };
+
+        if player.mp < cost {
+            debug!(
+                "cast_summon_skeleton: session_id={} mp={} < cost={} (second check)",
+                session_id,
+                player.mp,
+                cost
+            );
+            return;
+        }
+
+        player.mp -= cost;
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            amulet_slot,
+        )
+    };
+
+    let spawned = world.spawn_pet_for_player(session_id, PetKind::TaoistSkeleton);
+    debug!(
+        "cast_summon_skeleton: session_id={} spawn_pet_for_player result={:?}",
+        session_id,
+        spawned
+    );
+    if spawned.is_none() {
+        return;
+    }
+
+    if let Some(player) = world.players.get_mut(&session_id) {
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > SKELETON_AMULET_COUNT {
+                    item.count = item.count.saturating_sub(SKELETON_AMULET_COUNT);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
+    }
+
+    world.level_up_magic_for_player(session_id, Spell::SummonSkeleton as u8, events);
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
+
 pub fn cast_summon_shinsu<P: WorldProvider>(
     world: &mut World<P>,
     session_id: SessionId,
@@ -760,38 +977,85 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
     _y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
+    debug!(
+        "cast_summon_shinsu: session_id={} spell={} dir={} starting",
+        session_id,
+        spell,
+        direction
+    );
+
     // First try to recall an existing Shinsu pet for this player, mirroring
     // the C# behaviour where a second cast recalls instead of summoning a
     // new instance.
     if world.recall_pet_for_player(session_id, PetKind::TaoistShinsu, events) {
+        debug!(
+            "cast_summon_shinsu: session_id={} recalled existing pet and returning",
+            session_id
+        );
         return;
     }
 
     let (map_index, caster_x, caster_y, level, amulet_slot) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
         };
 
         let magic = match player.magics.iter().find(|m| m.spell == spell) {
             Some(m) => m,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
         };
 
         let level = magic.level;
+        debug!(
+            "cast_summon_shinsu: session_id={} magic_level={} mp_before={}",
+            session_id,
+            level,
+            player.mp
+        );
         let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
         {
             Some(c) => c,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} no MagicInfo / cost for spell {} level {}",
+                    session_id,
+                    spell,
+                    level
+                );
+                return;
+            }
         };
 
         if player.mp < cost {
+            debug!(
+                "cast_summon_shinsu: session_id={} mp={} < cost={}",
+                session_id,
+                player.mp,
+                cost
+            );
             return;
         }
 
         let mut amulet_slot: Option<usize> = None;
 
-        for (idx, slot) in player.inventory.slots.iter().enumerate() {
+        // Mirror C# HumanObject.GetAmulet: search equipped amulets rather
+        // than loose items in the bag. The original server checks
+        // Info.Equipment and matches on ItemType.Amulet plus Shape/count.
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
             let item = match slot.as_ref() {
                 Some(i) => i,
                 None => continue,
@@ -818,7 +1082,13 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
 
         let amulet_slot = match amulet_slot {
             Some(idx) => idx,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_shinsu: session_id={} has no suitable Shinsu amulet",
+                    session_id
+                );
+                return;
+            }
         };
 
         if player.mp < cost {
@@ -836,15 +1106,18 @@ pub fn cast_summon_shinsu<P: WorldProvider>(
         )
     };
 
-    if world
-        .spawn_pet_for_player(session_id, PetKind::TaoistShinsu)
-        .is_none()
-    {
+    let spawned = world.spawn_pet_for_player(session_id, PetKind::TaoistShinsu);
+    debug!(
+        "cast_summon_shinsu: session_id={} spawn_pet_for_player result={:?}",
+        session_id,
+        spawned
+    );
+    if spawned.is_none() {
         return;
     }
 
     if let Some(player) = world.players.get_mut(&session_id) {
-        if let Some(slot) = player.inventory.slots.get_mut(amulet_slot) {
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
             if let Some(item) = slot.as_mut() {
                 if item.count > SHINSU_AMULET_COUNT {
                     item.count = item.count.saturating_sub(SHINSU_AMULET_COUNT);
@@ -878,37 +1151,83 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
     _y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
+    debug!(
+        "cast_summon_holy_deva: session_id={} spell={} dir={} starting",
+        session_id,
+        spell,
+        direction
+    );
+
     // As with Shinsu, recast behaves as a recall for an existing HolyDeva
     // pet when present.
     if world.recall_pet_for_player(session_id, PetKind::TaoistHolyDeva, events) {
+        debug!(
+            "cast_summon_holy_deva: session_id={} recalled existing pet and returning",
+            session_id
+        );
         return;
     }
 
     let (map_index, caster_x, caster_y, level, amulet_slot) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_holy_deva: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
         };
 
         let magic = match player.magics.iter().find(|m| m.spell == spell) {
             Some(m) => m,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_holy_deva: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
         };
 
         let level = magic.level;
+        debug!(
+            "cast_summon_holy_deva: session_id={} magic_level={} mp_before={}",
+            session_id,
+            level,
+            player.mp
+        );
         let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
         {
             Some(c) => c,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_holy_deva: session_id={} no MagicInfo / cost for spell {} level {}",
+                    session_id,
+                    spell,
+                    level
+                );
+                return;
+            }
         };
 
         if player.mp < cost {
+            debug!(
+                "cast_summon_holy_deva: session_id={} mp={} < cost={}",
+                session_id,
+                player.mp,
+                cost
+            );
             return;
         }
 
         let mut amulet_slot: Option<usize> = None;
 
-        for (idx, slot) in player.inventory.slots.iter().enumerate() {
+        // As with Shinsu, mirror C# HumanObject.GetAmulet by searching the
+        // equipped amulet slots rather than inventory for HolyDeva.
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
             let item = match slot.as_ref() {
                 Some(i) => i,
                 None => continue,
@@ -935,10 +1254,22 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
 
         let amulet_slot = match amulet_slot {
             Some(idx) => idx,
-            None => return,
+            None => {
+                debug!(
+                    "cast_summon_holy_deva: session_id={} has no suitable HolyDeva amulet",
+                    session_id
+                );
+                return;
+            }
         };
 
         if player.mp < cost {
+            debug!(
+                "cast_summon_holy_deva: session_id={} mp={} < cost={} (second check)",
+                session_id,
+                player.mp,
+                cost
+            );
             return;
         }
 
@@ -953,15 +1284,18 @@ pub fn cast_summon_holy_deva<P: WorldProvider>(
         )
     };
 
-    if world
-        .spawn_pet_for_player(session_id, PetKind::TaoistHolyDeva)
-        .is_none()
-    {
+    let spawned = world.spawn_pet_for_player(session_id, PetKind::TaoistHolyDeva);
+    debug!(
+        "cast_summon_holy_deva: session_id={} spawn_pet_for_player result={:?}",
+        session_id,
+        spawned
+    );
+    if spawned.is_none() {
         return;
     }
 
     if let Some(player) = world.players.get_mut(&session_id) {
-        if let Some(slot) = player.inventory.slots.get_mut(amulet_slot) {
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
             if let Some(item) = slot.as_mut() {
                 if item.count > HOLY_DEVA_AMULET_COUNT {
                     item.count = item.count.saturating_sub(HOLY_DEVA_AMULET_COUNT);

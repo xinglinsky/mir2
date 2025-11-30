@@ -440,6 +440,7 @@
                          System_PleaseEnterInfo = "Please enter the required information.",
                          System_PersonObservingLoggedOff = "The person you was observing has logged off.",
                          System_UnknownTypeRequired = "Unknown Type Required",
+                         System_TargetTooFar = "Target is too far.",
                          System_ObservationDisabled = "That player has disabled observation.",
 
                          // Group related
@@ -447,6 +448,7 @@
                          Group_PlayerLeft = "{0} has left the group.",
                          Group_PlayerJoined = "{0} has joined the group.",
                          Group_InviteQuestion = "Do you want to group with {0}?",
+
 
                          // Quest related
                          Quest_ShareQuestion = "{0} would like to share a quest with you. Do you accept?",
@@ -966,6 +968,7 @@
         GameLanguage.System_PleaseEnterInfo = reader.ReadString("Language", "System_PleaseEnterInfo", GameLanguage.System_PleaseEnterInfo);
         GameLanguage.System_PersonObservingLoggedOff = reader.ReadString("Language", "System_PersonObservingLoggedOff", GameLanguage.System_PersonObservingLoggedOff);
         GameLanguage.System_UnknownTypeRequired = reader.ReadString("Language", "System_UnknownTypeRequired", GameLanguage.System_UnknownTypeRequired);
+        GameLanguage.System_TargetTooFar = reader.ReadString("Language", "System_TargetTooFar", GameLanguage.System_TargetTooFar);
         GameLanguage.System_ObservationDisabled = reader.ReadString("Language", "System_ObservationDisabled", GameLanguage.System_ObservationDisabled);
 
         // Group related
@@ -1402,6 +1405,7 @@
         reader.Write("Language", "System_PleaseEnterInfo", GameLanguage.System_PleaseEnterInfo);
         reader.Write("Language", "System_PersonObservingLoggedOff", GameLanguage.System_PersonObservingLoggedOff);
         reader.Write("Language", "System_UnknownTypeRequired", GameLanguage.System_UnknownTypeRequired);
+        reader.Write("Language", "System_TargetTooFar", GameLanguage.System_TargetTooFar);
 
         // Group related
         reader.Write("Language", "Group_YouLeft", GameLanguage.Group_YouLeft);

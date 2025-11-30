@@ -1,7 +1,9 @@
+use chrono::TimeZone;
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::skills::class_owns_spell;
+use crystal_shared_proto::item::SResizeStorage;
 use crystal_shared_proto::scene::{SObjectRemove, SLevelChanged, SObjectLeveled};
-use crystal_shared_proto::user::{SGainedGold, SHealthChanged};
+use crystal_shared_proto::user::{SGainedGold, SLoseGold, SHealthChanged};
 
 use super::LoginConnection;
 
@@ -19,6 +21,136 @@ impl LoginConnection {
                 self.is_gm = true;
                 self.send_system_chat("GM mode enabled.", out);
             }
+            return true;
+        }
+
+        // /addstorage - purchase or extend expanded account storage. This
+        // mirrors the C# PlayerObject ADDSTORAGE behaviour: charge 1,000,000
+        // gold for 10 days of expanded storage, extending any existing rental
+        // period if it has not yet expired.
+        if let Some(rest) = trimmed.strip_prefix("/addstorage") {
+            let arg = rest.trim();
+            if !arg.is_empty() {
+                self.send_system_chat("Usage: /addstorage", out);
+                return true;
+            }
+
+            let (account_id, char_idx) = match (&self.account_id, self.current_char_index) {
+                (Some(a), Some(c)) => (a.clone(), c),
+                _ => {
+                    self.send_system_chat("Not in game.", out);
+                    return true;
+                }
+            };
+
+            let mut stats = match self.current_stats.clone() {
+                Some(s) => s,
+                None => {
+                    self.send_system_chat("Character stats not loaded.", out);
+                    return true;
+                }
+            };
+
+            let cost: i64 = 1_000_000;
+            if stats.gold < cost {
+                self.send_system_chat("Not enough gold for expanded storage.", out);
+                return true;
+            }
+
+            // Load or initialise account-wide storage.
+            let mut storage = match self.store.load_account_storage(&account_id) {
+                Ok(Some(s)) => s,
+                Ok(None) => crystal_server_core::account::AccountStorage {
+                    slots: vec![None; 80],
+                    has_expanded_storage: false,
+                    expanded_storage_expiry_binary: 0,
+                },
+                Err(_) => {
+                    self.send_system_chat("Failed to load account storage.", out);
+                    return true;
+                }
+            };
+
+            // Expand the physical storage grid from 80 to 160 slots the first
+            // time this is purchased, mirroring AccountInfo.ExpandStorage.
+            const STORAGE_GRID_SIZE: usize = 80;
+            if storage.slots.len() == STORAGE_GRID_SIZE {
+                storage
+                    .slots
+                    .resize(STORAGE_GRID_SIZE.saturating_mul(2), None);
+            }
+
+            // Deduct gold and persist character stats.
+            stats.gold = stats.gold.saturating_sub(cost);
+            if let Err(_) = self
+                .store
+                .save_character_stats(&account_id, char_idx, &stats)
+            {
+                self.send_system_chat("Failed to save character stats.", out);
+                return true;
+            }
+            self.current_stats = Some(stats.clone());
+
+            // Compute new expiry: extend existing rental when still active,
+            // otherwise start from now, for a fixed 10-day period.
+            let now_ms = LoginConnection::now_millis();
+            let ten_days_ms: i64 = 10 * 24 * 60 * 60 * 1_000;
+
+            let old_expiry_ms = if storage.expanded_storage_expiry_binary > 0 {
+                LoginConnection::dotnet_binary_to_unix_ms(
+                    storage.expanded_storage_expiry_binary,
+                )
+            } else {
+                0
+            };
+
+            let new_expiry_ms = if old_expiry_ms > now_ms {
+                old_expiry_ms.saturating_add(ten_days_ms)
+            } else {
+                now_ms.saturating_add(ten_days_ms)
+            };
+
+            storage.has_expanded_storage = true;
+            storage.expanded_storage_expiry_binary =
+                LoginConnection::unix_ms_to_dotnet_binary(new_expiry_ms);
+
+            if let Err(_) = self
+                .store
+                .save_account_storage(&account_id, &storage)
+            {
+                self.send_system_chat("Failed to save account storage.", out);
+                return true;
+            }
+
+            // Inform the player of the new expiry date.
+            if let Some(dt) = chrono::Local
+                .timestamp_millis_opt(new_expiry_ms)
+                .single()
+            {
+                let msg = format!(
+                    "Expanded storage expires on {}",
+                    dt.format("%Y-%m-%d %H:%M:%S")
+                );
+                self.send_system_chat(&msg, out);
+            } else {
+                self.send_system_chat("Expanded storage rental extended.", out);
+            }
+
+            // Mirror C#: send a gold-loss packet followed by ResizeStorage.
+            let lose = SLoseGold { gold: cost as u32 };
+            if let Ok(raw) = lose.encode() {
+                out.push(LoginConnection::encode_raw(raw));
+            }
+
+            let resize = SResizeStorage {
+                size: storage.slots.len() as i32,
+                has_expanded_storage: storage.has_expanded_storage,
+                expiry_time_binary: storage.expanded_storage_expiry_binary,
+            };
+            if let Ok(raw) = resize.encode() {
+                out.push(LoginConnection::encode_raw(raw));
+            }
+
             return true;
         }
 

@@ -3438,6 +3438,7 @@ System_PersonObservingLoggedOff;Client;The person you was observing has logged o
 System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
 System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
 System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
+System_TargetTooFar;Client;Target is too far.;目标太远。
 TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
 ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
 TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。

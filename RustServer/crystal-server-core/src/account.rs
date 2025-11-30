@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::world::magic::UserMagic;
 use crate::item::{Inventory, Equipment};
 use crate::guild::GuildInfo;
+use crystal_shared_proto::item_types::UserItemData;
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -51,6 +52,22 @@ pub struct CharacterStats {
     pub experience: i64,
     pub gold: i64,
     pub credit: i64,
+}
+
+/// Account-wide item storage, mirroring the C# AccountInfo.Storage,
+/// HasExpandedStorage and ExpandedStorageExpiryDate fields. The slots vector
+/// contains the full set of storage cells for the account (including any
+/// expanded pages). This type is not serialized directly via serde; the DB
+/// layer uses a separate StoredAccountStorage helper that stores item bytes.
+#[derive(Clone, Debug)]
+pub struct AccountStorage {
+    pub slots: Vec<Option<UserItemData>>,
+    /// Whether the account currently has expanded storage beyond the base
+    /// StorageGridSize.
+    pub has_expanded_storage: bool,
+    /// Expanded storage expiry time stored as DateTime.ToBinary() ticks so it
+    /// can be forwarded directly to the legacy C# client.
+    pub expanded_storage_expiry_binary: i64,
 }
 
 /// Simplified persisted mail representation for a character, roughly
@@ -116,6 +133,20 @@ pub trait AccountStore: Send + Sync {
     /// same backing store as passwords and timestamps.
     fn load_account_status(&self, id: &str) -> Result<Option<AccountStatus>, StoreError>;
     fn save_account_status(&self, status: &AccountStatus) -> Result<(), StoreError>;
+
+    /// Load the account-wide item storage (personal warehouse) for the given
+    /// account. This mirrors the C# AccountInfo.Storage,
+    /// AccountInfo.HasExpandedStorage and AccountInfo.ExpandedStorageExpiryDate
+    /// fields. Returns Ok(None) when no storage has been created yet.
+    fn load_account_storage(&self, account_id: &str) -> Result<Option<AccountStorage>, StoreError>;
+
+    /// Persist the full account-wide item storage for the given account,
+    /// replacing any previously stored record.
+    fn save_account_storage(
+        &self,
+        account_id: &str,
+        storage: &AccountStorage,
+    ) -> Result<(), StoreError>;
 
     fn list_characters(&self, account_id: &str) -> Result<Vec<CharacterSummary>, StoreError>;
     fn create_character(

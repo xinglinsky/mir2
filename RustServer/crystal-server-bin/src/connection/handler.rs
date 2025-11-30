@@ -9,9 +9,10 @@ use crystal_shared_proto::guild::{
     CEditGuildNotice,
     CRequestGuildInfo,
     CGuildStorageGoldChange,
+    CGuildStorageItemChange,
 };
 use crystal_shared_proto::io::read_string;
-use crystal_shared_proto::item::CDropItem;
+use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem};
 use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
 use crystal_shared_proto::login::{
     CAddMember,
@@ -169,6 +170,16 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::MoveItem => {
                 if let Ok(msg) = CMoveItem::decode(&packet.payload) {
                     self.handle_move_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::StoreItem => {
+                if let Ok(msg) = CStoreItem::decode(&packet.payload) {
+                    self.handle_store_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::TakeBackItem => {
+                if let Ok(msg) = CTakeBackItem::decode(&packet.payload) {
+                    self.handle_take_back_item(msg, &mut out);
                 }
             }
             ClientPacketId::UseItem => {
@@ -330,14 +341,17 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::GuildStorageItemChange => {
-                tracing::debug!(
-                    "GuildStorageItemChange packet received but not implemented yet",
-                );
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "行会仓库物品变更功能尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                match CGuildStorageItemChange::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_guild_storage_item_change(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CGuildStorageItemChange from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
                 }
             }
             ClientPacketId::GuildWarReturn => {

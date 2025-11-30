@@ -46,5 +46,16 @@ impl LoginConnection {
         if self.handle_gm_chat(trimmed, out) {
             return;
         }
+
+        // Handle NPC-triggered extended storage rental from the Storage
+        // dialog. The C# client sends a chat message "@ADDSTORAGE" when the
+        // user clicks the Rent/Extend button; the C# server then handles this
+        // in PlayerObject.Chat under the ADDSTORAGE case. We mirror that by
+        // delegating to the same logic used by the /addstorage GM command.
+        if trimmed.eq_ignore_ascii_case("@ADDSTORAGE") {
+            // Reuse the existing /addstorage implementation in gm_commands.
+            let _ = self.handle_gm_chat("/addstorage", out);
+            return;
+        }
     }
 }

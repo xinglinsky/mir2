@@ -13,7 +13,7 @@ use crystal_shared_proto::login::{
     CChangeAMode,
 };
 use crystal_shared_proto::map::SMapChanged;
-use crystal_shared_proto::magic::{SMagicCast, SMagicDelay, SObjectEffect, SObjectMagic, SObjectSpell};
+use crystal_shared_proto::magic::{SMagic, SMagicCast, SMagicDelay, SObjectEffect, SObjectMagic, SObjectSpell};
 use crystal_shared_proto::scene::{
     SObjectAttack,
     SObjectRun,
@@ -341,21 +341,24 @@ impl LoginConnection {
                         target_y,
                         cast: true,
                         level,
-                        self_broadcast: true,
+                        // Mirror the C# behaviour for player-cast spells
+                        // where the local client is responsible for playing
+                        // its own spell animation. When SelfBroadcast is
+                        // false, the C# client ignores S.ObjectMagic for the
+                        // UserObject but still processes it for other
+                        // viewers. This prevents the caster from seeing a
+                        // duplicated spell-cast animation while nearby
+                        // players still see the effect.
+                        self_broadcast: false,
                         secondary_target_ids: Vec::new(),
                     };
                     if let Ok(raw) = pkt.encode() {
                         let bytes = Self::encode_raw(raw);
 
-                        // Deliver the spell animation to the caster as well
-                        // as to other players in range. The client will use
-                        // this to drive SoulFireBall/FireBall-style
-                        // projectile animations and to update local
-                        // ClientMagic.CastTime.
-                        if session_id == self.session_id {
-                            out.push(bytes.clone());
-                        }
-
+                        // Only broadcast to other sessions in range; the
+                        // caster already enqueues a local MirAction.Spell via
+                        // input handling, so sending S.ObjectMagic back to
+                        // them would cause a second, duplicate animation.
                         self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
@@ -571,6 +574,31 @@ impl LoginConnection {
                             if let Ok(raw) = pkt.encode() {
                                 out.push(Self::encode_raw(raw));
                             }
+                        }
+                    }
+                }
+                world::WorldEvent::Magic {
+                    session_id,
+                    spell_id,
+                    target_id,
+                    x,
+                    y,
+                    cast,
+                    level,
+                    secondary_target_ids,
+                } => {
+                    if session_id == self.session_id {
+                        let pkt = SMagic {
+                            spell: spell_id,
+                            target_id,
+                            target_x: x,
+                            target_y: y,
+                            cast,
+                            level,
+                            secondary_target_ids,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
                         }
                     }
                 }

@@ -8,6 +8,7 @@ use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
 use crystal_server_core::world::WorldProvider;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
 use crystal_shared_proto::io::write_bool;
+use crystal_shared_proto::item::SResizeStorage;
 use crystal_shared_proto::login::{CKeepAlive, SKeepAlive};
 use crystal_shared_proto::packet::RawPacket;
 use crystal_shared_proto::scene::{SMagicLeveled, SNewMagic};
@@ -56,6 +57,7 @@ impl LoginConnection {
             known_monsters: HashSet::new(),
             known_npcs: HashSet::new(),
             known_players: HashSet::new(),
+            current_storage_npc_id: None,
             player_summaries,
             outboxes,
             active_connections,
@@ -231,6 +233,46 @@ impl LoginConnection {
         let resp = SKeepAlive { time: msg.time };
         if let Ok(raw) = resp.encode() {
             out.push(Self::encode_raw(raw));
+        }
+
+        // Mirror C# PlayerObject.Process behaviour for expanded storage
+        // expiry: if the rental has expired while the player is online,
+        // clear HasExpandedStorage and notify the client via ResizeStorage.
+        if self.stage == Stage::InGame {
+            if let Some(ref account_id) = self.account_id {
+                if let Ok(Some(mut storage)) = self.store.load_account_storage(account_id) {
+                    if storage.has_expanded_storage
+                        && storage.expanded_storage_expiry_binary > 0
+                    {
+                        let expiry_ms =
+                            super::LoginConnection::dotnet_binary_to_unix_ms(
+                                storage.expanded_storage_expiry_binary,
+                            );
+                        let now_ms = super::LoginConnection::now_millis();
+                        if expiry_ms > 0 && now_ms > expiry_ms {
+                            storage.has_expanded_storage = false;
+                            let _ = self
+                                .store
+                                .save_account_storage(account_id, &storage);
+
+                            self.send_system_chat(
+                                "Expanded storage has expired.",
+                                out,
+                            );
+
+                            let resize = SResizeStorage {
+                                size: storage.slots.len() as i32,
+                                has_expanded_storage: storage.has_expanded_storage,
+                                expiry_time_binary: storage
+                                    .expanded_storage_expiry_binary,
+                            };
+                            if let Ok(raw) = resize.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

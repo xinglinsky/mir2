@@ -52,6 +52,7 @@ pub struct PlayerState {
     pub attack_mode: u8,
     /// Per-player GameShop purchase counts keyed by GameShopItem GIndex.
     pub gs_purchases: HashMap<i32, i32>,
+    pub npc_data: HashMap<String, String>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -146,6 +147,7 @@ impl<P: WorldProvider> World<P> {
                     next_pk_decay_ms: 0,
                     attack_mode: 5,
                     gs_purchases: HashMap::new(),
+                    npc_data: HashMap::new(),
                 }
             });
 
@@ -185,6 +187,18 @@ impl<P: WorldProvider> World<P> {
 
     pub fn player_guild_name(&self, session_id: SessionId) -> Option<String> {
         self.players.get(&session_id).map(|p| p.guild_name.clone())
+    }
+
+    pub fn set_player_npc_data(&mut self, session_id: SessionId, key: &str, value: String) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.npc_data.insert(key.to_string(), value);
+        }
+    }
+
+    pub fn get_player_npc_data(&self, session_id: SessionId, key: &str) -> Option<String> {
+        self.players
+            .get(&session_id)
+            .and_then(|p| p.npc_data.get(key).cloned())
     }
 
     pub fn set_player_attack_mode(&mut self, session_id: SessionId, mode: u8) {

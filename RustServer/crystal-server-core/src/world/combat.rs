@@ -42,6 +42,7 @@ use crate::world::skills::taoist::{
     cast_soul_shield,
     cast_summon_holy_deva,
     cast_summon_shinsu,
+    cast_summon_skeleton,
 };
 use crate::world::types::{AttackMode, BuffType};
 use crate::world::Spell;
@@ -154,7 +155,7 @@ impl<P: WorldProvider> World<P> {
         session_id: SessionId,
         spell: u8,
         direction: u8,
-        _target_id: u32,
+        target_id: u32,
         x: i32,
         y: i32,
         events: &mut Vec<WorldEvent>,
@@ -238,8 +239,18 @@ impl<P: WorldProvider> World<P> {
             // Route wizard single-target attack spells (FireBall, GreatFireBall,
             // ThunderBolt, SoulFireBall, etc.) through the unified attack
             // pipeline so that MP cost, damage, skill training and visual
-            // effects are handled consistently.
-            self.handle_attack_command(session_id, direction, spell, events);
+            // effects are handled consistently. For these spells we honour the
+            // client-provided target first, falling back to directional scan
+            // when necessary.
+            self.handle_attack_command(
+                session_id,
+                direction,
+                spell,
+                target_id,
+                x,
+                y,
+                events,
+            );
             return;
         }
 
@@ -278,6 +289,11 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if spell == Spell::SummonSkeleton as u8 {
+            cast_summon_skeleton(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
         if spell == Spell::SummonShinsu as u8 {
             cast_summon_shinsu(self, session_id, spell, direction, x, y, events);
             return;
@@ -309,6 +325,9 @@ impl<P: WorldProvider> World<P> {
         session_id: SessionId,
         direction: u8,
         spell: u8,
+        packet_target_id: u32,
+        packet_target_x: i32,
+        packet_target_y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
         let (
@@ -746,9 +765,13 @@ impl<P: WorldProvider> World<P> {
         let target_info = match self.monsters.get(&map_index) {
             Some(monsters) => {
                 if is_pure_magic_attack(effective_spell) {
-                    // For pure magic attack spells (e.g. FireBall, SoulFireBall)
-                    // scan forward along the attack direction up to the spell
-                    // range and select the first monster encountered.
+                    // For pure magic attack spells (e.g. FireBall, SoulFireBall,
+                    // ThunderBolt), first try to honour the explicit
+                    // client-provided target (ID / location) and only fall
+                    // back to a directional scan when no suitable monster is
+                    // found. This mirrors the C# HumanObject.Fireball /
+                    // ThunderBolt behaviour where Magic.Target is preferred
+                    // over nearest-in-front.
                     let max_range: i32 = self
                         .provider
                         .get_magic_info(effective_spell)
@@ -769,15 +792,51 @@ impl<P: WorldProvider> World<P> {
                         .max(1);
 
                     let mut found: Option<(u64, i32, i32, i32)> = None;
-                    for step in 1..=max_range {
-                        let tx = x + dx * step;
-                        let ty = y + dy * step;
+
+                    // 1) Try explicit monster ID from the packet when present.
+                    if packet_target_id != 0 {
                         if let Some(m) = monsters
                             .iter()
-                            .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                            .find(|m| m.hp > 0 && m.id == packet_target_id as u64)
                         {
-                            found = Some((m.id, m.monster_index, tx, ty));
-                            break;
+                            let dx_t = m.x - x;
+                            let dy_t = m.y - y;
+                            if dx_t.abs().max(dy_t.abs()) <= max_range {
+                                found = Some((m.id, m.monster_index, m.x, m.y));
+                            }
+                        }
+                    }
+
+                    // 2) If no ID match, try the explicit location from the
+                    // packet to pick a monster standing exactly on that tile.
+                    if found.is_none() && (packet_target_x != 0 || packet_target_y != 0) {
+                        if let Some(m) = monsters
+                            .iter()
+                            .find(|m| m.hp > 0 && m.x == packet_target_x && m.y == packet_target_y)
+                        {
+                            let dx_t = m.x - x;
+                            let dy_t = m.y - y;
+                            if dx_t.abs().max(dy_t.abs()) <= max_range {
+                                found = Some((m.id, m.monster_index, m.x, m.y));
+                            }
+                        }
+                    }
+
+                    // 3) Fallback: scan forward along the attack direction up
+                    // to the spell range and select the first monster
+                    // encountered, preserving the original behaviour when no
+                    // explicit target is usable.
+                    if found.is_none() {
+                        for step in 1..=max_range {
+                            let tx = x + dx * step;
+                            let ty = y + dy * step;
+                            if let Some(m) = monsters
+                                .iter()
+                                .find(|m| m.hp > 0 && m.x == tx && m.y == ty)
+                            {
+                                found = Some((m.id, m.monster_index, tx, ty));
+                                break;
+                            }
                         }
                     }
 
@@ -899,6 +958,23 @@ impl<P: WorldProvider> World<P> {
                     target_id: id as u32,
                     target_x,
                     target_y,
+                });
+
+                // And notify the caster about the cast using a Magic event,
+                // mirroring C# S.Magic. The legacy client uses this to set
+                // User.Spell/User.Cast/TargetID/TargetPoint and then, when the
+                // MirAction.Spell animation completes, spawn the correct
+                // projectile and hit effects (e.g. FireBall explosion,
+                // ThunderBolt lightning on the target).
+                events.push(WorldEvent::Magic {
+                    session_id,
+                    spell_id: effective_spell,
+                    target_id: id as u32,
+                    x: target_x,
+                    y: target_y,
+                    cast: true,
+                    level,
+                    secondary_target_ids: Vec::new(),
                 });
             }
 

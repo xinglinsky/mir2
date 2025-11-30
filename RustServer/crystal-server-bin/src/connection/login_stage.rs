@@ -66,6 +66,24 @@ impl LoginConnection {
         }
     }
 
+    /// Convert a .NET DateTime.ToBinary()-style tick value back into a Unix
+    /// timestamp in milliseconds, approximately mirroring the inverse of
+    /// unix_ms_to_dotnet_binary. This treats the incoming ticks as local
+    /// time (matching the original C# server's use of Envir.Now).
+    pub(crate) fn dotnet_binary_to_unix_ms(bin: i64) -> i64 {
+        if bin <= 0 {
+            0
+        } else {
+            const DOTNET_TICKS_AT_UNIX_EPOCH: i64 = 621_355_968_000_000_000;
+            let local_ms = bin
+                .saturating_sub(DOTNET_TICKS_AT_UNIX_EPOCH)
+                .saturating_div(10_000);
+
+            let offset_secs = Local::now().offset().local_minus_utc() as i64;
+            local_ms.saturating_sub(offset_secs.saturating_mul(1_000))
+        }
+    }
+
     pub(crate) fn handle_new_account(
         &mut self,
         msg: CNewAccount,

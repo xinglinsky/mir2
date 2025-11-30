@@ -193,6 +193,28 @@ impl SNpcSell {
 }
 
 #[derive(Clone, Debug)]
+pub struct SNpcStorage;
+
+impl SNpcStorage {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ServerPacketId::NPCStorage as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "SNpcStorage payload must be empty",
+            ));
+        }
+        Ok(SNpcStorage)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SNpcRepair {
     pub rate: f32,
 }

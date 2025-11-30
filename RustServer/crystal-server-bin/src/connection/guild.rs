@@ -5,9 +5,12 @@ use crystal_shared_proto::guild::{
     SGuildNoticeChange,
     SGuildExpGain,
     SGuildStorageGoldChange,
+    SGuildStorageItemChange,
+    SGuildStorageList,
     CRequestGuildInfo,
     CEditGuildNotice,
     CGuildStorageGoldChange,
+    CGuildStorageItemChange,
 };
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_i64_le, write_string};
 use crystal_shared_proto::login::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
@@ -17,7 +20,7 @@ use crystal_shared_proto::scene::{
     SLoseGold,
 };
 use crystal_server_core::guild::{GuildInfo as CoreGuildInfo, GuildRank as CoreGuildRank};
-use crystal_server_core::world::world::{GuildGoldChangeError, GuildJoinError, SessionId};
+use crystal_server_core::world::world::{GuildGoldChangeError, GuildJoinError, GuildStorageError, SessionId};
 use crystal_server_core::world::configs::guild_settings;
 
 use super::{LoginConnection, Stage};
@@ -25,6 +28,8 @@ use super::{LoginConnection, Stage};
 impl LoginConnection {
     const GUILD_RANK_OPT_CAN_CHANGE_RANK: u8 = 1;
     const GUILD_RANK_OPT_CAN_CHANGE_NOTICE: u8 = 64;
+    const GUILD_RANK_OPT_CAN_STORE_ITEM: u8 = 8;
+    const GUILD_RANK_OPT_CAN_RETRIEVE_ITEM: u8 = 16;
     /// Build a GuildRank/GuildMember list based on the persisted GuildInfo
     /// stored in the world, including offline members when ranks have been
     /// populated (e.g. from a migrated C# database). Returns None if the
@@ -127,6 +132,443 @@ impl LoginConnection {
         }
     }
 
+    /// Handle guild storage item changes (store/retrieve/move/list) initiated
+    /// by the client. This mirrors the C# PlayerObject.GuildStorageItemChange
+    /// logic for Type 0 (store), 1 (retrieve), 2 (move) and 3 (request list),
+    /// including safe-zone and rank permission checks.
+    pub(crate) fn handle_guild_storage_item_change(
+        &mut self,
+        msg: CGuildStorageItemChange,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let (guild_name, _player_name) = {
+            let map = self.player_summaries.lock().unwrap();
+            match map.get(&self.session_id) {
+                Some(v) => (v.guild_name.clone(), v.name.clone()),
+                None => (String::new(), String::new()),
+            }
+        };
+
+        let base_type = msg.change_type;
+        let from_slot = msg.from_slot;
+        let to_slot = msg.to_slot;
+
+        let user_id_i32 = self.current_char_index.unwrap_or(0);
+
+        // Helper: send a single revert packet back to the caller using
+        // Type = 3 + base_type and no item payload, mirroring the C#
+        // GuildStorageItemChange error behaviour.
+        let send_revert = |_conn: &mut LoginConnection, out: &mut Vec<Vec<u8>>| {
+            let pkt = SGuildStorageItemChange {
+                user: user_id_i32,
+                change_type: base_type.saturating_add(3),
+                to_slot,
+                from_slot,
+                item_user_id: None,
+                item_bytes: Vec::new(),
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        };
+
+        if guild_name.is_empty() {
+            send_revert(self, out);
+            self.send_system_chat("You are not part of a guild.", out);
+            return;
+        }
+
+        // Enforce safe-zone restriction for guild storage usage for
+        // store/retrieve/move. The list request (type 3) is allowed outside
+        // safe zones, mirroring the C# behaviour.
+        if base_type != 3 {
+            let in_safe_zone = {
+                let world = self.world.lock().unwrap();
+                world.player_in_safe_zone(self.session_id)
+            };
+            if !in_safe_zone {
+                send_revert(self, out);
+                self.send_system_chat(
+                    "You cannot use guild storage outside safezones.",
+                    out,
+                );
+                return;
+            }
+        }
+
+        match base_type {
+            // Type 0: store item from player inventory into guild storage.
+            0 => {
+                let (_rank_index, options) = match self
+                    .get_kicker_rank_index_and_options(&guild_name)
+                {
+                    Some(v) => v,
+                    None => {
+                        send_revert(self, out);
+                        self.send_system_chat(
+                            "Guild data not found for item operation.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                if options & Self::GUILD_RANK_OPT_CAN_STORE_ITEM == 0 {
+                    send_revert(self, out);
+                    self.send_system_chat(
+                        "You do not have permission to store items in guild storage.",
+                        out,
+                    );
+                    return;
+                }
+
+                if from_slot < 0 || to_slot < 0 {
+                    send_revert(self, out);
+                    return;
+                }
+                let from_idx = from_slot as usize;
+                let to_idx = to_slot as usize;
+
+                // Snapshot inventory/equipment so we can update it after the
+                // guild storage operation succeeds.
+                let (mut inv, eq) = {
+                    let world = self.world.lock().unwrap();
+                    world
+                        .player_items(self.session_id)
+                        .unwrap_or((
+                            crystal_server_core::item::Inventory::new_default(),
+                            crystal_server_core::item::Equipment::new_default(),
+                        ))
+                };
+
+                if from_idx >= inv.slots.len() {
+                    send_revert(self, out);
+                    return;
+                }
+
+                let item = match inv.slots[from_idx].as_ref() {
+                    Some(it) => it.clone(),
+                    None => {
+                        send_revert(self, out);
+                        return;
+                    }
+                };
+
+                let guild_result = {
+                    let mut world = self.world.lock().unwrap();
+                    world.guild_storage_store_item(
+                        &guild_name,
+                        to_idx,
+                        item.clone(),
+                        user_id_i32 as i64,
+                    )
+                };
+
+                let updated_guild = match guild_result {
+                    Ok(g) => g,
+                    Err(GuildStorageError::GuildNotFound) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild not found.", out);
+                        return;
+                    }
+                    Err(GuildStorageError::SlotOccupied) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Target slot not empty.", out);
+                        return;
+                    }
+                    Err(
+                        GuildStorageError::InvalidSlot
+                        | GuildStorageError::SlotEmpty
+                        | GuildStorageError::ItemBound,
+                    ) => {
+                        // Silent failure like the C# implementation for most
+                        // validation errors.
+                        send_revert(self, out);
+                        return;
+                    }
+                    Err(GuildStorageError::EncodingFailed | GuildStorageError::DecodingFailed) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild storage operation failed.", out);
+                        return;
+                    }
+                };
+
+                // Persist updated guild snapshot.
+                let _ = self.store.save_guild(&updated_guild);
+
+                // Remove the item from the player's inventory and push the
+                // new state back into the world.
+                inv.slots[from_idx] = None;
+                {
+                    let mut world = self.world.lock().unwrap();
+                    world.set_player_items(self.session_id, inv.clone(), eq.clone());
+                }
+
+                // Build the success packet using the stored item snapshot.
+                let storage_item = match updated_guild
+                    .stored_items
+                    .get(to_idx)
+                    .and_then(|o| o.as_ref())
+                    .cloned()
+                {
+                    Some(it) => it,
+                    None => {
+                        return;
+                    }
+                };
+
+                let pkt = SGuildStorageItemChange {
+                    user: user_id_i32,
+                    change_type: 0,
+                    to_slot,
+                    from_slot,
+                    item_user_id: Some(storage_item.user_id),
+                    item_bytes: storage_item.item_bytes.clone(),
+                };
+
+                self.broadcast_guild_storage_item_change(&guild_name, &pkt);
+            }
+            // Type 1: retrieve item from guild storage into player inventory.
+            1 => {
+                let (_rank_index, options) = match self
+                    .get_kicker_rank_index_and_options(&guild_name)
+                {
+                    Some(v) => v,
+                    None => {
+                        self.send_system_chat(
+                            "Guild data not found for item operation.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                if options & Self::GUILD_RANK_OPT_CAN_RETRIEVE_ITEM == 0 {
+                    self.send_system_chat(
+                        "You do not have permission to retrieve items from guild storage.",
+                        out,
+                    );
+                    return;
+                }
+
+                if from_slot < 0 || to_slot < 0 {
+                    send_revert(self, out);
+                    return;
+                }
+                let from_idx = from_slot as usize;
+                let to_idx = to_slot as usize;
+
+                let (mut inv, eq) = {
+                    let world = self.world.lock().unwrap();
+                    world
+                        .player_items(self.session_id)
+                        .unwrap_or((
+                            crystal_server_core::item::Inventory::new_default(),
+                            crystal_server_core::item::Equipment::new_default(),
+                        ))
+                };
+
+                if to_idx >= inv.slots.len() {
+                    send_revert(self, out);
+                    return;
+                }
+
+                if inv.slots[to_idx].is_some() {
+                    send_revert(self, out);
+                    self.send_system_chat("Target slot not empty.", out);
+                    return;
+                }
+
+                let guild_result = {
+                    let mut world = self.world.lock().unwrap();
+                    world.guild_storage_retrieve_item(&guild_name, from_idx)
+                };
+
+                let (updated_guild, item) = match guild_result {
+                    Ok(v) => v,
+                    Err(GuildStorageError::GuildNotFound) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild not found.", out);
+                        return;
+                    }
+                    Err(
+                        GuildStorageError::InvalidSlot
+                        | GuildStorageError::SlotEmpty
+                        | GuildStorageError::ItemBound,
+                    ) => {
+                        send_revert(self, out);
+                        return;
+                    }
+                    Err(GuildStorageError::SlotOccupied) => {
+                        // Not expected on retrieve path.
+                        send_revert(self, out);
+                        return;
+                    }
+                    Err(GuildStorageError::EncodingFailed | GuildStorageError::DecodingFailed) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild storage operation failed.", out);
+                        return;
+                    }
+                };
+
+                let _ = self.store.save_guild(&updated_guild);
+
+                inv.slots[to_idx] = Some(item.clone());
+                {
+                    let mut world = self.world.lock().unwrap();
+                    world.set_player_items(self.session_id, inv.clone(), eq.clone());
+                }
+
+                let pkt = SGuildStorageItemChange {
+                    user: user_id_i32,
+                    change_type: 1,
+                    to_slot,
+                    from_slot,
+                    item_user_id: None,
+                    item_bytes: Vec::new(),
+                };
+
+                self.broadcast_guild_storage_item_change(&guild_name, &pkt);
+            }
+            // Type 2: move or swap items within guild storage.
+            2 => {
+                let (_rank_index, options) = match self
+                    .get_kicker_rank_index_and_options(&guild_name)
+                {
+                    Some(v) => v,
+                    None => {
+                        send_revert(self, out);
+                        self.send_system_chat(
+                            "Guild data not found for item operation.",
+                            out,
+                        );
+                        return;
+                    }
+                };
+
+                if options & Self::GUILD_RANK_OPT_CAN_STORE_ITEM == 0 {
+                    send_revert(self, out);
+                    self.send_system_chat(
+                        "You do not have permission to move items in guild storage.",
+                        out,
+                    );
+                    return;
+                }
+
+                if from_slot < 0 || to_slot < 0 {
+                    send_revert(self, out);
+                    return;
+                }
+                let from_idx = from_slot as usize;
+                let to_idx = to_slot as usize;
+
+                let guild_result = {
+                    let mut world = self.world.lock().unwrap();
+                    world.guild_storage_move_item(&guild_name, from_idx, to_idx)
+                };
+
+                let updated_guild = match guild_result {
+                    Ok(g) => g,
+                    Err(GuildStorageError::GuildNotFound) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild not found.", out);
+                        return;
+                    }
+                    Err(
+                        GuildStorageError::InvalidSlot
+                        | GuildStorageError::SlotEmpty
+                        | GuildStorageError::ItemBound,
+                    ) => {
+                        send_revert(self, out);
+                        return;
+                    }
+                    Err(
+                        GuildStorageError::SlotOccupied
+                        | GuildStorageError::EncodingFailed
+                        | GuildStorageError::DecodingFailed,
+                    ) => {
+                        send_revert(self, out);
+                        self.send_system_chat("Guild storage operation failed.", out);
+                        return;
+                    }
+                };
+
+                let _ = self.store.save_guild(&updated_guild);
+
+                let storage_item = match updated_guild
+                    .stored_items
+                    .get(to_idx)
+                    .and_then(|o| o.as_ref())
+                    .cloned()
+                {
+                    Some(it) => it,
+                    None => {
+                        return;
+                    }
+                };
+
+                let pkt = SGuildStorageItemChange {
+                    user: user_id_i32,
+                    change_type: 2,
+                    to_slot,
+                    from_slot,
+                    item_user_id: Some(storage_item.user_id),
+                    item_bytes: storage_item.item_bytes.clone(),
+                };
+
+                self.broadcast_guild_storage_item_change(&guild_name, &pkt);
+            }
+            // Type 3: request full guild storage list.
+            3 => {
+                let items = {
+                    let mut world = self.world.lock().unwrap();
+                    match world.guild_storage_list(&guild_name) {
+                        Ok(v) => v,
+                        Err(GuildStorageError::GuildNotFound) => {
+                            self.send_system_chat("Guild not found.", out);
+                            return;
+                        }
+                        Err(_) => {
+                            self.send_system_chat(
+                                "Guild storage list operation failed.",
+                                out,
+                            );
+                            return;
+                        }
+                    }
+                };
+
+                let mut buf = Vec::new();
+                let _ = write_i32_le(&mut buf, items.len() as i32);
+
+                for slot in items {
+                    match slot {
+                        None => {
+                            let _ = write_bool(&mut buf, false);
+                        }
+                        Some(storage_item) => {
+                            let _ = write_bool(&mut buf, true);
+                            // GuildStorageItem.Save: Item.Save then UserId.
+                            buf.extend_from_slice(&storage_item.item_bytes);
+                            let _ = write_i64_le(&mut buf, storage_item.user_id);
+                        }
+                    }
+                }
+
+                let pkt = SGuildStorageList { items_bytes: buf };
+                let raw = pkt.encode();
+                out.push(Self::encode_raw(raw));
+            }
+            _ => {
+                // Unknown change type; ignore for now.
+            }
+        }
+    }
+
     /// Broadcast a GuildExpGain packet to all online members of the
     /// specified guild. This mirrors the non-level-up branch of C#
     /// GuildObject.GainExp where GuildExpGain is sent periodically while the
@@ -134,6 +576,29 @@ impl LoginConnection {
     pub(crate) fn broadcast_guild_exp_gain(&self, guild_name: &str, amount: u32) {
         let pkt = SGuildExpGain { amount };
 
+        let Ok(raw) = pkt.encode() else {
+            return;
+        };
+        let encoded = Self::encode_raw(raw);
+
+        let summaries = self.player_summaries.lock().unwrap();
+        let mut outboxes = self.outboxes.lock().unwrap();
+
+        for (sid, v) in summaries.iter() {
+            if v.guild_name.eq_ignore_ascii_case(guild_name) {
+                outboxes.entry(*sid).or_default().push(encoded.clone());
+            }
+        }
+    }
+
+    /// Broadcast a GuildStorageItemChange packet to all online members of the
+    /// specified guild. This mirrors the C# GuildObject.GuildStorageItemChange
+    /// behaviour where all members see who stored/retrieved/moved which item.
+    fn broadcast_guild_storage_item_change(
+        &self,
+        guild_name: &str,
+        pkt: &SGuildStorageItemChange,
+    ) {
         let Ok(raw) = pkt.encode() else {
             return;
         };

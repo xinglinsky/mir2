@@ -10,6 +10,7 @@ use chrono::Utc;
 use crystal_server_core::account::{
     AccountStatus,
     AccountStore,
+    AccountStorage,
     StoreError,
     CharacterSummary,
     CharacterStats,
@@ -33,6 +34,13 @@ pub struct SqliteAccountStore {
 struct StoredItems {
     inventory: Vec<Option<Vec<u8>>>,
     equipment: Vec<Option<Vec<u8>>>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredAccountStorage {
+    slots: Vec<Option<Vec<u8>>>,
+    has_expanded_storage: bool,
+    expanded_storage_expiry_binary: i64,
 }
 
 impl SqliteAccountStore {
@@ -229,6 +237,12 @@ impl SqliteAccountStore {
                     name        TEXT NOT NULL UNIQUE,
                     data_json   TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS account_storage (
+                    account_id   TEXT PRIMARY KEY,
+                    storage_json TEXT NOT NULL,
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
                 "#,
             ))?;
             let _ = conn.execute(
@@ -254,6 +268,57 @@ impl SqliteAccountStore {
             Ok(())
         })
     }
+
+    fn load_account_storage_inner(&self, account_id: &str) -> Result<Option<AccountStorage>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT storage_json FROM account_storage WHERE account_id = ?1 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query([account_id]))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let stored: StoredAccountStorage = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+                let slots = decode_item_slots(stored.slots)
+                    .map_err(StoreError::Io)?;
+
+                Ok(Some(AccountStorage {
+                    slots,
+                    has_expanded_storage: stored.has_expanded_storage,
+                    expanded_storage_expiry_binary: stored.expanded_storage_expiry_binary,
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_account_storage_inner(
+        &self,
+        account_id: &str,
+        storage: &AccountStorage,
+    ) -> Result<(), StoreError> {
+        let stored = StoredAccountStorage {
+            slots: encode_item_slots(&storage.slots)
+                .map_err(StoreError::Io)?,
+            has_expanded_storage: storage.has_expanded_storage,
+            expanded_storage_expiry_binary: storage.expanded_storage_expiry_binary,
+        };
+
+        let json = serde_json::to_string(&stored)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO account_storage (account_id, storage_json)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(account_id) DO UPDATE SET storage_json = excluded.storage_json",
+                (account_id, &json),
+            ))?;
+            Ok(())
+        })
+    }
 }
 
 impl AccountStore for SqliteAccountStore {
@@ -276,6 +341,18 @@ impl AccountStore for SqliteAccountStore {
             ))?;
             Ok(())
         })
+    }
+
+    fn load_account_storage(&self, account_id: &str) -> Result<Option<AccountStorage>, StoreError> {
+        self.load_account_storage_inner(account_id)
+    }
+
+    fn save_account_storage(
+        &self,
+        account_id: &str,
+        storage: &AccountStorage,
+    ) -> Result<(), StoreError> {
+        self.save_account_storage_inner(account_id, storage)
     }
 
     fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError> {
@@ -1202,6 +1279,20 @@ impl AccountStore for AsyncAccountStore {
     fn create_account(&self, id: &str, password: &str) -> Result<(), StoreError> {
         let inner = self.sync_store();
         AccountStore::create_account(&inner, id, password)
+    }
+
+    fn load_account_storage(&self, account_id: &str) -> Result<Option<AccountStorage>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_account_storage(&inner, account_id)
+    }
+
+    fn save_account_storage(
+        &self,
+        account_id: &str,
+        storage: &AccountStorage,
+    ) -> Result<(), StoreError> {
+        let inner = self.sync_store();
+        AccountStore::save_account_storage(&inner, account_id, storage)
     }
 
     fn verify_password(&self, id: &str, password: &str) -> Result<bool, StoreError> {

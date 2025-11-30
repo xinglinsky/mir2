@@ -7,6 +7,7 @@ use crystal_shared_proto::scene::{
     SObjectNpc,
     SObjectRemove,
 };
+use tracing::debug;
 use crystal_shared_proto::user::SObjectPlayer;
 
 use super::LoginConnection;
@@ -98,6 +99,17 @@ impl LoginConnection {
 
             if !self.known_monsters.contains(&monster.id) {
                 if let Some(info) = self.world_db.get_monster_info(monster.monster_index) {
+                    debug!(
+                        "update_visibility: session_id={} new monster id={} index={} name={} is_pet={} map={} pos=({}, {})",
+                        self.session_id,
+                        monster.id,
+                        monster.monster_index,
+                        info.name,
+                        monster.is_pet,
+                        map_index,
+                        monster.x,
+                        monster.y
+                    );
                     let packet = SObjectMonster {
                         object_id: monster.id as u32,
                         name: info.name.clone(),

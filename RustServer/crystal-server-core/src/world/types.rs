@@ -323,6 +323,7 @@ pub enum PetKind {
     ArcherVampire = 2,
     ArcherToad = 3,
     ArcherSnakes = 4,
+    TaoistSkeleton = 5,
 }
 
 impl PetKind {
@@ -333,6 +334,7 @@ impl PetKind {
             2 => Some(PetKind::ArcherVampire),
             3 => Some(PetKind::ArcherToad),
             4 => Some(PetKind::ArcherSnakes),
+            5 => Some(PetKind::TaoistSkeleton),
             _ => None,
         }
     }

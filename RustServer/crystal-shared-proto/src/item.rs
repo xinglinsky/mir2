@@ -253,6 +253,62 @@ impl SSellItem {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SStoreItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SStoreItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::StoreItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SStoreItem { from, to, success })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct STakeBackItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl STakeBackItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::TakeBackItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(STakeBackItem { from, to, success })
+    }
+}
+
 impl SNewItemInfo {
     pub fn decode_item_info(&self) -> io::Result<ItemInfoData> {
         ItemInfoData::decode_from_bytes(&self.info_bytes)

@@ -65,6 +65,10 @@ pub(crate) struct LoginConnection {
     pub(crate) known_monsters: HashSet<u64>,
     pub(crate) known_npcs: HashSet<i32>,
     pub(crate) known_players: HashSet<world::SessionId>,
+    /// NPC index (as sent in CCallNPC.object_id) for which the storage page
+    /// is currently open, if any. Used to validate StoreItem/TakeBackItem
+    /// requests similarly to C# PlayerObject.NPCPage/NPCObjectID.
+    pub(crate) current_storage_npc_id: Option<u32>,
     pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
     pub(crate) outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
     pub(crate) active_connections: Arc<AtomicU32>,
