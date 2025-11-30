@@ -4,6 +4,7 @@ use crate::world::provider::WorldProvider;
 use crate::world::types::PetKind;
 use crate::world::configs::pet_template;
 use crate::world::{SessionId, World, WorldEvent};
+use tracing::debug;
 
 impl<P: WorldProvider> World<P> {
     /// Pet-specific AI: summoned pets stay near their owner and automatically
@@ -69,10 +70,31 @@ impl<P: WorldProvider> World<P> {
         // visible (ObjectShow) and allowed to attack using a special
         // InAttackRange pattern.
         if pet_kind == PetKind::TaoistShinsu {
-            // Compute the best target within the Shinsu InAttackRange shape:
+            let follow_distance = template.follow_distance.max(1);
+            let leash_distance = template.leash_distance.max(follow_distance);
+
+            // debug!(
+            //     "pet_ai_shinsu_tick: pet_id={} map={} pos=({}, {}) owner=({}, {}) special_mode={} until_ms={} now_ms={}",
+            //     monster.id,
+            //     map_index,
+            //     monster.x,
+            //     monster.y,
+            //     owner_x,
+            //     owner_y,
+            //     monster.special_mode,
+            //     monster.special_mode_until_ms,
+            //     now_ms,
+            // );
+
+            // Separate targets for attack vs. chase. Attack candidates must be
+            // inside the Shinsu InAttackRange shape, while chase candidates
+            // only need to be within leash distance so Shinsu will move toward
+            // nearby threats.
+            // InAttackRange pattern from C#:
             //   if (x > 2 || y > 2) return false;
             //   return (x <= 1 && y <= 1) || (x == y || x % 2 == y % 2);
-            let mut best: Option<(u64, i32, i32, i32, i32, i32, i32)> = None;
+            let mut best_attack: Option<(u64, i32, i32, i32, i32, i32)> = None;
+            let mut best_chase: Option<(i32, i32, i32)> = None;
 
             for &(tid, t_index, tx, ty) in hostile_monsters {
                 let dx = tx - monster.x;
@@ -83,25 +105,44 @@ impl<P: WorldProvider> World<P> {
                 if ax == 0 && ay == 0 {
                     continue;
                 }
-                if ax > 2 || ay > 2 {
-                    continue;
-                }
-
-                if !((ax <= 1 && ay <= 1) || (ax == ay || (ax % 2 == ay % 2))) {
-                    continue;
-                }
 
                 let dist = ax.max(ay);
-                match best {
-                    None => best = Some((tid, t_index, tx, ty, dx, dy, dist)),
-                    Some((_, _, _, _, _, _, best_dist)) if dist < best_dist => {
-                        best = Some((tid, t_index, tx, ty, dx, dy, dist));
+
+                // Attack candidate: inside the Shinsu attack pattern.
+                if ax <= 2
+                    && ay <= 2
+                    && ((ax <= 1 && ay <= 1) || (ax == ay || (ax % 2 == ay % 2)))
+                {
+                    match best_attack {
+                        None => best_attack = Some((tid, t_index, tx, ty, dx, dy)),
+                        Some((_, _, _, _, _, _,)) => {
+                            // Use distance from center (ax/ay) to prioritise
+                            // closer targets.
+                            let current_best_dist =
+                                best_attack.map(|(_, _, _, _, bdx, bdy)| {
+                                    bdx.abs().max(bdy.abs())
+                                }).unwrap_or(i32::MAX);
+                            if dist < current_best_dist {
+                                best_attack = Some((tid, t_index, tx, ty, dx, dy));
+                            }
+                        }
                     }
-                    _ => {}
+                }
+
+                // Chase candidate: any hostile within leash distance of the
+                // pet. This approximates C# ProcessSearch/Target behaviour.
+                if dist <= leash_distance {
+                    match best_chase {
+                        None => best_chase = Some((tx, ty, dist)),
+                        Some((_, _, best_dist)) if dist < best_dist => {
+                            best_chase = Some((tx, ty, dist));
+                        }
+                        _ => {}
+                    }
                 }
             }
 
-            let has_target = best.is_some();
+            let has_target = best_chase.is_some();
 
             // Update Shinsu Mode timers and emit ObjectShow/ObjectHide,
             // mirroring Shinsu.ProcessAI.
@@ -118,6 +159,16 @@ impl<P: WorldProvider> World<P> {
                     monster.special_mode_action_time_ms =
                         now_ms.saturating_add(MODE_ACTION_INTERVAL_MS);
 
+                    debug!(
+                        "pet_ai_shinsu_mode_on: pet_id={} map={} pos=({}, {}) until_ms={} now_ms={}",
+                        monster.id,
+                        map_index,
+                        monster.x,
+                        monster.y,
+                        monster.special_mode_until_ms,
+                        now_ms,
+                    );
+
                     events.push(WorldEvent::ObjectShow {
                         object_id: monster.id,
                         map_index,
@@ -128,16 +179,23 @@ impl<P: WorldProvider> World<P> {
                     && (monster.special_mode_until_ms > 0
                         && now_ms > monster.special_mode_until_ms)
                 {
+                    // When Mode expires, keep Shinsu visible and only flip the
+                    // internal special_mode flag instead of emitting
+                    // ObjectHide, to avoid the client playing a full hide
+                    // animation that makes the pet appear to disappear.
                     monster.special_mode = false;
                     monster.special_mode_action_time_ms =
                         now_ms.saturating_add(MODE_ACTION_INTERVAL_MS);
 
-                    events.push(WorldEvent::ObjectHide {
-                        object_id: monster.id,
+                    debug!(
+                        "pet_ai_shinsu_mode_off: pet_id={} map={} pos=({}, {}) now_ms={} until_ms={}",
+                        monster.id,
                         map_index,
-                        x: monster.x,
-                        y: monster.y,
-                    });
+                        monster.x,
+                        monster.y,
+                        now_ms,
+                        monster.special_mode_until_ms,
+                    );
                 }
             }
 
@@ -151,9 +209,22 @@ impl<P: WorldProvider> World<P> {
                     ty,
                     dx,
                     dy,
-                    _,
-                )) = best
+                )) = best_attack
                 {
+                    debug!(
+                        "pet_ai_shinsu_attack: pet_id={} map={} pet_pos=({}, {}) target_id={} target_pos=({}, {}) dx={} dy={} now_ms={}",
+                        monster.id,
+                        map_index,
+                        monster.x,
+                        monster.y,
+                        target_id,
+                        tx,
+                        ty,
+                        dx,
+                        dy,
+                        now_ms,
+                    );
+
                     let sx = dx.clamp(-1, 1);
                     let sy = dy.clamp(-1, 1);
                     let dir = match (sx, sy) {
@@ -193,6 +264,105 @@ impl<P: WorldProvider> World<P> {
                     monster.next_attack_time_ms = now_ms.saturating_add(delay_ms);
 
                     handled = true;
+                }
+            }
+
+            // When not attacking, chase the closest hostile within leash
+            // distance as long as we remain reasonably close to the owner.
+            if !handled {
+                if let Some((tx, ty, dist_to_target)) = best_chase {
+                    let owner_dx = owner_x - monster.x;
+                    let owner_dy = owner_y - monster.y;
+                    let owner_dist = owner_dx.abs().max(owner_dy.abs());
+
+                    // Only chase while we are strictly inside the leash
+                    // distance so that a single step cannot move us outside
+                    // Globals.DataRange and out of the owner's view.
+                    if owner_dist < leash_distance && dist_to_target > 0 {
+                        if monster.next_move_time_ms == 0
+                            || now_ms >= monster.next_move_time_ms
+                        {
+                            let step_x = (tx - monster.x).clamp(-1, 1);
+                            let step_y = (ty - monster.y).clamp(-1, 1);
+
+                            let new_x = monster.x.saturating_add(step_x);
+                            let new_y = monster.y.saturating_add(step_y);
+
+                            if new_x >= 0 && new_y >= 0 {
+                                let from_x = monster.x as u16;
+                                let from_y = monster.y as u16;
+                                let to_x = new_x as u16;
+                                let to_y = new_y as u16;
+
+                                if to_x < map.width
+                                    && to_y < map.height
+                                    && map.can_move(from_x, from_y, to_x, to_y)
+                                    && !self.is_cell_blocked(map_index, new_x, new_y)
+                                {
+                                    // Update facing based on the chase step,
+                                    // mirroring C# Functions.DirectionFromPoint
+                                    // and ensuring diagonal movement uses the
+                                    // correct MirDirection value.
+                                    let dir = match (step_x, step_y) {
+                                        (0, -1) => 0,
+                                        (1, -1) => 1,
+                                        (1, 0) => 2,
+                                        (1, 1) => 3,
+                                        (0, 1) => 4,
+                                        (-1, 1) => 5,
+                                        (-1, 0) => 6,
+                                        (-1, -1) => 7,
+                                        _ => monster.direction,
+                                    };
+                                    monster.direction = dir;
+
+                                    debug!(
+                                        "pet_ai_shinsu_chase: pet_id={} map={} from=({}, {}) to=({}, {}) owner_dist={} target_dist={} now_ms={}",
+                                        monster.id,
+                                        map_index,
+                                        monster.x,
+                                        monster.y,
+                                        new_x,
+                                        new_y,
+                                        owner_dist,
+                                        dist_to_target,
+                                        now_ms,
+                                    );
+
+                                    self.remove_monster_from_occupancy(
+                                        monster.id,
+                                        map_index,
+                                        monster.x,
+                                        monster.y,
+                                    );
+                                    self.add_monster_to_occupancy(
+                                        monster.id,
+                                        map_index,
+                                        new_x,
+                                        new_y,
+                                    );
+
+                                    monster.x = new_x;
+                                    monster.y = new_y;
+
+                                    let delay_ms =
+                                        Self::compute_monster_move_delay_ms(move_speed);
+                                    monster.next_move_time_ms =
+                                        now_ms.saturating_add(delay_ms);
+
+                                    events.push(WorldEvent::ObjectLocation {
+                                        object_id: monster.id,
+                                        map_index,
+                                        x: monster.x,
+                                        y: monster.y,
+                                        direction: dir,
+                                    });
+
+                                    handled = true;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -300,7 +470,9 @@ impl<P: WorldProvider> World<P> {
                     let owner_dy = owner_y - monster.y;
                     let owner_dist = owner_dx.abs().max(owner_dy.abs());
 
-                    if owner_dist <= leash_distance && dist_to_target > attack_range {
+                    // Use a strict < comparison so that a single chase step
+                    // cannot push the pet outside the leash/DataRange.
+                    if owner_dist < leash_distance && dist_to_target > attack_range {
                         if monster.next_move_time_ms == 0
                             || now_ms >= monster.next_move_time_ms
                         {
@@ -369,6 +541,20 @@ impl<P: WorldProvider> World<P> {
         // If the pet has strayed too far from its owner, snap it back to the
         // owner's current tile.
         if !handled && dist > leash_distance {
+            debug!(
+                "pet_ai_recall_to_owner: pet_id={} kind={:?} map={} from=({}, {}) owner=({}, {}) dist={} leash={} now_ms={}",
+                monster.id,
+                pet_kind,
+                map_index,
+                monster.x,
+                monster.y,
+                owner_x,
+                owner_y,
+                dist,
+                leash_distance,
+                now_ms,
+            );
+
             self.remove_monster_from_occupancy(monster.id, map_index, monster.x, monster.y);
             monster.x = owner_x;
             monster.y = owner_y;
@@ -406,6 +592,23 @@ impl<P: WorldProvider> World<P> {
                         && map.can_move(from_x, from_y, to_x, to_y)
                         && !self.is_cell_blocked(map_index, new_x, new_y)
                     {
+                        // Update facing towards the owner based on the
+                        // follow step, mirroring C#
+                        // Functions.DirectionFromPoint and ensuring
+                        // diagonals use the correct MirDirection value.
+                        let dir = match (step_x, step_y) {
+                            (0, -1) => 0,
+                            (1, -1) => 1,
+                            (1, 0) => 2,
+                            (1, 1) => 3,
+                            (0, 1) => 4,
+                            (-1, 1) => 5,
+                            (-1, 0) => 6,
+                            (-1, -1) => 7,
+                            _ => monster.direction,
+                        };
+                        monster.direction = dir;
+
                         self.remove_monster_from_occupancy(
                             monster.id,
                             map_index,
@@ -425,7 +628,7 @@ impl<P: WorldProvider> World<P> {
                             map_index,
                             x: monster.x,
                             y: monster.y,
-                            direction: monster.direction,
+                            direction: dir,
                         });
                     }
                 }

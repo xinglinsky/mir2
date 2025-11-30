@@ -3,10 +3,10 @@ use crate::world::monster::MonsterAiState;
 use crate::world::skills::{
     compute_magic_mana_cost, compute_pure_magic_attack_damage,
 };
-use crate::world::magic::magic_power;
+use crate::world::magic::magic_power_with_base;
 use crate::world::types::BuffType;
 use crate::world::{SessionId, Spell, World, WorldEvent, WorldProvider};
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 /// Wizard-specific helpers for casting AoE spells such as FireBang,
 /// IceStorm, ThunderStorm and FlameField. These operate on the World
@@ -438,7 +438,7 @@ pub fn cast_fire_wall<P: WorldProvider>(
     target_y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, player_x, player_y, level) = {
+    let (map_index, player_x, player_y, level, value) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -450,7 +450,8 @@ pub fn cast_fire_wall<P: WorldProvider>(
         };
 
         let level = magic.level;
-        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        let stats = player.stats.total.clone();
+        let cost = match compute_magic_mana_cost(&world.provider, &stats, spell, level)
         {
             Some(c) => c,
             None => return,
@@ -462,8 +463,107 @@ pub fn cast_fire_wall<P: WorldProvider>(
 
         player.mp -= cost;
 
-        (player.map_index, player.x, player.y, level)
+        // Approximate C# FireWall damage using the same pure magic helper that
+        // other wizard attack spells use: DamageBase from MC and MagicInfo,
+        // then use that as the per-tick Value for the wall.
+        let dmg = compute_pure_magic_attack_damage(&world.provider, &stats, spell, level)
+            .max(0);
+
+        (player.map_index, player.x, player.y, level, dmg)
     };
+
+    if value <= 0 {
+        return;
+    }
+
+    // Determine the FireWall tiles: centre + four cardinal neighbours around
+    // the clicked location, mirroring the C# Map.FireWall placement which
+    // uses Functions.PointMove with Up/Right/Down/Left.
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+
+    let fw_spell_id = Spell::FireWall as u8;
+
+    let candidates = [
+        (target_x, target_y),                // centre
+        (target_x, target_y - 1),            // up
+        (target_x + 1, target_y),            // right
+        (target_x, target_y + 1),            // down
+        (target_x - 1, target_y),            // left
+    ];
+
+    let mut cells: Vec<(i32, i32)> = Vec::new();
+
+    for (x, y) in candidates {
+        if x < 0 || y < 0 {
+            continue;
+        }
+
+        let ux = x as u16;
+        let uy = y as u16;
+
+        if ux >= map.width || uy >= map.height {
+            continue;
+        }
+
+        if !map.is_walkable(ux, uy) {
+            continue;
+        }
+
+        // Avoid stacking multiple FireWall instances on the same tile,
+        // approximating the C# Cell.Objects Spell.FireWall check.
+        if world.cell_has_spell(map_index, x, y, fw_spell_id) {
+            continue;
+        }
+
+        cells.push((x, y));
+    }
+
+    if cells.is_empty() {
+        return;
+    }
+
+    // Lifetime and tick timing: ExpireTime = now + (10 + value/2) * 1000,
+    // TickSpeed = 2000ms, matching the C# SpellObject fields.
+    let base_time = world.time_ms.max(0);
+    let duration_secs: i64 = (10_i64)
+        .saturating_add((value as i64) / 2)
+        .max(1);
+    let expire_time_ms = base_time.saturating_add(duration_secs.saturating_mul(1_000));
+
+    tracing::debug!(
+        "[wizard] FireWall cast: value={} duration_secs={} expire_time_ms={} (base_time={})",
+        value,
+        duration_secs,
+        expire_time_ms,
+        base_time,
+    );
+    let tick_speed_ms: i64 = 2_000;
+    let next_tick_ms = base_time.saturating_add(tick_speed_ms);
+
+    for &(x, y) in &cells {
+        world.add_map_spell(map_index, x, y, fw_spell_id);
+        events.push(WorldEvent::MapSpellAdded {
+            map_index,
+            x,
+            y,
+            spell: fw_spell_id,
+            direction,
+            param: false,
+        });
+    }
+
+    world.fire_walls.push(crate::world::world::FireWallInstance {
+        map_index,
+        caster_session_id: session_id,
+        value,
+        cells: cells.clone(),
+        expire_time_ms,
+        tick_speed_ms,
+        next_tick_ms,
+    });
 
     world.level_up_magic_for_player(session_id, Spell::FireWall as u8, events);
 
@@ -563,17 +663,33 @@ pub fn cast_magic_shield<P: WorldProvider>(
             cost
         );
 
-        // Approximate C# MagicShield duration by using the magic's power
-        // value as a number of seconds, via magic_power().
+        // Approximate C# MagicShield duration by mirroring
+        //   magic.GetPower(GetAttackPower(MinMC, MaxMC) + 15)
+        // and then using that value as a number of seconds.
+        let min_mc = player.stats.total.get(Stat::MinMC).max(0);
+        let max_mc = player.stats.total.get(Stat::MaxMC).max(min_mc);
+
+        let mut rng = thread_rng();
+        let attack_roll = if max_mc > min_mc {
+            rng.gen_range(min_mc..=max_mc)
+        } else {
+            min_mc
+        };
+
+        let base_power = attack_roll.saturating_add(15);
+
         let mut duration_sec: i64 = 0;
         if let Some(info) = world.provider.get_magic_info(spell_id) {
-            let mut rng = thread_rng();
-            let power = magic_power(info, level, &mut rng).max(1);
+            let power = magic_power_with_base(info, level, base_power, &mut rng).max(1);
             duration_sec = power as i64;
         }
+        // 正常情况下，根据 MagicInfo 和 GetAttackPower 计算出的 GetPower
+        // 应该始终为正值；这里仅在极端情况下（例如 MirDB 缺少 MagicInfo）
+        // 做一个保底，避免持续时间为 0 或负数。
         if duration_sec <= 0 {
             duration_sec = 60;
         }
+
         let duration_ms = duration_sec.saturating_mul(1_000);
 
         let mut stats = Stats::default();

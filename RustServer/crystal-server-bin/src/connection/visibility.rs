@@ -118,11 +118,30 @@ impl LoginConnection {
         let range = Self::DATA_RANGE;
         let map_index = self.current_map_index;
 
-        // Monsters in view.
-        let monsters_in_view = {
+        // Monsters in view. Start with the generic visibility query based on
+        // DATA_RANGE around the player.
+        let mut monsters_in_view = {
             let world = self.world.lock().unwrap();
             world.monsters_in_view_for_map(map_index, self.current_x, self.current_y, range)
         };
+
+        // Always keep this player's own summoned pets visible regardless of
+        // distance, so that pets like Shinsu do not visually disappear while
+        // still attacking when they move outside the normal DATA_RANGE
+        // rectangle. This mirrors the original server behaviour where your
+        // own pets remain tracked even when they momentarily stray.
+        {
+            let world = self.world.lock().unwrap();
+            let all_monsters = world.monsters_for_map(map_index);
+
+            for m in all_monsters.into_iter().filter(|m| {
+                m.is_pet && m.owner_session_id == Some(self.session_id)
+            }) {
+                if !monsters_in_view.iter().any(|existing| existing.id == m.id) {
+                    monsters_in_view.push(m);
+                }
+            }
+        }
 
         let mut visible_monster_ids: HashSet<u64> = HashSet::new();
 
@@ -226,6 +245,43 @@ impl LoginConnection {
             .collect();
 
         for id in removed_monsters {
+            // Do not remove this session's own summoned pets purely due to
+            // visibility pruning. Pets like Shinsu/HolyDeva should remain in
+            // view while they are alive, even if they move outside the normal
+            // DATA_RANGE rectangle. We verify existence and ownership via the
+            // world state before deciding whether to send SObjectRemove.
+            let mut skip_remove = false;
+            {
+                let world = self.world.lock().unwrap();
+                let monsters = world.monsters_for_map(map_index);
+
+                if let Some(m) = monsters.iter().find(|m| m.id == id) {
+                    if m.is_pet && m.owner_session_id == Some(self.session_id) {
+                        skip_remove = true;
+                        debug!(
+                            "update_visibility: session_id={} skipping remove for own pet id={} index={} map={} pos=({}, {})",
+                            self.session_id,
+                            m.id,
+                            m.monster_index,
+                            map_index,
+                            m.x,
+                            m.y
+                        );
+                    }
+                }
+            }
+
+            if skip_remove {
+                continue;
+            }
+
+            debug!(
+                "update_visibility: session_id={} removing monster id={} from view on map={}",
+                self.session_id,
+                id,
+                map_index
+            );
+
             let pkt = SObjectRemove { object_id: id as u32 };
             if let Ok(raw) = pkt.encode() {
                 out.push(Self::encode_raw(raw));

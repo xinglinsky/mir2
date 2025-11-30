@@ -67,6 +67,31 @@ pub struct PendingMagicHit {
 }
 
 #[derive(Clone, Debug)]
+pub struct FireWallInstance {
+    pub map_index: i32,
+    pub caster_session_id: SessionId,
+    pub value: i32,
+    pub cells: Vec<(i32, i32)>,
+    pub expire_time_ms: i64,
+    pub tick_speed_ms: i64,
+    pub next_tick_ms: i64,
+}
+
+/// Global/per-player timer information mirroring Server.MirEnvir.Timer.
+///
+/// All timers (both global and player-scoped) are stored in a single map on
+/// the world, keyed by their full key string. This matches the C#
+/// Envir.Timers dictionary usage, where player timers use "Name-Key" and
+/// global timers use "_-Key" prefixes.
+#[derive(Clone, Debug)]
+pub struct TimerEntry {
+    pub key: String,
+    pub timer_type: u8,
+    pub seconds: i32,
+    pub relative_time_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub enum GuildJoinError {
     NotFound,
     Full,
@@ -292,6 +317,26 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
     },
+    /// Map-level spell visual added, approximating C# S.ObjectSpell used by
+    /// SpellObject.GetInfo for effects such as FireWall, HealingCircle,
+    /// MapLava, etc.
+    MapSpellAdded {
+        map_index: i32,
+        x: i32,
+        y: i32,
+        spell: u8,
+        direction: u8,
+        param: bool,
+    },
+    /// Map-level spell visual removed, typically sent when the underlying
+    /// SpellObject expires. Connections can map this to S.ObjectRemove using
+    /// the same object-id scheme as MapSpellAdded.
+    MapSpellRemoved {
+        map_index: i32,
+        x: i32,
+        y: i32,
+        spell: u8,
+    },
     PlayerHealed {
         session_id: SessionId,
         map_index: i32,
@@ -385,6 +430,7 @@ pub struct World<P: WorldProvider> {
     pub(crate) spawn_multiplier: u16,
     pub(crate) drop_rate: f32,
     pub(crate) pending_magic_hits: Vec<PendingMagicHit>,
+    pub(crate) fire_walls: Vec<FireWallInstance>,
     pub(crate) guilds: GuildManager,
     pub(crate) parties: PartyManager,
     /// In-memory GameShop purchase log keyed by GameShopItem GIndex.
@@ -393,6 +439,8 @@ pub struct World<P: WorldProvider> {
     /// In-memory BuyBack storage keyed by (session, map_index, npc_index).
     /// This approximates C# NPCObject.BuyBack per player and per NPC.
     pub(crate) buyback: HashMap<(SessionId, i32, i32), Vec<BuyBackEntry>>,
+    /// Global and per-player timers, mirroring C# Envir.Timers.
+    pub(crate) timers: HashMap<String, TimerEntry>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -420,11 +468,95 @@ impl<P: WorldProvider> World<P> {
             spawn_multiplier,
             drop_rate,
             pending_magic_hits: Vec::new(),
+            fire_walls: Vec::new(),
             guilds: GuildManager::new(),
             parties: PartyManager::new(),
             gameshop_log: HashMap::new(),
             buyback: HashMap::new(),
+            timers: HashMap::new(),
         }
+    }
+
+    /// Create or replace a timer with the given full key. This mirrors the
+    /// C# Timer constructor which sets RelativeTime based on Envir.Time and
+    /// the requested number of seconds.
+    pub fn set_timer(&mut self, key: String, seconds: i32, timer_type: u8) {
+        let seconds = seconds.max(0);
+        let now = self.time_ms.max(0);
+        let rel = now.saturating_add((seconds as i64).saturating_mul(1_000));
+        let entry = TimerEntry {
+            key: key.clone(),
+            timer_type,
+            seconds,
+            relative_time_ms: rel,
+        };
+        self.timers.insert(key, entry);
+    }
+
+    /// Remove a timer by its full key if present.
+    pub fn remove_timer(&mut self, key: &str) {
+        self.timers.remove(key);
+    }
+
+    /// Return the remaining whole seconds for the given full key, if the
+    /// timer exists. This is equivalent to
+    /// (timer.RelativeTime - Envir.Time) / 1000 in the C# server.
+    pub fn timer_remaining_seconds(&self, key: &str) -> Option<i64> {
+        let t = self.timers.get(key)?;
+        let now = self.time_ms.max(0);
+        let remaining_ms = t.relative_time_ms.saturating_sub(now);
+        Some((remaining_ms / 1000).max(0))
+    }
+
+    /// Compare two i64 values using a string operator, mirroring the C#
+    /// NPCSegment.Compare helper used by CHECKTIMER and other numeric
+    /// checks.
+    fn compare_i64(op: &str, left: i64, right: i64) -> Result<bool, String> {
+        match op {
+            "<" => Ok(left < right),
+            ">" => Ok(left > right),
+            "<=" => Ok(left <= right),
+            ">=" => Ok(left >= right),
+            "==" => Ok(left == right),
+            "!=" => Ok(left != right),
+            _ => Err(format!("invalid comparison operator: {}", op)),
+        }
+    }
+
+    /// Evaluate a CHECKTIMER-style condition for a given player session,
+    /// checking global timers first ("_-key") and then per-player timers
+    /// ("<Name>-key"). Returns true if the comparison holds.
+    pub fn check_timer_for_session(
+        &self,
+        session_id: SessionId,
+        op: &str,
+        base_key: &str,
+        time_secs: i64,
+    ) -> Result<bool, String> {
+        let time_secs = time_secs.max(0);
+
+        let mut remaining: i64 = 0;
+        let mut has_timer = false;
+
+        // Global timer takes precedence if present.
+        let global_key = format!("_-{}", base_key);
+        if let Some(r) = self.timer_remaining_seconds(&global_key) {
+            remaining = r;
+            has_timer = true;
+        } else if let Some(name) = self.player_name(session_id) {
+            // Fall back to per-player timer using "<Name>-<Key>" format.
+            let full_key = format!("{}-{}", name, base_key);
+            if let Some(r) = self.timer_remaining_seconds(&full_key) {
+                remaining = r;
+                has_timer = true;
+            }
+        }
+
+        if !has_timer {
+            remaining = 0;
+        }
+
+        Self::compare_i64(op, remaining, time_secs)
     }
 
     /// Increment experience for the given player's magic and, if the
@@ -616,6 +748,86 @@ impl<P: WorldProvider> World<P> {
             }
         }
         false
+    }
+
+    /// Count how many items with the given name the specified player has in
+    /// their inventory. This is used by NPC CHECKITEM conditions.
+    pub fn player_item_count_by_name(&self, session_id: SessionId, item_name: &str) -> i32 {
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return 0,
+        };
+
+        let info = match self.provider.get_item_info_by_name(item_name) {
+            Some(i) => i,
+            None => return 0,
+        };
+
+        let mut total: i32 = 0;
+        for slot_opt in &player.inventory.slots {
+            if let Some(item) = slot_opt {
+                if item.item_index == info.index {
+                    total = total.saturating_add(item.count as i32);
+                }
+            }
+        }
+        total
+    }
+
+    /// Count players on the map identified by file name. Used by NPC CHECKHUM.
+    pub fn player_count_on_map_by_file_name(&self, map_file_name: &str) -> i32 {
+        let map_index = match self.provider.get_map_info_by_file_name(map_file_name) {
+            Some(info) => info.index,
+            None => return 0,
+        };
+
+        self.players
+            .values()
+            .filter(|p| p.map_index == map_index)
+            .count() as i32
+    }
+
+    /// Count all monsters present on the map identified by file name. Used by
+    /// NPC CHECKMON conditions.
+    pub fn monster_count_on_map_by_file_name(&self, map_file_name: &str) -> i32 {
+        let map_index = match self.provider.get_map_info_by_file_name(map_file_name) {
+            Some(info) => info.index,
+            None => return 0,
+        };
+
+        self.monsters
+            .get(&map_index)
+            .map(|v| v.len() as i32)
+            .unwrap_or(0)
+    }
+
+    /// Count monsters with a specific name on the map identified by file
+    /// name. This approximates NPC CHECKEXACTMON behaviour by resolving the
+    /// MonsterInfo for each instance and comparing its Name.
+    pub fn monster_count_on_map_by_file_and_name(
+        &self,
+        map_file_name: &str,
+        monster_name: &str,
+    ) -> i32 {
+        let map_index = match self.provider.get_map_info_by_file_name(map_file_name) {
+            Some(info) => info.index,
+            None => return 0,
+        };
+
+        if let Some(mons) = self.monsters.get(&map_index) {
+            mons
+                .iter()
+                .filter(|m| {
+                    if let Some(info) = self.provider.get_monster_info(m.monster_index) {
+                        info.name.eq_ignore_ascii_case(monster_name)
+                    } else {
+                        false
+                    }
+                })
+                .count() as i32
+        } else {
+            0
+        }
     }
 
     /// Look up the canonical player name for a given session.
@@ -1061,6 +1273,44 @@ impl<P: WorldProvider> World<P> {
             }
         }
         false
+    }
+
+    pub(crate) fn cell_has_spell(&self, map_index: i32, x: i32, y: i32, spell_id: u8) -> bool {
+        if let Some(map_spells) = self.map_spells.get(&map_index) {
+            if let Some(spells) = map_spells.get(&(x, y)) {
+                return spells.contains(&spell_id);
+            }
+        }
+        false
+    }
+
+    pub(crate) fn add_map_spell(&mut self, map_index: i32, x: i32, y: i32, spell_id: u8) {
+        let map_spells = self
+            .map_spells
+            .entry(map_index)
+            .or_insert_with(HashMap::new);
+        let entry = map_spells
+            .entry((x, y))
+            .or_insert_with(Vec::new);
+        if !entry.contains(&spell_id) {
+            entry.push(spell_id);
+        }
+    }
+
+    pub(crate) fn remove_map_spell(&mut self, map_index: i32, x: i32, y: i32, spell_id: u8) {
+        if let Some(map_spells) = self.map_spells.get_mut(&map_index) {
+            if let Some(spells) = map_spells.get_mut(&(x, y)) {
+                if let Some(pos) = spells.iter().position(|&s| s == spell_id) {
+                    spells.remove(pos);
+                }
+                if spells.is_empty() {
+                    map_spells.remove(&(x, y));
+                }
+            }
+            if map_spells.is_empty() {
+                self.map_spells.remove(&map_index);
+            }
+        }
     }
 
     /// Create a new guild with the given name if no existing guild uses the
@@ -2350,7 +2600,7 @@ impl<P: WorldProvider> World<P> {
                     self.spawn_monsters_for_map(map_index, &map);
                 }
 
-                let (sid, p_map, px, py, dir) = {
+                let (sid, p_map, px, py, _dir) = {
                     let p = self.upsert_player(
                         session_id,
                         character_index,
@@ -2369,13 +2619,6 @@ impl<P: WorldProvider> World<P> {
                 };
 
                 self.add_player_to_occupancy(sid, p_map, px, py);
-                events.push(WorldEvent::UserLocation {
-                    session_id: sid,
-                    map_index: p_map,
-                    x: px,
-                    y: py,
-                    direction: dir,
-                });
             }
             WorldCommand::Turn {
                 session_id,
@@ -3337,18 +3580,41 @@ impl<P: WorldProvider> World<P> {
 
         // Emit an AddBuff world event so the connection layer can send
         // SAddBuff to the client. Only visible buffs are serialized.
+        //
+        // 注意：C# 服务器在发送 ClientBuff 时，ExpireTime 字段承载的是
+        // “剩余时间”（毫秒），客户端在 GameScene.AddBuff 中会执行
+        //   buff.ExpireTime += CMain.Time
+        // 将其转换为本地的绝对到期时间。为了与这一行为严格对齐，
+        // 这里在编码前将内部使用的绝对过期时间（expire_time_ms）
+        // 转换为相对于当前 world.time_ms 的剩余时间。
         if let Some(p) = self.players.get(&session_id) {
             if let Some(buff) = p.active_buffs.iter().find(|b| b.buff_type == buff_type) {
                 if buff.visible {
                     let mut buff_bytes = Vec::new();
-                    buff.encode(&mut buff_bytes, session_id);
+
+                    // 克隆一份临时 Buff，将 expire_time_ms 替换为剩余毫秒数，
+                    // 以匹配 C# ClientBuff.ExpireTime 语义。
+                    let mut tmp = buff.clone();
+                    if !tmp.infinite {
+                        let remaining = tmp
+                            .expire_time_ms
+                            .saturating_sub(self.time_ms)
+                            .max(0);
+                        tmp.expire_time_ms = remaining;
+                    } else {
+                        tmp.expire_time_ms = 0;
+                    }
+
+                    tmp.encode(&mut buff_bytes, session_id);
+
                     if matches!(buff_type, BuffType::MagicShield | BuffType::ElementalBarrier) {
                         tracing::debug!(
-                            "add_player_buff: pushing AddBuff event buff_type={:?} session_id={} visible={} buff_len={}",
+                            "add_player_buff: pushing AddBuff event buff_type={:?} session_id={} visible={} buff_len={} remaining_ms={}",
                             buff_type,
                             session_id,
                             buff.visible,
                             buff_bytes.len(),
+                            if tmp.infinite { -1 } else { tmp.expire_time_ms },
                         );
                     }
                     events.push(WorldEvent::AddBuff {

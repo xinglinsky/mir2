@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use std::fs;
 use std::path::Path;
 
+#[allow(dead_code)]
 fn parse_bool(val: &str, default: bool) -> bool {
     match val {
         "True" | "true" | "1" => true,

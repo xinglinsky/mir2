@@ -1,4 +1,6 @@
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
+
+use crystal_shared_proto::item_types::UserItemData;
 
 use crate::combat::compute_physical_melee_with_crit;
 use crate::world::magic::magic_power;
@@ -6,6 +8,8 @@ use crate::stats::{Stat, Stats};
 use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
+use crate::world::configs::setup_config;
+use crate::world::map_item::MapItem;
 use crate::world::skills::{
     apply_attack_spell_scaling,
     apply_fatal_sword_and_undead,
@@ -35,14 +39,15 @@ use crate::world::skills::wizard::{
 };
 use crate::world::skills::taoist::{
     cast_blessed_armour,
-    cast_ultimate_enhancer,
     cast_energy_shield,
+    cast_hallucination,
     cast_healing,
     cast_mass_healing,
     cast_soul_shield,
     cast_summon_holy_deva,
     cast_summon_shinsu,
     cast_summon_skeleton,
+    cast_ultimate_enhancer,
 };
 use crate::world::types::{AttackMode, BuffType};
 use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell};
@@ -57,7 +62,7 @@ impl<P: WorldProvider> World<P> {
     /// rules. This inspects map NoFight, SafeZone membership and the
     /// attacker's AttackMode, together with party and guild membership and
     /// the target's PK status (red/brown).
-    fn can_attack_player(&self, attacker_sid: SessionId, target_sid: SessionId) -> bool {
+    pub(crate) fn can_attack_player(&self, attacker_sid: SessionId, target_sid: SessionId) -> bool {
         if attacker_sid == target_sid {
             return false;
         }
@@ -136,12 +141,310 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    /// Apply player death-drop logic for the given target session on the
+    /// specified map. This approximates C# PlayerObject.Die ->
+    /// DeathDrop/RedDeathDrop by selecting a subset of equipment and
+    /// inventory items to drop on the ground near the corpse and assigning a
+    /// longer expire timeout based on GameConfig.player_died_item_timeout.
+    fn apply_player_death_drops(
+        &mut self,
+        target_sid: SessionId,
+        map_index: i32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Snapshot basic position/PK state without holding a mutable borrow
+        // of the player so we can still mutate world structures below.
+        let (px, py, pk_points) = match self.players.get(&target_sid) {
+            Some(p) => (p.x, p.y, p.pk_points),
+            None => return,
+        };
+
+        let map_info = match self.provider.get_map_info(map_index) {
+            Some(info) => info,
+            None => return,
+        };
+
+        // Honour NoDropPlayer like C# Map.Info.NoDropPlayer.
+        if map_info.no_drop_player {
+            return;
+        }
+
+        // Use the configured PlayerDiedItemTimeOut (in seconds) from
+        // Setup.ini. This is the extended timeout used by C# ItemObject for
+        // player-death drops.
+        let cfg = setup_config();
+        let timeout_secs = cfg.game.player_died_item_timeout.max(0) as i64;
+        let item_timeout_ms = timeout_secs.saturating_mul(1_000);
+        let now = self.time_ms.max(0);
+
+        let mut rng = thread_rng();
+        let is_red = pk_points > 200;
+
+        // Mirror the C# behaviour where non-red players only death-drop when
+        // not in a SafeZone, while red players (PKPoints > 200) can drop
+        // regardless of SafeZone.
+        if !is_red && self.player_in_safe_zone(target_sid) {
+            return;
+        }
+
+        // Collect candidate drops as (is_equipment, slot_index, item_clone)
+        // and items that should be destroyed (BreakOnDeath) as
+        // (is_equipment, slot_index).
+        let mut drops: Vec<(bool, usize, UserItemData)> = Vec::new();
+        let mut destroys: Vec<(bool, usize)> = Vec::new();
+
+        const BIND_DONT_DEATHDROP: i16 = 0x0001;
+        const BIND_BREAK_ON_DEATH: i16 = 0x0100;
+
+        if let Some(p) = self.players.get(&target_sid) {
+            // Equipment: approximate DeathDrop/RedDeathDrop percentages and
+            // BindMode semantics.
+            for (idx, opt) in p.equipment.slots.iter().enumerate() {
+                let item = match opt {
+                    Some(it) => it,
+                    None => continue,
+                };
+
+                let info = match self.provider.get_item_info(item.item_index) {
+                    Some(i) => i,
+                    None => continue,
+                };
+
+                // Skip DontDeathdrop-bound items and rental equivalents.
+                if (info.bind & BIND_DONT_DEATHDROP) != 0 {
+                    continue;
+                }
+                if item
+                    .rental_information
+                    .as_ref()
+                    .map_or(false, |r| (r.binding_flags & BIND_DONT_DEATHDROP) != 0)
+                {
+                    continue;
+                }
+
+                // Skip wedding rings (C# item.WeddingRing != -1). We treat
+                // any non-zero wedding_ring as a bound marriage ring.
+                if item.wedding_ring != 0 {
+                    continue;
+                }
+
+                // Skip sealed items entirely for now while the SealedInfo
+                // model is not yet fully wired.
+                if item.sealed_info.is_some() {
+                    continue;
+                }
+
+                let break_on_death =
+                    (info.bind & BIND_BREAK_ON_DEATH) != 0
+                        || item
+                            .rental_information
+                            .as_ref()
+                            .map_or(false, |r| (r.binding_flags & BIND_BREAK_ON_DEATH) != 0);
+
+                if break_on_death {
+                    // Destroy the item on death without dropping a
+                    // ground item, mirroring BindMode.BreakOnDeath.
+                    destroys.push((true, idx));
+                    continue;
+                }
+
+                let mut drop_count: u16 = 0;
+                if item.count > 1 {
+                    // Stacks: choose a random 1–8 (or 4–10 for red) percent
+                    // of the stack, similar to HumanObject.DeathDrop and
+                    // PlayerObject.RedDeathDrop.
+                    let percent = if is_red {
+                        rng.gen_range(4..=10)
+                    } else {
+                        rng.gen_range(1..=8)
+                    } as u32;
+                    let total = item.count as u32;
+                    let calc = ((total * percent + 9) / 10) as u16; // ceil
+                    if calc > 0 {
+                        drop_count = calc.min(item.count);
+                    }
+                } else {
+                    // Single equipment item: 1/30 for normal, 1/10 for red.
+                    let chance = if is_red { 10 } else { 30 };
+                    if rng.gen_range(0..chance) == 0 {
+                        drop_count = 1;
+                    }
+                }
+
+                if drop_count > 0 {
+                    let mut clone = item.clone();
+                    clone.count = drop_count;
+                    drops.push((true, idx, clone));
+                }
+            }
+
+            // Inventory: similar probabilities but with a higher base chance
+            // for singles in normal (1/10) and red (1/5) cases.
+            for (idx, opt) in p.inventory.slots.iter().enumerate() {
+                let item = match opt {
+                    Some(it) => it,
+                    None => continue,
+                };
+
+                let info = match self.provider.get_item_info(item.item_index) {
+                    Some(i) => i,
+                    None => continue,
+                };
+
+                if (info.bind & BIND_DONT_DEATHDROP) != 0 {
+                    continue;
+                }
+                if item
+                    .rental_information
+                    .as_ref()
+                    .map_or(false, |r| (r.binding_flags & BIND_DONT_DEATHDROP) != 0)
+                {
+                    continue;
+                }
+
+                if item.wedding_ring != 0 {
+                    continue;
+                }
+
+                if item.sealed_info.is_some() {
+                    continue;
+                }
+
+                let break_on_death =
+                    (info.bind & BIND_BREAK_ON_DEATH) != 0
+                        || item
+                            .rental_information
+                            .as_ref()
+                            .map_or(false, |r| (r.binding_flags & BIND_BREAK_ON_DEATH) != 0);
+
+                if break_on_death {
+                    destroys.push((false, idx));
+                    continue;
+                }
+
+                let mut drop_count: u16 = 0;
+                if item.count > 1 {
+                    let percent = if is_red {
+                        rng.gen_range(4..=10)
+                    } else {
+                        rng.gen_range(1..=8)
+                    } as u32;
+                    let total = item.count as u32;
+                    let calc = ((total * percent + 9) / 10) as u16;
+                    if calc > 0 {
+                        drop_count = calc.min(item.count);
+                    }
+                } else {
+                    // Single inventory item: 1/10 for normal, 1/5 for red.
+                    let chance = if is_red { 5 } else { 10 };
+                    if rng.gen_range(0..chance) == 0 {
+                        drop_count = 1;
+                    }
+                }
+
+                if drop_count > 0 {
+                    let mut clone = item.clone();
+                    clone.count = drop_count;
+                    drops.push((false, idx, clone));
+                }
+            }
+        }
+
+        if drops.is_empty() {
+            return;
+        }
+
+        // Place map items near the corpse using the same drop location search
+        // as normal item drops, but with the extended death-drop timeout.
+        let mut placed: Vec<(bool, usize, UserItemData)> = Vec::new();
+
+        for (is_eq, idx, item) in drops.into_iter() {
+            let info = match self.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if let Some((dx, dy)) = self.find_drop_location(map_index, px, py, 4) {
+                let entry = self.map_items.entry(map_index).or_default();
+                let map_item_id = self.next_map_item_id;
+                self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+
+                entry.push(MapItem {
+                    id: map_item_id,
+                    map_index,
+                    x: dx,
+                    y: dy,
+                    item_index: Some(info.index),
+                    gold: 0,
+                    count: item.count,
+                    item: Some(item.clone()),
+                    expire_time_ms: now.saturating_add(item_timeout_ms),
+                });
+
+                events.push(WorldEvent::ItemDropped {
+                    object_id: map_item_id,
+                    map_index,
+                    x: dx,
+                    y: dy,
+                    item_index: info.index,
+                    count: item.count,
+                });
+
+                placed.push((is_eq, idx, item));
+            }
+        }
+
+        // Finally, remove the dropped or destroyed items from the player's
+        // equipment / inventory slots.
+        if let Some(p) = self.players.get_mut(&target_sid) {
+            // Apply stack reductions for items that produced ground drops.
+            for (is_eq, idx, item) in placed.into_iter() {
+                let slots = if is_eq {
+                    &mut p.equipment.slots
+                } else {
+                    &mut p.inventory.slots
+                };
+
+                if let Some(slot_opt) = slots.get_mut(idx) {
+                    if let Some(slot_item) = slot_opt {
+                        if item.count >= slot_item.count {
+                            *slot_opt = None;
+                        } else {
+                            slot_item.count = slot_item
+                                .count
+                                .saturating_sub(item.count);
+                        }
+                    }
+                }
+            }
+
+            // Remove items flagged as BreakOnDeath regardless of whether a
+            // ground drop was produced.
+            for (is_eq, idx) in destroys.into_iter() {
+                let slots = if is_eq {
+                    &mut p.equipment.slots
+                } else {
+                    &mut p.inventory.slots
+                };
+
+                if let Some(slot_opt) = slots.get_mut(idx) {
+                    *slot_opt = None;
+                }
+            }
+        }
+    }
+
     /// Determine whether `attacker_sid` is allowed to attack the specified
     /// monster according to the C# MonsterObject.IsAttackTarget(HumanObject
     /// attacker) rules. This primarily affects pets (monsters with a player
     /// owner) and mirrors the interaction with AttackMode/party/guild/PK
     /// state, while leaving wild monsters unrestricted by AttackMode.
-    fn can_attack_monster(&self, attacker_sid: SessionId, map_index: i32, monster_id: u64) -> bool {
+    pub(crate) fn can_attack_monster(
+        &self,
+        attacker_sid: SessionId,
+        map_index: i32,
+        monster_id: u64,
+    ) -> bool {
         let attacker = match self.players.get(&attacker_sid) {
             Some(p) => p,
             None => return false,
@@ -229,6 +532,125 @@ impl<P: WorldProvider> World<P> {
                 owner.pk_points >= 200 || self.time_ms < owner.brown_time_ms
             }
             AttackMode::Peace => false, // already handled above
+        }
+    }
+
+    /// Apply damage from one player to another, updating HP/death,
+    /// PKPoints/BrownTime and emitting ObjectStruck, mirroring the core C#
+    /// PlayerObject.Attacked + PK rules. `damage` may be zero to represent a
+    /// miss; in that case we still emit ObjectStruck but do not change HP.
+    pub(crate) fn apply_player_hit_from_player(
+        &mut self,
+        attacker_sid: SessionId,
+        target_sid: SessionId,
+        map_index: i32,
+        damage: i32,
+        damage_type: u8,
+        strike_x_override: Option<i32>,
+        strike_y_override: Option<i32>,
+        strike_dir_override: Option<u8>,
+        allow_pk_points: bool,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        if attacker_sid == target_sid {
+            return;
+        }
+
+        let damage = damage.max(0);
+
+        let (old_pk_points, old_brown_time) = if let Some(t) = self.players.get(&target_sid) {
+            (t.pk_points, t.brown_time_ms)
+        } else {
+            return;
+        };
+
+        let (max_hp, strike_x, strike_y, strike_dir, new_hp, dead) =
+            if let Some(t) = self.players.get_mut(&target_sid) {
+                if t.dead || t.hp <= 0 {
+                    return;
+                }
+
+                let max_hp = t.stats.total.get(Stat::HP).max(1);
+
+                let mut strike_x = t.x;
+                let mut strike_y = t.y;
+                let mut strike_dir = t.direction;
+
+                if let Some(sx) = strike_x_override {
+                    strike_x = sx;
+                }
+                if let Some(sy) = strike_y_override {
+                    strike_y = sy;
+                }
+                if let Some(sd) = strike_dir_override {
+                    strike_dir = sd;
+                }
+
+                let old_hp = t.hp.max(0);
+                let mut new_hp = old_hp;
+                let mut dead = false;
+
+                if damage > 0 {
+                    if damage >= t.hp {
+                        t.hp = 0;
+                        dead = true;
+                    } else {
+                        t.hp -= damage;
+                    }
+
+                    new_hp = t.hp.max(0);
+                }
+
+                (max_hp, strike_x, strike_y, strike_dir, new_hp, dead)
+            } else {
+                return;
+            };
+
+        let health_percent = if max_hp > 0 {
+            ((new_hp as i64 * 100) / max_hp as i64).clamp(0, 100) as u8
+        } else {
+            0
+        };
+
+        events.push(WorldEvent::ObjectStruck {
+            attacker_id: attacker_sid,
+            target_id: target_sid as u64,
+            map_index,
+            x: strike_x,
+            y: strike_y,
+            direction: strike_dir,
+            damage,
+            damage_type,
+            health_percent,
+        });
+
+        // If the hit killed the target, apply player death drops (equipment /
+        // inventory) using the configured PlayerDiedItemTimeOut for expire
+        // time. SafeZone and NoDropPlayer rules are handled inside
+        // apply_player_death_drops, which approximates the C#
+        // PlayerObject.Die -> DeathDrop/RedDeathDrop path.
+        if dead {
+            self.apply_player_death_drops(target_sid, map_index, events);
+        }
+
+        if !allow_pk_points || damage <= 0 || !dead {
+            return;
+        }
+
+        // PK/BrownTime logic: mirror existing melee path.
+        if let Some(t) = self.players.get_mut(&target_sid) {
+            t.brown_time_ms = self.time_ms;
+        }
+
+        if let Some(map_info) = self.provider.get_map_info(map_index) {
+            if !map_info.fight {
+                let eligible = old_pk_points < 200 && self.time_ms > old_brown_time;
+                if eligible {
+                    if let Some(att) = self.players.get_mut(&attacker_sid) {
+                        att.pk_points = att.pk_points.saturating_add(100);
+                    }
+                }
+            }
         }
     }
 
@@ -380,6 +802,11 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::MassHealing as u8 {
             cast_mass_healing(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Hallucination as u8 {
+            cast_hallucination(self, session_id, spell, direction, x, y, events);
             return;
         }
 
@@ -685,10 +1112,9 @@ impl<P: WorldProvider> World<P> {
 
             if let Some(target_session_id) = player_target {
                 // Snapshot defender stats for damage calculation.
-                let (defender_stats, max_hp) = {
+                let defender_stats = {
                     if let Some(t) = self.players.get(&target_session_id) {
-                        let max_hp = t.stats.total.get(Stat::HP).max(1);
-                        (t.stats.total.clone(), max_hp)
+                        t.stats.total.clone()
                     } else {
                         return;
                     }
@@ -737,99 +1163,24 @@ impl<P: WorldProvider> World<P> {
                 {
                     raw_damage = raw_damage.saturating_mul(2);
                 }
-
-                let mut strike_x = target_x;
-                let mut strike_y = target_y;
-                let mut strike_dir = direction;
-                let mut damage_done: i32 = 0;
-                let mut health_percent: u8 = 100;
-                let mut dead = false;
-                let mut old_pk_points = 0;
-                let mut old_brown_time = 0;
-
-                if let Some(t) = self.players.get(&target_session_id) {
-                    old_pk_points = t.pk_points;
-                    old_brown_time = t.brown_time_ms;
-                }
-
-                if let Some(t) = self.players.get_mut(&target_session_id) {
-                    strike_x = t.x;
-                    strike_y = t.y;
-                    strike_dir = t.direction;
-
-                    let old_hp = t.hp.max(0);
-                    let mut new_hp = old_hp;
-
-                    if hit && raw_damage > 0 {
-                        damage_done = raw_damage;
-
-                        if raw_damage >= t.hp {
-                            t.hp = 0;
-                            dead = true;
-                        } else {
-                            t.hp -= raw_damage;
-                        }
-
-                        new_hp = t.hp.max(0);
-                    }
-
-                    if max_hp > 0 {
-                        let pct = (new_hp as i64 * 100 / max_hp as i64)
-                            .clamp(0, 100) as u8;
-                        health_percent = pct;
-                    } else {
-                        health_percent = 0;
-                    }
-                }
-
-                if hit {
-                    if damage_done > 0 {
-                        events.push(WorldEvent::ObjectStruck {
-                            attacker_id: session_id,
-                            target_id: target_session_id as u64,
-                            map_index,
-                            x: strike_x,
-                            y: strike_y,
-                            direction: strike_dir,
-                            damage: damage_done,
-                            damage_type,
-                            health_percent,
-                        });
-                    }
+                let damage_to_apply = if hit && raw_damage > 0 {
+                    raw_damage
                 } else {
-                    events.push(WorldEvent::ObjectStruck {
-                        attacker_id: session_id,
-                        target_id: target_session_id as u64,
-                        map_index,
-                        x: strike_x,
-                        y: strike_y,
-                        direction: strike_dir,
-                        damage: 0,
-                        damage_type,
-                        health_percent,
-                    });
-                }
+                    0
+                };
 
-                if dead {
-                    // Mirror the core PK rules: when a player kills another
-                    // outside Fight maps, award PKPoints if the victim is not
-                    // already red/brown, and always refresh the victim's
-                    // BrownTime.
-                    if let Some(t) = self.players.get_mut(&target_session_id) {
-                        t.brown_time_ms = self.time_ms;
-                    }
-
-                    if let Some(map_info) = self.provider.get_map_info(map_index) {
-                        if !map_info.fight {
-                            let eligible = old_pk_points < 200 && self.time_ms > old_brown_time;
-                            if eligible {
-                                if let Some(att) = self.players.get_mut(&session_id) {
-                                    att.pk_points = att.pk_points.saturating_add(100);
-                                }
-                            }
-                        }
-                    }
-                }
+                self.apply_player_hit_from_player(
+                    session_id,
+                    target_session_id,
+                    map_index,
+                    damage_to_apply,
+                    damage_type,
+                    None,
+                    None,
+                    None,
+                    true,
+                    events,
+                );
 
                 // Emit the usual attack animation and position events for the
                 // attacker, then stop; monster handling below is skipped.

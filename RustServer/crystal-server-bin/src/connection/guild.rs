@@ -535,7 +535,7 @@ impl LoginConnection {
                 self.guild_can_request_items = false;
 
                 let items = {
-                    let mut world = self.world.lock().unwrap();
+                    let world = self.world.lock().unwrap();
                     match world.guild_storage_list(&guild_name) {
                         Ok(v) => v,
                         Err(GuildStorageError::GuildNotFound) => {

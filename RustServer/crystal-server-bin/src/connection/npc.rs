@@ -431,6 +431,764 @@ impl LoginConnection {
         Ok((pages, moves))
     }
 
+    /// Render a single NPC page for the given key, interpreting simple
+    /// `#IF` blocks that contain only `CHECKTIMER` conditions and
+    /// selecting between `#SAY` and `#ELSESAY` text accordingly. Pages
+    /// that do not contain any CHECKTIMER-based conditions, or whose
+    /// conditions use other CheckType variants, will return None so that
+    /// the legacy `pages` map can be used instead.
+    fn render_npc_page_with_if(
+        &self,
+        script_path: &Path,
+        key: &str,
+    ) -> Option<Vec<String>> {
+        let text = fs::read_to_string(script_path).ok()?;
+        let lines: Vec<&str> = text.lines().collect();
+
+        let target_key = key.to_ascii_uppercase();
+        let mut in_page = false;
+        let mut i: usize = 0;
+        let mut out_lines: Vec<String> = Vec::new();
+        let mut found_if = false;
+
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") {
+                // New page label.
+                if let Some(end) = trimmed.find(']') {
+                    let label_inner = &trimmed[1..end];
+                    let label = label_inner.to_ascii_uppercase();
+                    if label == target_key {
+                        in_page = true;
+                        i += 1;
+                        continue;
+                    }
+
+                    if in_page {
+                        // We were inside the target page and hit the next
+                        // label; stop processing.
+                        break;
+                    }
+                }
+                i += 1;
+                continue;
+            }
+
+            if !in_page {
+                i += 1;
+                continue;
+            }
+
+            // Handle conditional segments that start with #IF.
+            if trimmed.eq_ignore_ascii_case("#IF") {
+                match self.process_if_segment(&lines, i) {
+                    Some((segment_lines, next_i, handled_any)) => {
+                        if handled_any {
+                            found_if = true;
+                        }
+                        out_lines.extend(segment_lines);
+                        i = next_i;
+                        continue;
+                    }
+                    None => {
+                        // Encountered an #IF block that we cannot safely
+                        // interpret (e.g. it uses unsupported checks).
+                        // Fall back to legacy behaviour for this page.
+                        return None;
+                    }
+                }
+            }
+
+            // Unconditional #SAY blocks are rendered as-is.
+            if trimmed.eq_ignore_ascii_case("#SAY") {
+                i += 1;
+                while i < lines.len() {
+                    let l = lines[i];
+                    let t = l.trim_start();
+                    if t.starts_with("[@") || (t.starts_with('#') && !t.eq_ignore_ascii_case("#SAY")) {
+                        break;
+                    }
+                    out_lines.push(l.to_string());
+                    i += 1;
+                }
+                continue;
+            }
+
+            // Other directives (#ACT, #ELSESAY, etc.) and empty/comment
+            // lines are ignored for dialog text purposes here.
+            i += 1;
+        }
+
+        if found_if {
+            Some(out_lines)
+        } else {
+            None
+        }
+    }
+
+    /// Process a single `#IF` segment that may contain supported conditions
+    /// (CHECKTIMER, LEVEL, CHECKITEM, etc). Returns the rendered text lines
+    /// together with the index of the next line after this segment, and a
+    /// flag indicating whether at least one condition was handled. If the
+    /// segment contains unsupported checks, None is returned so that the
+    /// caller can fall back to the legacy script handling.
+    fn process_if_segment(
+        &self,
+        lines: &[&str],
+        if_index: usize,
+    ) -> Option<(Vec<String>, usize, bool)> {
+        let mut i = if_index + 1;
+        let mut timer_conds: Vec<(String, String, i64)> = Vec::new();
+        let mut level_conds: Vec<(String, i64)> = Vec::new();
+        let mut gold_conds: Vec<(String, i64)> = Vec::new();
+        let mut credit_conds: Vec<(String, i64)> = Vec::new();
+        let mut pk_conds: Vec<(String, i64)> = Vec::new();
+        let mut gender_conds: Vec<u8> = Vec::new();
+        let mut class_conds: Vec<u8> = Vec::new();
+        let mut map_conds: Vec<String> = Vec::new();
+        let mut range_conds: Vec<(i32, i32, i32)> = Vec::new();
+        let mut day_conds: Vec<String> = Vec::new();
+        let mut hour_conds: Vec<u32> = Vec::new();
+        let mut minute_conds: Vec<u32> = Vec::new();
+        let mut random_conds: Vec<i32> = Vec::new();
+        let mut checkitem_conds: Vec<(String, i32)> = Vec::new();
+        let mut checkhum_conds: Vec<(String, i32)> = Vec::new();
+        let mut checkmon_conds: Vec<(String, i32)> = Vec::new();
+        let mut checkexactmon_conds: Vec<(String, String, i32)> = Vec::new();
+
+        // Collect condition lines until we hit another directive or label.
+        while i < lines.len() {
+            let trimmed = lines[i].trim();
+
+            if trimmed.is_empty() || trimmed.starts_with(';') {
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with("[@") || trimmed.starts_with('#') {
+                break;
+            }
+
+            let upper = trimmed.to_ascii_uppercase();
+            if upper.starts_with("CHECKTIMER") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 4 {
+                    return None;
+                }
+
+                // Expected layout: CHECKTIMER <op> <time_secs> <key>
+                let op = parts[1].to_string();
+                let time_secs = match parts[2].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                let base_key = parts[3].to_string();
+                timer_conds.push((op, base_key, time_secs));
+            } else if upper.starts_with("LEVEL") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    return None;
+                }
+
+                let op = parts[1].to_string();
+                let value = match parts[2].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                level_conds.push((op, value));
+            } else if upper.starts_with("CHECKGOLD") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    return None;
+                }
+
+                let op = parts[1].to_string();
+                let value = match parts[2].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                gold_conds.push((op, value));
+            } else if upper.starts_with("CHECKCREDIT") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    return None;
+                }
+
+                let op = parts[1].to_string();
+                let value = match parts[2].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                credit_conds.push((op, value));
+            } else if upper.starts_with("CHECKPKPOINT") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    return None;
+                }
+
+                let op = parts[1].to_string();
+                let value = match parts[2].parse::<i64>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                pk_conds.push((op, value));
+            } else if upper.starts_with("CHECKGENDER") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                let val = parts[1];
+                let expected = if val.eq_ignore_ascii_case("MALE") {
+                    0u8
+                } else if val.eq_ignore_ascii_case("FEMALE") {
+                    1u8
+                } else {
+                    return None;
+                };
+                gender_conds.push(expected);
+            } else if upper.starts_with("CHECKCLASS") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                let val = parts[1];
+                let expected = if val.eq_ignore_ascii_case("WARRIOR") {
+                    0u8
+                } else if val.eq_ignore_ascii_case("WIZARD") {
+                    1u8
+                } else if val.eq_ignore_ascii_case("TAOIST") {
+                    2u8
+                } else if val.eq_ignore_ascii_case("ASSASSIN") {
+                    3u8
+                } else if val.eq_ignore_ascii_case("ARCHER") {
+                    4u8
+                } else {
+                    return None;
+                };
+                class_conds.push(expected);
+            } else if upper.starts_with("CHECKMAP") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                map_conds.push(parts[1].to_string());
+            } else if upper.starts_with("CHECKRANGE") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 4 {
+                    return None;
+                }
+
+                let x = match parts[1].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                let y = match parts[2].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                let range = match parts[3].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                range_conds.push((x, y, range));
+            } else if upper.starts_with("DAYOFWEEK") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                day_conds.push(parts[1].to_ascii_uppercase());
+            } else if upper.starts_with("HOUR") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                let hour = match parts[1].parse::<u32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                hour_conds.push(hour);
+            } else if upper.starts_with("MIN") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                let minute = match parts[1].parse::<u32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                minute_conds.push(minute);
+            } else if upper.starts_with("RANDOM") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+
+                let val = match parts[1].parse::<i32>() {
+                    Ok(v) if v > 0 => v,
+                    _ => return None,
+                };
+                random_conds.push(val);
+            } else if upper.starts_with("CHECKITEM") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 2 {
+                    return None;
+                }
+                let item_name = parts[1].to_string();
+                let count = if parts.len() >= 3 {
+                    parts[2].parse::<i32>().unwrap_or(1)
+                } else {
+                    1
+                };
+                checkitem_conds.push((item_name, count));
+            } else if upper.starts_with("CHECKHUM") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    // We only support CHECKHUM <Map> <Count> for now.
+                    // C# also supports <Map> <Range> <Count>, which we treat as unsupported.
+                    return None;
+                }
+                let map_name = parts[1].to_string();
+                let count = match parts[2].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                checkhum_conds.push((map_name, count));
+            } else if upper.starts_with("CHECKMON") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 3 {
+                    return None;
+                }
+                let map_name = parts[1].to_string();
+                let count = match parts[2].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                checkmon_conds.push((map_name, count));
+            } else if upper.starts_with("CHECKEXACTMON") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 4 {
+                    return None;
+                }
+                let map_name = parts[1].to_string();
+                let mon_name = parts[2].to_string();
+                let count = match parts[3].parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => return None,
+                };
+                checkexactmon_conds.push((map_name, mon_name, count));
+            } else if upper.starts_with("CHECK") || upper.starts_with("LEVEL") {
+                // Other CHECK* or LEVEL-based conditions are not yet
+                // supported in this minimal renderer.
+                return None;
+            } else {
+                // Unknown condition syntax – bail out to avoid breaking
+                // complex scripts.
+                return None;
+            }
+
+            i += 1;
+        }
+
+        // Collect #SAY / #ELSESAY text for this segment.
+        let mut say_lines: Vec<String> = Vec::new();
+        let mut else_lines: Vec<String> = Vec::new();
+        let mut block: u8 = 0; // 0 = none, 1 = say, 2 = else-say
+
+        while i < lines.len() {
+            let line = lines[i];
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("[@") || trimmed.eq_ignore_ascii_case("#IF") {
+                break;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#SAY") {
+                block = 1;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.eq_ignore_ascii_case("#ELSESAY") {
+                block = 2;
+                i += 1;
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                // #ACT / #ELSEACT etc. mark the end of this segment from a
+                // dialog-text perspective.
+                break;
+            }
+
+            match block {
+                1 => say_lines.push(line.to_string()),
+                2 => else_lines.push(line.to_string()),
+                _ => {}
+            }
+
+            i += 1;
+        }
+
+        let mut pass = true;
+
+        // World-based conditions: CHECKTIMER, LEVEL, CHECKPKPOINT, CHECKITEM, CHECKHUM, etc.
+        if pass
+            && (!timer_conds.is_empty()
+                || !level_conds.is_empty()
+                || !pk_conds.is_empty()
+                || !checkitem_conds.is_empty()
+                || !checkhum_conds.is_empty()
+                || !checkmon_conds.is_empty()
+                || !checkexactmon_conds.is_empty())
+        {
+            let world = self.world.lock().unwrap();
+
+            if !timer_conds.is_empty() {
+                for (op, base_key, time_secs) in &timer_conds {
+                    let ok = match world.check_timer_for_session(
+                        self.session_id,
+                        op,
+                        base_key,
+                        *time_secs,
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!(
+                                "npc: CHECKTIMER eval error op={} key={} err={}",
+                                op,
+                                base_key,
+                                e
+                            );
+                            false
+                        }
+                    };
+                    if !ok {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !checkitem_conds.is_empty() {
+                for (name, count) in &checkitem_conds {
+                    let total = world.player_item_count_by_name(self.session_id, name);
+                    if total < *count {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !checkhum_conds.is_empty() {
+                for (map_name, count) in &checkhum_conds {
+                    let player_count = world.player_count_on_map_by_file_name(map_name);
+                    if player_count < *count {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !checkmon_conds.is_empty() {
+                for (map_name, count) in &checkmon_conds {
+                    let mon_count = world.monster_count_on_map_by_file_name(map_name);
+                    if mon_count < *count {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !checkexactmon_conds.is_empty() {
+                for (map_name, mon_name, count) in &checkexactmon_conds {
+                    let found_count =
+                        world.monster_count_on_map_by_file_and_name(map_name, mon_name);
+                    if found_count < *count {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !level_conds.is_empty() {
+                let level_val = world.player_level(self.session_id).unwrap_or(0) as i64;
+                for (op, value) in &level_conds {
+                    let ok = match op.as_str() {
+                        "<" => level_val < *value,
+                        ">" => level_val > *value,
+                        "<=" => level_val <= *value,
+                        ">=" => level_val >= *value,
+                        "==" => level_val == *value,
+                        "!=" => level_val != *value,
+                        _ => {
+                            tracing::warn!(
+                                "npc: LEVEL eval error invalid op={} level={} target={}",
+                                op,
+                                level_val,
+                                value
+                            );
+                            false
+                        }
+                    };
+                    if !ok {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !pk_conds.is_empty() {
+                let pk_val = world.player_pk_points(self.session_id).unwrap_or(0) as i64;
+                for (op, value) in &pk_conds {
+                    let ok = match op.as_str() {
+                        "<" => pk_val < *value,
+                        ">" => pk_val > *value,
+                        "<=" => pk_val <= *value,
+                        ">=" => pk_val >= *value,
+                        "==" => pk_val == *value,
+                        "!=" => pk_val != *value,
+                        _ => {
+                            tracing::warn!(
+                                "npc: CHECKPKPOINT eval error invalid op={} pk={} target={}",
+                                op,
+                                pk_val,
+                                value
+                            );
+                            false
+                        }
+                    };
+                    if !ok {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Character/account/map/range-based conditions (from connection state).
+        if pass && !gender_conds.is_empty() {
+            let mut gender_val: u8 = 0;
+            if let Some(char_idx) = self.current_char_index {
+                if let Some(ch) = self.characters.iter().find(|c| c.index == char_idx) {
+                    gender_val = ch.gender;
+                }
+            }
+            for expected in &gender_conds {
+                if gender_val != *expected {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        if pass && !class_conds.is_empty() {
+            let mut class_val: u8 = 255;
+            if let Some(char_idx) = self.current_char_index {
+                if let Some(ch) = self.characters.iter().find(|c| c.index == char_idx) {
+                    class_val = ch.class;
+                }
+            }
+            for expected in &class_conds {
+                if class_val != *expected {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        if pass && !map_conds.is_empty() {
+            let cur_map = self.current_map_index;
+            for name in &map_conds {
+                let mut ok = false;
+                if let Some(info) = self
+                    .world_db
+                    .map_infos
+                    .iter()
+                    .find(|m| m.file_name.eq_ignore_ascii_case(name))
+                {
+                    ok = info.index == cur_map;
+                }
+                if !ok {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        if pass && !range_conds.is_empty() {
+            let px = self.current_x;
+            let py = self.current_y;
+            for (tx, ty, range) in &range_conds {
+                let dx = px - *tx;
+                let dy = py - *ty;
+                let dist = dx.abs().max(dy.abs());
+                if dist > *range {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        // Evaluate CHECKGOLD and CHECKCREDIT conditions using connection-side
+        // current_stats (account gold/credit), which are kept in sync via
+        // server packets.
+        if pass && !gold_conds.is_empty() {
+            let mut gold_val: i64 = 0;
+            if let Some(ref stats) = self.current_stats {
+                gold_val = stats.gold as i64;
+            }
+
+            for (op, value) in &gold_conds {
+                let ok = match op.as_str() {
+                    "<" => gold_val < *value,
+                    ">" => gold_val > *value,
+                    "<=" => gold_val <= *value,
+                    ">=" => gold_val >= *value,
+                    "==" => gold_val == *value,
+                    "!=" => gold_val != *value,
+                    _ => {
+                        tracing::warn!(
+                            "npc: CHECKGOLD eval error invalid op={} gold={} target={}",
+                            op,
+                            gold_val,
+                            value
+                        );
+                        false
+                    }
+                };
+                if !ok {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        if pass && !credit_conds.is_empty() {
+            let mut credit_val: i64 = 0;
+            if let Some(ref stats) = self.current_stats {
+                credit_val = stats.credit as i64;
+            }
+
+            for (op, value) in &credit_conds {
+                let ok = match op.as_str() {
+                    "<" => credit_val < *value,
+                    ">" => credit_val > *value,
+                    "<=" => credit_val <= *value,
+                    ">=" => credit_val >= *value,
+                    "==" => credit_val == *value,
+                    "!=" => credit_val != *value,
+                    _ => {
+                        tracing::warn!(
+                            "npc: CHECKCREDIT eval error invalid op={} credit={} target={}",
+                            op,
+                            credit_val,
+                            value
+                        );
+                        false
+                    }
+                };
+                if !ok {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        // Time/global-random based conditions.
+        if pass
+            && (!day_conds.is_empty() || !hour_conds.is_empty() || !minute_conds.is_empty())
+        {
+            use chrono::{Datelike, Timelike};
+            let now = chrono::Local::now();
+
+            if !day_conds.is_empty() {
+                let day_str = match now.weekday() {
+                    chrono::Weekday::Mon => "MONDAY",
+                    chrono::Weekday::Tue => "TUESDAY",
+                    chrono::Weekday::Wed => "WEDNESDAY",
+                    chrono::Weekday::Thu => "THURSDAY",
+                    chrono::Weekday::Fri => "FRIDAY",
+                    chrono::Weekday::Sat => "SATURDAY",
+                    chrono::Weekday::Sun => "SUNDAY",
+                };
+
+                for expected in &day_conds {
+                    if day_str != expected {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !hour_conds.is_empty() {
+                let hour = now.hour() as u32;
+                for expected in &hour_conds {
+                    if hour != *expected {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+
+            if pass && !minute_conds.is_empty() {
+                let minute = now.minute() as u32;
+                for expected in &minute_conds {
+                    if minute != *expected {
+                        pass = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if pass && !random_conds.is_empty() {
+            let mut rng = thread_rng();
+            for bound in &random_conds {
+                let b = if *bound <= 0 { 1 } else { *bound };
+                let roll = rng.gen_range(0..b);
+                if roll != 0 {
+                    pass = false;
+                    break;
+                }
+            }
+        }
+
+        let mut out: Vec<String> = Vec::new();
+        if pass {
+            out.extend(say_lines);
+        } else if !else_lines.is_empty() {
+            out.extend(else_lines);
+        }
+
+        let handled_any = !timer_conds.is_empty()
+            || !level_conds.is_empty()
+            || !gold_conds.is_empty()
+            || !credit_conds.is_empty()
+            || !pk_conds.is_empty()
+            || !gender_conds.is_empty()
+            || !class_conds.is_empty()
+            || !map_conds.is_empty()
+            || !range_conds.is_empty()
+            || !day_conds.is_empty()
+            || !hour_conds.is_empty()
+            || !minute_conds.is_empty()
+            || !random_conds.is_empty()
+            || !checkitem_conds.is_empty()
+            || !checkhum_conds.is_empty()
+            || !checkmon_conds.is_empty()
+            || !checkexactmon_conds.is_empty();
+
+        Some((out, i, handled_any))
+    }
+
     /// Expand simple NPC dialog placeholders such as <$USERNAME>, <$LEVEL>,
     /// <$MAP>, <$HP>, <$GAMEGOLD> and <$PARCELAMOUNT> in the given page
     /// lines. This mirrors the C# NPCSegment.ReplaceValue behaviour for a
@@ -1596,138 +2354,192 @@ impl LoginConnection {
                                 }
                             }
 
-                            // Per-player timer UI, mirroring the C#
-                            // ActionType.SetTimer/ExpireTimer behaviour on the
-                            // client. We currently ignore the global timer
-                            // flag and only drive the local TimerDialog.
-                            if let Some((timer_key, seconds, type_id, _global)) =
+                            // Global and per-player timers, mirroring the C#
+                            // ActionType.SetTimer/ExpireTimer behaviour.
+                            if let Some((timer_key, seconds, type_id, global)) =
                                 Self::extract_set_timer(&script_path, &key)
                             {
-                                let pkt = SSetTimer {
-                                    key: timer_key,
-                                    type_id,
-                                    seconds,
-                                };
-                                if let Ok(raw) = pkt.encode() {
-                                    out.push(Self::encode_raw(raw));
-                                }
-                            }
+                                let mut world = self.world.lock().unwrap();
+                                if global {
+                                    // Global timer: key is "_-" + script key,
+                                    // only stored server-side and used by
+                                    // NPC CheckTimer; it is not sent to the
+                                    // client TimerDialog.
+                                    let full_key = format!("_-{}", timer_key);
+                                    world.set_timer(full_key, seconds, type_id);
+                                } else if let Some(name) =
+                                    world.player_name(self.session_id)
+                                {
+                                    // Per-player timer: key is
+                                    // "<PlayerName>-<ScriptKey>", stored in
+                                    // the shared timer map and also sent to
+                                    // the client so TimerDialog can track it.
+                                    let full_key = format!("{}-{}", name, timer_key);
+                                    world.set_timer(full_key.clone(), seconds, type_id);
+                                    drop(world);
 
-                            if let Some(expire_key) =
-                                Self::extract_expire_timer(&script_path, &key)
-                            {
-                                let pkt = SExpireTimer { key: expire_key };
-                                if let Ok(raw) = pkt.encode() {
-                                    out.push(Self::encode_raw(raw));
-                                }
-                            }
-
-                            if key.eq_ignore_ascii_case("@MAIN") {
-                                if let Some(page_alt) = pages.get("@MAIN-1") {
-                                    maybe_page = Some(page_alt.clone());
-                                } else if let Some(page_main) = pages.get("@MAIN") {
-                                    maybe_page = Some(page_main.clone());
-                                }
-                            } else {
-                                maybe_page = pages.get(&key).cloned();
-                            }
-                        }
-                    }
-                }
-
-                let page_raw = maybe_page.unwrap_or_else(|| vec![npc.name.clone()]);
-                let page = self.expand_npc_placeholders(page_raw, Some(&npc.name));
-                let resp = SNpcResponse { page };
-                if let Ok(raw) = resp.encode() {
-                    out.push(Self::encode_raw(raw));
-                }
-
-                // Special-case the storage page: when the player clicks an
-                // [@STORAGE] entry, mirror the C# behaviour of sending the
-                // current account Storage contents followed by an NPCStorage
-                // packet to open the warehouse dialog.
-                if key_upper == "@STORAGE" {
-                    // Remember which NPC index opened the storage page so
-                    // that subsequent StoreItem/TakeBackItem requests can be
-                    // validated against NPC proximity, similar to C#
-                    // PlayerObject.NPCPage/NPCObjectID.
-                    self.current_storage_npc_id = Some(msg.object_id);
-
-                    if let Some(ref account_id) = self.account_id {
-                        let account_storage = match self.store.load_account_storage(account_id) {
-                            Ok(Some(s)) => s,
-                            Ok(None) => AccountStorage {
-                                slots: vec![None; 80],
-                                has_expanded_storage: false,
-                                expanded_storage_expiry_binary: 0,
-                            },
-                            Err(_) => AccountStorage {
-                                slots: vec![None; 80],
-                                has_expanded_storage: false,
-                                expanded_storage_expiry_binary: 0,
-                            },
-                        };
-
-                        let mut storage_bytes = Vec::new();
-                        let has_storage_array = !account_storage.slots.is_empty();
-                        let _ = write_bool(&mut storage_bytes, has_storage_array);
-                        if has_storage_array {
-                            let _ = write_i32_le(
-                                &mut storage_bytes,
-                                account_storage.slots.len() as i32,
-                            );
-                            for slot in &account_storage.slots {
-                                let _ = write_bool(&mut storage_bytes, slot.is_some());
-                                if let Some(item) = slot {
-                                    if let Ok(bytes) = item.encode_to_bytes() {
-                                        storage_bytes.extend_from_slice(&bytes);
+                                    let pkt = SSetTimer {
+                                        key: full_key,
+                                        type_id,
+                                        seconds,
+                                    };
+                                    if let Ok(raw) = pkt.encode() {
+                                        out.push(Self::encode_raw(raw));
                                     }
                                 }
                             }
+
+                            if let Some(expire_base_key) =
+                                Self::extract_expire_timer(&script_path, &key)
+                            {
+                                let mut world = self.world.lock().unwrap();
+
+                                // Global timer key uses the "_-" prefix.
+                                let global_key = format!("_-{}", expire_base_key);
+                                world.remove_timer(&global_key);
+
+                                if let Some(name) = world.player_name(self.session_id) {
+                                    // Per-player timer key uses the
+                                    // "<PlayerName>-<ScriptKey>" format.
+                                    let full_key =
+                                        format!("{}-{}", name, expire_base_key);
+                                    world.remove_timer(&full_key);
+                                    drop(world);
+
+                                    let pkt = SExpireTimer { key: full_key };
+                                    if let Ok(raw) = pkt.encode() {
+                                        out.push(Self::encode_raw(raw));
+                                    }
+                                }
+                            }
+
+                            // Special-case the storage page: when the player
+                            // clicks an [@STORAGE] entry, mirror the C# behaviour
+                            // of sending the current account Storage contents
+                            // followed by an NPCStorage packet to open the
+                            // warehouse dialog.
+                            if key_upper == "@STORAGE" {
+                                // Remember which NPC index opened the storage page so
+                                // that subsequent StoreItem/TakeBackItem requests can be
+                                // validated against NPC proximity, similar to C#
+                                // PlayerObject.NPCPage/NPCObjectID.
+                                self.current_storage_npc_id = Some(msg.object_id);
+
+                                if let Some(ref account_id) = self.account_id {
+                                    let account_storage =
+                                        match self.store.load_account_storage(account_id) {
+                                            Ok(Some(s)) => s,
+                                            Ok(None) => AccountStorage {
+                                                slots: vec![None; 80],
+                                                has_expanded_storage: false,
+                                                expanded_storage_expiry_binary: 0,
+                                            },
+                                            Err(_) => AccountStorage {
+                                                slots: vec![None; 80],
+                                                has_expanded_storage: false,
+                                                expanded_storage_expiry_binary: 0,
+                                            },
+                                        };
+
+                                    let mut storage_bytes = Vec::new();
+                                    let has_storage_array = !account_storage.slots.is_empty();
+                                    let _ = write_bool(&mut storage_bytes, has_storage_array);
+                                    if has_storage_array {
+                                        let _ = write_i32_le(
+                                            &mut storage_bytes,
+                                            account_storage.slots.len() as i32,
+                                        );
+                                        for slot in &account_storage.slots {
+                                            let _ = write_bool(&mut storage_bytes, slot.is_some());
+                                            if let Some(item) = slot {
+                                                if let Ok(bytes) = item.encode_to_bytes() {
+                                                    storage_bytes
+                                                        .extend_from_slice(&bytes);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    let storage_pkt = SUserStorage { storage_bytes };
+                                    if let Ok(raw) = storage_pkt.encode() {
+                                        out.push(Self::encode_raw(raw));
+                                    }
+
+                                    let npc_storage = SNpcStorage;
+                                    let raw = npc_storage.encode();
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            if let Some((goods_items, panel_type)) = shop_goods {
+                                let rate: f32 = (npc.rate as f32) / 100.0;
+                                if let Ok(bytes) = Self::build_npc_goods_bytes(
+                                    &goods_items,
+                                    rate,
+                                    panel_type,
+                                    false,
+                                ) {
+                                    let pkt = SNpcGoods { goods_bytes: bytes };
+                                    let raw = pkt.encode();
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            if send_npc_sell_only || send_npc_sell_after_goods {
+                                let sell = SNpcSell;
+                                let raw = sell.encode();
+                                out.push(Self::encode_raw(raw));
+                            }
+
+                            if key_upper == "@REPAIR" {
+                                let rate: f32 = (npc.rate as f32) / 100.0;
+                                let pkt = SNpcRepair { rate };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            } else if key_upper == "@SREPAIR" {
+                                let rate: f32 = (npc.rate as f32) / 100.0;
+                                let pkt = SNpcsRepair { rate };
+                                if let Ok(raw) = pkt.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            // After executing any actions (teleport, timers,
+                            // storage, shop, etc.), choose which dialog page
+                            // to send. If a fail label for paid teleport has
+                            // already populated maybe_page, honour that
+                            // first; otherwise, try the IF-aware renderer and
+                            // fall back to the simple pages map, mirroring the
+                            // C# behaviour.
+                            if maybe_page.is_none() {
+                                // First attempt to render using the
+                                // process_if_segment/#IF logic. If that
+                                // returns None (unsupported conditions), fall
+                                // back to the legacy pages map.
+                                if let Some(page_if) =
+                                    self.render_npc_page_with_if(&script_path, &key)
+                                {
+                                    maybe_page = Some(page_if);
+                                } else if key.eq_ignore_ascii_case("@MAIN") {
+                                    if let Some(page_alt) = pages.get("@MAIN-1") {
+                                        maybe_page = Some(page_alt.clone());
+                                    } else if let Some(page_main) = pages.get("@MAIN") {
+                                        maybe_page = Some(page_main.clone());
+                                    }
+                                } else if let Some(page) = pages.get(&key) {
+                                    maybe_page = Some(page.clone());
+                                }
+                            }
+
+                            if let Some(page_raw) = maybe_page {
+                                let page = self.expand_npc_placeholders(page_raw, None);
+                                let resp = SNpcResponse { page };
+                                if let Ok(raw) = resp.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
                         }
-
-                        let storage_pkt = SUserStorage { storage_bytes };
-                        if let Ok(raw) = storage_pkt.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-
-                        let npc_storage = SNpcStorage;
-                        let raw = npc_storage.encode();
-                        out.push(Self::encode_raw(raw));
-                    }
-                }
-
-                if let Some((goods_items, panel_type)) = shop_goods {
-                    let rate: f32 = (npc.rate as f32) / 100.0;
-                    if let Ok(bytes) = Self::build_npc_goods_bytes(
-                        &goods_items,
-                        rate,
-                        panel_type,
-                        false,
-                    ) {
-                        let pkt = SNpcGoods { goods_bytes: bytes };
-                        let raw = pkt.encode();
-                        out.push(Self::encode_raw(raw));
-                    }
-                }
-
-                if send_npc_sell_only || send_npc_sell_after_goods {
-                    let sell = SNpcSell;
-                    let raw = sell.encode();
-                    out.push(Self::encode_raw(raw));
-                }
-
-                if key_upper == "@REPAIR" {
-                    let rate: f32 = (npc.rate as f32) / 100.0;
-                    let pkt = SNpcRepair { rate };
-                    if let Ok(raw) = pkt.encode() {
-                        out.push(Self::encode_raw(raw));
-                    }
-                } else if key_upper == "@SREPAIR" {
-                    let rate: f32 = (npc.rate as f32) / 100.0;
-                    let pkt = SNpcsRepair { rate };
-                    if let Ok(raw) = pkt.encode() {
-                        out.push(Self::encode_raw(raw));
                     }
                 }
             }

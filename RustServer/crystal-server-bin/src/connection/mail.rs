@@ -451,7 +451,7 @@ impl LoginConnection {
             return;
         }
 
-        let sender_account_id = match &self.account_id {
+        let _sender_account_id = match &self.account_id {
             Some(id) => id.clone(),
             None => {
                 let pkt = SMailSent { result: -1 };
@@ -460,7 +460,7 @@ impl LoginConnection {
             }
         };
 
-        let sender_char_idx = match self.current_char_index {
+        let _sender_char_idx = match self.current_char_index {
             Some(i) => i,
             None => {
                 let pkt = SMailSent { result: -1 };
@@ -721,7 +721,7 @@ impl LoginConnection {
                 write_bool, write_i32_le, write_i64_le, write_string, write_u32_le, write_u64_le,
             };
 
-            let mut online_accounts = self.online_accounts.lock().unwrap();
+            let online_accounts = self.online_accounts.lock().unwrap();
             if let Some(&other_session) = online_accounts.get(&recipient_account_id) {
                 let mut buf = Vec::new();
                 if write_i32_le(&mut buf, 1).is_ok()

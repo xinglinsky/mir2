@@ -692,6 +692,43 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
+                world::WorldEvent::MapSpellAdded {
+                    map_index,
+                    x,
+                    y,
+                    spell,
+                    direction,
+                    param,
+                } => {
+                    let object_id = Self::safezone_spell_object_id(map_index, x, y);
+                    let pkt = SObjectSpell {
+                        object_id,
+                        location_x: x,
+                        location_y: y,
+                        spell,
+                        direction,
+                        param,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        out.push(bytes.clone());
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::MapSpellRemoved {
+                    map_index,
+                    x,
+                    y,
+                    spell: _,
+                } => {
+                    let object_id = Self::safezone_spell_object_id(map_index, x, y);
+                    let pkt = SObjectRemove { object_id };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        out.push(bytes.clone());
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
                 world::WorldEvent::PlayerHealed {
                     session_id,
                     map_index,

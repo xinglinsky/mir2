@@ -441,6 +441,10 @@ impl<P: WorldProvider> World<P> {
             .map(|p| (p.inventory.clone(), p.equipment.clone()))
     }
 
+    pub fn player_level(&self, session_id: SessionId) -> Option<u16> {
+        self.players.get(&session_id).map(|p| p.level)
+    }
+
     pub fn player_pk_points(&self, session_id: SessionId) -> Option<i32> {
         self.players.get(&session_id).map(|p| p.pk_points)
     }

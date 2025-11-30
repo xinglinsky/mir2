@@ -91,11 +91,26 @@ pub fn magic_def_power<R: Rng + ?Sized>(info: &MagicInfo, rng: &mut R) -> i32 {
 }
 
 /// Compute the base power added by a magic at the given level, mirroring the
-/// C# UserMagic.GetPower implementation.
+/// C# UserMagic.GetPower() implementation.
 pub fn magic_power<R: Rng + ?Sized>(info: &MagicInfo, level: u8, rng: &mut R) -> i32 {
     let mpower = magic_mpower(info, rng) as f32;
     let def_power = magic_def_power(info, rng) as f32;
     ((mpower / 4.0) * (level as f32 + 1.0) + def_power).round() as i32
+}
+
+/// Variant of magic_power that mirrors C# UserMagic.GetPower(int power), where
+/// the caller supplies an external base power (e.g. GetAttackPower + 15 for
+/// MagicShield) instead of using MPower(). This is used for effects whose
+/// strength/duration scales directly with a precomputed physical/magic roll.
+pub fn magic_power_with_base<R: Rng + ?Sized>(
+    info: &MagicInfo,
+    level: u8,
+    base_power: i32,
+    rng: &mut R,
+) -> i32 {
+    let p = base_power.max(0) as f32;
+    let def_power = magic_def_power(info, rng) as f32;
+    (p / 4.0 * (level as f32 + 1.0) + def_power).round() as i32
 }
 
 /// Compute final damage for a magic given a base physical DamageBase, mirroring

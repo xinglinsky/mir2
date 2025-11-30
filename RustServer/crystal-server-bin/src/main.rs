@@ -1,5 +1,4 @@
 use std::{
-    fs,
     io,
     net::SocketAddr,
     sync::{Arc, Mutex, atomic::{AtomicU32, Ordering}},
@@ -24,7 +23,7 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
     SStruck,
 };
-use crystal_shared_proto::magic::SObjectEffect;
+use crystal_shared_proto::magic::{SObjectEffect, SRemoveBuff};
 use crystal_shared_proto::user::SHealthChanged;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -402,7 +401,7 @@ async fn main() -> io::Result<()> {
                                 )
                             };
 
-                            tracing::debug!(
+                            tracing::trace!(
                                 "[drop-send] GoldDropped: object_id={} map={} pos=({}, {}) gold={} viewers={}",
                                 object_id,
                                 map_index,
@@ -858,6 +857,106 @@ async fn main() -> io::Result<()> {
                                             .entry(session_id)
                                             .or_default()
                                             .push(encoded);
+                                    }
+                                }
+                            }
+                        }
+                        world::WorldEvent::RemoveBuff {
+                            session_id,
+                            buff_type,
+                        } => {
+                            // Determine which sessions should observe the buff
+                            // removal. We use the player's current location to
+                            // find nearby viewers, mirroring other broadcast
+                            // events such as ObjectAttack.
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                if let Some((map_index, x, y, _dir)) =
+                                    w.player_position(session_id)
+                                {
+                                    w.sessions_in_range_for_map(
+                                        map_index,
+                                        x,
+                                        y,
+                                        LoginConnection::DATA_RANGE,
+                                    )
+                                } else {
+                                    Vec::new()
+                                }
+                            };
+
+                            // Notify the buff owner (and nearby viewers) that
+                            // the buff has been removed so client-side buff
+                            // lists and visuals stay in sync.
+                            let pkt = SRemoveBuff {
+                                buff_type,
+                                object_id: session_id,
+                            };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+
+                                // Owner always receives their own RemoveBuff.
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(encoded.clone());
+
+                                // Also broadcast to other nearby viewers.
+                                for sid in &viewers {
+                                    if *sid != session_id {
+                                        outboxes
+                                            .entry(*sid)
+                                            .or_default()
+                                            .push(encoded.clone());
+                                    }
+                                }
+                            }
+
+                            // For MagicShield / ElementalBarrier, also emit the
+                            // corresponding "Down" visual so clients can stop
+                            // the looping shield animation.
+                            if buff_type == world::BuffType::MagicShield as u8
+                                || buff_type
+                                    == world::BuffType::ElementalBarrier as u8
+                            {
+                                let effect: u8 =
+                                    if buff_type
+                                        == world::BuffType::MagicShield as u8
+                                    {
+                                        7 // SpellEffect.MagicShieldDown
+                                    } else {
+                                        14 // SpellEffect.ElementalBarrierDown
+                                    };
+
+                                let eff_pkt = SObjectEffect {
+                                    object_id: session_id,
+                                    effect,
+                                    effect_type: 0,
+                                    delay_time: 0,
+                                    time: 0,
+                                };
+
+                                if let Ok(raw) = eff_pkt.encode() {
+                                    let encoded = raw.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+
+                                    // Send to owner.
+                                    outboxes
+                                        .entry(session_id)
+                                        .or_default()
+                                        .push(encoded.clone());
+
+                                    // And to nearby viewers.
+                                    for sid in &viewers {
+                                        if *sid != session_id {
+                                            outboxes
+                                                .entry(*sid)
+                                                .or_default()
+                                                .push(encoded.clone());
+                                        }
                                     }
                                 }
                             }

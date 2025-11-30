@@ -11,7 +11,7 @@ use crate::world::types::{AttackMode, BuffProperty, BuffType, PetKind};
 use crate::world::configs::pet_template;
 use crate::world::Spell;
 
-use super::{World, WorldEvent, PendingMagicHit};
+use super::{World, WorldEvent, PendingMagicHit, SessionId};
 
 #[derive(Clone, Debug)]
 pub struct RoutePoint {
@@ -177,6 +177,7 @@ impl<P: WorldProvider> World<P> {
 
     /// World update tick. This will eventually drive respawns, monster AI,
     /// buffs and other timed systems.
+    #[allow(unused_assignments)]
     pub fn update(&mut self, now_ms: i64) -> Vec<WorldEvent> {
         self.time_ms = now_ms;
         self.update_respawn_tick_counter(now_ms);
@@ -210,6 +211,8 @@ impl<P: WorldProvider> World<P> {
                 self.safezone_heal_last_ms = now_ms;
             }
         }
+
+        self.process_fire_walls(now_ms, &mut events);
 
         self.process_monster_buffs(now_ms);
 
@@ -347,6 +350,188 @@ impl<P: WorldProvider> World<P> {
         self.process_pending_magic_hits(now_ms, &mut events);
 
         events
+    }
+
+    fn process_fire_walls(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        if self.fire_walls.is_empty() {
+            return;
+        }
+
+        let instances = std::mem::take(&mut self.fire_walls);
+        let mut remaining = Vec::new();
+
+        for mut fw in instances {
+            // C# SpellObject.Process has special handling for FireWall:
+            // - If Caster becomes null, or
+            // - If CurrentMap != Caster.CurrentMap
+            // then the spell object is removed immediately, even before
+            // ExpireTime. We approximate this by checking whether the caster
+            // player still exists on the same map.
+            let caster_ok = match self.players.get(&fw.caster_session_id) {
+                Some(p) if p.map_index == fw.map_index => true,
+                _ => false,
+            };
+
+            if !caster_ok {
+                for &(x, y) in &fw.cells {
+                    self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
+                    events.push(WorldEvent::MapSpellRemoved {
+                        map_index: fw.map_index,
+                        x,
+                        y,
+                        spell: Spell::FireWall as u8,
+                    });
+                }
+                continue;
+            }
+
+            if now_ms > fw.expire_time_ms {
+                for &(x, y) in &fw.cells {
+                    self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
+                    events.push(WorldEvent::MapSpellRemoved {
+                        map_index: fw.map_index,
+                        x,
+                        y,
+                        spell: Spell::FireWall as u8,
+                    });
+                }
+                continue;
+            }
+
+            if now_ms >= fw.next_tick_ms {
+                let step = fw.tick_speed_ms.max(0);
+                if step > 0 {
+                    fw.next_tick_ms = now_ms.saturating_add(step);
+                } else {
+                    fw.next_tick_ms = now_ms;
+                }
+
+                let map_index = fw.map_index;
+                let caster_session_id = fw.caster_session_id;
+                let value = fw.value;
+
+                if value > 0 {
+                    // Damage monsters standing on any FireWall tile by
+                    // scheduling PendingMagicHit entries, reusing the common
+                    // monster damage + drops/experience pipeline.
+                    for &(cx, cy) in &fw.cells {
+                        if let Some(monsters) = self.monsters.get(&map_index) {
+                            for m in monsters.iter() {
+                                if m.hp <= 0 {
+                                    continue;
+                                }
+                                if m.x != cx || m.y != cy {
+                                    continue;
+                                }
+                                if !self.can_attack_monster(caster_session_id, map_index, m.id) {
+                                    continue;
+                                }
+
+                                let due_time_ms = now_ms;
+                                self.pending_magic_hits.push(PendingMagicHit {
+                                    due_time_ms,
+                                    attacker_session_id: caster_session_id,
+                                    map_index,
+                                    target_monster_id: m.id,
+                                    monster_index: m.monster_index,
+                                    spell_id: Spell::FireWall as u8,
+                                    damage: value,
+                                    damage_type: 0,
+                                });
+                            }
+                        }
+                    }
+
+                    // Damage players standing on any FireWall tile, using the
+                    // same PK and safe-zone rules as C#
+                    // PlayerObject.IsAttackTarget(HumanObject attacker) via
+                    // can_attack_player, and approximating DefenceType.MAC by
+                    // sampling MinMAC/MaxMAC and applying
+                    // DamageReductionPercent. We then route the actual
+                    // HP/death + PK logic through the unified
+                    // apply_player_hit_from_player helper so that FireWall
+                    // kills behave like other player-vs-player attacks.
+                    let mut player_targets: Vec<SessionId> = Vec::new();
+                    for (&sid, p) in &self.players {
+                        if p.map_index != map_index || p.dead || p.hp <= 0 {
+                            continue;
+                        }
+
+                        if !fw.cells.contains(&(p.x, p.y)) {
+                            continue;
+                        }
+
+                        if !self.can_attack_player(caster_session_id, sid) {
+                            continue;
+                        }
+
+                        player_targets.push(sid);
+                    }
+
+                    for sid in player_targets {
+                        // Compute FireWall damage against this player's
+                        // MAC/DR without mutating state; the unified helper
+                        // will handle HP/death and PK side-effects.
+                        let dmg = {
+                            let p = match self.players.get(&sid) {
+                                Some(p) => p,
+                                None => continue,
+                            };
+
+                            let stats = &p.stats.total;
+
+                            // Sample a MAC-based armour value similar to how
+                            // physical armour is sampled, but using
+                            // MinMAC/MaxMAC instead of MinAC/MaxAC.
+                            let min_mac = stats.get(Stat::MinMAC).max(0);
+                            let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+                            let mut dmg = value;
+
+                            if max_mac > 0 {
+                                let mut rng = thread_rng();
+                                let armour = rng.gen_range(min_mac..=max_mac);
+                                dmg = dmg.saturating_sub(armour);
+                            }
+
+                            if dmg <= 0 {
+                                0
+                            } else {
+                                // Apply generic damage reduction percent on
+                                // the defender, mirroring physical damage
+                                // handling.
+                                let dr_percent = stats.get(Stat::DamageReductionPercent);
+                                if dr_percent > 0 {
+                                    let clamped = dr_percent.clamp(0, 95);
+                                    dmg = dmg.saturating_mul(100 - clamped) / 100;
+                                }
+                                dmg
+                            }
+                        };
+
+                        if dmg <= 0 {
+                            continue;
+                        }
+
+                        self.apply_player_hit_from_player(
+                            caster_session_id,
+                            sid,
+                            map_index,
+                            dmg,
+                            0,
+                            None,
+                            None,
+                            None,
+                            true,
+                            events,
+                        );
+                    }
+                }
+            }
+
+            remaining.push(fw);
+        }
+
+        self.fire_walls = remaining;
     }
 
     fn process_pending_magic_hits(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
@@ -774,6 +959,19 @@ impl<P: WorldProvider> World<P> {
                 // treat MonsterProcessWhenAlone as false, so skip AI when alone
                 // to match default behaviour.
                 if monster.alone {
+                    continue;
+                }
+
+                // Mirror C# MonsterObject.HallucinationTime behaviour: when a
+                // monster is under the Hallucination effect, it temporarily
+                // stops acquiring or chasing targets. We approximate this by
+                // clearing its current target and skipping the rest of the AI
+                // processing for this tick while Envir.Time < HallucinationTime.
+                if monster.hallucination_time_ms > 0
+                    && now_ms < monster.hallucination_time_ms
+                {
+                    monster.ai_state = MonsterAiState::Idle;
+                    monster.target_session_id = None;
                     continue;
                 }
 
@@ -1252,7 +1450,7 @@ impl<P: WorldProvider> World<P> {
 
             // Defender (target monster) stats: MonsterInfo base plus
             // per-instance buff_stats.
-            let (monster_exp, undead, max_hp, mut defender_stats, monster_drops): (
+            let (monster_exp, _undead, max_hp, defender_stats, monster_drops): (
                 u32,
                 bool,
                 i32,

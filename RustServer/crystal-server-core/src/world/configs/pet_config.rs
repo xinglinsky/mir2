@@ -30,7 +30,9 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             max_count_per_owner: 1,
             life_time_ms: 0,
             follow_distance: 3,
-            leash_distance: 10,
+            // Match C# pet recall distance based on Globals.DataRange (16)
+            // so pets do not rubber-band while chasing.
+            leash_distance: 16,
             persistent: false,
         },
     );
@@ -47,7 +49,7 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             max_count_per_owner: 1,
             life_time_ms: 0,
             follow_distance: 3,
-            leash_distance: 10,
+            leash_distance: 16,
             persistent: false,
         },
     );
@@ -65,7 +67,7 @@ static PET_TEMPLATES: Lazy<HashMap<PetKind, PetTemplate>> = Lazy::new(|| {
             max_count_per_owner: 2,
             life_time_ms: 0,
             follow_distance: 3,
-            leash_distance: 10,
+            leash_distance: 16,
             persistent: false,
         },
     );

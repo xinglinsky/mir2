@@ -10,6 +10,7 @@ fn parse_bool(val: &str, default: bool) -> bool {
     }
 }
 
+#[allow(dead_code)]
 fn parse_u16(val: &str, default: u16) -> u16 {
     val.parse::<u16>().unwrap_or(default)
 }
@@ -22,6 +23,7 @@ fn parse_i32(val: &str, default: i32) -> i32 {
     val.parse::<i32>().unwrap_or(default)
 }
 
+#[allow(dead_code)]
 fn parse_i64(val: &str, default: i64) -> i64 {
     val.parse::<i64>().unwrap_or(default)
 }

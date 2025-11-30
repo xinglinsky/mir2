@@ -29,7 +29,14 @@ use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
 use crystal_shared_proto::notice::{NoticeData, SUpdateNotice};
 use crystal_shared_proto::shop::SGameShopInfo;
 use crystal_shared_proto::mail::SReceiveMail;
-use crystal_shared_proto::user::{SChangeAMode, SUserInformation, SUserLocation, SUserSlotsRefresh};
+use crystal_shared_proto::user::{
+    SChangeAMode,
+    SChangePMode,
+    STimeOfDay,
+    SSwitchGroup,
+    SUserInformation,
+    SUserSlotsRefresh,
+};
 use crystal_shared_proto::io::{
     write_bool,
     write_i32_le,
@@ -125,34 +132,6 @@ impl LoginConnection {
             .find(|c| c.index == msg.character_index)
             .cloned()
         {
-            // Before fully entering the game, mirror the C# PlayerObject.StartGame
-            // behaviour for server notices: if Envir/Notice.txt exists and its
-            // last modification time is more recent than the character's last
-            // logout, send an UpdateNotice packet so the client shows the
-            // welcome/notice dialog on first login after a change.
-            if let Some(ref account_id) = self.account_id {
-                let last_logout_unix_ms = self
-                    .store
-                    .list_characters(account_id)
-                    .ok()
-                    .and_then(|chars: Vec<CharacterSummary>| {
-                        chars
-                            .into_iter()
-                            .find(|cs| cs.index == ch.index)
-                            .map(|cs| cs.last_access_binary)
-                    })
-                    .unwrap_or(0);
-
-                if let Some((notice, notice_last_update_ms)) = Self::load_notice_from_file() {
-                    if notice_last_update_ms > last_logout_unix_ms {
-                        let pkt = SUpdateNotice { notice: notice };
-                        if let Ok(raw) = pkt.encode() {
-                            out.push(Self::encode_raw(raw));
-                        }
-                    }
-                }
-            }
-
             let (guild_name, guild_rank_name) = if let Some(ref account_id) = self.account_id {
                 if let Ok(Some((name, rank_idx))) =
                     self.store.load_character_guild(account_id, ch.index)
@@ -193,6 +172,35 @@ impl LoginConnection {
             let ok = SStartGame { result: 4, resolution: 1024 };
             if let Ok(raw) = ok.encode() {
                 out.push(Self::encode_raw(raw));
+            }
+
+            // After sending StartGame (which switches the client into the
+            // GameScene), mirror the C# PlayerObject.StartGameSuccess
+            // behaviour for server notices: if Envir/Notice.txt exists and its
+            // last modification time is more recent than the character's last
+            // logout, send an UpdateNotice packet so the client shows the
+            // welcome/notice dialog on first login after a change.
+            if let Some(ref account_id) = self.account_id {
+                let last_logout_unix_ms = self
+                    .store
+                    .list_characters(account_id)
+                    .ok()
+                    .and_then(|chars: Vec<CharacterSummary>| {
+                        chars
+                            .into_iter()
+                            .find(|cs| cs.index == ch.index)
+                            .map(|cs| cs.last_access_binary)
+                    })
+                    .unwrap_or(0);
+
+                if let Some((notice, notice_last_update_ms)) = Self::load_notice_from_file() {
+                    if notice_last_update_ms > last_logout_unix_ms {
+                        let pkt = SUpdateNotice { notice };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
             }
 
             // Send ItemInfo definitions (equivalent to C# PlayerObject.GetItemInfo),
@@ -510,14 +518,6 @@ impl LoginConnection {
             };
             self.handle_world_events(events, out);
 
-            // Send BaseStatsInfo so the client has the same core stat
-            // formulas (HP/MP, weights, etc.) as the server for this class.
-            let base_stats_bytes = base_stats::encode_base_stats_for_job(job);
-            let base_stats_pkt = SBaseStatsInfo {
-                stats_bytes: base_stats_bytes,
-            };
-            out.push(Self::encode_raw(base_stats_pkt.encode()));
-
             if let Some(ref account_id) = self.account_id {
                 if let Ok(Some((inv, eq))) =
                     self.store.load_character_items(account_id, ch.index)
@@ -619,13 +619,50 @@ impl LoginConnection {
                 out.push(Self::encode_raw(raw));
             }
 
+            // Send BaseStatsInfo after UserInformation so the client has
+            // CoreStats formulas available once the User object is
+            // initialised, mirroring the C# PlayerObject.SendBaseStats
+            // behaviour where BaseStatsInfo is enqueued after GetUserInfo.
+            let base_stats_bytes = base_stats::encode_base_stats_for_job(job);
+            let base_stats_pkt = SBaseStatsInfo {
+                stats_bytes: base_stats_bytes,
+            };
+            out.push(Self::encode_raw(base_stats_pkt.encode()));
+
+            // Mirror the C# StartGameSuccess sequence: after BaseStatsInfo,
+            // send TimeOfDay, ChangeAMode, ChangePMode and SwitchGroup so the
+            // client's UI (light level, attack mode, pet mode, group toggle)
+            // matches the server-side defaults.
+            let tod_pkt = STimeOfDay {
+                lights: map_info_core.light,
+            };
+            let tod_raw = tod_pkt.encode();
+            out.push(Self::encode_raw(tod_raw));
+
             // Initialise the client-side attack mode UI to match the
             // server-side default (Peace/0), mirroring the C#
             // PlayerObject.StartGame behaviour which enqueues
-            // S.ChangeAMode with the current AMode.
+            // S.ChangeAMode with the current AMode (persisted in
+            // CharacterInfo.AMode). We currently default to Peace/0.
             let amode_pkt = SChangeAMode { mode: 0 };
             let amode_raw = amode_pkt.encode();
             out.push(Self::encode_raw(amode_raw));
+
+            // PetMode defaults to Both/0 for now. The legacy C# server
+            // persists PMode per-character; once that is mirrored in the
+            // Rust world state we can load and send the stored value here.
+            let pmode_pkt = SChangePMode { mode: 0 };
+            let pmode_raw = pmode_pkt.encode();
+            out.push(Self::encode_raw(pmode_raw));
+
+            // Group toggle: default to allowing group invites, matching the
+            // initial AllowGroup behaviour on the C# server. The dedicated
+            // group connection handler will keep this in sync when the
+            // player toggles the option.
+            let switch_group_pkt = SSwitchGroup { allow_group: true };
+            if let Ok(raw) = switch_group_pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
 
             let slots_refresh = {
                 let world = self.world.lock().unwrap();
@@ -674,17 +711,7 @@ impl LoginConnection {
             if let Ok(raw) = resize_pkt.encode() {
                 out.push(Self::encode_raw(raw));
             }
-
-            let loc = SUserLocation {
-                location_x: self.current_x,
-                location_y: self.current_y,
-                direction: self.direction,
-            };
-            if let Ok(raw) = loc.encode() {
-                out.push(Self::encode_raw(raw));
-            }
-
-            let map_changed = SMapChanged {
+           let map_changed = SMapChanged {
                 map_index: map_info_core.index,
                 file_name: map_info_core.file_name.clone(),
                 title: map_info_core.title.clone(),
@@ -693,10 +720,10 @@ impl LoginConnection {
                 lights: map_info_core.light,
                 location_x: spawn_x,
                 location_y: spawn_y,
-                direction: 0,
+                direction: initial_direction,
                 map_dark_light: map_info_core.map_dark_light,
                 music: map_info_core.music,
-                weather: 0,
+                weather: map_info_core.weather_particles,
             };
             if let Ok(raw) = map_changed.encode() {
                 out.push(Self::encode_raw(raw));

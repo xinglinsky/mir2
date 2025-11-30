@@ -24,6 +24,7 @@ pub use location::{
 };
 pub use status::{
     SChangeAMode,
+    SChangePMode,
     SDamageIndicator,
     SHealthChanged,
     SHeroHealthChanged,

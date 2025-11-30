@@ -1,5 +1,6 @@
 use crate::stats::{Stat, Stats};
 use crate::world::magic::{magic_damage, magic_power};
+use crate::world::monster::MonsterAiState;
 use crate::world::skills::compute_magic_mana_cost;
 use crate::world::types::{BuffType, PetKind};
 use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
@@ -172,6 +173,168 @@ pub fn cast_healing<P: WorldProvider>(
         direction,
         spell,
         level,
+        attack_type: 0,
+    });
+}
+
+pub fn cast_hallucination<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let mut rng = thread_rng();
+    let now_ms = world.time_ms.max(0);
+
+    let (map_index, caster_x, caster_y, player_level, magic_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            i32::from(player.level),
+            i32::from(level),
+        )
+    };
+
+    let mut target_id: Option<u64> = None;
+    let mut target_mx: i32 = 0;
+    let mut target_my: i32 = 0;
+    let mut target_monster_index: i32 = 0;
+
+    if let Some(monsters) = world.monsters.get(&map_index) {
+        for m in monsters {
+            if m.hp <= 0 {
+                continue;
+            }
+            if m.x == target_x && m.y == target_y {
+                target_id = Some(m.id);
+                target_mx = m.x;
+                target_my = m.y;
+                target_monster_index = m.monster_index;
+                break;
+            }
+        }
+    }
+
+    let target_id = match target_id {
+        Some(id) => id,
+        None => return,
+    };
+
+    if !world.can_attack_monster(session_id, map_index, target_id) {
+        return;
+    }
+
+    let dx = target_mx - caster_x;
+    let dy = target_my - caster_y;
+    if dx.abs().max(dy.abs()) > 7 {
+        return;
+    }
+
+    let monster_level: i32 = world
+        .provider
+        .get_monster_info(target_monster_index)
+        .map(|info| i32::from(info.level))
+        .unwrap_or(0);
+
+    let max_roll = (player_level + 20 + magic_level.saturating_mul(5)).max(1);
+    if rng.gen_range(0..max_roll) <= monster_level + 10 {
+        return;
+    }
+
+    let hallucination_until_ms = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let mut amulet_slot: Option<usize> = None;
+
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
+
+        world.level_up_magic_for_player(session_id, Spell::Hallucination as u8, events);
+
+        let extra_secs = rng.gen_range(0..20) + 10;
+        now_ms.saturating_add(i64::from(extra_secs).saturating_mul(1_000))
+    };
+
+    if let Some(monsters) = world.monsters.get_mut(&map_index) {
+        if let Some(m) = monsters.iter_mut().find(|m| m.id == target_id) {
+            m.hallucination_time_ms = hallucination_until_ms;
+            m.target_session_id = None;
+            m.ai_state = MonsterAiState::Idle;
+        }
+    }
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level: magic_level as u8,
         attack_type: 0,
     });
 }
