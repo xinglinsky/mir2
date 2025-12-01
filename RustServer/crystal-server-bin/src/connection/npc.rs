@@ -2205,10 +2205,39 @@ impl LoginConnection {
                                 }
                             }
 
+                            // After executing any actions (teleport, timers, storage, shop, etc.),
+                            // choose which dialog page to send. If a fail label for paid teleport
+                            // has already populated maybe_page, honour that first; otherwise, try
+                            // the IF-aware renderer and fall back to the simple pages map.
+                            if maybe_page.is_none() {
+                                if let Some(page_if) = self.render_npc_page_with_if(&script_path, &key) {
+                                    maybe_page = Some(page_if);
+                                } else if key.eq_ignore_ascii_case("@MAIN") {
+                                    if let Some(page_alt) = pages.get("@MAIN-1") {
+                                        maybe_page = Some(page_alt.clone());
+                                    } else if let Some(page_main) = pages.get("@MAIN") {
+                                        maybe_page = Some(page_main.clone());
+                                    }
+                                } else if let Some(page) = pages.get(&key) {
+                                    maybe_page = Some(page.clone());
+                                }
+                            }
+
+                            if let Some(page_raw) = maybe_page {
+                                let page = self.expand_npc_placeholders(page_raw, None);
+                                let resp = SNpcResponse { page };
+                                if let Ok(raw) = resp.encode() {
+                                    out.push(Self::encode_raw(raw));
+                                }
+                            }
+
+                            // Now send shop-related packets after the dialog response so that the
+                            // client has the NPC dialog open (NPCDialog.Visible == true) when
+                            // handling NPCGoods, matching the C# server behaviour.
                             if let Some((goods_items, panel_type)) = shop_goods {
-                                // Ensure the client has ItemInfo definitions for all goods
-                                // before sending the NPCGoods list, similar to the C#
-                                // server's CheckItem behaviour.
+                                // Ensure the client has ItemInfo definitions for all goods before
+                                // sending the NPCGoods list, similar to the C# server's CheckItem
+                                // behaviour.
                                 for item in &goods_items {
                                     if let Some(info) = self
                                         .world_db
@@ -2262,41 +2291,6 @@ impl LoginConnection {
                                     out.push(Self::encode_raw(raw));
                                 }
                             }
-
-                            // After executing any actions (teleport, timers,
-                            // storage, shop, etc.), choose which dialog page
-                            // to send. If a fail label for paid teleport has
-                            // already populated maybe_page, honour that
-                            // first; otherwise, try the IF-aware renderer and
-                            // fall back to the simple pages map, mirroring the
-                            // C# behaviour.
-                            if maybe_page.is_none() {
-                                // First attempt to render using the
-                                // process_if_segment/#IF logic. If that
-                                // returns None (unsupported conditions), fall
-                                // back to the legacy pages map.
-                                if let Some(page_if) =
-                                    self.render_npc_page_with_if(&script_path, &key)
-                                {
-                                    maybe_page = Some(page_if);
-                                } else if key.eq_ignore_ascii_case("@MAIN") {
-                                    if let Some(page_alt) = pages.get("@MAIN-1") {
-                                        maybe_page = Some(page_alt.clone());
-                                    } else if let Some(page_main) = pages.get("@MAIN") {
-                                        maybe_page = Some(page_main.clone());
-                                    }
-                                } else if let Some(page) = pages.get(&key) {
-                                    maybe_page = Some(page.clone());
-                                }
-                            }
-
-                            if let Some(page_raw) = maybe_page {
-                                let page = self.expand_npc_placeholders(page_raw, None);
-                                let resp = SNpcResponse { page };
-                                if let Ok(raw) = resp.encode() {
-                                    out.push(Self::encode_raw(raw));
-                                }
-                            }
                         }
                     }
                 }
@@ -2306,6 +2300,7 @@ impl LoginConnection {
 
     fn handle_default_npc_call(&mut self, raw_key: String, out: &mut Vec<Vec<u8>>) {
         let key = Self::normalize_npc_key(&raw_key);
+
         let root_deploy = Path::new("./deploy/Envir/SystemScripts/00Default");
         let root_plain = Path::new("./Envir/SystemScripts/00Default");
         let root = if root_deploy.exists() { root_deploy } else { root_plain };
@@ -2383,10 +2378,8 @@ impl LoginConnection {
                 } else if let Some(page_main) = pages.get("@MAIN") {
                     maybe_page = Some(page_main.clone());
                 }
-            } else {
-                if let Some(page) = pages.get(&key) {
-                    maybe_page = Some(page.clone());
-                }
+            } else if let Some(page) = pages.get(&key) {
+                maybe_page = Some(page.clone());
             }
 
             if let Some(page_raw) = maybe_page {
