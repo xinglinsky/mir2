@@ -508,6 +508,28 @@ pub fn cast_half_moon<P: WorldProvider>(
                                 item_index,
                                 count: 1,
                             });
+
+                            if let Some(info) = world.provider.get_item_info(item_index) {
+                                if info.global_drop_notify {
+                                    let base_name = info.friendly_name();
+                                    let monster_name = world
+                                        .provider
+                                        .get_monster_info(monster_index)
+                                        .map(|mi| mi.name.clone())
+                                        .unwrap_or_else(|| "Monster".to_string());
+                                    let text = format!(
+                                        "{} has dropped {}.",
+                                        monster_name,
+                                        base_name
+                                    );
+                                    for (&sid, _) in world.players.iter() {
+                                        events.push(WorldEvent::PartySystemMessage {
+                                            session_id: sid,
+                                            message: text.clone(),
+                                        });
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -793,7 +815,12 @@ pub fn cast_flaming_sword<P: WorldProvider>(
     events: &mut Vec<WorldEvent>,
 ) {
     let spell_id = Spell::FlamingSword as u8;
-    if let Some(player) = world.players.get_mut(&session_id) {
+    let duration_ms = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
         let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
             Some(m) => m,
             None => return,
@@ -810,6 +837,8 @@ pub fn cast_flaming_sword<P: WorldProvider>(
             return;
         }
 
+        // 如果已有 FlamingSword Buff，则不允许叠加，行为与 C#
+        // HumanObject.FlamingSword 语义一致。
         if player
             .active_buffs
             .iter()
@@ -820,20 +849,29 @@ pub fn cast_flaming_sword<P: WorldProvider>(
 
         player.mp -= cost;
 
-        let duration_ms = 10_000;
-        let mut buff = PlayerBuff::new(BuffType::FlamingSword, world.time_ms + duration_ms);
-        buff.visible = false;
-        buff.values = vec![];
-        player.active_buffs.push(buff);
+        // 保持原有 10 秒持续时间的近似实现；具体的“一次性触发并
+        // 消耗”仍由 combat.rs 中的攻击逻辑驱动。
+        10_000_i64
+    };
 
-        events.push(WorldEvent::SpellToggle {
-            session_id,
-            spell_id,
-            enabled: true,
-        });
+    // 通过统一的 World::add_player_buff 接口挂载 FlamingSword Buff，
+    // 这样其生命周期、死亡/下线清理等均由世界 Buff 系统管理。
+    world.add_player_buff(
+        session_id,
+        BuffType::FlamingSword,
+        duration_ms,
+        Stats::default(),
+        Vec::new(),
+        events,
+    );
 
-        world.level_up_magic_for_player(session_id, spell_id, events);
-    }
+    events.push(WorldEvent::SpellToggle {
+        session_id,
+        spell_id,
+        enabled: true,
+    });
+
+    world.level_up_magic_for_player(session_id, spell_id, events);
 }
 
 /// Cast Rage, granting a temporary DC buff via a player buff entry.
@@ -889,6 +927,60 @@ pub fn cast_rage<P: WorldProvider>(
         Vec::new(),
         events,
     );
+}
+
+/// Cast Fury, granting a temporary flat AttackSpeed buff via a player buff
+/// entry. This mirrors the C# HumanObject FurySpell implementation:
+///   duration = 60s + level * 10s, AttackSpeed = 4.
+pub fn cast_fury<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::Fury as u8;
+    let (duration_ms, stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        let duration_sec = 60_i64.saturating_add(10_i64.saturating_mul(level as i64));
+        let duration_ms = duration_sec.saturating_mul(1_000);
+
+        let mut stats = Stats::default();
+        stats.set(Stat::AttackSpeed, 4);
+
+        (duration_ms, stats)
+    };
+
+    world.add_player_buff(
+        session_id,
+        BuffType::Fury,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+
+    world.level_up_magic_for_player(session_id, spell_id, events);
 }
 
 /// Cast ImmortalSkin, trading DC for AC via a timed buff.

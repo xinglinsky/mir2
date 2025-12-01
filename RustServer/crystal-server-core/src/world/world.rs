@@ -71,6 +71,7 @@ pub struct FireWallInstance {
     pub map_index: i32,
     pub caster_session_id: SessionId,
     pub value: i32,
+    pub spell_id: u8,
     pub cells: Vec<(i32, i32)>,
     pub expire_time_ms: i64,
     pub tick_speed_ms: i64,
@@ -259,6 +260,10 @@ pub enum WorldEvent {
         target_x: i32,
         target_y: i32,
     },
+    ObjectEffect {
+        session_id: SessionId,
+        effect: u8,
+    },
     ObjectStruck {
         attacker_id: SessionId,
         target_id: u64,
@@ -393,6 +398,14 @@ pub enum WorldEvent {
         session_id: SessionId,
         spell_id: u8,
     },
+    /// Request that the owning connection perform a Teleport-to-bind
+    /// operation for the given player, mirroring the C# MagicTeleport logic
+    /// which samples random points around BindLocation based on magic level.
+    TeleportToBindRequested {
+        session_id: SessionId,
+        spell_id: u8,
+        level: u8,
+    },
     SpellToggle {
         session_id: SessionId,
         spell_id: u8,
@@ -417,6 +430,22 @@ pub enum WorldEvent {
     PartySystemMessage {
         session_id: SessionId,
         message: String,
+    },
+    /// Player-level poison status change, mirroring C# S.Poisoned. The
+    /// `poison` field is a bitmask of active PoisonType flags.
+    Poisoned {
+        session_id: SessionId,
+        poison: u16,
+    },
+    /// Object-level poison status change for monsters and other map
+    /// objects, mirroring C# S.ObjectPoisoned. The `poison` field is a
+    /// bitmask of active PoisonType flags.
+    ObjectPoisoned {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        poison: u16,
     },
 }
 
@@ -632,6 +661,52 @@ impl<P: WorldProvider> World<P> {
             spell_id: spell,
             delay,
         });
+    }
+
+    /// Apply the post-teleport effects for the wizard Teleport spell once a
+    /// bind-based teleport has successfully completed: add the TemporalFlux
+    /// buff and level up the magic, mirroring the C# behaviour where
+    /// AddBuff/LevelMagic are only invoked when MagicTeleport returns true.
+    pub fn apply_teleport_skill_outcome(
+        &mut self,
+        session_id: SessionId,
+        spell: u8,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Only handle the Teleport magic; ignore other spells defensively.
+        if Spell::from_u8(spell) != Some(Spell::Teleport) {
+            return;
+        }
+
+        // Ensure the player and corresponding magic entry still exist.
+        let has_magic = match self.players.get(&session_id) {
+            Some(p) => p.magics.iter().any(|m| m.spell == spell),
+            None => return,
+        };
+
+        if !has_magic {
+            return;
+        }
+
+        // Level up the Teleport magic, emitting MagicLeveled/MagicDelay
+        // events so the client can refresh its UI.
+        self.level_up_magic_for_player(session_id, spell, events);
+
+        // Apply a 30s TemporalFlux buff so subsequent Teleport/Blink/
+        // StormEscape casts incur TeleportManaPenaltyPercent, matching the C#
+        // HumanObject Teleport behaviour.
+        let duration_ms: i64 = 30_000;
+        let mut stats = Stats::default();
+        stats.set(Stat::TeleportManaPenaltyPercent, 30);
+
+        self.add_player_buff(
+            session_id,
+            BuffType::TemporalFlux,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
     }
 
     /// Check whether the given magic is off cooldown for this player and, if
@@ -2247,6 +2322,8 @@ impl<P: WorldProvider> World<P> {
             special_mode_action_time_ms: 0,
             dead: false,
             dead_until_ms: 0,
+            poisons: Vec::new(),
+            current_poison_mask: 0,
         };
 
         self.add_monster_to_occupancy(instance.id, map_index, instance.x, instance.y);
@@ -2583,6 +2660,12 @@ impl<P: WorldProvider> World<P> {
         // Despawn all pets owned by this session across all maps before
         // removing the player itself.
         self.remove_all_pets_for_session(session_id);
+
+        // 下线时清理带 BuffProperty::RemoveOnExit 的 Buff，保持与 C#
+        // PlayerObject/HeroObject 的语义一致。
+        self.clear_player_buffs_on_exit(session_id);
+
+        self.leave_party(session_id);
 
         if let Some(p) = self.players.remove(&session_id) {
             self.remove_player_from_occupancy(session_id, p.map_index, p.x, p.y);
@@ -3064,8 +3147,17 @@ impl<P: WorldProvider> World<P> {
                 });
             }
             WorldCommand::SetAllowGroup { session_id, allow } => {
+                let mut should_leave = false;
                 if let Some(p) = self.players.get_mut(&session_id) {
-                    p.allow_group = allow;
+                    if p.allow_group != allow {
+                        p.allow_group = allow;
+                        if !allow && p.party_id.is_some() {
+                            should_leave = true;
+                        }
+                    }
+                }
+                if should_leave {
+                    self.leave_party(session_id);
                 }
             }
             WorldCommand::InviteToParty {
@@ -3640,6 +3732,103 @@ impl<P: WorldProvider> World<P> {
                     });
                 }
             }
+        }
+    }
+
+    /// 清理玩家在死亡时需要移除的 Buff（带 BuffProperty::RemoveOnDeath），
+    /// 并重新计算 Buff 带来的属性加成。对应 C# HumanObject.Die 中的 Buff
+    /// 清理语义，同时发出 RemoveBuff / SpellToggle 事件。
+    pub fn clear_player_buffs_on_death(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // 先收集需要移除的索引，避免在持有可变引用时再次借用 self。
+        let mut to_remove: Vec<usize> = Vec::new();
+
+        if let Some(player) = self.players.get(&session_id) {
+            for (idx, buff) in player.active_buffs.iter().enumerate() {
+                if let Some(info) = self.provider.get_buff_info(buff.buff_type) {
+                    if info.has_property(BuffProperty::RemoveOnDeath) {
+                        to_remove.push(idx);
+                    }
+                }
+            }
+        }
+
+        if to_remove.is_empty() {
+            return;
+        }
+
+        // 反向排序后再移除，保持索引有效。
+        to_remove.sort_unstable_by(|a, b| b.cmp(a));
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            for idx in to_remove {
+                if idx >= player.active_buffs.len() {
+                    continue;
+                }
+
+                let buff = player.active_buffs.remove(idx);
+
+                if buff.buff_type == BuffType::FlamingSword {
+                    events.push(WorldEvent::SpellToggle {
+                        session_id,
+                        spell_id: Spell::FlamingSword as u8,
+                        enabled: false,
+                    });
+                } else {
+                    events.push(WorldEvent::RemoveBuff {
+                        session_id,
+                        buff_type: buff.buff_type.as_u8(),
+                    });
+                }
+            }
+
+            // 移除后重新计算 Buff 叠加属性。
+            player.stats.buffs.clear();
+            for b in &player.active_buffs {
+                player.stats.buffs.add(&b.stats);
+            }
+            player.stats.recalc_if_dirty_for_job(player.job);
+        }
+    }
+
+    /// 当玩家下线或连接断开时，移除带 BuffProperty::RemoveOnExit 的 Buff，
+    /// 并重新计算 Buff 属性加成。对应 C# PlayerObject/HeroObject 离开时
+    /// 将 RemoveOnExit Buff 从列表中清理的语义。
+    pub fn clear_player_buffs_on_exit(&mut self, session_id: SessionId) {
+        let mut to_remove: Vec<usize> = Vec::new();
+
+        if let Some(player) = self.players.get(&session_id) {
+            for (idx, buff) in player.active_buffs.iter().enumerate() {
+                if let Some(info) = self.provider.get_buff_info(buff.buff_type) {
+                    if info.has_property(BuffProperty::RemoveOnExit) {
+                        to_remove.push(idx);
+                    }
+                }
+            }
+        }
+
+        if to_remove.is_empty() {
+            return;
+        }
+
+        to_remove.sort_unstable_by(|a, b| b.cmp(a));
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            for idx in to_remove {
+                if idx >= player.active_buffs.len() {
+                    continue;
+                }
+                player.active_buffs.remove(idx);
+            }
+
+            player.stats.buffs.clear();
+            for b in &player.active_buffs {
+                player.stats.buffs.add(&b.stats);
+            }
+            player.stats.recalc_if_dirty_for_job(player.job);
         }
     }
 

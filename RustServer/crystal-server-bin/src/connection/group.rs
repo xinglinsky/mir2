@@ -1,4 +1,5 @@
 use crystal_server_core::world;
+use crystal_server_core::world::WorldProvider;
 use crystal_shared_proto::login::{
     CAddMember,
     CDelMember,
@@ -10,6 +11,8 @@ use crystal_shared_proto::user::group::{
     SDeleteGroup,
     SDeleteMember,
     SGroupInvite,
+    SGroupMembersMap,
+    SSendMemberLocation,
     SSwitchGroup,
 };
 
@@ -24,6 +27,15 @@ impl LoginConnection {
         if self.stage != Stage::InGame {
             return;
         }
+
+        // Snapshot current party membership before applying the toggle so we
+        // can detect whether this change caused the player to leave their
+        // party (AllowGroup off while grouped), mirroring C# SwitchGroup /
+        // LeaveGroup semantics.
+        let party_members_before = {
+            let world = self.world.lock().unwrap();
+            world.party_members_for_session(self.session_id)
+        };
 
         let events = {
             let mut world = self.world.lock().unwrap();
@@ -49,6 +61,61 @@ impl LoginConnection {
         };
 
         self.send_system_chat(text, out);
+
+        // If the player disabled group invites and was in a party, the world
+        // side will have called leave_party; notify remaining members so their
+        // group UI stays in sync.
+        if !msg.allow_group {
+            if let Some(members_before) = party_members_before {
+                let members_after = {
+                    let world = self.world.lock().unwrap();
+                    world.party_members_for_session(self.session_id)
+                };
+
+                if members_after.is_none() {
+                    let total = members_before.len();
+                    if total >= 2 {
+                        let leaver_sid = self.session_id;
+                        let leaving_name = members_before
+                            .iter()
+                            .find(|(sid, _)| *sid == leaver_sid)
+                            .map(|(_, name)| name.clone())
+                            .unwrap_or_else(String::new);
+
+                        let mut outboxes = self.outboxes.lock().unwrap();
+                        if total > 2 && !leaving_name.is_empty() {
+                            let pkt = SDeleteMember {
+                                name: leaving_name.clone(),
+                            };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = Self::encode_raw(raw);
+                                for (sid, _) in &members_before {
+                                    if *sid == leaver_sid {
+                                        continue;
+                                    }
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        } else {
+                            let pkt = SDeleteGroup;
+                            let encoded = Self::encode_raw(pkt.encode());
+                            for (sid, _) in &members_before {
+                                if *sid == leaver_sid {
+                                    continue;
+                                }
+                                outboxes
+                                    .entry(*sid)
+                                    .or_default()
+                                    .push(encoded.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub(crate) fn handle_add_member(
@@ -256,6 +323,9 @@ impl LoginConnection {
             };
 
             if let Some(members) = members {
+                // First, mirror the legacy behaviour of sending SAddMember
+                // for all members to each participant so their group list is
+                // fully populated.
                 let names: Vec<String> = members.iter().map(|(_, n)| n.clone()).collect();
                 let mut outboxes = self.outboxes.lock().unwrap();
 
@@ -274,6 +344,14 @@ impl LoginConnection {
                         }
                     }
                 }
+
+                // Then, send GroupMembersMap and SendMemberLocation packets so
+                // the client-side big map UI can show party member locations
+                // and map names, mirroring C# GroupMemberMapNameChanged and
+                // GetPlayerLocation.
+                drop(outboxes);
+                self.broadcast_group_maps_for_self(out);
+                self.broadcast_group_locations_for_self(out);
             }
         }
 
@@ -282,6 +360,95 @@ impl LoginConnection {
             self.session_id,
             msg.accept_invite,
         );
+    }
+
+    pub(crate) fn broadcast_group_maps_for_self(&mut self, out: &mut Vec<Vec<u8>>) {
+        // Snapshot current party members and their map titles.
+        let member_infos = {
+            let mut infos = Vec::new();
+            let world = self.world.lock().unwrap();
+            let members = match world.party_members_for_session(self.session_id) {
+                Some(m) if !m.is_empty() => m,
+                _ => return,
+            };
+
+            for (sid, name) in members {
+                if let Some((map_index, _, _, _)) = world.player_position(sid) {
+                    if let Some(mi) = self.world_db.get_map_info(map_index) {
+                        infos.push((sid, name.clone(), mi.title.clone()));
+                    }
+                }
+            }
+            infos
+        };
+
+        if member_infos.is_empty() {
+            return;
+        }
+
+        let mut outboxes = self.outboxes.lock().unwrap();
+        let sids: Vec<world::SessionId> = member_infos.iter().map(|(sid, _, _)| *sid).collect();
+
+        for (_, name, map_title) in &member_infos {
+            let pkt = SGroupMembersMap {
+                player_name: name.clone(),
+                player_map: map_title.clone(),
+            };
+            if let Ok(raw) = pkt.encode() {
+                let encoded = Self::encode_raw(raw);
+                for sid in &sids {
+                    if *sid == self.session_id {
+                        out.push(encoded.clone());
+                    } else {
+                        outboxes.entry(*sid).or_default().push(encoded.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn broadcast_group_locations_for_self(&mut self, out: &mut Vec<Vec<u8>>) {
+        // Snapshot current party members and their positions.
+        let member_infos = {
+            let mut infos = Vec::new();
+            let world = self.world.lock().unwrap();
+            let members = match world.party_members_for_session(self.session_id) {
+                Some(m) if !m.is_empty() => m,
+                _ => return,
+            };
+
+            for (sid, name) in members {
+                if let Some((_, x, y, _)) = world.player_position(sid) {
+                    infos.push((sid, name.clone(), x, y));
+                }
+            }
+            infos
+        };
+
+        if member_infos.is_empty() {
+            return;
+        }
+
+        let mut outboxes = self.outboxes.lock().unwrap();
+        let sids: Vec<world::SessionId> = member_infos.iter().map(|(sid, _, _, _)| *sid).collect();
+
+        for (_, name, x, y) in &member_infos {
+            let pkt = SSendMemberLocation {
+                member_name: name.clone(),
+                member_location_x: *x,
+                member_location_y: *y,
+            };
+            if let Ok(raw) = pkt.encode() {
+                let encoded = Self::encode_raw(raw);
+                for sid in &sids {
+                    if *sid == self.session_id {
+                        out.push(encoded.clone());
+                    } else {
+                        outboxes.entry(*sid).or_default().push(encoded.clone());
+                    }
+                }
+            }
+        }
     }
 }
 

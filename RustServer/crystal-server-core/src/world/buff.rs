@@ -86,6 +86,7 @@ pub fn load_default_buff_infos(game_master_effect: bool) -> Vec<BuffInfo> {
     list.push(BuffInfo { buff_type: T::UltimateEnhancer, stack_type: S::ResetStatAndDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
     list.push(BuffInfo { buff_type: T::ProtectionField, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
     list.push(BuffInfo { buff_type: T::Rage, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
+    list.push(BuffInfo { buff_type: T::FlamingSword, stack_type: S::ResetDuration, properties_mask: P::RemoveOnDeath.as_u8(), icon: 0, visible: false });
     list.push(BuffInfo { buff_type: T::Curse, stack_type: S::ResetDuration, properties_mask: P::RemoveOnDeath.as_u8() | P::Debuff.as_u8(), icon: 0, visible: false });
     list.push(BuffInfo { buff_type: T::MoonLight, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::DarkBody, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
@@ -98,8 +99,8 @@ pub fn load_default_buff_infos(game_master_effect: bool) -> Vec<BuffInfo> {
     list.push(BuffInfo { buff_type: T::MagicBooster, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::PetEnhancer, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::ImmortalSkin, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
-    list.push(BuffInfo { buff_type: T::MagicShield, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
-    list.push(BuffInfo { buff_type: T::ElementalBarrier, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
+    list.push(BuffInfo { buff_type: T::MagicShield, stack_type: S::ResetDuration, properties_mask: P::RemoveOnDeath.as_u8(), icon: 0, visible: true });
+    list.push(BuffInfo { buff_type: T::ElementalBarrier, stack_type: S::ResetDuration, properties_mask: P::RemoveOnDeath.as_u8(), icon: 0, visible: true });
 
     // Monsters
     list.push(BuffInfo { buff_type: T::HornedArcherBuff, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });

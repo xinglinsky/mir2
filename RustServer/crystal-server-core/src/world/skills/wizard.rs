@@ -22,7 +22,7 @@ pub fn cast_fire_bang_ice_storm<P: WorldProvider>(
     center_y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, level, attacker_stats) = {
+    let (map_index, level, attacker_stats, player_x, player_y) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -50,6 +50,8 @@ pub fn cast_fire_bang_ice_storm<P: WorldProvider>(
             player.map_index,
             level,
             player.stats.total.clone(),
+            player.x,
+            player.y,
         )
     };
 
@@ -191,15 +193,28 @@ pub fn cast_fire_bang_ice_storm<P: WorldProvider>(
         world.level_up_magic_for_player(session_id, spell, events);
     }
 
-    events.push(WorldEvent::ObjectAttack {
+    events.push(WorldEvent::ObjectMagic {
         session_id,
         map_index,
-        x: center_x,
-        y: center_y,
+        x: player_x,
+        y: player_y,
         direction,
         spell,
         level,
-        attack_type: 0,
+        target_id: 0,
+        target_x: center_x,
+        target_y: center_y,
+    });
+
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id: spell,
+        target_id: 0,
+        x: center_x,
+        y: center_y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
     });
 }
 
@@ -328,6 +343,169 @@ pub fn cast_thunder_storm_flame_field<P: WorldProvider>(
         spell,
         level,
         attack_type: 0,
+    });
+}
+
+/// Cast Blizzard for a wizard, mirroring the legacy C# behaviour where the
+/// spell creates a 5x5 area of Spell.Blizzard SpellObjects that persist for
+/// ~3 seconds and tick damage several times. We approximate this using the
+/// existing FireWall-style map-spell pipeline plus PendingMagicHit so that
+/// monster damage, drops and experience reuse the common runtime.
+pub fn cast_blizzard<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    center_x: i32,
+    center_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, level, attacker_stats, player_x, player_y) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (
+            player.map_index,
+            level,
+            player.stats.total.clone(),
+            player.x,
+            player.y,
+        )
+    };
+
+    let damage_base =
+        compute_pure_magic_attack_damage(&world.provider, &attacker_stats, spell, level);
+
+    if damage_base <= 0 {
+        return;
+    }
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+
+    // Map dimensions are stored as u16; convert to i32 so we can safely
+    // compare against the i32 Blizzard coordinates.
+    let width: i32 = map.width as i32;
+    let height: i32 = map.height as i32;
+
+    // Blizzard range: 5x5 square centred on the target location.
+    let range = 2;
+    let min_x = center_x - range;
+    let max_x = center_x + range;
+    let min_y = center_y - range;
+    let max_y = center_y + range;
+
+    let spell_id = Spell::Blizzard as u8;
+    let mut cells: Vec<(i32, i32)> = Vec::new();
+
+    for y in min_y..=max_y {
+        if y < 0 || y >= height {
+            continue;
+        }
+
+        for x in min_x..=max_x {
+            if x < 0 || x >= width {
+                continue;
+            }
+
+            // Avoid stacking multiple Blizzard instances on the same tile,
+            // approximating the C# Cell.Objects Spell.Blizzard check.
+            if world.cell_has_spell(map_index, x, y, spell_id) {
+                continue;
+            }
+
+            cells.push((x, y));
+        }
+    }
+
+    if cells.is_empty() {
+        return;
+    }
+
+    let base_time = world.time_ms.max(0);
+    // Approximate C# SpellObject lifetime: ExpireTime = now + 3000ms.
+    let expire_time_ms = base_time.saturating_add(3_000);
+    // Approximate SpellObject.TickSpeed = 440ms.
+    let tick_speed_ms: i64 = 440;
+    let next_tick_ms = base_time.saturating_add(tick_speed_ms);
+
+    for (i, &(x, y)) in cells.iter().enumerate() {
+        world.add_map_spell(map_index, x, y, spell_id);
+        events.push(WorldEvent::MapSpellAdded {
+            map_index,
+            x,
+            y,
+            spell: spell_id,
+            direction,
+            // param mirrors SpellObject.Show: true only for the first tile.
+            param: i == 0,
+        });
+    }
+
+    // Schedule periodic damage ticks against monsters standing in any of the
+    // Blizzard tiles by reusing the PendingMagicHit pipeline.
+    let mut blizzard_cells = cells.clone();
+    blizzard_cells.shrink_to_fit();
+
+    world.fire_walls.push(crate::world::world::FireWallInstance {
+        map_index,
+        caster_session_id: session_id,
+        value: damage_base,
+        spell_id,
+        cells: blizzard_cells,
+        expire_time_ms,
+        tick_speed_ms,
+        next_tick_ms,
+    });
+
+    world.level_up_magic_for_player(session_id, spell, events);
+
+    // Drive caster animation and local cooldown via ObjectMagic + Magic,
+    // mirroring the FireBang/IceStorm pattern.
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x: player_x,
+        y: player_y,
+        direction,
+        spell,
+        level,
+        target_id: 0,
+        target_x: center_x,
+        target_y: center_y,
+    });
+
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id: spell,
+        target_id: 0,
+        x: center_x,
+        y: center_y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
     });
 }
 
@@ -937,6 +1115,7 @@ pub fn cast_fire_wall<P: WorldProvider>(
         map_index,
         caster_session_id: session_id,
         value,
+        spell_id: Spell::FireWall as u8,
         cells: cells.clone(),
         expire_time_ms,
         tick_speed_ms,
@@ -1087,4 +1266,312 @@ pub fn cast_magic_shield<P: WorldProvider>(
     );
 
     world.level_up_magic_for_player(session_id, spell_id, events);
+}
+
+/// Cast Blink for a wizard, mirroring the C# HumanObject Blink behaviour:
+/// short-range teleport within the current map with a chance based on magic
+/// level, obeying map NoTeleport, consuming MP (including any active
+/// TemporalFlux penalty) and applying a 30s TemporalFlux buff on success.
+pub fn cast_blink<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    _direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, player_x, player_y, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        // Respect map NoTeleport flag in the same way as the C# server:
+        // if teleporting is forbidden on this map, abort the cast after
+        // cooldown/MP checks without moving the player.
+        if let Some(info) = world.provider.get_map_info(player.map_index) {
+            if info.no_teleport {
+                return;
+            }
+        }
+
+        let level = magic.level;
+        let cost =
+            match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level) {
+                Some(c) => c,
+                None => return,
+            };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (player.map_index, player.x, player.y, level)
+    };
+
+    // Enforce the MagicInfo.Range limit using a Chebyshev distance check,
+    // mirroring Functions.InRange(CurrentLocation, location, magic.Info.Range)
+    // on the C# server.
+    let info = match world.provider.get_magic_info(spell) {
+        Some(i) => i,
+        None => return,
+    };
+    let range: i32 = info.range as i32;
+    let dx = (target_x - player_x).abs();
+    let dy = (target_y - player_y).abs();
+    if dx.max(dy) > range {
+        return;
+    }
+
+    // Validate that the target cell is inside the map bounds and walkable.
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+
+    if target_x < 0 || target_y < 0 {
+        return;
+    }
+
+    let ux = target_x as u16;
+    let uy = target_y as u16;
+    if ux >= map.width || uy >= map.height || !map.is_walkable(ux, uy) {
+        return;
+    }
+
+    // Apply the Blink success chance: Envir.Random.Next(4) >= magic.Level + 1
+    // results in failure on the C# server.
+    let mut rng = thread_rng();
+    let roll: u8 = rng.gen_range(0..4);
+    if roll >= level.saturating_add(1) {
+        return;
+    }
+
+    // Perform an in-map teleport by updating the player's coordinates and
+    // occupancy, then emit a UserLocation event so the client updates the
+    // local player position. This approximates the behaviour of
+    // MapObject.Teleport for same-map moves.
+    let (old_x, old_y, new_x, new_y, dir) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if player.map_index != map_index {
+            return;
+        }
+
+        let old_x = player.x;
+        let old_y = player.y;
+        player.x = target_x;
+        player.y = target_y;
+
+        (old_x, old_y, player.x, player.y, player.direction)
+    };
+
+    world.remove_player_from_occupancy(session_id, map_index, old_x, old_y);
+    world.add_player_to_occupancy(session_id, map_index, new_x, new_y);
+
+    events.push(WorldEvent::UserLocation {
+        session_id,
+        map_index,
+        x: new_x,
+        y: new_y,
+        direction: dir,
+    });
+
+    // SpellEffect.Teleport visual for Blink (enum value 2 in C# SpellEffect).
+    events.push(WorldEvent::ObjectEffect {
+        session_id,
+        effect: 2,
+    });
+
+    // Apply TemporalFlux for 30 seconds so subsequent Teleport/Blink/StormEscape
+    // casts incur the TeleportManaPenaltyPercent, and train the magic level.
+    world.level_up_magic_for_player(session_id, spell, events);
+
+    let duration_ms: i64 = 30_000;
+    let mut stats = Stats::default();
+    stats.set(Stat::TeleportManaPenaltyPercent, 30);
+
+    world.add_player_buff(
+        session_id,
+        BuffType::TemporalFlux,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+}
+
+pub fn cast_storm_escape<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    _direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, level) = {
+        let player = match world.players.get(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Some(info) = world.provider.get_map_info(player.map_index) {
+            if info.no_teleport {
+                events.push(WorldEvent::PartySystemMessage {
+                    session_id,
+                    message: "You cannot teleport on this map".to_string(),
+                });
+                return;
+            }
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        (player.map_index, magic.level)
+    };
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+
+    if target_x < 0 || target_y < 0 {
+        return;
+    }
+
+    let ux = target_x as u16;
+    let uy = target_y as u16;
+    if ux >= map.width || uy >= map.height || !map.is_walkable(ux, uy) {
+        return;
+    }
+
+    let mut rng = thread_rng();
+    let roll: u8 = rng.gen_range(0..4);
+    if roll >= level.saturating_add(1) {
+        return;
+    }
+
+    let (old_x, old_y, new_x, new_y, dir) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if player.map_index != map_index {
+            return;
+        }
+
+        let old_x = player.x;
+        let old_y = player.y;
+        player.x = target_x;
+        player.y = target_y;
+
+        (old_x, old_y, player.x, player.y, player.direction)
+    };
+
+    world.remove_player_from_occupancy(session_id, map_index, old_x, old_y);
+    world.add_player_to_occupancy(session_id, map_index, new_x, new_y);
+
+    events.push(WorldEvent::UserLocation {
+        session_id,
+        map_index,
+        x: new_x,
+        y: new_y,
+        direction: dir,
+    });
+
+    world.level_up_magic_for_player(session_id, spell, events);
+
+    let duration_ms: i64 = 30_000;
+    let mut stats = Stats::default();
+    stats.set(Stat::TeleportManaPenaltyPercent, 30);
+
+    world.add_player_buff(
+        session_id,
+        BuffType::TemporalFlux,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+
+    events.push(WorldEvent::ObjectEffect {
+        session_id,
+        effect: 29,
+    });
+}
+
+/// Cast the wizard Teleport spell: consume MP (including any active
+/// TeleportManaPenaltyPercent), respect map.Info.NoTeleport and, on success,
+/// request that the connection perform a bind-based teleport using the
+/// C# MagicTeleport algorithm. The actual random destination selection and
+/// Teleport movement are handled in the connection layer.
+pub fn cast_teleport<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    _direction: u8,
+    _target_x: i32,
+    _target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let (map_index, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        if let Some(info) = world.provider.get_map_info(player.map_index) {
+            if info.no_teleport {
+                events.push(WorldEvent::PartySystemMessage {
+                    session_id,
+                    message: "You cannot teleport on this map".to_string(),
+                });
+                return;
+            }
+        }
+
+        let level = magic.level;
+        let cost =
+            match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level) {
+                Some(c) => c,
+                None => return,
+            };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        (player.map_index, level)
+    };
+
+    let _ = map_index; // map_index is kept for potential future use.
+
+    events.push(WorldEvent::TeleportToBindRequested {
+        session_id,
+        spell_id: spell,
+        level,
+    });
 }

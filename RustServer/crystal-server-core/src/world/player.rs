@@ -6,10 +6,19 @@ use crate::world::magic::UserMagic;
 use crate::world::buff::PlayerBuff;
 use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
+use crystal_shared_proto::io::{write_bool, write_i32_le, write_string};
 use std::collections::HashMap;
 
 use super::{Job, PlayerStats, SessionId, World};
 use crate::world::types::AttackMode;
+
+#[derive(Clone, Debug)]
+pub struct FriendEntry {
+    pub index: i32,
+    pub name: String,
+    pub memo: String,
+    pub blocked: bool,
+}
 
 #[derive(Clone, Debug)]
 pub struct PlayerState {
@@ -49,10 +58,17 @@ pub struct PlayerState {
     pub pk_points: i32,
     pub brown_time_ms: i64,
     pub next_pk_decay_ms: i64,
+    pub last_revival_time_ms: i64,
     pub attack_mode: u8,
+    /// Active poisons applied to this player. This mirrors the legacy C#
+    /// MapObject.PoisonList and is processed by player_runtime.
+    pub poisons: Vec<crate::world::PoisonInstance>,
+    /// Bitmask of current poison types for quick comparison and client sync.
+    pub current_poison_mask: u16,
     /// Per-player GameShop purchase counts keyed by GameShopItem GIndex.
     pub gs_purchases: HashMap<i32, i32>,
     pub npc_data: HashMap<String, String>,
+    pub friends: Vec<FriendEntry>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -145,9 +161,13 @@ impl<P: WorldProvider> World<P> {
                     pk_points: 0,
                     brown_time_ms: 0,
                     next_pk_decay_ms: 0,
+                    last_revival_time_ms: 0,
                     attack_mode: 0,
+                    poisons: Vec::new(),
+                    current_poison_mask: 0,
                     gs_purchases: HashMap::new(),
                     npc_data: HashMap::new(),
+                    friends: Vec::new(),
                 }
             });
 
@@ -187,6 +207,104 @@ impl<P: WorldProvider> World<P> {
 
     pub fn player_guild_name(&self, session_id: SessionId) -> Option<String> {
         self.players.get(&session_id).map(|p| p.guild_name.clone())
+    }
+
+    pub fn friends_for_player(&self, session_id: SessionId) -> Vec<FriendEntry> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.friends.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn add_friend_entry_for_player(
+        &mut self,
+        session_id: SessionId,
+        friend_index: i32,
+        friend_name: &str,
+        blocked: bool,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if player.friends.iter().any(|f| f.index == friend_index) {
+            return false;
+        }
+
+        player.friends.push(FriendEntry {
+            index: friend_index,
+            name: friend_name.to_string(),
+            memo: String::new(),
+            blocked,
+        });
+        true
+    }
+
+    pub fn remove_friend_for_player(&mut self, session_id: SessionId, friend_index: i32) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let before = player.friends.len();
+        player.friends.retain(|f| f.index != friend_index);
+        player.friends.len() != before
+    }
+
+    pub fn set_friend_memo_for_player(
+        &mut self,
+        session_id: SessionId,
+        friend_index: i32,
+        memo: String,
+    ) -> bool {
+        if memo.is_empty() || memo.chars().count() > 200 {
+            return false;
+        }
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if let Some(entry) = player.friends.iter_mut().find(|f| f.index == friend_index) {
+            entry.memo = memo;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn encode_friends_bytes_for_player(&self, session_id: SessionId) -> Vec<u8> {
+        let mut buf = Vec::new();
+        let friends = match self.players.get(&session_id) {
+            Some(p) => &p.friends,
+            None => {
+                let _ = write_i32_le(&mut buf, 0);
+                return buf;
+            }
+        };
+
+        let count = friends.len().min(i32::MAX as usize) as i32;
+        let _ = write_i32_le(&mut buf, count);
+
+        for f in friends {
+            let _ = write_i32_le(&mut buf, f.index);
+            let _ = write_string(&mut buf, &f.name);
+            let _ = write_string(&mut buf, &f.memo);
+            let _ = write_bool(&mut buf, f.blocked);
+
+            // Online flag: true if any active player session currently uses
+            // this character index. This mirrors ClientFriend.Online in the
+            // legacy C# server.
+            let online = self
+                .players
+                .values()
+                .any(|p| p.character_index == f.index);
+            let _ = write_bool(&mut buf, online);
+        }
+
+        buf
     }
 
     pub fn set_player_npc_data(&mut self, session_id: SessionId, key: &str, value: String) {

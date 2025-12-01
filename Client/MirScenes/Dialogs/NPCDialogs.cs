@@ -1211,19 +1211,19 @@ namespace Client.MirScenes.Dialogs
             switch (PType)
             {
                 case PanelType.Sell:
-                    text = "Sale: ";
+                    text = GameLanguage.NPC_SellPrefix;
                     break;
                 case PanelType.Repair:
-                    text = "Repair: ";
+                    text = GameLanguage.NPC_RepairPrefix;
                     break;
                 case PanelType.SpecialRepair:
-                    text = "S. Repair: ";
+                    text = GameLanguage.NPC_SpecialRepairPrefix;
                     break;
                 case PanelType.Consign:
-                    InfoLabel.Text = "Consignment: ";
+                    InfoLabel.Text = GameLanguage.NPC_ConsignPrefix;
                     return;
                 case PanelType.Disassemble:
-                    text = "Item will be Destroyed\n\n\n\n\n\n\n\n         ";
+                    text = GameLanguage.NPC_DisassembleWarning;
                     HoldButton.Visible = false;
                     Index = 711;
                     Library = Libraries.Title;
@@ -1236,26 +1236,26 @@ namespace Client.MirScenes.Dialogs
                     ItemCell.Location = new Point(83, 94);
                     break;
                 case PanelType.Downgrade:
-                    text = "Downgrade: ";
+                    text = GameLanguage.NPC_DowngradePrefix;
                     HoldButton.Visible = false;
                     break;
                 case PanelType.Reset:
-                    text = "Reset: ";
+                    text = GameLanguage.NPC_ResetPrefix;
                     HoldButton.Visible = false;
                     break;
                 case PanelType.Refine:
-                    text = "Refine: ";
+                    text = GameLanguage.NPC_RefinePrefix;
                     HoldButton.Visible = false;
                     ConfirmButton.Visible = true;
                     GameScene.Scene.RefineDialog.Show();
                     break;
                 case PanelType.CheckRefine:
-                    text = "Check Refine";
+                    text = GameLanguage.NPC_CheckRefine;
                     HoldButton.Visible = false;
                     ConfirmButton.Visible = true;
                     break;
                 case PanelType.ReplaceWedRing:
-                    text = "Replace: ";
+                    text = GameLanguage.NPC_ReplaceWedRingPrefix;
                     HoldButton.Visible = false;
                     ConfirmButton.Visible = true;
                     break;
@@ -1296,7 +1296,7 @@ namespace Client.MirScenes.Dialogs
                     default: return;
                 }
 
-                text += " Gold";
+                text += " " + GameLanguage.Gold;
             }
 
             InfoLabel.Text = text;

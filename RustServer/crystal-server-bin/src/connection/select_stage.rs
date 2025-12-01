@@ -2,7 +2,14 @@ use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crystal_server_core::account::{AccountStorage, CharacterPosition, CharacterStats, CharacterSummary, StoredMail};
+use crystal_server_core::account::{
+    AccountStorage,
+    CharacterPosition,
+    CharacterStats,
+    CharacterSummary,
+    StoredMail,
+    StoredFriend,
+};
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::configs::base_stats;
 use crystal_server_core::world::magic::{UserMagic as WorldUserMagic, encode_client_magic_bytes};
@@ -229,6 +236,23 @@ impl LoginConnection {
                     .unwrap_or(None)
             } else {
                 None
+            };
+
+            let stored_friends: Vec<StoredFriend> = if let Some(ref account_id) = self.account_id {
+                self
+                    .store
+                    .load_character_friends(account_id, ch.index)
+                    .unwrap_or_else(|e| {
+                        tracing::debug!(
+                            "load_character_friends failed for account_id={} idx={} err={:?}",
+                            account_id,
+                            ch.index,
+                            e,
+                        );
+                        Vec::new()
+                    })
+            } else {
+                Vec::new()
             };
 
             let mut account_storage = if let Some(ref account_id) = self.account_id {
@@ -512,6 +536,24 @@ impl LoginConnection {
 
                 if !guild_name.is_empty() {
                     world.set_player_guild_name(self.session_id, &guild_name);
+                }
+
+                // Hydrate in-memory friend list from stored friends, mirroring
+                // C# CharacterInfo.Friends / FriendInfo.CreateClientFriend.
+                for f in &stored_friends {
+                    let _ = world.add_friend_entry_for_player(
+                        self.session_id,
+                        f.friend_index,
+                        &f.name,
+                        f.blocked,
+                    );
+                    if !f.memo.is_empty() {
+                        let _ = world.set_friend_memo_for_player(
+                            self.session_id,
+                            f.friend_index,
+                            f.memo.clone(),
+                        );
+                    }
                 }
 
                 events

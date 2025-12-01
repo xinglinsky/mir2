@@ -8,6 +8,7 @@ use crate::world::map::{self, RespawnInfo};
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
 use crate::world::types::{AttackMode, BuffProperty, BuffType, PetKind};
+use crate::world::PoisonType;
 use crate::world::configs::pet_template;
 use crate::world::Spell;
 
@@ -196,6 +197,10 @@ impl<P: WorldProvider> World<P> {
         // stats). This runs independently of SafeZone healing.
         self.process_player_regen(now_ms, &mut events);
 
+        // Process player poisons after regen, approximating the C# ordering
+        // of ProcessRegen followed by ProcessPoison on HumanObject.
+        self.process_player_poison(now_ms, &mut events);
+
         self.process_player_pk(now_ms);
 
         // SafeZoneHealing: periodically heal players standing inside any
@@ -347,6 +352,11 @@ impl<P: WorldProvider> World<P> {
         self.process_monster_ai(now_ms, &mut events);
         self.process_guard_ai(now_ms, &mut events);
 
+        // Process monster poisons before resolving any pending magic hits so
+        // that poison damage is applied through the same pipeline as other
+        // magic-based attacks (drops/experience attribution, etc.).
+        self.process_monster_poison(now_ms, &mut events);
+
         self.process_pending_magic_hits(now_ms, &mut events);
 
         // After processing combat and AI for this tick, remove any monsters
@@ -368,6 +378,7 @@ impl<P: WorldProvider> World<P> {
         let mut remaining = Vec::new();
 
         for mut fw in instances {
+            let spell_id = fw.spell_id;
             // C# SpellObject.Process has special handling for FireWall:
             // - If Caster becomes null, or
             // - If CurrentMap != Caster.CurrentMap
@@ -390,12 +401,12 @@ impl<P: WorldProvider> World<P> {
                     fw.cells.len(),
                 );
                 for &(x, y) in &fw.cells {
-                    self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
+                    self.remove_map_spell(fw.map_index, x, y, spell_id);
                     events.push(WorldEvent::MapSpellRemoved {
                         map_index: fw.map_index,
                         x,
                         y,
-                        spell: Spell::FireWall as u8,
+                        spell: spell_id,
                     });
                 }
                 continue;
@@ -459,7 +470,7 @@ impl<P: WorldProvider> World<P> {
                                     map_index,
                                     target_monster_id: m.id,
                                     monster_index: m.monster_index,
-                                    spell_id: Spell::FireWall as u8,
+                                    spell_id,
                                     damage: value,
                                     damage_type: 0,
                                 });
@@ -557,6 +568,100 @@ impl<P: WorldProvider> World<P> {
         }
 
         self.fire_walls = remaining;
+    }
+
+    fn process_monster_poison(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        for monsters in self.monsters.values_mut() {
+            for monster in monsters.iter_mut() {
+                if monster.hp <= 0 {
+                    continue;
+                }
+
+                let old_mask = monster.current_poison_mask;
+
+                if !monster.poisons.is_empty() {
+                    let mut idx = monster.poisons.len();
+                    while idx > 0 {
+                        idx -= 1;
+
+                        let mut remove = false;
+                        let (ptype, value, owner_sid) = {
+                            let poison = &mut monster.poisons[idx];
+
+                            if now_ms > poison.tick_time_ms {
+                                poison.time = poison.time.saturating_add(1);
+
+                                let step = poison.tick_speed_ms.max(0);
+                                poison.tick_time_ms = if step > 0 {
+                                    now_ms.saturating_add(step)
+                                } else {
+                                    now_ms
+                                };
+
+                                if poison.time >= poison.duration {
+                                    remove = true;
+                                }
+
+                                (
+                                    poison.poison_type,
+                                    poison.value.max(0),
+                                    poison.owner_session_id,
+                                )
+                            } else {
+                                // No tick this update; skip damage and keep the
+                                // current poison entry.
+                                (
+                                    poison.poison_type,
+                                    0,
+                                    poison.owner_session_id,
+                                )
+                            }
+                        };
+
+                        if remove {
+                            monster.poisons.remove(idx);
+                        }
+
+                        // For Green/Bleeding poisons applied by players, route the
+                        // damage through the existing PendingMagicHit pipeline so
+                        // that drops and experience attribution behave like other
+                        // magic-based attacks.
+                        if (ptype == PoisonType::Green || ptype == PoisonType::Bleeding)
+                            && value > 0
+                        {
+                            if let Some(attacker_sid) = owner_sid {
+                                self.pending_magic_hits.push(PendingMagicHit {
+                                    due_time_ms: now_ms,
+                                    attacker_session_id: attacker_sid,
+                                    map_index: monster.map_index,
+                                    target_monster_id: monster.id,
+                                    monster_index: monster.monster_index,
+                                    spell_id: Spell::Poisoning as u8,
+                                    damage: value,
+                                    damage_type: 0,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                let mut mask: u16 = 0;
+                for poison in &monster.poisons {
+                    mask |= poison.poison_type.as_u16();
+                }
+                monster.current_poison_mask = mask;
+
+                if mask != old_mask {
+                    events.push(WorldEvent::ObjectPoisoned {
+                        object_id: monster.id,
+                        map_index: monster.map_index,
+                        x: monster.x,
+                        y: monster.y,
+                        poison: mask,
+                    });
+                }
+            }
+        }
     }
 
     fn process_pending_magic_hits(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
@@ -798,6 +903,32 @@ impl<P: WorldProvider> World<P> {
                             item_index,
                             count: 1,
                         });
+
+                        // Global drop notify for monster drops: if the item is
+                        // flagged with global_drop_notify, broadcast a system
+                        // message to all players indicating that this monster
+                        // has dropped the item.
+                        if let Some(info) = self.provider.get_item_info(item_index) {
+                            if info.global_drop_notify {
+                                let base_name = info.friendly_name();
+                                let monster_name = self
+                                    .provider
+                                    .get_monster_info(monster_index)
+                                    .map(|mi| mi.name.clone())
+                                    .unwrap_or_else(|| "Monster".to_string());
+                                let text = format!(
+                                    "{} has dropped {}.",
+                                    monster_name,
+                                    base_name
+                                );
+                                for (&sid, _) in self.players.iter() {
+                                    events.push(WorldEvent::PartySystemMessage {
+                                        session_id: sid,
+                                        message: text.clone(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1423,9 +1554,9 @@ impl<P: WorldProvider> World<P> {
             // - When `hit` is true but raw_damage <= 0 (e.g. very high AC/DR)
             //   we treat it as a fully absorbed hit and skip emitting any
             //   event.
-            let (damage, damage_type, new_hp) = if !hit {
+            let (damage, damage_type, new_hp, dead) = if !hit {
                 let old_hp = player.hp.max(0);
-                (0, 1_u8, old_hp)
+                (0, 1_u8, old_hp, false)
             } else {
                 if raw_damage <= 0 {
                     continue;
@@ -1439,11 +1570,13 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 player.hp = new_hp;
+                let mut dead = false;
                 if new_hp <= 0 {
                     player.dead = true;
+                    dead = true;
                 }
 
-                (damage, raw_damage_type, new_hp)
+                (damage, raw_damage_type, new_hp, dead)
             };
 
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
@@ -1460,6 +1593,19 @@ impl<P: WorldProvider> World<P> {
                 damage_type,
                 health_percent,
             });
+
+            if dead {
+                // 玩家被怪物击杀时，先尝试使用复活戒指复活，如果成功则不
+                // 进入死亡掉落流程。复活失败时，按与 PVP 相同的规则处理：
+                // 先清理该玩家的所有宠物/召唤物，再清理带 RemoveOnDeath
+                // 属性的 Buff，并根据 PlayerObject.Die -> DeathDrop /
+                // RedDeathDrop 规则计算装备/背包掉落。
+                if !self.try_revive_with_revival_ring(target_sid, events) {
+                    self.remove_all_pets_for_session(target_sid);
+                    self.clear_player_buffs_on_death(target_sid, events);
+                    self.apply_player_death_drops(target_sid, map_index, events);
+                }
+            }
         }
 
         // Resolve pending pet attacks against monsters after the main AI loop,
@@ -1699,6 +1845,28 @@ impl<P: WorldProvider> World<P> {
                                     item_index,
                                     count: 1,
                                 });
+
+                                if let Some(info) = self.provider.get_item_info(item_index) {
+                                    if info.global_drop_notify {
+                                        let base_name = info.friendly_name();
+                                        let monster_name = self
+                                            .provider
+                                            .get_monster_info(target_monster_index)
+                                            .map(|mi| mi.name.clone())
+                                            .unwrap_or_else(|| "Monster".to_string());
+                                        let text = format!(
+                                            "{} has dropped {}.",
+                                            monster_name,
+                                            base_name
+                                        );
+                                        for (&sid, _) in self.players.iter() {
+                                            events.push(WorldEvent::PartySystemMessage {
+                                                session_id: sid,
+                                                message: text.clone(),
+                                            });
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -2287,9 +2455,9 @@ impl<P: WorldProvider> World<P> {
             let (hit, raw_damage, raw_damage_type) =
                 compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
 
-            let (damage, damage_type, new_hp) = if !hit {
+            let (damage, damage_type, new_hp, dead) = if !hit {
                 let old_hp = player.hp.max(0);
-                (0, 1_u8, old_hp)
+                (0, 1_u8, old_hp, false)
             } else {
                 if raw_damage <= 0 {
                     continue;
@@ -2303,11 +2471,13 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 player.hp = new_hp;
+                let mut dead = false;
                 if new_hp <= 0 {
                     player.dead = true;
+                    dead = true;
                 }
 
-                (damage, raw_damage_type, new_hp)
+                (damage, raw_damage_type, new_hp, dead)
             };
 
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
@@ -2324,6 +2494,17 @@ impl<P: WorldProvider> World<P> {
                 damage_type,
                 health_percent,
             });
+
+            if dead {
+                // 该分支处理另一类怪物对玩家的物理攻击（例如部分范围技能），
+                // 在玩家死亡时同样需要先尝试复活戒指，再触发宠物清理、
+                // 死亡 Buff 清理和掉落逻辑。
+                if !self.try_revive_with_revival_ring(target_sid, events) {
+                    self.remove_all_pets_for_session(target_sid);
+                    self.clear_player_buffs_on_death(target_sid, events);
+                    self.apply_player_death_drops(target_sid, map_index, events);
+                }
+            }
         }
     }
 
@@ -2505,6 +2686,8 @@ impl<P: WorldProvider> World<P> {
                     special_mode_action_time_ms: 0,
                     dead: false,
                     dead_until_ms: 0,
+                    poisons: Vec::new(),
+                    current_poison_mask: 0,
                 });
 
                 placed = true;

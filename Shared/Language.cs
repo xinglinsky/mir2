@@ -42,6 +42,19 @@
                          Relationship = "Relationship ({0})",
                          Groups = "Groups ({0})",
                          Guild = "Guild ({0})",
+                         MiniMap_Hint = "MiniMap ({0})",
+                         Inspect_InviteToGroup = "Invite to Group",
+                         Inspect_AddToFriends = "Add to Friends List",
+                         Inspect_SendMail = "Send Mail",
+                         Inspect_Trade = "Trade",
+                         Inspect_Observe = "Observe",
+                         GuildTerritory_None = "None",
+                         GuildTerritory_StatusAvailable = "Available",
+                         GuildTerritory_StatusForSale = "For Sale",
+                         GuildTerritory_StatusSalePending = "Sale pending",
+                         GuildTerritory_StatusUnavailable = "Unavailable",
+                         GuildTerritory_OwnerAndPrefix = " and ",
+                         Mail_ReportBug = "Report Bug",
                          Expire = "Expire: {0}",
                          ExpireNever = "Expire: Never",
                          ExpirePaused = "Expire: Paused",
@@ -261,6 +274,7 @@
                          Awakening_CannotAwaken = "Cannot awaken this item.",
                          BigMap_TeleportToNPC = "Teleport to this NPC for {0} Gold?",
                          BigMap_PathNotFound = "Could not find suitable path.",
+                         BigMap_SearchForNPCs = "Search for NPCs",
                          System_PlayerNotOnline = "Player is not online",
                          TrustMerchant_GetBackUnsold = "{0} has not sold, Are you sure you want to get it back?",
                          TrustMerchant_BuyConfirm = "Are you sure you want to buy {0} for {1:#,##0} {2}?",
@@ -276,6 +290,48 @@
                          TrustMerchant_FailHoldGold = "You cannot hold enough gold to get your sale.",
                          TrustMerchant_FailMinBid = "This item has not met the minimum bid yet.",
                          TrustMerchant_FailAuctionEnded = "Auction has already ended for this item.",
+                         TrustMerchant_Title_SalePrice = "SALE PRICE",
+                         TrustMerchant_Title_SellItem = "SELL ITEM",
+                         TrustMerchant_Title_Item = "ITEM",
+                         TrustMerchant_Title_Price = "PRICE",
+                         TrustMerchant_Title_Expiry = "EXPIRY",
+                         TrustMerchant_Title_PriceBid = "PRICE / BID",
+                         TrustMerchant_Title_SellerExpiry = "SELLER / EXPIRY",
+                         TrustMerchant_Title_StartingBid = "STARTING BID",
+                         TrustMerchant_Title_HighestBid = "HIGHEST BID",
+                         TrustMerchant_Title_EndDate = "END DATE",
+                         TrustMerchant_ConsignHelp = "1. Consignment is {0} gold per item \r\n\r\n2. 1% of sale price is paid to Trust Merchant at sale end\r\n\r\n3. Maximum {1} days of item sale registration until item is removed\r\n\r\n4. Maximum of unlimited items allowed for sale\r\n\r\n5. Sale price can be set between: {2} - {3} gold",
+                         TrustMerchant_AuctionHelp = "1. Auction cost is {0} gold, max starting bid is {1} gold per item \r\n\r\n2. 1% of final bid price is paid to Trust Merchant at auction end\r\n\r\n3. Maximum {2} days of item sale registration, afterwards the item will be sent to highest bidder\r\n\r\n4. Maximum of unlimited items allowed for auction\r\n\r\n",
+                         TrustMerchant_Filter_All = "Show All Items",
+                         TrustMerchant_Filter_Weapon = "Weapon Items",
+                         TrustMerchant_Filter_Drapery = "Drapery Items",
+                         TrustMerchant_Filter_Accessory = "Accessory Items",
+                         TrustMerchant_Filter_Consumable = "Consumable Items",
+                         TrustMerchant_Filter_Enhancement = "Enhancement",
+                         TrustMerchant_Filter_Book = "Books",
+                         TrustMerchant_Filter_Craft = "Craft Items",
+                         TrustMerchant_Filter_Drapery_Armour = "Armour",
+                         TrustMerchant_Filter_Drapery_Helmet = "Helmet",
+                         TrustMerchant_Filter_Drapery_Belt = "Belt",
+                         TrustMerchant_Filter_Drapery_Boots = "Boots",
+                         TrustMerchant_Filter_Drapery_Stone = "Stone",
+                         TrustMerchant_Filter_Accessory_Necklaces = "Necklaces",
+                         TrustMerchant_Filter_Accessory_Bracelets = "Bracelets",
+                         TrustMerchant_Filter_Accessory_Rings = "Rings",
+                         TrustMerchant_Filter_Consumable_Recovery = "Recovery Pots",
+                         TrustMerchant_Filter_Consumable_Buff = "Buff Pots",
+                         TrustMerchant_Filter_Consumable_Scrolls = "Scrolls / Oils",
+                         TrustMerchant_Filter_Consumable_Misc = "Misc Items",
+                         TrustMerchant_Filter_Enhancement_Gems = "Gems",
+                         TrustMerchant_Filter_Enhancement_Orbs = "Orbs",
+                         TrustMerchant_Filter_Book_Warrior = "Warrior",
+                         TrustMerchant_Filter_Book_Wizard = "Wizard",
+                         TrustMerchant_Filter_Book_Taoist = "Taoist",
+                         TrustMerchant_Filter_Book_Assassin = "Assassin",
+                         TrustMerchant_Filter_Book_Archer = "Archer",
+                         TrustMerchant_Filter_Craft_Materials = "Materials",
+                         TrustMerchant_Filter_Craft_Meat = "Meat",
+                         TrustMerchant_Filter_Craft_Ore = "Ore",
                          AddMentor = "Add Mentor",
                          RemoveMentorMentee = "Remove Mentor/Mentee",
                          MentorRequests = "Allow/Disallow Mentor Requests",
@@ -304,6 +360,14 @@
                          Chat_Report = "Report",
 
                          Ranking_OnlineOnly = "Online Only",
+                         Ranking_AllHint = "Overall TOP 20",
+                         Ranking_WarriorHint = "TOP 20 Warriors",
+                         Ranking_WizardHint = "TOP 20 Wizards",
+                         Ranking_TaoistHint = "TOP 20 Taoists",
+                         Ranking_AssassinHint = "TOP 20 Assasins",
+                         Ranking_ArcherHint = "TOP 20 Archers",
+                         Ranking_NotListed = "Not Listed",
+                         Ranking_Ranked = "Ranked: {0}",
 
                          Keyboard_EnforceStrict = "Assign Rule: Strict",
                          Keyboard_EnforceRelaxed = "Assign Rule: Relaxed",
@@ -326,6 +390,10 @@
                          Guild_Buff_MinLevel = "Minimum Guild Level: {0}",
                          Guild_Buff_PointsRequired = "Points Required: {0}",
                          Guild_Buff_ActivationCost = "Activation Cost: {0} gold.",
+                         Guild_Buff_InsufficientPoints = "Insufficient points available.",
+                         Guild_Buff_GuildLevelTooLow = "Guild level too low.",
+                         Guild_Buff_StillActive = "Buff is still active.",
+                         Guild_Buff_InsufficientFunds = "Insufficient guild funds.",
                          Guild_EditRank = "Edit Rank",
                          Guild_SelectRank = "Select Rank",
                          Guild_RankNoBuffPermission = "Guild rank does not allow buff activation.",
@@ -541,6 +609,16 @@
                          NPC_CannotConsignItem = "Cannot consign this item.",
                          NPC_NotEnoughGold = "You do not have enough gold.",
                          NPC_MissingToolsOrIngredients = "You do not have the required tools or ingredients.",
+                         NPC_SellPrefix = "Sale: ",
+                         NPC_RepairPrefix = "Repair: ",
+                         NPC_SpecialRepairPrefix = "S. Repair: ",
+                         NPC_ConsignPrefix = "Consignment: ",
+                         NPC_DisassembleWarning = "Item will be Destroyed\n\n\n\n\n\n\n\n         ",
+                         NPC_DowngradePrefix = "Downgrade: ",
+                         NPC_ResetPrefix = "Reset: ",
+                         NPC_RefinePrefix = "Refine: ",
+                         NPC_CheckRefine = "Check Refine",
+                         NPC_ReplaceWedRingPrefix = "Replace: ",
                          GameName = "Legend of Mir 2",
                          ExpandedStorageExpiresOn = "Expanded Storage Expires On",
 
@@ -601,6 +679,19 @@
         GameLanguage.Relationship = reader.ReadString("Language", "Relationship", GameLanguage.Relationship);
         GameLanguage.Groups = reader.ReadString("Language", "Groups", GameLanguage.Groups);
         GameLanguage.Guild = reader.ReadString("Language", "Guild", GameLanguage.Guild);
+        GameLanguage.MiniMap_Hint = reader.ReadString("Language", "MiniMap_Hint", GameLanguage.MiniMap_Hint);
+        GameLanguage.Inspect_InviteToGroup = reader.ReadString("Language", "Inspect_InviteToGroup", GameLanguage.Inspect_InviteToGroup);
+        GameLanguage.Inspect_AddToFriends = reader.ReadString("Language", "Inspect_AddToFriends", GameLanguage.Inspect_AddToFriends);
+        GameLanguage.Inspect_SendMail = reader.ReadString("Language", "Inspect_SendMail", GameLanguage.Inspect_SendMail);
+        GameLanguage.Inspect_Trade = reader.ReadString("Language", "Inspect_Trade", GameLanguage.Inspect_Trade);
+        GameLanguage.Inspect_Observe = reader.ReadString("Language", "Inspect_Observe", GameLanguage.Inspect_Observe);
+        GameLanguage.GuildTerritory_None = reader.ReadString("Language", "GuildTerritory_None", GameLanguage.GuildTerritory_None);
+        GameLanguage.GuildTerritory_StatusAvailable = reader.ReadString("Language", "GuildTerritory_StatusAvailable", GameLanguage.GuildTerritory_StatusAvailable);
+        GameLanguage.GuildTerritory_StatusForSale = reader.ReadString("Language", "GuildTerritory_StatusForSale", GameLanguage.GuildTerritory_StatusForSale);
+        GameLanguage.GuildTerritory_StatusSalePending = reader.ReadString("Language", "GuildTerritory_StatusSalePending", GameLanguage.GuildTerritory_StatusSalePending);
+        GameLanguage.GuildTerritory_StatusUnavailable = reader.ReadString("Language", "GuildTerritory_StatusUnavailable", GameLanguage.GuildTerritory_StatusUnavailable);
+        GameLanguage.GuildTerritory_OwnerAndPrefix = reader.ReadString("Language", "GuildTerritory_OwnerAndPrefix", GameLanguage.GuildTerritory_OwnerAndPrefix);
+        GameLanguage.Mail_ReportBug = reader.ReadString("Language", "Mail_ReportBug", GameLanguage.Mail_ReportBug);
         GameLanguage.Trade = reader.ReadString("Language", "Trade", GameLanguage.Trade);
         GameLanguage.Size = reader.ReadString("Language", "Size", GameLanguage.Size);
         GameLanguage.ChatSettings = reader.ReadString("Language", "ChatSettings", GameLanguage.ChatSettings);
@@ -633,6 +724,16 @@
         GameLanguage.NPC_CannotConsignItem = reader.ReadString("Language", "NPC_CannotConsignItem", GameLanguage.NPC_CannotConsignItem);
         GameLanguage.NPC_NotEnoughGold = reader.ReadString("Language", "NPC_NotEnoughGold", GameLanguage.NPC_NotEnoughGold);
         GameLanguage.NPC_MissingToolsOrIngredients = reader.ReadString("Language", "NPC_MissingToolsOrIngredients", GameLanguage.NPC_MissingToolsOrIngredients);
+        GameLanguage.NPC_SellPrefix = reader.ReadString("Language", "NPC_SellPrefix", GameLanguage.NPC_SellPrefix);
+        GameLanguage.NPC_RepairPrefix = reader.ReadString("Language", "NPC_RepairPrefix", GameLanguage.NPC_RepairPrefix);
+        GameLanguage.NPC_SpecialRepairPrefix = reader.ReadString("Language", "NPC_SpecialRepairPrefix", GameLanguage.NPC_SpecialRepairPrefix);
+        GameLanguage.NPC_ConsignPrefix = reader.ReadString("Language", "NPC_ConsignPrefix", GameLanguage.NPC_ConsignPrefix);
+        GameLanguage.NPC_DisassembleWarning = reader.ReadString("Language", "NPC_DisassembleWarning", GameLanguage.NPC_DisassembleWarning);
+        GameLanguage.NPC_DowngradePrefix = reader.ReadString("Language", "NPC_DowngradePrefix", GameLanguage.NPC_DowngradePrefix);
+        GameLanguage.NPC_ResetPrefix = reader.ReadString("Language", "NPC_ResetPrefix", GameLanguage.NPC_ResetPrefix);
+        GameLanguage.NPC_RefinePrefix = reader.ReadString("Language", "NPC_RefinePrefix", GameLanguage.NPC_RefinePrefix);
+        GameLanguage.NPC_CheckRefine = reader.ReadString("Language", "NPC_CheckRefine", GameLanguage.NPC_CheckRefine);
+        GameLanguage.NPC_ReplaceWedRingPrefix = reader.ReadString("Language", "NPC_ReplaceWedRingPrefix", GameLanguage.NPC_ReplaceWedRingPrefix);
 
         GameLanguage.Gold = reader.ReadString("Language", "Gold", GameLanguage.Gold);
         GameLanguage.Credit = reader.ReadString("Language", "Credit", GameLanguage.Credit);
@@ -831,6 +932,7 @@
         GameLanguage.Awakening_CannotAwaken = reader.ReadString("Language", "Awakening_CannotAwaken", GameLanguage.Awakening_CannotAwaken);
         GameLanguage.BigMap_TeleportToNPC = reader.ReadString("Language", "BigMap_TeleportToNPC", GameLanguage.BigMap_TeleportToNPC);
         GameLanguage.BigMap_PathNotFound = reader.ReadString("Language", "BigMap_PathNotFound", GameLanguage.BigMap_PathNotFound);
+        GameLanguage.BigMap_SearchForNPCs = reader.ReadString("Language", "BigMap_SearchForNPCs", GameLanguage.BigMap_SearchForNPCs);
         GameLanguage.System_PlayerNotOnline = reader.ReadString("Language", "System_PlayerNotOnline", GameLanguage.System_PlayerNotOnline);
         GameLanguage.TrustMerchant_GetBackUnsold = reader.ReadString("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
         GameLanguage.TrustMerchant_BuyConfirm = reader.ReadString("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
@@ -846,6 +948,48 @@
         GameLanguage.TrustMerchant_FailHoldGold = reader.ReadString("Language", "TrustMerchant_FailHoldGold", GameLanguage.TrustMerchant_FailHoldGold);
         GameLanguage.TrustMerchant_FailMinBid = reader.ReadString("Language", "TrustMerchant_FailMinBid", GameLanguage.TrustMerchant_FailMinBid);
         GameLanguage.TrustMerchant_FailAuctionEnded = reader.ReadString("Language", "TrustMerchant_FailAuctionEnded", GameLanguage.TrustMerchant_FailAuctionEnded);
+        GameLanguage.TrustMerchant_Title_SalePrice = reader.ReadString("Language", "TrustMerchant_Title_SalePrice", GameLanguage.TrustMerchant_Title_SalePrice);
+        GameLanguage.TrustMerchant_Title_SellItem = reader.ReadString("Language", "TrustMerchant_Title_SellItem", GameLanguage.TrustMerchant_Title_SellItem);
+        GameLanguage.TrustMerchant_Title_Item = reader.ReadString("Language", "TrustMerchant_Title_Item", GameLanguage.TrustMerchant_Title_Item);
+        GameLanguage.TrustMerchant_Title_Price = reader.ReadString("Language", "TrustMerchant_Title_Price", GameLanguage.TrustMerchant_Title_Price);
+        GameLanguage.TrustMerchant_Title_Expiry = reader.ReadString("Language", "TrustMerchant_Title_Expiry", GameLanguage.TrustMerchant_Title_Expiry);
+        GameLanguage.TrustMerchant_Title_PriceBid = reader.ReadString("Language", "TrustMerchant_Title_PriceBid", GameLanguage.TrustMerchant_Title_PriceBid);
+        GameLanguage.TrustMerchant_Title_SellerExpiry = reader.ReadString("Language", "TrustMerchant_Title_SellerExpiry", GameLanguage.TrustMerchant_Title_SellerExpiry);
+        GameLanguage.TrustMerchant_Title_StartingBid = reader.ReadString("Language", "TrustMerchant_Title_StartingBid", GameLanguage.TrustMerchant_Title_StartingBid);
+        GameLanguage.TrustMerchant_Title_HighestBid = reader.ReadString("Language", "TrustMerchant_Title_HighestBid", GameLanguage.TrustMerchant_Title_HighestBid);
+        GameLanguage.TrustMerchant_Title_EndDate = reader.ReadString("Language", "TrustMerchant_Title_EndDate", GameLanguage.TrustMerchant_Title_EndDate);
+        GameLanguage.TrustMerchant_ConsignHelp = reader.ReadString("Language", "TrustMerchant_ConsignHelp", GameLanguage.TrustMerchant_ConsignHelp);
+        GameLanguage.TrustMerchant_AuctionHelp = reader.ReadString("Language", "TrustMerchant_AuctionHelp", GameLanguage.TrustMerchant_AuctionHelp);
+        GameLanguage.TrustMerchant_Filter_All = reader.ReadString("Language", "TrustMerchant_Filter_All", GameLanguage.TrustMerchant_Filter_All);
+        GameLanguage.TrustMerchant_Filter_Weapon = reader.ReadString("Language", "TrustMerchant_Filter_Weapon", GameLanguage.TrustMerchant_Filter_Weapon);
+        GameLanguage.TrustMerchant_Filter_Drapery = reader.ReadString("Language", "TrustMerchant_Filter_Drapery", GameLanguage.TrustMerchant_Filter_Drapery);
+        GameLanguage.TrustMerchant_Filter_Accessory = reader.ReadString("Language", "TrustMerchant_Filter_Accessory", GameLanguage.TrustMerchant_Filter_Accessory);
+        GameLanguage.TrustMerchant_Filter_Consumable = reader.ReadString("Language", "TrustMerchant_Filter_Consumable", GameLanguage.TrustMerchant_Filter_Consumable);
+        GameLanguage.TrustMerchant_Filter_Enhancement = reader.ReadString("Language", "TrustMerchant_Filter_Enhancement", GameLanguage.TrustMerchant_Filter_Enhancement);
+        GameLanguage.TrustMerchant_Filter_Book = reader.ReadString("Language", "TrustMerchant_Filter_Book", GameLanguage.TrustMerchant_Filter_Book);
+        GameLanguage.TrustMerchant_Filter_Craft = reader.ReadString("Language", "TrustMerchant_Filter_Craft", GameLanguage.TrustMerchant_Filter_Craft);
+        GameLanguage.TrustMerchant_Filter_Drapery_Armour = reader.ReadString("Language", "TrustMerchant_Filter_Drapery_Armour", GameLanguage.TrustMerchant_Filter_Drapery_Armour);
+        GameLanguage.TrustMerchant_Filter_Drapery_Helmet = reader.ReadString("Language", "TrustMerchant_Filter_Drapery_Helmet", GameLanguage.TrustMerchant_Filter_Drapery_Helmet);
+        GameLanguage.TrustMerchant_Filter_Drapery_Belt = reader.ReadString("Language", "TrustMerchant_Filter_Drapery_Belt", GameLanguage.TrustMerchant_Filter_Drapery_Belt);
+        GameLanguage.TrustMerchant_Filter_Drapery_Boots = reader.ReadString("Language", "TrustMerchant_Filter_Drapery_Boots", GameLanguage.TrustMerchant_Filter_Drapery_Boots);
+        GameLanguage.TrustMerchant_Filter_Drapery_Stone = reader.ReadString("Language", "TrustMerchant_Filter_Drapery_Stone", GameLanguage.TrustMerchant_Filter_Drapery_Stone);
+        GameLanguage.TrustMerchant_Filter_Accessory_Necklaces = reader.ReadString("Language", "TrustMerchant_Filter_Accessory_Necklaces", GameLanguage.TrustMerchant_Filter_Accessory_Necklaces);
+        GameLanguage.TrustMerchant_Filter_Accessory_Bracelets = reader.ReadString("Language", "TrustMerchant_Filter_Accessory_Bracelets", GameLanguage.TrustMerchant_Filter_Accessory_Bracelets);
+        GameLanguage.TrustMerchant_Filter_Accessory_Rings = reader.ReadString("Language", "TrustMerchant_Filter_Accessory_Rings", GameLanguage.TrustMerchant_Filter_Accessory_Rings);
+        GameLanguage.TrustMerchant_Filter_Consumable_Recovery = reader.ReadString("Language", "TrustMerchant_Filter_Consumable_Recovery", GameLanguage.TrustMerchant_Filter_Consumable_Recovery);
+        GameLanguage.TrustMerchant_Filter_Consumable_Buff = reader.ReadString("Language", "TrustMerchant_Filter_Consumable_Buff", GameLanguage.TrustMerchant_Filter_Consumable_Buff);
+        GameLanguage.TrustMerchant_Filter_Consumable_Scrolls = reader.ReadString("Language", "TrustMerchant_Filter_Consumable_Scrolls", GameLanguage.TrustMerchant_Filter_Consumable_Scrolls);
+        GameLanguage.TrustMerchant_Filter_Consumable_Misc = reader.ReadString("Language", "TrustMerchant_Filter_Consumable_Misc", GameLanguage.TrustMerchant_Filter_Consumable_Misc);
+        GameLanguage.TrustMerchant_Filter_Enhancement_Gems = reader.ReadString("Language", "TrustMerchant_Filter_Enhancement_Gems", GameLanguage.TrustMerchant_Filter_Enhancement_Gems);
+        GameLanguage.TrustMerchant_Filter_Enhancement_Orbs = reader.ReadString("Language", "TrustMerchant_Filter_Enhancement_Orbs", GameLanguage.TrustMerchant_Filter_Enhancement_Orbs);
+        GameLanguage.TrustMerchant_Filter_Book_Warrior = reader.ReadString("Language", "TrustMerchant_Filter_Book_Warrior", GameLanguage.TrustMerchant_Filter_Book_Warrior);
+        GameLanguage.TrustMerchant_Filter_Book_Wizard = reader.ReadString("Language", "TrustMerchant_Filter_Book_Wizard", GameLanguage.TrustMerchant_Filter_Book_Wizard);
+        GameLanguage.TrustMerchant_Filter_Book_Taoist = reader.ReadString("Language", "TrustMerchant_Filter_Book_Taoist", GameLanguage.TrustMerchant_Filter_Book_Taoist);
+        GameLanguage.TrustMerchant_Filter_Book_Assassin = reader.ReadString("Language", "TrustMerchant_Filter_Book_Assassin", GameLanguage.TrustMerchant_Filter_Book_Assassin);
+        GameLanguage.TrustMerchant_Filter_Book_Archer = reader.ReadString("Language", "TrustMerchant_Filter_Book_Archer", GameLanguage.TrustMerchant_Filter_Book_Archer);
+        GameLanguage.TrustMerchant_Filter_Craft_Materials = reader.ReadString("Language", "TrustMerchant_Filter_Craft_Materials", GameLanguage.TrustMerchant_Filter_Craft_Materials);
+        GameLanguage.TrustMerchant_Filter_Craft_Meat = reader.ReadString("Language", "TrustMerchant_Filter_Craft_Meat", GameLanguage.TrustMerchant_Filter_Craft_Meat);
+        GameLanguage.TrustMerchant_Filter_Craft_Ore = reader.ReadString("Language", "TrustMerchant_Filter_Craft_Ore", GameLanguage.TrustMerchant_Filter_Craft_Ore);
         GameLanguage.MentorRequests = reader.ReadString("Language", "MentorRequests", GameLanguage.MentorRequests);
         GameLanguage.MentorEnterName = reader.ReadString("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         GameLanguage.NoMentorship = reader.ReadString("Language", "NoMentorship", GameLanguage.NoMentorship);
@@ -871,7 +1015,15 @@
         GameLanguage.Guild_DonatedToFund = reader.ReadString("Language", "Guild_DonatedToFund", GameLanguage.Guild_DonatedToFund);
         GameLanguage.Guild_RetrievedFromFund = reader.ReadString("Language", "Guild_RetrievedFromFund", GameLanguage.Guild_RetrievedFromFund);
 
-        GameLanguage.Ranking_OnlineOnly = reader.ReadString("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
+        GameLanguage.Ranking_OnlineOnly   = reader.ReadString("Language", "Ranking_OnlineOnly",   GameLanguage.Ranking_OnlineOnly);
+        GameLanguage.Ranking_AllHint      = reader.ReadString("Language", "Ranking_AllHint",      GameLanguage.Ranking_AllHint);
+        GameLanguage.Ranking_WarriorHint  = reader.ReadString("Language", "Ranking_WarriorHint",  GameLanguage.Ranking_WarriorHint);
+        GameLanguage.Ranking_WizardHint   = reader.ReadString("Language", "Ranking_WizardHint",   GameLanguage.Ranking_WizardHint);
+        GameLanguage.Ranking_TaoistHint   = reader.ReadString("Language", "Ranking_TaoistHint",   GameLanguage.Ranking_TaoistHint);
+        GameLanguage.Ranking_AssassinHint = reader.ReadString("Language", "Ranking_AssassinHint", GameLanguage.Ranking_AssassinHint);
+        GameLanguage.Ranking_ArcherHint   = reader.ReadString("Language", "Ranking_ArcherHint",   GameLanguage.Ranking_ArcherHint);
+        GameLanguage.Ranking_NotListed    = reader.ReadString("Language", "Ranking_NotListed",    GameLanguage.Ranking_NotListed);
+        GameLanguage.Ranking_Ranked       = reader.ReadString("Language", "Ranking_Ranked",       GameLanguage.Ranking_Ranked);
 
         GameLanguage.Keyboard_EnforceStrict = reader.ReadString("Language", "Keyboard_EnforceStrict", GameLanguage.Keyboard_EnforceStrict);
         GameLanguage.Keyboard_EnforceRelaxed = reader.ReadString("Language", "Keyboard_EnforceRelaxed", GameLanguage.Keyboard_EnforceRelaxed);
@@ -1084,6 +1236,19 @@
         reader.Write("Language", "Relationship", GameLanguage.Relationship);
         reader.Write("Language", "Groups", GameLanguage.Groups);
         reader.Write("Language", "Guild", GameLanguage.Guild);
+        reader.Write("Language", "MiniMap_Hint", GameLanguage.MiniMap_Hint);
+        reader.Write("Language", "Inspect_InviteToGroup", GameLanguage.Inspect_InviteToGroup);
+        reader.Write("Language", "Inspect_AddToFriends", GameLanguage.Inspect_AddToFriends);
+        reader.Write("Language", "Inspect_SendMail", GameLanguage.Inspect_SendMail);
+        reader.Write("Language", "Inspect_Trade", GameLanguage.Inspect_Trade);
+        reader.Write("Language", "Inspect_Observe", GameLanguage.Inspect_Observe);
+        reader.Write("Language", "GuildTerritory_None", GameLanguage.GuildTerritory_None);
+        reader.Write("Language", "GuildTerritory_StatusAvailable", GameLanguage.GuildTerritory_StatusAvailable);
+        reader.Write("Language", "GuildTerritory_StatusForSale", GameLanguage.GuildTerritory_StatusForSale);
+        reader.Write("Language", "GuildTerritory_StatusSalePending", GameLanguage.GuildTerritory_StatusSalePending);
+        reader.Write("Language", "GuildTerritory_StatusUnavailable", GameLanguage.GuildTerritory_StatusUnavailable);
+        reader.Write("Language", "GuildTerritory_OwnerAndPrefix", GameLanguage.GuildTerritory_OwnerAndPrefix);
+        reader.Write("Language", "Mail_ReportBug", GameLanguage.Mail_ReportBug);
         reader.Write("Language", "Trade", GameLanguage.Trade);
         reader.Write("Language", "Size", GameLanguage.Size);
         reader.Write("Language", "ChatSettings", GameLanguage.ChatSettings);
@@ -1117,6 +1282,16 @@
         reader.Write("Language", "NPC_CannotConsignItem", GameLanguage.NPC_CannotConsignItem);
         reader.Write("Language", "NPC_NotEnoughGold", GameLanguage.NPC_NotEnoughGold);
         reader.Write("Language", "NPC_MissingToolsOrIngredients", GameLanguage.NPC_MissingToolsOrIngredients);
+        reader.Write("Language", "NPC_SellPrefix", GameLanguage.NPC_SellPrefix);
+        reader.Write("Language", "NPC_RepairPrefix", GameLanguage.NPC_RepairPrefix);
+        reader.Write("Language", "NPC_SpecialRepairPrefix", GameLanguage.NPC_SpecialRepairPrefix);
+        reader.Write("Language", "NPC_ConsignPrefix", GameLanguage.NPC_ConsignPrefix);
+        reader.Write("Language", "NPC_DisassembleWarning", GameLanguage.NPC_DisassembleWarning);
+        reader.Write("Language", "NPC_DowngradePrefix", GameLanguage.NPC_DowngradePrefix);
+        reader.Write("Language", "NPC_ResetPrefix", GameLanguage.NPC_ResetPrefix);
+        reader.Write("Language", "NPC_RefinePrefix", GameLanguage.NPC_RefinePrefix);
+        reader.Write("Language", "NPC_CheckRefine", GameLanguage.NPC_CheckRefine);
+        reader.Write("Language", "NPC_ReplaceWedRingPrefix", GameLanguage.NPC_ReplaceWedRingPrefix);
 
         reader.Write("Language", "Gold", GameLanguage.Gold);
         reader.Write("Language", "Credit", GameLanguage.Credit);
@@ -1289,11 +1464,54 @@
         reader.Write("Language", "Awakening_AlreadyMaxLevel", GameLanguage.Awakening_AlreadyMaxLevel);
         reader.Write("Language", "Awakening_CannotAwaken", GameLanguage.Awakening_CannotAwaken);
         reader.Write("Language", "BigMap_TeleportToNPC", GameLanguage.BigMap_TeleportToNPC);
+        reader.Write("Language", "BigMap_SearchForNPCs", GameLanguage.BigMap_SearchForNPCs);
         reader.Write("Language", "System_PlayerNotOnline", GameLanguage.System_PlayerNotOnline);
         reader.Write("Language", "TrustMerchant_GetBackUnsold", GameLanguage.TrustMerchant_GetBackUnsold);
         reader.Write("Language", "TrustMerchant_BuyConfirm", GameLanguage.TrustMerchant_BuyConfirm);
         reader.Write("Language", "TrustMerchant_BidConfirm", GameLanguage.TrustMerchant_BidConfirm);
         reader.Write("Language", "TrustMerchant_SearchCooldown", GameLanguage.TrustMerchant_SearchCooldown);
+        reader.Write("Language", "TrustMerchant_Title_SalePrice", GameLanguage.TrustMerchant_Title_SalePrice);
+        reader.Write("Language", "TrustMerchant_Title_SellItem", GameLanguage.TrustMerchant_Title_SellItem);
+        reader.Write("Language", "TrustMerchant_Title_Item", GameLanguage.TrustMerchant_Title_Item);
+        reader.Write("Language", "TrustMerchant_Title_Price", GameLanguage.TrustMerchant_Title_Price);
+        reader.Write("Language", "TrustMerchant_Title_Expiry", GameLanguage.TrustMerchant_Title_Expiry);
+        reader.Write("Language", "TrustMerchant_Title_PriceBid", GameLanguage.TrustMerchant_Title_PriceBid);
+        reader.Write("Language", "TrustMerchant_Title_SellerExpiry", GameLanguage.TrustMerchant_Title_SellerExpiry);
+        reader.Write("Language", "TrustMerchant_Title_StartingBid", GameLanguage.TrustMerchant_Title_StartingBid);
+        reader.Write("Language", "TrustMerchant_Title_HighestBid", GameLanguage.TrustMerchant_Title_HighestBid);
+        reader.Write("Language", "TrustMerchant_Title_EndDate", GameLanguage.TrustMerchant_Title_EndDate);
+        reader.Write("Language", "TrustMerchant_ConsignHelp", GameLanguage.TrustMerchant_ConsignHelp);
+        reader.Write("Language", "TrustMerchant_AuctionHelp", GameLanguage.TrustMerchant_AuctionHelp);
+        reader.Write("Language", "TrustMerchant_Filter_All", GameLanguage.TrustMerchant_Filter_All);
+        reader.Write("Language", "TrustMerchant_Filter_Weapon", GameLanguage.TrustMerchant_Filter_Weapon);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery", GameLanguage.TrustMerchant_Filter_Drapery);
+        reader.Write("Language", "TrustMerchant_Filter_Accessory", GameLanguage.TrustMerchant_Filter_Accessory);
+        reader.Write("Language", "TrustMerchant_Filter_Consumable", GameLanguage.TrustMerchant_Filter_Consumable);
+        reader.Write("Language", "TrustMerchant_Filter_Enhancement", GameLanguage.TrustMerchant_Filter_Enhancement);
+        reader.Write("Language", "TrustMerchant_Filter_Book", GameLanguage.TrustMerchant_Filter_Book);
+        reader.Write("Language", "TrustMerchant_Filter_Craft", GameLanguage.TrustMerchant_Filter_Craft);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery_Armour", GameLanguage.TrustMerchant_Filter_Drapery_Armour);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery_Helmet", GameLanguage.TrustMerchant_Filter_Drapery_Helmet);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery_Belt", GameLanguage.TrustMerchant_Filter_Drapery_Belt);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery_Boots", GameLanguage.TrustMerchant_Filter_Drapery_Boots);
+        reader.Write("Language", "TrustMerchant_Filter_Drapery_Stone", GameLanguage.TrustMerchant_Filter_Drapery_Stone);
+        reader.Write("Language", "TrustMerchant_Filter_Accessory_Necklaces", GameLanguage.TrustMerchant_Filter_Accessory_Necklaces);
+        reader.Write("Language", "TrustMerchant_Filter_Accessory_Bracelets", GameLanguage.TrustMerchant_Filter_Accessory_Bracelets);
+        reader.Write("Language", "TrustMerchant_Filter_Accessory_Rings", GameLanguage.TrustMerchant_Filter_Accessory_Rings);
+        reader.Write("Language", "TrustMerchant_Filter_Consumable_Recovery", GameLanguage.TrustMerchant_Filter_Consumable_Recovery);
+        reader.Write("Language", "TrustMerchant_Filter_Consumable_Buff", GameLanguage.TrustMerchant_Filter_Consumable_Buff);
+        reader.Write("Language", "TrustMerchant_Filter_Consumable_Scrolls", GameLanguage.TrustMerchant_Filter_Consumable_Scrolls);
+        reader.Write("Language", "TrustMerchant_Filter_Consumable_Misc", GameLanguage.TrustMerchant_Filter_Consumable_Misc);
+        reader.Write("Language", "TrustMerchant_Filter_Enhancement_Gems", GameLanguage.TrustMerchant_Filter_Enhancement_Gems);
+        reader.Write("Language", "TrustMerchant_Filter_Enhancement_Orbs", GameLanguage.TrustMerchant_Filter_Enhancement_Orbs);
+        reader.Write("Language", "TrustMerchant_Filter_Book_Warrior", GameLanguage.TrustMerchant_Filter_Book_Warrior);
+        reader.Write("Language", "TrustMerchant_Filter_Book_Wizard", GameLanguage.TrustMerchant_Filter_Book_Wizard);
+        reader.Write("Language", "TrustMerchant_Filter_Book_Taoist", GameLanguage.TrustMerchant_Filter_Book_Taoist);
+        reader.Write("Language", "TrustMerchant_Filter_Book_Assassin", GameLanguage.TrustMerchant_Filter_Book_Assassin);
+        reader.Write("Language", "TrustMerchant_Filter_Book_Archer", GameLanguage.TrustMerchant_Filter_Book_Archer);
+        reader.Write("Language", "TrustMerchant_Filter_Craft_Materials", GameLanguage.TrustMerchant_Filter_Craft_Materials);
+        reader.Write("Language", "TrustMerchant_Filter_Craft_Meat", GameLanguage.TrustMerchant_Filter_Craft_Meat);
+        reader.Write("Language", "TrustMerchant_Filter_Craft_Ore", GameLanguage.TrustMerchant_Filter_Craft_Ore);
         reader.Write("Language", "MentorRequests", GameLanguage.MentorRequests);
         reader.Write("Language", "MentorEnterName", GameLanguage.MentorEnterName);
         reader.Write("Language", "NoMentorship", GameLanguage.NoMentorship);
@@ -1319,7 +1537,15 @@
         reader.Write("Language", "Guild_DonatedToFund", GameLanguage.Guild_DonatedToFund);
         reader.Write("Language", "Guild_RetrievedFromFund", GameLanguage.Guild_RetrievedFromFund);
 
-        reader.Write("Language", "Ranking_OnlineOnly", GameLanguage.Ranking_OnlineOnly);
+        reader.Write("Language", "Ranking_OnlineOnly",   GameLanguage.Ranking_OnlineOnly);
+        reader.Write("Language", "Ranking_AllHint",      GameLanguage.Ranking_AllHint);
+        reader.Write("Language", "Ranking_WarriorHint",  GameLanguage.Ranking_WarriorHint);
+        reader.Write("Language", "Ranking_WizardHint",   GameLanguage.Ranking_WizardHint);
+        reader.Write("Language", "Ranking_TaoistHint",   GameLanguage.Ranking_TaoistHint);
+        reader.Write("Language", "Ranking_AssassinHint", GameLanguage.Ranking_AssassinHint);
+        reader.Write("Language", "Ranking_ArcherHint",   GameLanguage.Ranking_ArcherHint);
+        reader.Write("Language", "Ranking_NotListed",    GameLanguage.Ranking_NotListed);
+        reader.Write("Language", "Ranking_Ranked",       GameLanguage.Ranking_Ranked);
 
         reader.Write("Language", "Keyboard_EnforceStrict", GameLanguage.Keyboard_EnforceStrict);
         reader.Write("Language", "Keyboard_EnforceRelaxed", GameLanguage.Keyboard_EnforceRelaxed);

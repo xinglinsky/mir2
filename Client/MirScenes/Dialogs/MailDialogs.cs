@@ -277,7 +277,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 Location = new Point(210, 414),
                 Sound = SoundList.ButtonA,
-                Hint = "Report Bug",
+                Hint = GameLanguage.Mail_ReportBug,
                 GrayScale = true,
                 Enabled = false
             };

@@ -1934,7 +1934,7 @@ Magic_DarkBody;Both;DarkBody;暗影之躯
 Magic_DelayedExplosion;Both;DelayedExplosion;延时爆裂
 Magic_DoubleShot;Both;DoubleShot;二连射
 Magic_DoubleSlash;Both;DoubleSlash;双重斩
-Magic_ElectricShock;Both;ElectricShock;雷电术
+Magic_ElectricShock;Both;ElectricShock;诱惑之光
 Magic_ElementalBarrier;Both;ElementalBarrier;元素屏障
 Magic_ElementalShot;Both;ElementalShot;元素射击
 Magic_EnergyRepulsor;Both;EnergyRepulsor;能量反震
@@ -2016,7 +2016,7 @@ Magic_SummonVampire;Both;SummonVampire;召唤吸血鬼
 Magic_SwiftFeet;Both;SwiftFeet;疾风步
 Magic_Teleport;Both;Teleport;瞬息移动
 Magic_Thrusting;Both;Thrusting;刺杀剑术
-Magic_ThunderBolt;Both;ThunderBolt;雷霆术
+Magic_ThunderBolt;Both;ThunderBolt;雷电术
 Magic_ThunderStorm;Both;ThunderStorm;地狱雷光
 Magic_Trap;Both;Trap;陷阱术
 Magic_TrapHexagon;Both;TrapHexagon;困魔咒
@@ -3437,8 +3437,8 @@ System_ObservationDisabled;Client;That player has disabled observation.;该玩�
 System_PersonObservingLoggedOff;Client;The person you was observing has logged off.;你正在观察的玩家已下线。
 System_PlayerNotOnline;Client;Player is not online;该玩家当前不在线.
 System_PleaseEnterInfo;Client;Please enter the required information.;请输入所需的信息。
-System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
 System_TargetTooFar;Client;Target is too far.;目标太远。
+System_UnknownTypeRequired;Client;Unknown Type Required;需要未知类型
 TaoistDes;Client;Taoists are well disciplined in the study of Astronomy, Medicine, and others aside from Mu-Gong. Rather then directly engaging the enemies, their specialty lies in assisting their allies with support. Taoists can summon powerful creatures and have a high resistance to magic, and is a class with well balanced offensive and defensive abilities.;道士精通天文医术等，多以辅助队友为主，可召唤强力生物，拥有较高的魔法抗性，攻防较为均衡.
 ToManyCharacters;Client;You cannot make anymore then {0} Characters.;你创建的角色数量已达到上限 {0} 个.
 TooHeavyToHold;Client;It is too heavy to Hold.;物品太重，无法拾取。

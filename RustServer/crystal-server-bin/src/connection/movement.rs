@@ -1,6 +1,7 @@
 use crystal_server_core::world;
 use crystal_server_core::world::WorldProvider;
 use crystal_server_core::world::configs::setup_config::setup_config;
+use rand::{thread_rng, Rng};
 use crystal_shared_proto::login::{
     CAttack,
     CPickUp,
@@ -224,6 +225,11 @@ impl LoginConnection {
                         if let Ok(raw) = pkt.encode() {
                             out.push(Self::encode_raw(raw));
                         }
+
+                        // Also broadcast updated party member locations so the
+                        // big map view stays in sync with movement, mirroring
+                        // C# HumanObject.GetPlayerLocation.
+                        self.broadcast_group_locations_for_self(out);
                     }
                 }
                 world::WorldEvent::MapChanged {
@@ -259,6 +265,12 @@ impl LoginConnection {
                                 out.push(Self::encode_raw(raw));
                             }
                         }
+
+                        // After changing maps, refresh party member map names
+                        // and locations for all members, mirroring C#
+                        // GroupMemberMapNameChanged + GetPlayerLocation.
+                        self.broadcast_group_maps_for_self(out);
+                        self.broadcast_group_locations_for_self(out);
                     }
 
                     // Emit decorative SafeZone border spells (TrapHexagon) for
@@ -266,7 +278,126 @@ impl LoginConnection {
                     // Settings.SafeZoneBorder is enabled.
                     self.send_safezone_border_spells(map_index, out);
                 }
+                world::WorldEvent::TeleportToBindRequested {
+                    session_id,
+                    spell_id,
+                    level,
+                } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+
+                    // Determine the bind location for this character. If no
+                    // bind is stored yet, fall back to the current
+                    // map/position, mirroring the behaviour used by town
+                    // teleport scrolls and TownRevive.
+                    let (bind_map, bind_x, bind_y, _bind_dir) = if let (
+                        Some(ref account_id),
+                        Some(char_idx),
+                    ) = (self.account_id.as_ref(), self.current_char_index)
+                    {
+                        if let Ok(Some(pos)) =
+                            self.store.load_character_bind(account_id, char_idx)
+                        {
+                            (pos.map_index, pos.x, pos.y, pos.direction)
+                        } else {
+                            (
+                                self.current_map_index,
+                                self.current_x,
+                                self.current_y,
+                                self.direction,
+                            )
+                        }
+                    } else {
+                        (
+                            self.current_map_index,
+                            self.current_x,
+                            self.current_y,
+                            self.direction,
+                        )
+                    };
+
+                    // Implement the C# PlayerObject.MagicTeleport algorithm:
+                    // sample up to 200 random points around BindLocation
+                    // within a rectangle sized by map_width/(level+1) and
+                    // map_height/(level+1), stopping at the first walkable
+                    // destination.
+                    let mut dest_opt: Option<(i32, i32)> = None;
+
+                    if let Some(info) = self.world_db.get_map_info(bind_map).cloned() {
+                        let dir = &self.world_config.map_path;
+                        if let Ok(map) =
+                            crystal_server_core::world::map::load_map_from_file(
+                                info,
+                                dir.as_path(),
+                            )
+                        {
+                            let width: i32 = map.width as i32;
+                            let height: i32 = map.height as i32;
+
+                            let denom: i32 = (level as i32).saturating_add(1).max(1);
+                            let map_size_x: i32 = (width / denom).max(1);
+                            let map_size_y: i32 = (height / denom).max(1);
+
+                            let mut rng = thread_rng();
+
+                            for _ in 0..200 {
+                                let dx = rng.gen_range(-map_size_x..map_size_x);
+                                let dy = rng.gen_range(-map_size_y..map_size_y);
+
+                                let x = bind_x.saturating_add(dx);
+                                let y = bind_y.saturating_add(dy);
+
+                                if x < 0 || y < 0 {
+                                    continue;
+                                }
+
+                                let ux = x as u16;
+                                let uy = y as u16;
+                                if ux >= map.width || uy >= map.height {
+                                    continue;
+                                }
+
+                                if !map.is_walkable(ux, uy) {
+                                    continue;
+                                }
+
+                                dest_opt = Some((x, y));
+                                break;
+                            }
+                        }
+                    }
+
+                    if let Some((tx, ty)) = dest_opt {
+                        let events2 = {
+                            let mut world = self.world.lock().unwrap();
+                            let mut events2 = world.handle_command(world::WorldCommand::Teleport {
+                                session_id: self.session_id,
+                                map_index: bind_map,
+                                x: tx,
+                                y: ty,
+                            });
+
+                            world.apply_teleport_skill_outcome(
+                                self.session_id,
+                                spell_id,
+                                &mut events2,
+                            );
+
+                            events2
+                        };
+
+                        let map_changed2 = self.handle_world_events(events2, out);
+                        if map_changed2 {
+                            self.known_monsters.clear();
+                            self.known_npcs.clear();
+                            self.update_visibility(out);
+                        }
+                    }
+                }
                 world::WorldEvent::ObjectLocation { .. } => {}
+                world::WorldEvent::Poisoned { .. } => {}
+                world::WorldEvent::ObjectPoisoned { .. } => {}
                 world::WorldEvent::GainExperience {
                     session_id,
                     amount,
@@ -723,6 +854,36 @@ impl LoginConnection {
                         }
                     }
                 }
+                world::WorldEvent::ObjectEffect { session_id, effect } => {
+                    // Generic object effect visual, used for SpellEffect-style
+                    // animations such as StormEscape. We mirror the handling
+                    // pattern used for Healing and MagicShieldUp/Down: send
+                    // to the owner (if this connection matches) and broadcast
+                    // to nearby viewers around the player's current
+                    // location.
+                    let eff_pkt = SObjectEffect {
+                        object_id: session_id,
+                        effect,
+                        effect_type: 0,
+                        delay_time: 0,
+                        time: 0,
+                    };
+
+                    if let Ok(raw) = eff_pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+
+                        if session_id == self.session_id {
+                            out.push(bytes.clone());
+                        }
+
+                        self.enqueue_for_viewers(
+                            self.current_map_index,
+                            self.current_x,
+                            self.current_y,
+                            bytes,
+                        );
+                    }
+                }
                 world::WorldEvent::MapItemRemoved {
                     object_id,
                     map_index,
@@ -1090,7 +1251,7 @@ impl LoginConnection {
         // Determine the bind location for this character (equivalent to C#
         // BindMapIndex/BindLocation). If none is stored, fall back to the
         // current map/position.
-        let (dest_map, dest_x, dest_y, dest_dir) = if let (
+        let (mut dest_map, mut dest_x, mut dest_y, mut dest_dir) = if let (
             Some(ref account_id),
             Some(char_idx),
         ) = (self.account_id.as_ref(), self.current_char_index)
@@ -1113,6 +1274,30 @@ impl LoginConnection {
                 self.direction,
             )
         };
+
+        // Mirror C# PlayerObject.TownRevive red-player behaviour: when
+        // PKPoints >= 200, attempt to revive at PKTownMapName /
+        // PKTownPositionX/Y from Setup.ini. If the configured PKTown map
+        // cannot be resolved, fall back to the normal bind location above.
+        let is_red = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_pk_points(self.session_id)
+                .map(|pk| pk >= 200)
+                .unwrap_or(false)
+        };
+
+        if is_red {
+            let cfg = setup_config();
+            if let Some(mi) = self
+                .world_db
+                .get_map_info_by_file_name(&cfg.pktown.map_name)
+            {
+                dest_map = mi.index;
+                dest_x = cfg.pktown.position_x;
+                dest_y = cfg.pktown.position_y;
+            }
+        }
 
         // Revive the player at the chosen bind location on the world side and
         // then issue a Teleport command so that a MapChanged event is emitted,

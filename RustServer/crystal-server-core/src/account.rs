@@ -93,6 +93,18 @@ pub struct StoredMail {
     pub can_reply: bool,
 }
 
+/// Simplified persisted friend representation for a character, roughly
+/// mirroring the C# FriendInfo/ClientFriend structures. This is stored in the
+/// account database and projected into SFriendUpdate/ClientFriend bytes when
+/// sending the friend list to the legacy C# client.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StoredFriend {
+    pub friend_index: i32,
+    pub name: String,
+    pub memo: String,
+    pub blocked: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StoredAccount {
     pub id: String,
@@ -308,6 +320,24 @@ pub trait AccountStore: Send + Sync {
         account_id: &str,
         index: i32,
         mails: &[StoredMail],
+    ) -> Result<(), StoreError>;
+
+    /// Load all stored friends for a given character. This mirrors the C#
+    /// CharacterInfo.Friends / FriendInfo list but in a simplified form.
+    /// Implementations should return an empty Vec when no friends exist yet.
+    fn load_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredFriend>, StoreError>;
+
+    /// Persist the full set of stored friends for a given character,
+    /// overwriting any previously saved list.
+    fn save_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+        friends: &[StoredFriend],
     ) -> Result<(), StoreError>;
 }
 

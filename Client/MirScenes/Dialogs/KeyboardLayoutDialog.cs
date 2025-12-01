@@ -42,7 +42,7 @@ namespace Client.MirScenes.Dialogs
 
             PageLabel = new MirLabel
             {
-                Text = "Keyboard Settings",
+                Text = GameLanguage.Keybinds,
                 Font = new Font(Settings.FontName, Settings.FontSize + 2, FontStyle.Bold),
                 DrawFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter,
                 Parent = this,
@@ -192,7 +192,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 Location = new Point(120, 404),
                 AutoSize = true,
-                Text = "Assign Rule: Strict"
+                Text = GameLanguage.Keyboard_EnforceStrict
             };
 
             UpdateText();

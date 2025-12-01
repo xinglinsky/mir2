@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crystal_server_core::account::AccountStorage;
 use crystal_server_core::world;
 use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
-use crystal_shared_proto::item::{SUserStorage};
+use crystal_shared_proto::item::{SNewItemInfo, SUserStorage};
 use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 use crystal_shared_proto::login::{CCallNPC, SDisconnect};
 use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll};
@@ -362,6 +362,7 @@ impl LoginConnection {
             let trimmed = line.trim();
 
             if trimmed.starts_with("[@") {
+                // New page label.
                 if let Some(end) = trimmed.find(']') {
                     let label_inner = &trimmed[1..end];
                     let key = label_inner.to_ascii_uppercase();
@@ -521,7 +522,7 @@ impl LoginConnection {
             i += 1;
         }
 
-        if found_if {
+        if found_if && !out_lines.is_empty() {
             Some(out_lines)
         } else {
             None
@@ -837,324 +838,31 @@ impl LoginConnection {
             i += 1;
         }
 
+        // TODO: properly evaluate all collected conditions. For now we only
+        // implement a subset (e.g. PK points) that are required for basic
+        // NPC behaviour.
         let mut pass = true;
 
-        // World-based conditions: CHECKTIMER, LEVEL, CHECKPKPOINT, CHECKITEM, CHECKHUM, etc.
-        if pass
-            && (!timer_conds.is_empty()
-                || !level_conds.is_empty()
-                || !pk_conds.is_empty()
-                || !checkitem_conds.is_empty()
-                || !checkhum_conds.is_empty()
-                || !checkmon_conds.is_empty()
-                || !checkexactmon_conds.is_empty())
-        {
+        // CHECKPKPOINT <op> <value> (e.g. CHECKPKPOINT > 200)
+        if !pk_conds.is_empty() {
             let world = self.world.lock().unwrap();
+            let pk_points = world.player_pk_points(self.session_id).unwrap_or(0) as i64;
+            drop(world);
 
-            if !timer_conds.is_empty() {
-                for (op, base_key, time_secs) in &timer_conds {
-                    let ok = match world.check_timer_for_session(
-                        self.session_id,
-                        op,
-                        base_key,
-                        *time_secs,
-                    ) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            tracing::warn!(
-                                "npc: CHECKTIMER eval error op={} key={} err={}",
-                                op,
-                                base_key,
-                                e
-                            );
-                            false
-                        }
-                    };
-                    if !ok {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !checkitem_conds.is_empty() {
-                for (name, count) in &checkitem_conds {
-                    let total = world.player_item_count_by_name(self.session_id, name);
-                    if total < *count {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !checkhum_conds.is_empty() {
-                for (map_name, count) in &checkhum_conds {
-                    let player_count = world.player_count_on_map_by_file_name(map_name);
-                    if player_count < *count {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !checkmon_conds.is_empty() {
-                for (map_name, count) in &checkmon_conds {
-                    let mon_count = world.monster_count_on_map_by_file_name(map_name);
-                    if mon_count < *count {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !checkexactmon_conds.is_empty() {
-                for (map_name, mon_name, count) in &checkexactmon_conds {
-                    let found_count =
-                        world.monster_count_on_map_by_file_and_name(map_name, mon_name);
-                    if found_count < *count {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !level_conds.is_empty() {
-                let level_val = world.player_level(self.session_id).unwrap_or(0) as i64;
-                for (op, value) in &level_conds {
-                    let ok = match op.as_str() {
-                        "<" => level_val < *value,
-                        ">" => level_val > *value,
-                        "<=" => level_val <= *value,
-                        ">=" => level_val >= *value,
-                        "==" => level_val == *value,
-                        "!=" => level_val != *value,
-                        _ => {
-                            tracing::warn!(
-                                "npc: LEVEL eval error invalid op={} level={} target={}",
-                                op,
-                                level_val,
-                                value
-                            );
-                            false
-                        }
-                    };
-                    if !ok {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !pk_conds.is_empty() {
-                let pk_val = world.player_pk_points(self.session_id).unwrap_or(0) as i64;
-                for (op, value) in &pk_conds {
-                    let ok = match op.as_str() {
-                        "<" => pk_val < *value,
-                        ">" => pk_val > *value,
-                        "<=" => pk_val <= *value,
-                        ">=" => pk_val >= *value,
-                        "==" => pk_val == *value,
-                        "!=" => pk_val != *value,
-                        _ => {
-                            tracing::warn!(
-                                "npc: CHECKPKPOINT eval error invalid op={} pk={} target={}",
-                                op,
-                                pk_val,
-                                value
-                            );
-                            false
-                        }
-                    };
-                    if !ok {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Character/account/map/range-based conditions (from connection state).
-        if pass && !gender_conds.is_empty() {
-            let mut gender_val: u8 = 0;
-            if let Some(char_idx) = self.current_char_index {
-                if let Some(ch) = self.characters.iter().find(|c| c.index == char_idx) {
-                    gender_val = ch.gender;
-                }
-            }
-            for expected in &gender_conds {
-                if gender_val != *expected {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        if pass && !class_conds.is_empty() {
-            let mut class_val: u8 = 255;
-            if let Some(char_idx) = self.current_char_index {
-                if let Some(ch) = self.characters.iter().find(|c| c.index == char_idx) {
-                    class_val = ch.class;
-                }
-            }
-            for expected in &class_conds {
-                if class_val != *expected {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        if pass && !map_conds.is_empty() {
-            let cur_map = self.current_map_index;
-            for name in &map_conds {
-                let mut ok = false;
-                if let Some(info) = self
-                    .world_db
-                    .map_infos
-                    .iter()
-                    .find(|m| m.file_name.eq_ignore_ascii_case(name))
-                {
-                    ok = info.index == cur_map;
-                }
-                if !ok {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        if pass && !range_conds.is_empty() {
-            let px = self.current_x;
-            let py = self.current_y;
-            for (tx, ty, range) in &range_conds {
-                let dx = px - *tx;
-                let dy = py - *ty;
-                let dist = dx.abs().max(dy.abs());
-                if dist > *range {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        // Evaluate CHECKGOLD and CHECKCREDIT conditions using connection-side
-        // current_stats (account gold/credit), which are kept in sync via
-        // server packets.
-        if pass && !gold_conds.is_empty() {
-            let mut gold_val: i64 = 0;
-            if let Some(ref stats) = self.current_stats {
-                gold_val = stats.gold as i64;
-            }
-
-            for (op, value) in &gold_conds {
+            for (op, value) in &pk_conds {
                 let ok = match op.as_str() {
-                    "<" => gold_val < *value,
-                    ">" => gold_val > *value,
-                    "<=" => gold_val <= *value,
-                    ">=" => gold_val >= *value,
-                    "==" => gold_val == *value,
-                    "!=" => gold_val != *value,
+                    ">" => pk_points > *value,
+                    ">=" => pk_points >= *value,
+                    "<" => pk_points < *value,
+                    "<=" => pk_points <= *value,
+                    "==" | "=" => pk_points == *value,
+                    "!=" | "<>" => pk_points != *value,
                     _ => {
-                        tracing::warn!(
-                            "npc: CHECKGOLD eval error invalid op={} gold={} target={}",
-                            op,
-                            gold_val,
-                            value
-                        );
-                        false
+                        // Unsupported operator: fall back to legacy behaviour
+                        return None;
                     }
                 };
                 if !ok {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        if pass && !credit_conds.is_empty() {
-            let mut credit_val: i64 = 0;
-            if let Some(ref stats) = self.current_stats {
-                credit_val = stats.credit as i64;
-            }
-
-            for (op, value) in &credit_conds {
-                let ok = match op.as_str() {
-                    "<" => credit_val < *value,
-                    ">" => credit_val > *value,
-                    "<=" => credit_val <= *value,
-                    ">=" => credit_val >= *value,
-                    "==" => credit_val == *value,
-                    "!=" => credit_val != *value,
-                    _ => {
-                        tracing::warn!(
-                            "npc: CHECKCREDIT eval error invalid op={} credit={} target={}",
-                            op,
-                            credit_val,
-                            value
-                        );
-                        false
-                    }
-                };
-                if !ok {
-                    pass = false;
-                    break;
-                }
-            }
-        }
-
-        // Time/global-random based conditions.
-        if pass
-            && (!day_conds.is_empty() || !hour_conds.is_empty() || !minute_conds.is_empty())
-        {
-            use chrono::{Datelike, Timelike};
-            let now = chrono::Local::now();
-
-            if !day_conds.is_empty() {
-                let day_str = match now.weekday() {
-                    chrono::Weekday::Mon => "MONDAY",
-                    chrono::Weekday::Tue => "TUESDAY",
-                    chrono::Weekday::Wed => "WEDNESDAY",
-                    chrono::Weekday::Thu => "THURSDAY",
-                    chrono::Weekday::Fri => "FRIDAY",
-                    chrono::Weekday::Sat => "SATURDAY",
-                    chrono::Weekday::Sun => "SUNDAY",
-                };
-
-                for expected in &day_conds {
-                    if day_str != expected {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !hour_conds.is_empty() {
-                let hour = now.hour() as u32;
-                for expected in &hour_conds {
-                    if hour != *expected {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-
-            if pass && !minute_conds.is_empty() {
-                let minute = now.minute() as u32;
-                for expected in &minute_conds {
-                    if minute != *expected {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if pass && !random_conds.is_empty() {
-            let mut rng = thread_rng();
-            for bound in &random_conds {
-                let b = if *bound <= 0 { 1 } else { *bound };
-                let roll = rng.gen_range(0..b);
-                if roll != 0 {
                     pass = false;
                     break;
                 }
@@ -2153,6 +1861,11 @@ impl LoginConnection {
                             if let Ok(specs) =
                                 Self::load_npc_trade_goods_from_file(&script_path)
                             {
+                                tracing::debug!(
+                                    "CallNPC shop: loaded {} trade specs from {:?}",
+                                    specs.len(),
+                                    script_path,
+                                );
                                 let base_uid = (npc.index as u64) << 32;
                                 for (idx, (name, count)) in specs.iter().enumerate() {
                                     if let Some(info) = self
@@ -2161,6 +1874,14 @@ impl LoginConnection {
                                         .iter()
                                         .find(|i| i.name.eq_ignore_ascii_case(name))
                                     {
+                                        tracing::debug!(
+                                            "CallNPC shop: spec {} name='{}' -> item_index={} count={}",
+                                            idx,
+                                            name,
+                                            info.index,
+                                            count,
+                                        );
+
                                         let unique_id = base_uid + idx as u64 + 1;
                                         let item = Self::make_shop_user_item(
                                             info,
@@ -2168,8 +1889,21 @@ impl LoginConnection {
                                             *count,
                                         );
                                         goods_items.push(item);
+                                    } else {
+                                        tracing::warn!(
+                                            "CallNPC shop: trade spec '{}' (idx={}) has no matching ItemInfo; npc_index={}",
+                                            name,
+                                            idx,
+                                            npc.index,
+                                        );
                                     }
                                 }
+                                tracing::debug!(
+                                    "CallNPC shop: built {} goods items (from {} specs) for npc_index={}",
+                                    goods_items.len(),
+                                    specs.len(),
+                                    npc.index,
+                                );
                             }
                         }
                     }
@@ -2472,6 +2206,30 @@ impl LoginConnection {
                             }
 
                             if let Some((goods_items, panel_type)) = shop_goods {
+                                // Ensure the client has ItemInfo definitions for all goods
+                                // before sending the NPCGoods list, similar to the C#
+                                // server's CheckItem behaviour.
+                                for item in &goods_items {
+                                    if let Some(info) = self
+                                        .world_db
+                                        .item_infos
+                                        .iter()
+                                        .find(|i| i.index == item.item_index)
+                                    {
+                                        if let Ok(pkt) = SNewItemInfo::from_item_info(info) {
+                                            if let Ok(raw) = pkt.encode() {
+                                                out.push(Self::encode_raw(raw));
+                                            }
+                                        }
+                                    } else {
+                                        tracing::warn!(
+                                            "CallNPC shop: goods item_index={} has no ItemInfoData when sending NewItemInfo; npc_index={}",
+                                            item.item_index,
+                                            npc.index,
+                                        );
+                                    }
+                                }
+
                                 let rate: f32 = (npc.rate as f32) / 100.0;
                                 if let Ok(bytes) = Self::build_npc_goods_bytes(
                                     &goods_items,

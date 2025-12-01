@@ -498,6 +498,47 @@ impl BuffProperty {
     }
 }
 
+#[repr(u16)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PoisonType {
+    None = 0,
+    Green = 1,
+    Red = 2,
+    Slow = 4,
+    Frozen = 8,
+    Stun = 16,
+    Paralysis = 32,
+    DelayedExplosion = 64,
+    Bleeding = 128,
+    LRParalysis = 256,
+    Blindness = 512,
+    Dazed = 1024,
+}
+
+impl PoisonType {
+    pub fn from_u16(bits: u16) -> Option<PoisonType> {
+        match bits {
+            0 => Some(PoisonType::None),
+            1 => Some(PoisonType::Green),
+            2 => Some(PoisonType::Red),
+            4 => Some(PoisonType::Slow),
+            8 => Some(PoisonType::Frozen),
+            16 => Some(PoisonType::Stun),
+            32 => Some(PoisonType::Paralysis),
+            64 => Some(PoisonType::DelayedExplosion),
+            128 => Some(PoisonType::Bleeding),
+            256 => Some(PoisonType::LRParalysis),
+            512 => Some(PoisonType::Blindness),
+            1024 => Some(PoisonType::Dazed),
+            _ => None,
+        }
+    }
+
+    pub fn as_u16(self) -> u16 {
+        self as u16
+    }
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BuffStackType {

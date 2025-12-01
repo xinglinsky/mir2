@@ -19,7 +19,7 @@ use crate::world::skills::{
     is_pure_magic_attack,
     resolve_attack_spell_and_level_for_player,
 };
-use crate::world::skills::assassin::{apply_moon_dark_bonus, resolve_moon_dark_opening};
+use crate::world::skills::assassin::{apply_moon_dark_bonus, resolve_moon_dark_opening, cast_swift_feet, cast_haste};
 use crate::world::skills::warrior::{
     cast_counter_attack,
     cast_cross_half_moon,
@@ -27,6 +27,7 @@ use crate::world::skills::warrior::{
     cast_half_moon,
     cast_immortal_skin,
     cast_rage,
+    cast_fury,
     is_thrusting_spell,
     resolve_slaying_for_attack,
     thrusting_max_range,
@@ -38,6 +39,10 @@ use crate::world::skills::wizard::{
     cast_hell_fire,
     cast_magic_shield,
     cast_thunder_storm_flame_field,
+    cast_blizzard,
+    cast_blink,
+    cast_storm_escape,
+    cast_teleport,
 };
 use crate::world::skills::taoist::{
     cast_blessed_armour,
@@ -45,17 +50,351 @@ use crate::world::skills::taoist::{
     cast_hallucination,
     cast_healing,
     cast_mass_healing,
+    cast_poisoning,
     cast_soul_shield,
     cast_summon_holy_deva,
     cast_summon_shinsu,
     cast_summon_skeleton,
     cast_ultimate_enhancer,
 };
-use crate::world::types::{AttackMode, BuffType};
-use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell};
+use crate::world::types::{AttackMode, BuffType, PoisonType};
+use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell, PoisonInstance};
 
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
+        true
+    }
+
+    /// Helper that mirrors C# MonsterObject.PoisonTarget for player targets
+    /// by layering an outer poison-resist roll and chance-to-poison roll in
+    /// front of the core ApplyPoison-style logic implemented by
+    /// apply_poison_to_player_from_monster. This does not itself enforce any
+    /// IsAttackTarget rules; callers should ensure the target is valid.
+    pub(crate) fn poison_target_player(
+        &mut self,
+        attacker_monster_id: u64,
+        map_index: i32,
+        target_session_id: SessionId,
+        chance_to_poison: i32,
+        poison_duration: i64,
+        poison_type: PoisonType,
+        poison_tick_speed_ms: i64,
+        no_resist: bool,
+        ignore_defence: bool,
+    ) -> bool {
+        if chance_to_poison <= 0 || poison_duration <= 0 || poison_tick_speed_ms <= 0 {
+            return false;
+        }
+
+        // Fetch the attacking monster and build its SC-based stats, mirroring
+        // the GetAttackPower(MinSC, MaxSC) call in C# MonsterObject.
+        let (attacker_stats, _monster_index) = {
+            let monsters = match self.monsters.get(&map_index) {
+                Some(ms) => ms,
+                None => return false,
+            };
+
+            let monster = match monsters
+                .iter()
+                .find(|m| m.id == attacker_monster_id && m.hp > 0)
+            {
+                Some(m) => m,
+                None => return false,
+            };
+
+            let info = match self.provider.get_monster_info(monster.monster_index) {
+                Some(i) => i,
+                None => return false,
+            };
+
+            let mut stats: Stats = info.stats.clone();
+            stats.add(&monster.buff_stats);
+            (stats, monster.monster_index)
+        };
+
+        let min_sc = attacker_stats.get(Stat::MinSC);
+        let max_sc = attacker_stats.get(Stat::MaxSC).max(min_sc);
+
+        let mut rng = thread_rng();
+        let value = if max_sc <= min_sc {
+            min_sc
+        } else {
+            rng.gen_range(min_sc..=max_sc)
+        };
+
+        if value <= 0 {
+            return false;
+        }
+
+        // Outer poison-resist roll taken directly from C# PoisonTarget:
+        //
+        // if (Envir.Random.Next(Settings.PoisonResistWeight) >= target.Stats[PoisonResist])
+        //     { ... ApplyPoison ... }
+        //
+        // which is equivalent to skipping application when the roll is less
+        // than PoisonResist.
+        let cfg = setup_config();
+        let poison_resist_weight = cfg.items.poison_resist_weight.max(1) as i32;
+        let target_resist = self
+            .players
+            .get(&target_session_id)
+            .map(|p| p.stats.total.get(Stat::PoisonResist).max(0))
+            .unwrap_or(0);
+
+        if target_resist > 0 && poison_resist_weight > 0 {
+            let roll = rng.gen_range(0..poison_resist_weight.max(1));
+            if roll < target_resist {
+                return false;
+            }
+        }
+
+        // chanceToPoison: only when Random.Next(chanceToPoison) == 0 do we
+        // proceed to apply the poison.
+        if chance_to_poison > 1 {
+            let roll = rng.gen_range(0..chance_to_poison.max(1));
+            if roll != 0 {
+                return false;
+            }
+        } else if chance_to_poison == 1 {
+            // Always attempt to poison once resist has passed.
+        } else {
+            return false;
+        }
+
+        self.apply_poison_to_player_from_monster(
+            attacker_monster_id,
+            map_index,
+            target_session_id,
+            poison_type,
+            value,
+            poison_duration,
+            poison_tick_speed_ms,
+            no_resist,
+            ignore_defence,
+        )
+    }
+
+    /// Apply a poison from a player to a monster, approximating the stacking
+    /// rules from C# MonsterObject.ApplyPoison / PoisonTarget but without
+    /// armour or resist checks for now. This function only initialises the
+    /// poison instance and attaches it to the target monster; the actual
+    /// tick damage is processed by monster_runtime.
+    pub(crate) fn apply_poison_to_monster_from_player(
+        &mut self,
+        attacker_sid: SessionId,
+        map_index: i32,
+        target_monster_id: u64,
+        poison_type: PoisonType,
+        value: i32,
+        duration: i64,
+        tick_speed_ms: i64,
+    ) -> bool {
+        if duration <= 0 || tick_speed_ms <= 0 {
+            return false;
+        }
+
+        let monsters = match self.monsters.get_mut(&map_index) {
+            Some(m) => m,
+            None => return false,
+        };
+
+        let monster = match monsters.iter_mut().find(|m| m.id == target_monster_id) {
+            Some(m) => m,
+            None => return false,
+        };
+
+        if monster.hp <= 0 {
+            return false;
+        }
+
+        let mut new_poison = PoisonInstance {
+            owner_session_id: Some(attacker_sid),
+            poison_type,
+            value,
+            duration,
+            time: 0,
+            tick_time_ms: self.time_ms.saturating_add(tick_speed_ms.max(0)),
+            tick_speed_ms: tick_speed_ms.max(0),
+        };
+
+        if let Some(idx) = monster
+            .poisons
+            .iter()
+            .position(|p| p.poison_type == poison_type)
+        {
+            let existing = &monster.poisons[idx];
+
+            // Mirror key C# stacking rules:
+            // - For Green poison, a weaker (lower value) poison cannot
+            //   overwrite a stronger one.
+            if poison_type == PoisonType::Green && existing.value > new_poison.value {
+                return false;
+            }
+
+            // - For non-Green poisons, a shorter duration cannot overwrite a
+            //   longer remaining duration.
+            if poison_type != PoisonType::Green
+                && existing.duration.saturating_sub(existing.time) > new_poison.duration
+            {
+                return false;
+            }
+
+            // - Prevent permanent control from Frozen/Slow/Paralysis-style
+            //   poisons by rejecting reapplications while they are active.
+            if matches!(
+                existing.poison_type,
+                PoisonType::Frozen | PoisonType::Slow | PoisonType::Paralysis | PoisonType::LRParalysis
+            ) {
+                return false;
+            }
+
+            // - Ignore additional DelayedExplosion applications for now.
+            if poison_type == PoisonType::DelayedExplosion {
+                return false;
+            }
+
+            monster.poisons[idx] = new_poison;
+        } else {
+            monster.poisons.push(new_poison);
+        }
+
+        true
+    }
+
+    /// Apply a poison from a monster to a player, approximating the core
+    /// behaviour of C# MonsterObject.PoisonTarget together with
+    /// HumanObject.ApplyPoison for Green/Red poisons. This handles poison
+    /// resist checks, optional MAC-based reduction for Green poison and
+    /// PoisonRecovery-based duration reduction, and reuses the same stacking
+    /// rules as apply_poison_to_monster_from_player.
+    pub(crate) fn apply_poison_to_player_from_monster(
+        &mut self,
+        _attacker_monster_id: u64,
+        map_index: i32,
+        target_session_id: SessionId,
+        poison_type: PoisonType,
+        mut value: i32,
+        mut duration: i64,
+        tick_speed_ms: i64,
+        no_resist: bool,
+        ignore_defence: bool,
+    ) -> bool {
+        if duration <= 0 || tick_speed_ms <= 0 {
+            return false;
+        }
+
+        let cfg = setup_config();
+        let poison_resist_weight = cfg.items.poison_resist_weight.max(1) as i32;
+
+        let player = match self.players.get_mut(&target_session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if player.dead || player.hp <= 0 || player.map_index != map_index {
+            return false;
+        }
+
+        // Poison resist check: mirror C# HumanObject.ApplyPoison where
+        // Envir.Random.Next(Settings.PoisonResistWeight) < Stats[PoisonResist]
+        // causes the poison application to be skipped. For monster-origin
+        // poisons Caster.Race != Player so the PvP gating does not apply.
+        if !no_resist {
+            let poison_resist = player.stats.total.get(Stat::PoisonResist).max(0);
+            if poison_resist > 0 && poison_resist_weight > 0 {
+                let mut rng = thread_rng();
+                let roll = rng.gen_range(0..poison_resist_weight.max(1));
+                if roll < poison_resist {
+                    return false;
+                }
+            }
+        }
+
+        // For Green poison, optionally reduce Value by the player's MAC
+        // before applying, mirroring the C# ignoreDefence behaviour where a
+        // high MAC can negate or reduce the poison entirely.
+        if !ignore_defence && poison_type == PoisonType::Green {
+            let stats = &player.stats.total;
+            let min_mac = stats.get(Stat::MinMAC).max(0);
+            let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+
+            let armour = if max_mac <= min_mac {
+                min_mac
+            } else {
+                let mut rng = thread_rng();
+                rng.gen_range(min_mac..=max_mac)
+            };
+
+            if value < armour {
+                // In C#, this sets PType = None, effectively cancelling the
+                // poison application.
+                return false;
+            } else {
+                value = value.saturating_sub(armour);
+            }
+        }
+
+        // Apply PoisonRecovery to Green/Red duration, mirroring C# where
+        // Duration is reduced by Stats[PoisonRecovery].
+        if poison_type == PoisonType::Green || poison_type == PoisonType::Red {
+            let recovery = player.stats.total.get(Stat::PoisonRecovery).max(0) as i64;
+            if recovery > 0 {
+                duration = duration.saturating_sub(recovery).max(0);
+            }
+            if duration <= 0 {
+                return false;
+            }
+        }
+
+        let mut new_poison = PoisonInstance {
+            // For monster-origin poisons we do not currently attribute the
+            // owner to a specific player session; poison damage is applied
+            // directly to the player rather than via PendingMagicHit.
+            owner_session_id: None,
+            poison_type,
+            value,
+            duration,
+            time: 0,
+            tick_time_ms: self.time_ms.saturating_add(tick_speed_ms.max(0)),
+            tick_speed_ms: tick_speed_ms.max(0),
+        };
+
+        if let Some(idx) = player
+            .poisons
+            .iter()
+            .position(|p| p.poison_type == poison_type)
+        {
+            let existing = &player.poisons[idx];
+
+            // Reuse the same stacking rules as monster poisons so that Green
+            // poisons cannot be overwritten by weaker applications and
+            // non-Green poisons preserve longer remaining durations.
+            if poison_type == PoisonType::Green && existing.value > new_poison.value {
+                return false;
+            }
+
+            if poison_type != PoisonType::Green
+                && existing.duration.saturating_sub(existing.time) > new_poison.duration
+            {
+                return false;
+            }
+
+            if matches!(
+                existing.poison_type,
+                PoisonType::Frozen | PoisonType::Slow | PoisonType::Paralysis | PoisonType::LRParalysis
+            ) {
+                return false;
+            }
+
+            if poison_type == PoisonType::DelayedExplosion {
+                return false;
+            }
+
+            player.poisons[idx] = new_poison;
+        } else {
+            player.poisons.push(new_poison);
+        }
+
         true
     }
 
@@ -148,16 +487,17 @@ impl<P: WorldProvider> World<P> {
     /// DeathDrop/RedDeathDrop by selecting a subset of equipment and
     /// inventory items to drop on the ground near the corpse and assigning a
     /// longer expire timeout based on GameConfig.player_died_item_timeout.
-    fn apply_player_death_drops(
+    pub(crate) fn apply_player_death_drops(
         &mut self,
         target_sid: SessionId,
         map_index: i32,
         events: &mut Vec<WorldEvent>,
     ) {
-        // Snapshot basic position/PK state without holding a mutable borrow
-        // of the player so we can still mutate world structures below.
-        let (px, py, pk_points) = match self.players.get(&target_sid) {
-            Some(p) => (p.x, p.y, p.pk_points),
+        // Snapshot basic position/PK state and the player's name without
+        // holding a mutable borrow so we can still mutate world structures
+        // below.
+        let (px, py, pk_points, player_name) = match self.players.get(&target_sid) {
+            Some(p) => (p.x, p.y, p.pk_points, p.name.clone()),
             None => return,
         };
 
@@ -199,6 +539,27 @@ impl<P: WorldProvider> World<P> {
         const BIND_BREAK_ON_DEATH: i16 = 0x0100;
 
         if let Some(p) = self.players.get(&target_sid) {
+            // First, approximate C# ItemSets behaviour for the Spirit set so
+            // we can mirror the logic that destroys Spirit items when the set
+            // is incomplete. In the C# server this is driven by ItemSets and
+            // SetComplete; here we approximate it by counting how many
+            // equipped items belong to the Spirit set (ItemInfo.set ==
+            // ItemSet.Spirit). If the player has at least one but fewer than
+            // SPIRIT_FULL_SET_PIECES Spirit items equipped, we consider the
+            // set incomplete and destroy all Spirit equipment on death.
+            let mut spirit_pieces: i32 = 0;
+            for opt in p.equipment.slots.iter() {
+                if let Some(it) = opt {
+                    if let Some(info) = self.provider.get_item_info(it.item_index) {
+                        if info.set == 1 {
+                            spirit_pieces += 1;
+                        }
+                    }
+                }
+            }
+            const SPIRIT_FULL_SET_PIECES: i32 = 4;
+            let destroy_spirit_equipment = spirit_pieces > 0 && spirit_pieces < SPIRIT_FULL_SET_PIECES;
+
             // Equipment: approximate DeathDrop/RedDeathDrop percentages and
             // BindMode semantics.
             for (idx, opt) in p.equipment.slots.iter().enumerate() {
@@ -236,6 +597,14 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
 
+                // Approximate C# Spirit set death behaviour: when the player
+                // has an incomplete Spirit set equipped, destroy all Spirit
+                // set equipment on death instead of dropping it.
+                if destroy_spirit_equipment && info.set == 1 {
+                    destroys.push((true, idx));
+                    continue;
+                }
+
                 let break_on_death =
                     (info.bind & BIND_BREAK_ON_DEATH) != 0
                         || item
@@ -269,7 +638,23 @@ impl<P: WorldProvider> World<P> {
                     // Single equipment item: 1/30 for normal, 1/10 for red.
                     let chance = if is_red { 10 } else { 30 };
                     if rng.gen_range(0..chance) == 0 {
-                        drop_count = 1;
+                        // For single-count rental items, approximate C#
+                        // DeathDrop/RedDeathDrop behaviour by returning the
+                        // item to its owner instead of dropping it on the
+                        // ground.
+                        if item.rental_information.is_some() {
+                            let name = info.friendly_name();
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id: target_sid,
+                                message: format!(
+                                    "You died and {} has been returned to it's owner.",
+                                    name
+                                ),
+                            });
+                            destroys.push((true, idx));
+                        } else {
+                            drop_count = 1;
+                        }
                     }
                 }
 
@@ -340,7 +725,19 @@ impl<P: WorldProvider> World<P> {
                     // Single inventory item: 1/10 for normal, 1/5 for red.
                     let chance = if is_red { 5 } else { 10 };
                     if rng.gen_range(0..chance) == 0 {
-                        drop_count = 1;
+                        if item.rental_information.is_some() {
+                            let name = info.friendly_name();
+                            events.push(WorldEvent::PartySystemMessage {
+                                session_id: target_sid,
+                                message: format!(
+                                    "You died and {} has been returned to it's owner.",
+                                    name
+                                ),
+                            });
+                            destroys.push((false, idx));
+                        } else {
+                            drop_count = 1;
+                        }
                     }
                 }
 
@@ -391,6 +788,26 @@ impl<P: WorldProvider> World<P> {
                     item_index: info.index,
                     count: item.count,
                 });
+
+                // If this item is flagged for global drop notification,
+                // approximate the C# GlobalDropNotify behaviour by sending a
+                // system chat message to all online players indicating that
+                // the dead player dropped this item.
+                if info.global_drop_notify {
+                    let base_name = info.friendly_name();
+                    let name = if item.count > 1 {
+                        format!("{} ({})", base_name, item.count)
+                    } else {
+                        base_name
+                    };
+                    let text = format!("{} has dropped {}.", player_name, name);
+                    for (&sid, _) in self.players.iter() {
+                        events.push(WorldEvent::PartySystemMessage {
+                            session_id: sid,
+                            message: text.clone(),
+                        });
+                    }
+                }
 
                 placed.push((is_eq, idx, item));
             }
@@ -626,12 +1043,19 @@ impl<P: WorldProvider> World<P> {
             health_percent,
         });
 
-        // If the hit killed the target, apply player death drops (equipment /
-        // inventory) using the configured PlayerDiedItemTimeOut for expire
-        // time. SafeZone and NoDropPlayer rules are handled inside
-        // apply_player_death_drops, which approximates the C#
-        // PlayerObject.Die -> DeathDrop/RedDeathDrop path.
+        // If the hit killed the target, first attempt revival via Revival
+        // rings before applying death buffs/drops. If revival succeeds, skip
+        // further death handling (no PKPoints, no drops).
         if dead {
+            if self.try_revive_with_revival_ring(target_sid, events) {
+                return;
+            }
+
+            // 玩家真正死亡时，先清理该玩家的所有宠物/召唤物，再按 C#
+            // HumanObject.Die 语义清理带 RemoveOnDeath 属性的 Buff，并
+            // 处理死亡掉落逻辑。
+            self.remove_all_pets_for_session(target_sid);
+            self.clear_player_buffs_on_death(target_sid, events);
             self.apply_player_death_drops(target_sid, map_index, events);
         }
 
@@ -644,6 +1068,8 @@ impl<P: WorldProvider> World<P> {
             t.brown_time_ms = self.time_ms;
         }
 
+        let mut murder = false;
+
         if let Some(map_info) = self.provider.get_map_info(map_index) {
             if !map_info.fight {
                 let eligible = old_pk_points < 200 && self.time_ms > old_brown_time;
@@ -651,9 +1077,86 @@ impl<P: WorldProvider> World<P> {
                     if let Some(att) = self.players.get_mut(&attacker_sid) {
                         att.pk_points = att.pk_points.saturating_add(100);
                     }
+                    murder = true;
                 }
             }
         }
+
+        if murder {
+            self.apply_weapon_luck_curse(attacker_sid, events);
+        }
+    }
+
+    /// When a player commits murder (gains PK points by killing a normal
+    /// player), apply a chance for their weapon Luck to decrease, mirroring
+    /// the C# logic:
+    ///
+    /// if (weapon != null && weapon.AddedStats[Stat.Luck] > (Settings.MaxLuck * -1)
+    ///     && Envir.Random.Next(4) == 0) { weapon.AddedStats[Stat.Luck]--; }
+    fn apply_weapon_luck_curse(
+        &mut self,
+        attacker_sid: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let cfg = setup_config();
+        let max_luck_cfg: i32 = cfg.items.max_luck.max(1).into();
+        let min_luck = -max_luck_cfg;
+
+        let mut rng = thread_rng();
+        if rng.gen_range(0..4) != 0 {
+            return;
+        }
+
+        {
+            let attacker = match self.players.get_mut(&attacker_sid) {
+                Some(p) => p,
+                None => return,
+            };
+
+            // EquipmentSlot.Weapon is index 0 in the legacy C# enums.
+            let weapon_slot = 0usize;
+            let slot_opt = match attacker.equipment.slots.get_mut(weapon_slot) {
+                Some(s) => s,
+                None => return,
+            };
+
+            let weapon = match slot_opt.as_mut() {
+                Some(w) => w,
+                None => return,
+            };
+
+            let luck_stat_id = Stat::Luck as u8;
+            let mut current_luck: i32 = 0;
+            let mut luck_index: Option<usize> = None;
+            for (idx, (sid, val)) in weapon.added_stats.entries.iter().enumerate() {
+                if *sid == luck_stat_id {
+                    current_luck = *val;
+                    luck_index = Some(idx);
+                    break;
+                }
+            }
+
+            if current_luck <= min_luck {
+                return;
+            }
+
+            let new_luck = current_luck.saturating_sub(1);
+            match luck_index {
+                Some(i) => weapon.added_stats.entries[i].1 = new_luck,
+                None => weapon
+                    .added_stats
+                    .entries
+                    .push((luck_stat_id, new_luck)),
+            }
+        }
+
+        // Recalculate equipment stats so that the Luck change takes effect for
+        // subsequent attacks, and notify the player via a system message.
+        self.recalc_player_equipment_stats(attacker_sid);
+        events.push(WorldEvent::PartySystemMessage {
+            session_id: attacker_sid,
+            message: "Your weapon has been cursed.".to_string(),
+        });
     }
 
     #[allow(dead_code)]
@@ -728,6 +1231,21 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if spell == Spell::Blink as u8 {
+            cast_blink(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Teleport as u8 {
+            cast_teleport(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Fury as u8 {
+            cast_fury(self, session_id, events);
+            return;
+        }
+
         if spell == Spell::ImmortalSkin as u8 {
             cast_immortal_skin(self, session_id, events);
             return;
@@ -735,6 +1253,16 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::CounterAttack as u8 {
             cast_counter_attack(self, session_id, events);
+            return;
+        }
+
+        if spell == Spell::Haste as u8 {
+            cast_haste(self, session_id, events);
+            return;
+        }
+
+        if spell == Spell::SwiftFeet as u8 {
+            cast_swift_feet(self, session_id, events);
             return;
         }
 
@@ -753,8 +1281,19 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if spell == Spell::StormEscape as u8 {
+            cast_thunder_storm_flame_field(self, session_id, spell, direction, events);
+            cast_storm_escape(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
         if spell == Spell::Lightning as u8 {
             cast_lightning(self, session_id, spell, direction, events);
+            return;
+        }
+
+        if spell == Spell::Blizzard as u8 {
+            cast_blizzard(self, session_id, spell, direction, x, y, events);
             return;
         }
 
@@ -814,6 +1353,11 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::MassHealing as u8 {
             cast_mass_healing(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Poisoning as u8 {
+            cast_poisoning(self, session_id, spell, direction, x, y, events);
             return;
         }
 
@@ -1506,6 +2050,14 @@ impl<P: WorldProvider> World<P> {
                     // ThunderBolt deals 1.5x damage to undead targets, mirroring
                     // the C# HumanObject.ThunderBolt implementation.
                     if effective_spell == Spell::ThunderBolt as u8 && undead {
+                        let scaled = (raw_damage as f32 * 1.5) as i32;
+                        raw_damage = scaled.max(1);
+                    }
+
+                    // FlameDisruptor deals 1.5x damage to non-undead targets,
+                    // matching the C# HumanObject.FlameDisruptor behaviour
+                    // where damage is scaled up when target.Undead == false.
+                    if effective_spell == Spell::FlameDisruptor as u8 && !undead {
                         let scaled = (raw_damage as f32 * 1.5) as i32;
                         raw_damage = scaled.max(1);
                     }

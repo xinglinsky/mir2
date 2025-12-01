@@ -27,7 +27,8 @@ use crystal_shared_proto::scene::{
     SStruck,
 };
 use crystal_shared_proto::magic::{SObjectEffect, SObjectRangeAttack, SRemoveBuff};
-use crystal_shared_proto::user::SHealthChanged;
+use crystal_shared_proto::user::{SHealthChanged, SPoisoned};
+use crystal_shared_proto::user::scene_object::SObjectPoisoned;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -383,6 +384,7 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
+                        world::WorldEvent::ObjectEffect { .. } => {}
                         world::WorldEvent::ItemDropped {
                             object_id,
                             map_index,
@@ -707,6 +709,7 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
+                        world::WorldEvent::TeleportToBindRequested { .. } => {}
                         world::WorldEvent::ObjectAttack {
                             session_id,
                             map_index,
@@ -1186,6 +1189,99 @@ async fn main() -> io::Result<()> {
                                                 .push(encoded.clone());
                                         }
                                     }
+                                }
+                            }
+                        }
+                        world::WorldEvent::Poisoned { session_id, poison } => {
+                            // Send SPoisoned to the affected player so their
+                            // local status bar and effect icons stay in sync.
+                            let pkt = SPoisoned { poison };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(encoded);
+                            }
+
+                            // Also broadcast SObjectPoisoned to nearby viewers so
+                            // they can see poison status on this player.
+                            let (map_index, x, y, _) = match {
+                                let w = world_for_tick.lock().unwrap();
+                                w.player_position(session_id)
+                            } {
+                                Some(pos) => pos,
+                                None => continue,
+                            };
+
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectPoisoned {
+                                object_id: session_id,
+                                poison,
+                            };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in viewers {
+                                    outboxes
+                                        .entry(sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
+                        world::WorldEvent::ObjectPoisoned {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            poison,
+                        } => {
+                            // Broadcast object (typically monster) poison state to
+                            // all nearby sessions, mirroring C# S.ObjectPoisoned.
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectPoisoned {
+                                object_id: object_id as u32,
+                                poison,
+                            };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in viewers {
+                                    outboxes
+                                        .entry(sid)
+                                        .or_default()
+                                        .push(encoded.clone());
                                 }
                             }
                         }

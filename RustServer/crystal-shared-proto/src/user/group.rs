@@ -1,6 +1,6 @@
 use std::io::{self, Cursor};
 
-use crate::io::{read_bool, read_string, write_bool, write_string};
+use crate::io::{read_bool, read_i32_le, read_string, write_bool, write_i32_le, write_string};
 use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
@@ -155,5 +155,62 @@ impl SAddMember {
         let mut c = Cursor::new(payload);
         let name = read_string(&mut c)?;
         Ok(SAddMember { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SGroupMembersMap {
+    pub player_name: String,
+    pub player_map: String,
+}
+
+impl SGroupMembersMap {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.player_name)?;
+        write_string(&mut buf, &self.player_map)?;
+        Ok(RawPacket {
+            id: ServerPacketId::GroupMembersMap as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let player_name = read_string(&mut c)?;
+        let player_map = read_string(&mut c)?;
+        Ok(SGroupMembersMap { player_name, player_map })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSendMemberLocation {
+    pub member_name: String,
+    pub member_location_x: i32,
+    pub member_location_y: i32,
+}
+
+impl SSendMemberLocation {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.member_name)?;
+        write_i32_le(&mut buf, self.member_location_x)?;
+        write_i32_le(&mut buf, self.member_location_y)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SendMemberLocation as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let member_name = read_string(&mut c)?;
+        let member_location_x = read_i32_le(&mut c)?;
+        let member_location_y = read_i32_le(&mut c)?;
+        Ok(SSendMemberLocation {
+            member_name,
+            member_location_x,
+            member_location_y,
+        })
     }
 }

@@ -1,6 +1,7 @@
 use crate::stats::Stats;
 use crate::world::drop::DropInfo;
 use crate::world::types::{BuffType, PetKind};
+use crate::world::PoisonInstance;
 
 #[derive(Clone, Debug)]
 pub struct MonsterInfo {
@@ -117,4 +118,12 @@ pub struct MonsterInstance {
     /// time passes, the monster remains in the monsters list but is skipped
     /// by AI and treated as non-blocking.
     pub dead_until_ms: i64,
+    /// Active poisons applied to this monster, mirroring the legacy
+    /// MonsterObject.PoisonList on the C# side. These are processed by the
+    /// monster_runtime poison tick logic.
+    pub poisons: Vec<PoisonInstance>,
+    /// Bitmask of active poison types on this monster, used to approximate
+    /// CurrentPoison from the C# server and eventually drive
+    /// SObjectPoisoned packets.
+    pub current_poison_mask: u16,
 }

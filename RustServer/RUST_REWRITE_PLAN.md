@@ -27,10 +27,10 @@
 - 迁移 C# `Server/MirNetwork/MirConnection.cs` 的核心行为到 Rust：
   - 连接生命周期：建立连接、发送初始包、心跳 & 超时、断线清理。
   - 包分发：基于 `ClientPacketIds` 的 `switch` / `match` 分发逻辑。
-- 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
-- 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
+ - 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
+ - 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
 
-**当前进度概览（2025-11-28 更新）**
+**当前进度概览（2025-12-01 更新）**
 - **已完成**：
   - 登录 / 注册 / 改密 / 角色列表 / 新建 / 删除 / StartGame / LogOut 等基础流转已在 `crystal-server-bin/src/connection` 中实现，并拆分为 `login_stage`, `select_stage` 以及按领域划分的子模块（`session`, `visibility`, `movement`, `npc`, `chat`, `gm_commands`, `guild`, `map`, `market`, `item` 等）；原 `ingame_stage.rs` 已拆空并删除。
   - `ClientPacketId` / `RawPacket` 解码和大部分核心 C* / S* 包已在 `crystal-shared-proto` 中实现，ID 数值与 C# 完全一致。
@@ -39,11 +39,15 @@
   - `handler.rs` 大文件拆分已完成。
   - 组队相关协议（`SwitchGroup`, `AddMember`, `DellMember`, `GroupInvite`）已在 `crystal-server-bin/src/connection/group.rs` 中对接 `WorldCommand`，基础行为对齐 C#。
   - 账号存储层：在 `crystal-server-core::account` / `crystal-server-db` 中扩展 `accounts` 表（`banned` / `ban_reason` / `ban_expires_at` / `require_password_change` / `wrong_password_count`），并通过 `AccountStatus` 与 `AccountStore::load_account_status` / `save_account_status` 在登录 / 改密流程中复现了 C# `AccountInfo` / `Envir.Login` / `Envir.ChangePassword` 的封禁与 `RequirePasswordChange` 语义。
+  - NPC 买卖与 GameShop：在 `connection::market` / `connection::gameshop` 中实现 NPC 商店买卖与 BuyBack 列表，使用脚本 [TRADE] 配置物品。
+  - 玩家交易系统：`connection::trade` 与 `world::World` 支持交易邀请 / 锁定 / 金币与物品交换 / 取消回滚，并做基础的容量与金币上限检查。
+  - 邮件系统协议：`connection::mail` + `crystal-server-core::account::StoredMail` + `world::configs::mail_config` 完成邮件收发、附件/金币寄送与邮资计算，并在收件人在线时推送 `SReceiveMail`。
+  - 行会扩展协议：在 `connection::guild` 中实现行会仓库物品/金币操作、行会经验广播与 `SGuildStatus` 刷新，桥接 `world::GuildManager` / `guild_settings`。
 
 - **待办事项**：
-  - **缺失的协议处理**：`Market` 拍卖行相关 C* 包（`ConsignItem`, `MarketSearch`, `MarketRefresh`, `MarketPage`, `MarketBuy`, `MarketGetBack`, `MarketSellNow`）、`Trade` (交易)、`Quest` (任务)、`Mail` (邮件)、`Harvest` (采集)。
+  - **缺失的协议处理**：全局 `Market` 拍卖行相关 C* 包（`ConsignItem`, `MarketSearch`, `MarketRefresh`, `MarketPage`, `MarketBuy`, `MarketGetBack`, `MarketSellNow`）、`Quest` (任务)、`Harvest` (采集) 以及与任务/市场相关的部分 NPC 指令。
   - **IP 封禁策略**：已在传输层（`crystal-server-net::run_server` + `ServerConfig.max_ip` / `ip_block_seconds`）实现基于 IP 的最大并发连接数限制与短期封禁；基于登录失败/异常包/账号创建次数等的 IP 封禁与解封逻辑仍待迁移。
-  - **边界情况处理**：对照 C# 完善错误码返回和异常流程保护。
+  - **边界情况处理**：对照 C# 完善错误码返回和异常流程保护，并为 Trade / Mail / NPC 商店等复杂协议补充日志与测试用例。
 
 ### 主要涉及代码
 
@@ -60,7 +64,7 @@
 ### 接下来计划
 
 - **1. 补齐剩余协议与分发**
-  - 在各 `connection` 子模块中（`movement.rs`, `npc.rs`, `chat.rs`, `guild.rs`, `item.rs`, `map.rs`, `market.rs` 等）补齐 `Trade`, 全局 `Market`(拍卖行), `Quest`, `Group`, `Mail`, `Harvest` 等高级玩法相关包的处理分支。
+  - 在各 `connection` 子模块中（`npc.rs`, `guild.rs`, `item.rs`, `map.rs`, `market.rs`, `quest.rs` 等）补齐全局 `Market`(拍卖行)、`Quest`、`Harvest` 等高级玩法相关包的处理分支，并将其路由到 `world::WorldCommand` / Admin 模块。
   - 对暂时没有完整业务逻辑的部分，先返回明确错误/提示，并记录日志，避免 silent fail。
 
 - **2. IP 封禁与安全策略**
@@ -82,7 +86,7 @@
 - 完整迁移 `Map` 地图系统：
   - 地图加载、判定、物品/怪物管理。
 
-**当前进度概览（2025-11-28 更新）**
+**当前进度概览（2025-12-01 更新）**
 - **已完成**：
   - `world::World` 具备玩家、地图、怪物、物品管理能力。
   - `world::map::load_map_from_file` 实现地图加载与可行走判定。
@@ -105,14 +109,11 @@
 
 ### 接下来计划
 
-- **1. Buff / 状态系统 Tick 化**
-  - 在 `World::update` 中实现 `process_buffs()`，驱动中毒/护盾/加速等 Buff 按 C# 规则递减与生效。
+- **1. Buff / 状态系统语义补全**
+  - 在现有 `process_player_buffs` / BuffInfo 表的基础上，对齐 C# Buff 系统的叠加/冲突/暂停规则（`PauseInSafeZone`, `RemoveOnDeath`, `Debuff` Tick 等），并补齐怪物 Buff 的 Tick 行为与属性刷新。
 
-- **2. 恢复与安全区效果**
-  - 实现 HP/MP 自然恢复与安全区加速恢复，对齐 C# 行为。
-
-- **3. 环境系统**
-  - 实现 Day/Night 切换及相关通知/可视效果（若客户端有对应支持）。
+- **2. 世界环境系统**
+  - 实现 Day/Night 切换及相关通知/可视效果（若客户端有对应支持），并预留天气/特殊事件扩展点。
 
 ---
 
@@ -134,11 +135,12 @@
     - 怪物反击（Monster vs Player）已实现。
     - 死亡与经验获取已实现。
     - `FatalSword` 技能逻辑已作为样例实现。
+  - **玩家交易系统**：在 `connection::trade` 与 `world::World` 中实现玩家间交易邀请 / 锁定 / 金币与物品交换 / 取消回滚，并复用了现有背包/装备/`MapItem` 结构。
 
 - **待办事项**：
   - **魔法/技能系统**：除 `FatalSword` 以及部分 Warrior 技能（如 `FlamingSword`、`Rage`、`ImmortalSkin`、`CounterAttack`、`HalfMoon`/`CrossHalfMoon` 等）的基础实现外，大部分技能仍未完全迁移/对齐（如火球术、治愈术等）。
   - **玩家死亡与复活**：虽然有 `SDeath`，但完整的死亡惩罚（掉装备）、复活（原地/回城）流程需完善。
-  - **交易系统**：玩家间交易逻辑。
+  - **交易系统边界与风控**：对照 C# `PlayerObject.Trade` 回归断线/越距/背包不足等场景，补齐日志、防刷与异常恢复策略。
   - **组队系统**：经验共享逻辑（基础 AllowGroup/邀请/入队/踢人 已在 `world::World` / `connection::group` 中实现）。
 
 ### 接下来计划
@@ -152,10 +154,9 @@
    - 3.2.1：对照 C# `PlayerObject.Die` / `RedDeathDrop` / `DeathDrop`，实现玩家死亡时的红名/普通掉落逻辑（含 BindMode、Rental、婚戒等判断）。
    - 3.2.2：接入 `revive_player_in_place` / `revive_player_to_position`，完成原地/回城/绑定点复活流程与 `SRevived` / `SObjectRevived` 协议.
 
-3. **交易系统子计划（3.3，与 3.1/3.2/3.4 基本无耦合）**
-   - 3.3.1：在 `connection::trade.rs` 中实现会话内交易状态机（邀请/接受/锁定/取消），对齐 C# `PlayerObject` 中的交易流程.
-   - 3.3.2：实现物品/金币交换与失败回滚逻辑，使用现有背包/装备/`MapItem` 结构.
-   - 3.3.3：补齐边界与安全检查（背包空间、重复包、防刷机制等）。
+3. **交易系统回归与安全策略子计划（3.3，可与 3.1/3.2/3.4 并行）**
+   - 3.3.1：基于现有 `connection::trade` / `world::World` 实现，对照 C# 场景编写集成测试（断线、取消、背包不足、金币上限等）。
+   - 3.3.2：补齐防刷逻辑与结构化日志，必要时暴露 Admin/GM 监控入口。
 
 4. **组队经验子计划（3.4，仅依赖已存在的组队基础逻辑）**
    - 3.4.1：在 `world::World` 中实现组队经验分配函数，对照 C# `PlayerObject.WinExp` 的组队加成和范围判定.
@@ -174,27 +175,27 @@
 **当前进度概览**
 - **已完成**：
   - Admin HTTP 服务框架与基础 Metrics 接口。
-  - 行会系统基础：`GuildManager`、创建行会、`CGuildInvite` 处理。
+  - 行会系统基础与扩展：`GuildManager`、创建行会、`CGuildInvite` 处理，以及行会仓库物品/金币操作、行会经验获取与 `SGuildStatus` 广播，配置来源于 `guild_settings`。
+  - 邮件系统：`connection::mail` + `StoredMail` + `mail_config` 已支持角色邮箱加载、邮件收发、金币与物品附件、邮资计算及在线收件推送。
 
 - **待办事项**：
-  - 完整的行会功能（成员管理、战争）。
-  - 攻城战系统。
-  - 任务系统（NPC 对话与任务状态）。
-  - 邮件系统。
-  - 市场/拍卖行。
+  - 完整的行会高级功能（成员管理 UI 同步、战争、行会等级 Buff、排行榜等）。
+  - 攻城战系统（Conquest）及相关地图/NPC 逻辑。
+  - 任务系统（NPC 对话与玩家任务状态），将 `QuestInfo` / `QuestManager` 接入世界加载与持久化。
+  - 市场/拍卖行（全局寄售 Market，区别于已实现的 NPC 商店/GameShop）。
 
 ### 接下来计划
 
 1. **任务系统**
-   - 实现 `QuestInfo` 解析与玩家任务状态（`PlayerQuest`）。
-   - 对接 NPC 对话中的任务指令。
+   - 基于 `crystal-server-core::quest::QuestInfo` / `QuestManager` 实现 QuestInfo 解析与世界加载。
+   - 设计玩家任务状态结构（`PlayerQuest`），并将 NPC 对话中的任务指令/脚本对接到 Rust 世界与连接层。
 
 2. **完善行会与攻城**
-   - 移植行会战争与沙巴克攻城逻辑。
+   - 移植行会战争与沙巴克攻城逻辑，对接 `conquest.rs` 数据结构与 `GuildManager`。
 
-3. **市场与邮件**
-   - 实现全局市场（拍卖行）数据结构。
-   - 实现邮件收发与附件提取。
+3. **市场 / 拍卖行**
+   - 设计全局 Market（拍卖行）数据结构与持久化方案，补齐 `ConsignItem` / 一系列 `Market*` C* 包处理。
+   - 与现有 NPC 商店/GameShop 区分清晰，确保价格/刷金防护策略与 C# 一致。
 
 ---
 

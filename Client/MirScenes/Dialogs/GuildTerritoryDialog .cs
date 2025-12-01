@@ -101,7 +101,7 @@ namespace Client.MirScenes.Dialogs
                 HoverIndex = 362,
                 Library = Libraries.Prguse,
                 Location = new Point(544, 8),
-                Hint = "Exit"
+                Hint = "关闭"
             };
             closeButton.Click += (o, e) => Hide();
 
@@ -114,7 +114,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 PressedIndex = 242,
                 Sound = SoundList.ButtonA,
-                Hint = "Page Back"
+                Hint = "上一页"
             };
             prevButton.Click += (o, e) =>
             {
@@ -135,7 +135,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 PressedIndex = 245,
                 Sound = SoundList.ButtonA,
-                Hint = "Page Forward"
+                Hint = "下一页"
             };
             nextButton.Click += (o, e) =>
             {
@@ -157,13 +157,13 @@ namespace Client.MirScenes.Dialogs
                 Location = new Point(262, 208),
                 Sound = SoundList.ButtonA,
                 Parent = this,
-                Hint = "Mail a Guild Leader"
+                Hint = "给行会会长写信"
             };
             mailButton.Click += (o, e) =>
             {
                 var GT = GTRowList.FirstOrDefault(x => x.Idx.Text == selectedIndex.ToString());
 
-                if (GT == null || GT.OwnerName.Text == "None") return;
+                if (GT == null || GT.OwnerName.Text == GameLanguage.GuildTerritory_None) return;
 
                 GameScene.Scene.MailComposeLetterDialog.ComposeMail(GT.Owner1);
             };
@@ -177,15 +177,15 @@ namespace Client.MirScenes.Dialogs
                 Location = new Point(292, 208),
                 Sound = SoundList.ButtonA,
                 Parent = this,
-                Hint = "Purchase",
+                Hint = "购买领地",
                 Visible = false
             };
             BuyButton.Click += (o, e) =>
             {
                 var GT = GTRowList.FirstOrDefault(x => x.Idx.Text == selectedIndex.ToString());
 
-                if (GT == null || GT.OwnerName.Text == "None") return;
-                if (GT.Status.Text != "For Sale") return;
+                if (GT == null || GT.OwnerName.Text == GameLanguage.GuildTerritory_None) return;
+                if (GT.Status.Text != GameLanguage.GuildTerritory_StatusForSale) return;
 
                 Network.Enqueue(new C.PurchaseGuildTerritory { Owner = GT.GuildOwner.Text });
             };
@@ -211,7 +211,7 @@ namespace Client.MirScenes.Dialogs
                 Font = new Font(Settings.FontName, 8F),
                 NotControl = true,
                 BackColour = Color.Transparent,
-                Text = "GT #"
+                Text = "编号"
             };
 
             var __gtguildLabel = new MirLabel
@@ -223,7 +223,7 @@ namespace Client.MirScenes.Dialogs
                 Font = new Font(Settings.FontName, 8F),
                 NotControl = true,
                 BackColour = Color.Transparent,
-                Text = "Owning Guild"
+                Text = "所属行会"
             };
 
             var __gtguildownersLabel = new MirLabel
@@ -235,7 +235,7 @@ namespace Client.MirScenes.Dialogs
                 Font = new Font(Settings.FontName, 8F),
                 NotControl = true,
                 BackColour = Color.Transparent,
-                Text = "Guild Leaders"
+                Text = "行会会长"
             };
 
             var __gtstatusLabel = new MirLabel
@@ -247,7 +247,7 @@ namespace Client.MirScenes.Dialogs
                 Font = new Font(Settings.FontName, 8F),
                 NotControl = true,
                 BackColour = Color.Transparent,
-                Text = "GT Status"
+                Text = "状态"
             };
 
             var __gtpriceLabel = new MirLabel
@@ -259,7 +259,7 @@ namespace Client.MirScenes.Dialogs
                 Font = new Font(Settings.FontName, 8F),
                 NotControl = true,
                 BackColour = Color.Transparent,
-                Text = "GT Price"
+                Text = "价格"
             };
 
             for (int i = 0; i < 7; i++)
@@ -272,9 +272,9 @@ namespace Client.MirScenes.Dialogs
                     BorderColour = Color.Lime,
                 };
                 gt.Idx.Text = (i + 1).ToString();
-                gt.GuildOwner.Text = "None";
-                gt.OwnerName.Text = "None";
-                gt.Status.Text = "Available";
+                gt.GuildOwner.Text = GameLanguage.GuildTerritory_None;
+                gt.OwnerName.Text = GameLanguage.GuildTerritory_None;
+                gt.Status.Text = GameLanguage.GuildTerritory_StatusAvailable;
                 gt.Price.Text = "10,000,000";
 
                 gt.Click += (e, o) =>
@@ -327,20 +327,20 @@ namespace Client.MirScenes.Dialogs
                     var gtRow = GTRowList[i];
 
                     gtRow.Idx.Text = ((i + 1) + Page * 7).ToString();
-                    gtRow.GuildOwner.Text = gtMap.Owner;
+                    gtRow.GuildOwner.Text = gtMap.Owner == "None" ? GameLanguage.GuildTerritory_None : gtMap.Owner;
                     gtRow.Owner1 = gtMap.Leader;
                     gtRow.Owner2 = gtMap.Leader2;
                     gtRow.OwnerName.Text = gtMap.Leader;
                     if (gtMap.Leader2 != string.Empty)
-                        gtRow.OwnerName.Text += $" and {gtMap.Leader2}";
+                        gtRow.OwnerName.Text += GameLanguage.GuildTerritory_OwnerAndPrefix + gtMap.Leader2;
 
                     if (gtMap.Owner != "None")
                         if (gtMap.begin > 0)
-                            gtRow.Status.Text = "Sale pending";
+                            gtRow.Status.Text = GameLanguage.GuildTerritory_StatusSalePending;
                     else
-                        gtRow.Status.Text = gtMap.price > 0 ? "For Sale" : "Unavailable";
+                        gtRow.Status.Text = gtMap.price > 0 ? GameLanguage.GuildTerritory_StatusForSale : GameLanguage.GuildTerritory_StatusUnavailable;
                     else
-                        gtRow.Status.Text = "Available";
+                        gtRow.Status.Text = GameLanguage.GuildTerritory_StatusAvailable;
 
                     gtRow.Price.Text = gtMap.price.ToString("###,###,##0");
                 }

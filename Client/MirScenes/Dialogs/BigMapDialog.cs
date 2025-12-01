@@ -195,7 +195,7 @@ namespace Client.MirScenes.Dialogs
                 Library = Libraries.Prguse2,
                 Parent = this,
                 Sound = SoundList.ButtonA,
-                Hint = "Search for NPCs"
+                Hint = GameLanguage.BigMap_SearchForNPCs
             };
             SearchButton.Click += (o, e) => Search();
 

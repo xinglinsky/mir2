@@ -30,5 +30,7 @@ pub use config::WorldConfig;
 pub use world::{SessionId, World, WorldCommand, WorldEvent, CoreMetrics, CorePlayerInfo, PendingMagicHit};
 pub use player::PlayerState;
 pub use player_stats::PlayerStats;
-pub use types::{Job, ActorKind, Spell, BuffType, BuffProperty, BuffStackType};
+pub use types::{Job, ActorKind, Spell, BuffType, BuffProperty, BuffStackType, PoisonType};
+pub mod poison;
+pub use poison::PoisonInstance;
 pub use recipe::RecipeInfo;

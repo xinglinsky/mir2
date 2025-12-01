@@ -1,4 +1,4 @@
-use crystal_server_core::account::StoredMail;
+use crystal_server_core::account::{StoredMail, StoredFriend};
 use crystal_server_core::item::{Equipment, Inventory};
 use crystal_server_core::world::configs::mail_config;
 use crystal_shared_proto::item_types::UserItemData;
@@ -451,7 +451,7 @@ impl LoginConnection {
             return;
         }
 
-        let _sender_account_id = match &self.account_id {
+        let sender_account_id = match &self.account_id {
             Some(id) => id.clone(),
             None => {
                 let pkt = SMailSent { result: -1 };
@@ -460,7 +460,7 @@ impl LoginConnection {
             }
         };
 
-        let _sender_char_idx = match self.current_char_index {
+        let sender_char_idx = match self.current_char_index {
             Some(i) => i,
             None => {
                 let pkt = SMailSent { result: -1 };
@@ -513,6 +513,67 @@ impl LoginConnection {
         let capacity = mail_config().mail_capacity as usize;
         if capacity > 0 && recipient_mails.len() >= capacity {
             self.send_system_chat("对方邮箱已满，无法接收更多邮件。", out);
+            let pkt = SMailSent { result: -1 };
+            out.push(Self::encode_raw(pkt.encode()));
+            return;
+        }
+
+        // Block / blacklist checks mirroring C# PlayerObject.SendMail:
+        // - If recipient has sender in their friends list with Blocked=true,
+        //   treat it as "Player is not accepting your mail.".
+        // - If sender has recipient in their friends list with Blocked=true,
+        //   treat it as "Cannot mail player whilst they are on your
+        //   blacklist.".
+        let recipient_friends: Vec<StoredFriend> = match self
+            .store
+            .load_character_friends(&recipient_account_id, recipient_char_idx)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::debug!(
+                    "SendMail: failed to load recipient friends for account_id={} idx={} err={:?}",
+                    recipient_account_id,
+                    recipient_char_idx,
+                    e,
+                );
+                Vec::new()
+            }
+        };
+
+        let sender_friends: Vec<StoredFriend> = match self
+            .store
+            .load_character_friends(&sender_account_id, sender_char_idx)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::debug!(
+                    "SendMail: failed to load sender friends for account_id={} idx={} err={:?}",
+                    sender_account_id,
+                    sender_char_idx,
+                    e,
+                );
+                Vec::new()
+            }
+        };
+
+        let recipient_blocks_sender = recipient_friends
+            .iter()
+            .any(|f| f.friend_index == sender_char_idx && f.blocked);
+        if recipient_blocks_sender {
+            // C# text: "Player is not accepting your mail.".
+            self.send_system_chat("该玩家已拒收你的邮件。", out);
+            let pkt = SMailSent { result: -1 };
+            out.push(Self::encode_raw(pkt.encode()));
+            return;
+        }
+
+        let sender_blocks_recipient = sender_friends
+            .iter()
+            .any(|f| f.friend_index == recipient_char_idx && f.blocked);
+        if sender_blocks_recipient {
+            // C# text: "Cannot mail player whilst they are on your
+            // blacklist.".
+            self.send_system_chat("对方在你的黑名单中，无法发送邮件。", out);
             let pkt = SMailSent { result: -1 };
             out.push(Self::encode_raw(pkt.encode()));
             return;

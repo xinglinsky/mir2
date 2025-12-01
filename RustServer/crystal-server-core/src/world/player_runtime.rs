@@ -1,5 +1,5 @@
 use crate::stats::Stat;
-use crate::world::types::{BuffProperty, BuffType};
+use crate::world::types::{BuffProperty, BuffType, PoisonType};
 use crate::world::Spell;
 use crate::world::provider::WorldProvider;
 
@@ -105,6 +105,93 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    /// Process per-player poisons, approximating the core behaviour of
+    /// C# HumanObject.ProcessPoison for damage-over-time poisons. This
+    /// currently handles Green/Bleeding DOT ticks and maintains a
+    /// bitmask of active poison types and emits Poisoned/ObjectPoisoned
+    /// style events for network synchronisation.
+    pub fn process_player_poison(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        // Duration/tick semantics mirror the C# Poison struct where Time
+        // counts ticks and TickTime/TickSpeed control the next tick.
+        for player in self.players.values_mut() {
+            if player.dead {
+                continue;
+            }
+
+            let old_mask = player.current_poison_mask;
+
+            if !player.poisons.is_empty() {
+                let mut idx = player.poisons.len();
+                while idx > 0 {
+                    idx -= 1;
+
+                    let mut remove = false;
+                    {
+                        let poison = &mut player.poisons[idx];
+
+                        if now_ms > poison.tick_time_ms {
+                            poison.time = poison.time.saturating_add(1);
+
+                            let step = poison.tick_speed_ms.max(0);
+                            poison.tick_time_ms = if step > 0 {
+                                now_ms.saturating_add(step)
+                            } else {
+                                now_ms
+                            };
+
+                            if poison.time >= poison.duration {
+                                remove = true;
+                            }
+
+                            match poison.poison_type {
+                                PoisonType::Green | PoisonType::Bleeding => {
+                                    let dmg = poison.value.max(0);
+                                    if dmg > 0 {
+                                        let max_hp = player.stats.total.get(Stat::HP).max(1);
+                                        let old_hp = player.hp.max(0).min(max_hp);
+                                        let new_hp = old_hp.saturating_sub(dmg).max(0);
+
+                                        if new_hp != old_hp {
+                                            player.hp = new_hp;
+                                            if new_hp <= 0 {
+                                                player.dead = true;
+                                            }
+                                        }
+
+                                        // Mirror C# RegenTime = Envir.Time + RegenDelay
+                                        // so that poison damage delays natural regen.
+                                        const REGEN_DELAY_MS: i64 = 10_000;
+                                        player.next_regen_time_ms =
+                                            now_ms.saturating_add(REGEN_DELAY_MS);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    if remove {
+                        player.poisons.remove(idx);
+                    }
+                }
+            }
+
+            let mut mask: u16 = 0;
+            for poison in &player.poisons {
+                mask |= poison.poison_type.as_u16();
+            }
+
+            player.current_poison_mask = mask;
+
+            if mask != old_mask {
+                events.push(WorldEvent::Poisoned {
+                    session_id: player.session_id,
+                    poison: mask,
+                });
+            }
+        }
+    }
+
     pub fn process_player_regen(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
         const REGEN_INTERVAL_MS: i64 = 10_000; // C# HumanObject.RegenDelay
         const HEALTH_REGEN_WEIGHT: i32 = 10; // Settings.HealthRegenWeight
@@ -195,5 +282,122 @@ impl<P: WorldProvider> World<P> {
                 player.next_pk_decay_ms = 0;
             }
         }
+    }
+
+    /// Attempt to revive a player using a Revival ring when their HP reaches
+    /// zero, approximating the C# PlayerObject.Die revival-ring logic. This
+    /// checks the ring slots for items whose ItemInfo.unique has the
+    /// SpecialItemMode.Revival (0x0010) flag and CurrentDura >= 1000, enforces
+    /// a 5-minute cooldown via PlayerState.last_revival_time_ms, restores HP
+    /// to max, reduces ring durability by 1000 and emits PlayerHealed and a
+    /// system message if successful.
+    pub fn try_revive_with_revival_ring(
+        &mut self,
+        session_id: crate::world::SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        const SPECIAL_REVIVAL: i16 = 0x0010;
+        const RING_L: usize = 7;
+        const RING_R: usize = 8;
+        const DURABILITY_COST: u16 = 1000;
+        const REVIVAL_COOLDOWN_MS: i64 = 300_000;
+
+        let now = self.time_ms;
+
+        let mut map_index: i32 = 0;
+        let mut x: i32 = 0;
+        let mut y: i32 = 0;
+        let mut healed: i32 = 0;
+        let mut new_hp: i32 = 0;
+        let mut revived = false;
+
+        {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return false,
+            };
+
+            // Only attempt revival when the player is actually at or below
+            // zero HP and not already alive.
+            if player.hp > 0 {
+                return false;
+            }
+
+            if player.last_revival_time_ms != 0 && now <= player.last_revival_time_ms {
+                return false;
+            }
+
+            map_index = player.map_index;
+            x = player.x;
+            y = player.y;
+
+            for slot in RING_L..=RING_R {
+                let slot_opt = match player.equipment.slots.get_mut(slot) {
+                    Some(s) => s,
+                    None => continue,
+                };
+
+                let ring = match slot_opt.as_mut() {
+                    Some(r) => r,
+                    None => continue,
+                };
+
+                let info = match self.provider.get_item_info(ring.item_index) {
+                    Some(i) => i,
+                    None => continue,
+                };
+
+                if (info.unique & SPECIAL_REVIVAL) == 0 {
+                    continue;
+                }
+
+                if ring.current_dura < DURABILITY_COST {
+                    continue;
+                }
+
+                let max_hp = player.stats.total.get(Stat::HP).max(1);
+                let old_hp = player.hp.max(0);
+
+                if max_hp <= old_hp {
+                    continue;
+                }
+
+                player.hp = max_hp;
+                player.dead = false;
+                ring.current_dura = ring.current_dura.saturating_sub(DURABILITY_COST);
+                player.last_revival_time_ms = now.saturating_add(REVIVAL_COOLDOWN_MS);
+
+                healed = max_hp.saturating_sub(old_hp);
+                new_hp = max_hp;
+                revived = true;
+                break;
+            }
+        }
+
+        if !revived {
+            return false;
+        }
+
+        // Recalculate equipment stats so the durability change is reflected in
+        // derived stats, then emit a heal + system message.
+        self.recalc_player_equipment_stats(session_id);
+
+        if healed > 0 {
+            events.push(WorldEvent::PlayerHealed {
+                session_id,
+                map_index,
+                x,
+                y,
+                amount: healed,
+                new_hp,
+            });
+        }
+
+        events.push(WorldEvent::PartySystemMessage {
+            session_id,
+            message: "You have been given a second chance at life".to_string(),
+        });
+
+        true
     }
 }

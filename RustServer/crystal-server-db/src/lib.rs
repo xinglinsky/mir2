@@ -16,6 +16,7 @@ use crystal_server_core::account::{
     CharacterStats,
     CharacterPosition,
     StoredMail,
+    StoredFriend,
     hash_password,
     verify_password_hash,
 };
@@ -228,6 +229,14 @@ impl SqliteAccountStore {
                     account_id   TEXT NOT NULL,
                     idx          INTEGER NOT NULL,
                     mail_json    TEXT NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS character_friends (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    friends_json TEXT NOT NULL,
                     PRIMARY KEY(account_id, idx),
                     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
                 );
@@ -956,6 +965,47 @@ impl AccountStore for SqliteAccountStore {
         })
     }
 
+    fn load_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredFriend>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT friends_json FROM character_friends WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query((account_id, index)))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let friends: Vec<StoredFriend> = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+                Ok(friends)
+            } else {
+                Ok(Vec::new())
+            }
+        })
+    }
+
+    fn save_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+        friends: &[StoredFriend],
+    ) -> Result<(), StoreError> {
+        let json = serde_json::to_string(friends)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO character_friends (account_id, idx, friends_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET friends_json = excluded.friends_json",
+                (account_id, &index, &json),
+            ))?;
+            Ok(())
+        })
+    }
+
     fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError> {
         self.with_conn(|conn| {
             let mut stmt = Self::map_sql_err(conn.prepare(
@@ -1063,6 +1113,11 @@ enum SaveTask {
         idx: i32,
         mails: Vec<StoredMail>,
     },
+    CharacterFriends {
+        account_id: String,
+        idx: i32,
+        friends: Vec<StoredFriend>,
+    },
     SaveGuild {
         guild: GuildInfo,
     },
@@ -1081,6 +1136,7 @@ struct PendingCharacter {
     magics: Option<Vec<UserMagic>>,
     guild: Option<(String, u8)>,
     mail: Option<Vec<StoredMail>>,
+    friends: Option<Vec<StoredFriend>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1133,6 +1189,10 @@ fn apply_save_task(
         SaveTask::CharacterMail { account_id, idx, mails } => {
             let entry = chars.entry((account_id, idx)).or_default();
             entry.mail = Some(mails);
+        }
+        SaveTask::CharacterFriends { account_id, idx, friends } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.friends = Some(friends);
         }
         SaveTask::SaveGuild { guild } => {
             let entry = guilds.entry(guild.id.0).or_default();
@@ -1195,6 +1255,10 @@ fn flush_pending(
 
         if let Some(mails) = pending.mail {
             let _ = AccountStore::save_character_mail(&store, &account_id, idx, &mails);
+        }
+
+        if let Some(friends) = pending.friends {
+            let _ = AccountStore::save_character_friends(&store, &account_id, idx, &friends);
         }
     }
 
@@ -1556,5 +1620,30 @@ impl AccountStore for AsyncAccountStore {
         self.tx
             .send(task)
             .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_mail failed: {}", e))))
+    }
+
+    fn load_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Vec<StoredFriend>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_friends(&inner, account_id, index)
+    }
+
+    fn save_character_friends(
+        &self,
+        account_id: &str,
+        index: i32,
+        friends: &[StoredFriend],
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterFriends {
+            account_id: account_id.to_string(),
+            idx: index,
+            friends: friends.to_vec(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_friends failed: {}", e))))
     }
 }

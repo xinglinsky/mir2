@@ -1079,3 +1079,100 @@ impl CCollectParcel {
         Ok(CCollectParcel { mail_id })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct CAddFriend {
+    pub name: String,
+    pub blocked: bool,
+}
+
+impl CAddFriend {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        write_bool(&mut buf, self.blocked)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AddFriend as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        let blocked = read_bool(&mut c)?;
+        Ok(CAddFriend { name, blocked })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRemoveFriend {
+    pub character_index: i32,
+}
+
+impl CRemoveFriend {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.character_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RemoveFriend as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let character_index = read_i32_le(&mut c)?;
+        Ok(CRemoveFriend { character_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRefreshFriends;
+
+impl CRefreshFriends {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::RefreshFriends as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CRefreshFriends payload must be empty",
+            ));
+        }
+        Ok(CRefreshFriends)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAddMemo {
+    pub character_index: i32,
+    pub memo: String,
+}
+
+impl CAddMemo {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.character_index)?;
+        write_string(&mut buf, &self.memo)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AddMemo as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let character_index = read_i32_le(&mut c)?;
+        let memo = read_string(&mut c)?;
+        Ok(CAddMemo {
+            character_index,
+            memo,
+        })
+    }
+}

@@ -2,7 +2,7 @@ use crate::stats::{Stat, Stats};
 use crate::world::magic::{magic_damage, magic_power};
 use crate::world::monster::MonsterAiState;
 use crate::world::skills::compute_magic_mana_cost;
-use crate::world::types::{BuffType, PetKind};
+use crate::world::types::{BuffType, PetKind, PoisonType};
 use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
 use crate::world::Spell;
 use rand::{thread_rng, Rng};
@@ -531,14 +531,174 @@ pub fn cast_blessed_armour<P: WorldProvider>(
 }
 
 pub fn cast_poisoning<P: WorldProvider>(
-    _world: &mut World<P>,
-    _session_id: SessionId,
-    _spell: u8,
-    _direction: u8,
-    _x: i32,
-    _y: i32,
-    _events: &mut Vec<WorldEvent>,
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
 ) {
+    let now_ms = world.time_ms.max(0);
+
+    let (map_index, caster_x, caster_y, level, power) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        // Mirror `magic.GetDamage(GetAttackPower(MinSC, MaxSC))` by sampling a
+        // base SC value and passing it through the generic magic_damage helper.
+        let stats = &player.stats.total;
+        let min_sc = stats.get(Stat::MinSC);
+        let max_sc = stats.get(Stat::MaxSC);
+        let luck = stats.get(Stat::Luck);
+
+        const MAX_LUCK_FOR_MAGIC: i32 = 10;
+
+        let mut rng = thread_rng();
+        let base_sc = {
+            let min = min_sc.max(0);
+            let max = max_sc.max(min);
+
+            if luck > 0 {
+                if luck > rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    max
+                } else {
+                    min
+                }
+            } else if luck < 0 {
+                if luck < -rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    min
+                } else {
+                    max
+                }
+            } else if max <= min {
+                min
+            } else {
+                rng.gen_range(min..=max)
+            }
+        };
+
+        let power = if let Some(info) = world.provider.get_magic_info(spell) {
+            let mut rng2 = thread_rng();
+            let v = magic_damage(info, level, base_sc, &mut rng2);
+            v.max(0)
+        } else {
+            base_sc.max(0)
+        };
+
+        (player.map_index, player.x, player.y, level, power)
+    };
+
+    // Find a target monster at the clicked location, mirroring the targeting
+    // approach used by Hallucination.
+    let mut target_id: Option<u64> = None;
+    let mut target_monster_index: i32 = 0;
+
+    if let Some(monsters) = world.monsters.get(&map_index) {
+        for m in monsters {
+            if m.hp <= 0 {
+                continue;
+            }
+            if m.x == target_x && m.y == target_y {
+                target_id = Some(m.id);
+                target_monster_index = m.monster_index;
+                break;
+            }
+        }
+    }
+
+    let target_id = match target_id {
+        Some(id) => id,
+        None => return,
+    };
+
+    if !world.can_attack_monster(session_id, map_index, target_id) {
+        return;
+    }
+
+    // For now, always use Green poison; Red poison support via different
+    // poison items can be added later.
+    let poison_type = PoisonType::Green;
+
+    // Duration in ticks: (power * 2) + ((Level + 1) * 7), matching
+    // HumanObject.Process(DelayedAction) for Spell.Poisoning.
+    let mut duration: i64 = (power.saturating_mul(2) as i64)
+        .saturating_add((i32::from(level) + 1) as i64 * 7);
+    if duration <= 0 {
+        duration = 1;
+    }
+
+    // Tick speed: 2000ms per tick.
+    let tick_speed_ms: i64 = 2_000;
+
+    // Per-tick damage: value / 15 + magic.Level + 1 + rand(PoisonAttack).
+    let poison_value = {
+        let player = match world.players.get(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+        let stats = &player.stats.total;
+        let poison_attack = stats.get(Stat::PoisonAttack).max(0);
+        let mut rng = thread_rng();
+        let bonus = if poison_attack > 0 {
+            rng.gen_range(0..poison_attack.max(0))
+        } else {
+            0
+        };
+
+        let base = power / 15;
+        let mut v = base
+            .saturating_add(i32::from(level) + 1)
+            .saturating_add(bonus);
+        if v <= 0 {
+            v = 1;
+        }
+        v
+    };
+
+    if !world.apply_poison_to_monster_from_player(
+        session_id,
+        map_index,
+        target_id,
+        poison_type,
+        poison_value,
+        duration,
+        tick_speed_ms,
+    ) {
+        return;
+    }
+
+    world.level_up_magic_for_player(session_id, Spell::Poisoning as u8, events);
+
+    // Emit a generic ObjectAttack so the client can play the Poisoning cast
+    // animation and start icon cooldown.
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
 }
 
 pub fn cast_ultimate_enhancer<P: WorldProvider>(

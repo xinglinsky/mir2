@@ -13,6 +13,7 @@ use crystal_shared_proto::login::{CKeepAlive, SKeepAlive};
 use crystal_shared_proto::packet::RawPacket;
 use crystal_shared_proto::scene::{SMagicLeveled, SNewMagic};
 use crystal_shared_proto::select::{SelectInfo, SLogOutFailed, SLogOutSuccess};
+use crystal_shared_proto::user::group::{SDeleteGroup, SDeleteMember};
 
 use super::{LoginConnection, PlayerVisual, Stage};
 
@@ -182,11 +183,62 @@ impl LoginConnection {
                 }
             }
 
+            // Snapshot current party membership so we can notify remaining
+            // members after this player is removed from the world, mirroring
+            // C# PlayerObject.LeaveGroup on despawn.
+            let party_members_before = {
+                let world = self.world.lock().unwrap();
+                world.party_members_for_session(self.session_id)
+            };
+
             // Remove the player from the world state and occupancy tracking so
             // that disconnected characters no longer block movement.
             {
                 let mut world = self.world.lock().unwrap();
                 world.remove_player_from_world(self.session_id);
+            }
+
+            if let Some(members_before) = party_members_before {
+                let total = members_before.len();
+                if total >= 2 {
+                    let leaver_sid = self.session_id;
+                    let leaving_name = members_before
+                        .iter()
+                        .find(|(sid, _)| *sid == leaver_sid)
+                        .map(|(_, name)| name.clone())
+                        .unwrap_or_else(String::new);
+
+                    let mut outboxes = self.outboxes.lock().unwrap();
+                    if total > 2 && !leaving_name.is_empty() {
+                        let pkt = SDeleteMember {
+                            name: leaving_name.clone(),
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            let encoded = Self::encode_raw(raw);
+                            for (sid, _) in &members_before {
+                                if *sid == leaver_sid {
+                                    continue;
+                                }
+                                outboxes
+                                    .entry(*sid)
+                                    .or_default()
+                                    .push(encoded.clone());
+                            }
+                        }
+                    } else {
+                        let pkt = SDeleteGroup;
+                        let encoded = Self::encode_raw(pkt.encode());
+                        for (sid, _) in &members_before {
+                            if *sid == leaver_sid {
+                                continue;
+                            }
+                            outboxes
+                                .entry(*sid)
+                                .or_default()
+                                .push(encoded.clone());
+                        }
+                    }
+                }
             }
         }
 

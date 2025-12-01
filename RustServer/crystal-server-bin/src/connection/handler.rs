@@ -15,7 +15,9 @@ use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem};
 use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
 use crystal_shared_proto::login::{
+    CAddFriend,
     CAddMember,
+    CAddMemo,
     CAttack,
     CCallNPC,
     CChangeAMode,
@@ -42,6 +44,8 @@ use crystal_shared_proto::login::{
     CNewCharacter,
     CPickUp,
     CReadMail,
+    CRefreshFriends,
+    CRemoveFriend,
     CRemoveItem,
     CRequestMapInfo,
     CRun,
@@ -62,6 +66,7 @@ use crystal_shared_proto::login::{
     ClientPacketId,
     SConnected,
 };
+use crystal_shared_proto::user::group::{SDeleteGroup, SDeleteMember};
 use crystal_shared_proto::packet::RawPacket;
 
 use super::{LoginConnection, Stage};
@@ -659,6 +664,26 @@ impl ConnectionHandler for LoginConnection {
                     }
                 }
             }
+            ClientPacketId::AddFriend => {
+                if let Ok(msg) = CAddFriend::decode(&packet.payload) {
+                    self.handle_add_friend(msg, &mut out);
+                }
+            }
+            ClientPacketId::RemoveFriend => {
+                if let Ok(msg) = CRemoveFriend::decode(&packet.payload) {
+                    self.handle_remove_friend(msg, &mut out);
+                }
+            }
+            ClientPacketId::RefreshFriends => {
+                if let Ok(msg) = CRefreshFriends::decode(&packet.payload) {
+                    self.handle_refresh_friends(msg, &mut out);
+                }
+            }
+            ClientPacketId::AddMemo => {
+                if let Ok(msg) = CAddMemo::decode(&packet.payload) {
+                    self.handle_add_memo(msg, &mut out);
+                }
+            }
             _ => {
                 tracing::debug!(
                     "Unhandled client packet {:?} (id={} payload_len={})",
@@ -744,11 +769,62 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
 
+            // Snapshot current party membership so we can notify remaining
+            // members after this player is removed from the world, mirroring
+            // C# PlayerObject.LeaveGroup on despawn.
+            let party_members_before = {
+                let world = self.world.lock().unwrap();
+                world.party_members_for_session(self.session_id)
+            };
+
             // Remove the player from the world state and occupancy tracking so
             // that disconnected characters no longer block movement.
             {
                 let mut world = self.world.lock().unwrap();
                 world.remove_player_from_world(self.session_id);
+            }
+
+            if let Some(members_before) = party_members_before {
+                let total = members_before.len();
+                if total >= 2 {
+                    let leaver_sid = self.session_id;
+                    let leaving_name = members_before
+                        .iter()
+                        .find(|(sid, _)| *sid == leaver_sid)
+                        .map(|(_, name)| name.clone())
+                        .unwrap_or_else(String::new);
+
+                    let mut outboxes = self.outboxes.lock().unwrap();
+                    if total > 2 && !leaving_name.is_empty() {
+                        let pkt = SDeleteMember {
+                            name: leaving_name.clone(),
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            let encoded = super::LoginConnection::encode_raw(raw);
+                            for (sid, _) in &members_before {
+                                if *sid == leaver_sid {
+                                    continue;
+                                }
+                                outboxes
+                                    .entry(*sid)
+                                    .or_default()
+                                    .push(encoded.clone());
+                            }
+                        }
+                    } else {
+                        let pkt = SDeleteGroup;
+                        let encoded = super::LoginConnection::encode_raw(pkt.encode());
+                        for (sid, _) in &members_before {
+                            if *sid == leaver_sid {
+                                continue;
+                            }
+                            outboxes
+                                .entry(*sid)
+                                .or_default()
+                                .push(encoded.clone());
+                        }
+                    }
+                }
             }
         }
 
