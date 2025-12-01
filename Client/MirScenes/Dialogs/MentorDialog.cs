@@ -212,7 +212,7 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true,
                 Font = new Font(Settings.FontName, 7F),
                 Visible = false,
-                Text = "ONLINE",
+                Text = GameLanguage.Mentor_Online,
             };
 
             MentorLabel = new MirLabel

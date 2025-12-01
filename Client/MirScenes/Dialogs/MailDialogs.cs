@@ -44,7 +44,7 @@ namespace Client.MirScenes.Dialogs
 
             TitleTypeLabel = new MirLabel
             {
-                Text = "TYPE",
+                Text = GameLanguage.Mail_TitleType,
                 Parent = this,
                 Font = new Font(Settings.FontName, Settings.FontSize - 1, FontStyle.Italic),
                 DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter,
@@ -54,7 +54,7 @@ namespace Client.MirScenes.Dialogs
 
             TitleSenderLabel = new MirLabel
             {
-                Text = "SENDER",
+                Text = GameLanguage.Mail_TitleSender,
                 Parent = this,
                 Font = new Font(Settings.FontName, Settings.FontSize - 1, FontStyle.Italic),
                 DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter,
@@ -64,7 +64,7 @@ namespace Client.MirScenes.Dialogs
 
             TitleMessageLabel = new MirLabel
             {
-                Text = "MESSAGE",
+                Text = GameLanguage.Mail_TitleMessage,
                 Parent = this,
                 Font = new Font(Settings.FontName, Settings.FontSize - 1, FontStyle.Italic),
                 DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter,

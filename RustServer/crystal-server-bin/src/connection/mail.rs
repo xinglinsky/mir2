@@ -1,6 +1,6 @@
 use crystal_server_core::account::{StoredMail, StoredFriend};
 use crystal_server_core::item::{Equipment, Inventory};
-use crystal_server_core::world::configs::mail_config;
+use crystal_server_core::world::{configs::mail_config, WorldProvider};
 use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::login::{
     CCollectParcel,
@@ -638,6 +638,7 @@ impl LoginConnection {
         } else {
             self.current_stats = Some(new_stats.clone());
         }
+
         // Gather attachments by unique_id from the sender's inventory. We
         // honour the stamped flag by allowing up to 5 attachments when
         // stamped, otherwise only the first.
@@ -671,9 +672,54 @@ impl LoginConnection {
                 }
             };
 
+            // Inspect the item without removing it first so we can enforce
+            // BindMode-based mail restrictions, mirroring C#
+            // PlayerObject.SendMail checks for DontTrade/NoMail on both the
+            // base ItemInfo and any rental BindingFlags.
+            let item_ref = match inv.slots[slot_idx].as_ref() {
+                Some(it) => it,
+                None => continue,
+            };
+
+            let (info_bind, item_name) = match self.world_db.get_item_info(item_ref.item_index) {
+                Some(info) => (info.bind, info.friendly_name()),
+                None => {
+                    // Conservative: unknown items cannot be mailed.
+                    self.send_system_chat("该物品无法通过邮件寄送。", out);
+                    let pkt = SMailSent { result: -1 };
+                    out.push(Self::encode_raw(pkt.encode()));
+                    return;
+                }
+            };
+
+            const BIND_DONT_TRADE: i16 = 0x0010;
+            const BIND_NO_MAIL: i16 = 0x4000;
+
+            if (info_bind & BIND_DONT_TRADE) != 0 {
+                let msg = format!("物品 {} 无法通过邮件寄送。", item_name);
+                self.send_system_chat(&msg, out);
+                return;
+            }
+
+            if (info_bind & BIND_NO_MAIL) != 0 {
+                let msg = format!("物品 {} 无法通过邮件寄送。", item_name);
+                self.send_system_chat(&msg, out);
+                let pkt = SMailSent { result: -1 };
+                out.push(Self::encode_raw(pkt.encode()));
+                return;
+            }
+
+            if let Some(ref rental) = item_ref.rental_information {
+                if (rental.binding_flags & BIND_DONT_TRADE) != 0 {
+                    let msg = format!("物品 {} 无法通过邮件寄送。", item_name);
+                    self.send_system_chat(&msg, out);
+                    return;
+                }
+            }
+
+            // All checks passed; remove the item from inventory and add it to
+            // the parcel.
             if let Some(item) = inv.slots[slot_idx].take() {
-                // TODO: enforce Bind / NoMail flags once item binding rules
-                // are fully mirrored from C#.
                 gift_items.push(item.clone());
 
                 let del = SDeleteItem {

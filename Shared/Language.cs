@@ -238,6 +238,9 @@
                                         " wizards, they rely on their keen instincts to dodge oncoming attacks as they tend to leave themselves open to frontal attacks. However, their" +
                                         " physical prowess and deadly aim allows them to instil fear into anyone they hit.",
                          DateSent = "Date Sent : {0}",
+                         Mail_TitleType = "TYPE",
+                         Mail_TitleSender = "SENDER",
+                         Mail_TitleMessage = "MESSAGE",
                          Send = "Send",
                          Reply = "Reply",
                          Read = "Read",
@@ -895,6 +898,9 @@
         GameLanguage.ArcherDes = reader.ReadString("Language", "ArcherDes", GameLanguage.ArcherDes);
 
         GameLanguage.DateSent = reader.ReadString("Language", "DateSent", GameLanguage.DateSent);
+        GameLanguage.Mail_TitleType = reader.ReadString("Language", "Mail_TitleType", GameLanguage.Mail_TitleType);
+        GameLanguage.Mail_TitleSender = reader.ReadString("Language", "Mail_TitleSender", GameLanguage.Mail_TitleSender);
+        GameLanguage.Mail_TitleMessage = reader.ReadString("Language", "Mail_TitleMessage", GameLanguage.Mail_TitleMessage);
         GameLanguage.Send = reader.ReadString("Language", "Send", GameLanguage.Send);
         GameLanguage.Reply = reader.ReadString("Language", "Reply", GameLanguage.Reply);
         GameLanguage.Read = reader.ReadString("Language", "Read", GameLanguage.Read);
@@ -1429,6 +1435,9 @@
         reader.Write("Language", "ArcherDes", GameLanguage.ArcherDes);
 
         reader.Write("Language", "DateSent", GameLanguage.DateSent);
+        reader.Write("Language", "Mail_TitleType", GameLanguage.Mail_TitleType);
+        reader.Write("Language", "Mail_TitleSender", GameLanguage.Mail_TitleSender);
+        reader.Write("Language", "Mail_TitleMessage", GameLanguage.Mail_TitleMessage);
         reader.Write("Language", "Send", GameLanguage.Send);
         reader.Write("Language", "Reply", GameLanguage.Reply);
         reader.Write("Language", "Read", GameLanguage.Read);
