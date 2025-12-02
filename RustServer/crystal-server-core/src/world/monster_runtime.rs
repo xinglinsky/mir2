@@ -7,9 +7,9 @@ use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
-use crate::world::types::{AttackMode, BuffProperty, BuffType, PetKind};
+use crate::world::types::AttackMode;
 use crate::world::PoisonType;
-use crate::world::configs::pet_template;
+use crate::world::configs::setup_config;
 use crate::world::Spell;
 
 use super::{World, WorldEvent, PendingMagicHit, SessionId};
@@ -691,7 +691,7 @@ impl<P: WorldProvider> World<P> {
             map_index,
             target_monster_id,
             monster_index,
-            spell_id: _,
+            spell_id,
             damage,
             damage_type,
         } = hit;
@@ -713,11 +713,11 @@ impl<P: WorldProvider> World<P> {
             (0, 1, Vec::new())
         };
 
-        let mut strike_x = 0;
-        let mut strike_y = 0;
-        let mut strike_dir: u8 = 0;
+        let strike_x;
+        let strike_y;
+        let strike_dir: u8;
         let mut damage_done: i32 = 0;
-        let mut health_percent: u8 = 100;
+        let health_percent: u8;
         let mut dead = false;
 
         if let Some(monsters) = self.monsters.get_mut(&map_index) {
@@ -769,6 +769,49 @@ impl<P: WorldProvider> World<P> {
 
         if damage_done <= 0 {
             return;
+        }
+
+        if spell_id == Spell::TwinDrakeBlade as u8 {
+            if let Some(info) = self.provider.get_monster_info(monster_index) {
+                let target_resist = info.stats.get(Stat::PoisonResist).max(0);
+                let cfg = setup_config();
+                let weight = cfg.items.poison_attack_weight.max(1) as i32;
+                let mut rng = thread_rng();
+                let roll = rng.gen_range(0..weight.max(1));
+                if roll >= target_resist {
+                    if let Some(player) = self.players.get(&attacker_session_id) {
+                        if let Some(magic) = player
+                            .magics
+                            .iter()
+                            .find(|m| m.spell == Spell::TwinDrakeBlade as u8)
+                        {
+                            let level = magic.level as i32;
+                            let check = rng.gen_range(0..20);
+                            if check <= level + 1 {
+                                let duration_secs: i64 = 2_i64.saturating_add(level as i64);
+                                let duration_ms = duration_secs.saturating_mul(1_000);
+                                let applied = self.apply_poison_to_monster_from_player(
+                                    attacker_session_id,
+                                    map_index,
+                                    target_monster_id,
+                                    PoisonType::Stun,
+                                    1,
+                                    duration_ms,
+                                    1_000,
+                                );
+
+                                if applied {
+                                    const TWIN_DRAKE_BLADE_EFFECT: u8 = 5;
+                                    events.push(WorldEvent::ObjectEffect {
+                                        session_id: attacker_session_id,
+                                        effect: TWIN_DRAKE_BLADE_EFFECT,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         events.push(WorldEvent::ObjectStruck {
@@ -935,9 +978,9 @@ impl<P: WorldProvider> World<P> {
         }
 
         if monster_exp > 0 {
-            if let Some(p) = self.players.get_mut(&attacker_session_id) {
-                p.experience = p.experience.saturating_add(monster_exp as i64);
-            }
+            // Use the shared levelling helper so normal experience gain can
+            // trigger level-ups and associated ranking updates.
+            let _ = self.gain_experience_for_session(attacker_session_id, monster_exp, events);
 
             events.push(WorldEvent::GainExperience {
                 session_id: attacker_session_id,
@@ -1678,11 +1721,11 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
-            let mut strike_x: i32 = 0;
-            let mut strike_y: i32 = 0;
-            let mut strike_dir: u8 = 0;
+            let strike_x: i32;
+            let strike_y: i32;
+            let strike_dir: u8;
             let mut damage_done: i32 = 0;
-            let mut health_percent: u8 = 100;
+            let health_percent: u8;
             let mut dead = false;
 
             if let Some(monsters) = self.monsters.get_mut(&map_index) {
@@ -1873,10 +1916,9 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 if monster_exp > 0 {
-                    if let Some(owner) = self.players.get_mut(&owner_sid) {
-                        owner.experience =
-                            owner.experience.saturating_add(monster_exp as i64);
-                    }
+                    // Attribute experience for pet kills via the same helper
+                    // so levels and rankings remain consistent.
+                    let _ = self.gain_experience_for_session(owner_sid, monster_exp, events);
 
                     events.push(WorldEvent::GainExperience {
                         session_id: owner_sid,

@@ -1277,15 +1277,12 @@ impl LoginConnection {
                         let rent_ms = Self::dotnet_binary_to_unix_ms(guild.gt_rent_ticks);
                         let expire_str = if rent_ms <= 0 {
                             "Never".to_string()
-                        } else if let Some(naive) =
-                            chrono::NaiveDateTime::from_timestamp_millis(rent_ms)
+                        } else if let Some(dt_utc) =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp_millis(rent_ms)
                         {
-                            let dt: chrono::DateTime<chrono::Local> =
-                                chrono::DateTime::from_utc(
-                                    naive,
-                                    chrono::Local::now().offset().clone(),
-                                );
-                            dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                            let dt_local: chrono::DateTime<chrono::Local> =
+                                dt_utc.with_timezone(&chrono::Local);
+                            dt_local.format("%Y-%m-%d %H:%M:%S").to_string()
                         } else {
                             rent_ms.to_string()
                         };
@@ -1293,7 +1290,7 @@ impl LoginConnection {
                         let scfg = crate::world::configs::setup_config::setup_config();
                         guild_extend_fee_str = Some(format!(
                             "Expire On: {} ,Extend fee: {}",
-                            expire_str, scfg.game.extend_gt_gold
+                            expire_str, scfg.game.extend_gt_gold,
                         ));
                     } else {
                         guild_extend_fee_str = Some("None".to_string());

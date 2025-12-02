@@ -1,11 +1,18 @@
-use std::collections::HashMap;
+ use std::collections::HashMap;
 
 use super::Job;
+use crate::ranking::{RankCharacterInfo, RankingTables, RankType};
 use crate::stats::{Stat, Stats};
 use crate::world::{BuffProperty, BuffStackType, BuffType, Spell};
 use crate::world::party::{Party, PartyManager, MAX_GROUP_SIZE};
 use crate::guild::{GuildInfo, GuildManager, GuildStorageItem};
-use super::configs::{guild_max_experience_for_level, guild_member_cap_for_level, guild_settings, pet_template};
+use crate::world::configs::{
+    guild_max_experience_for_level,
+    guild_member_cap_for_level,
+    guild_settings,
+    max_experience_for_level,
+    pet_template,
+};
 use crate::item::create_fresh_user_item;
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
@@ -223,6 +230,15 @@ pub enum WorldEvent {
         session_id: SessionId,
         amount: u32,
     },
+    /// Notify the connection layer that a player has changed level so it can
+    /// send SLevelChanged to the owning client and SObjectLeveled to
+    /// surrounding viewers, mirroring the C# LevelUp behaviour.
+    PlayerLevelChanged {
+        session_id: SessionId,
+        level: u16,
+        experience: i64,
+        max_experience: i64,
+    },
     ObjectAttack {
         session_id: SessionId,
         map_index: i32,
@@ -364,6 +380,7 @@ pub enum WorldEvent {
         y: i32,
         amount: i32,
         new_hp: i32,
+        show_healing_effect: bool,
     },
     /// Notify a specific player about the result of a magic cast, including
     /// target information, mirroring the legacy C# S.Magic packet. The
@@ -485,6 +502,9 @@ pub struct World<P: WorldProvider> {
     pub(crate) buyback: HashMap<(SessionId, i32, i32), Vec<BuyBackEntry>>,
     /// Global and per-player timers, mirroring C# Envir.Timers.
     pub(crate) timers: HashMap<String, TimerEntry>,
+    /// In-memory level-based rankings built from current online players.
+    pub(crate) ranking: RankingTables,
+    pub(crate) online_ranking_count: [i32; 6],
 }
 
 impl<P: WorldProvider> World<P> {
@@ -518,6 +538,8 @@ impl<P: WorldProvider> World<P> {
             gameshop_log: HashMap::new(),
             buyback: HashMap::new(),
             timers: HashMap::new(),
+            ranking: RankingTables::new(),
+            online_ranking_count: [0; 6],
         }
     }
 
@@ -603,6 +625,33 @@ impl<P: WorldProvider> World<P> {
         Self::compare_i64(op, remaining, time_secs)
     }
 
+    fn recompute_player_passives_for_session(&mut self, session_id: SessionId) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.stats.passives.clear();
+
+            for magic in &player.magics {
+                if let Some(spell_enum) = Spell::from_u8(magic.spell) {
+                    match spell_enum {
+                        Spell::Fencing => {
+                            let bonus = (magic.level as i32).saturating_mul(3);
+                            if bonus != 0 {
+                                let current = player.stats.passives.get(Stat::Accuracy);
+                                player
+                                    .stats
+                                    .passives
+                                    .set(Stat::Accuracy, current.saturating_add(bonus));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            player.stats.mark_dirty(crate::world::player_stats::RecalcReason::PassiveChanged);
+            player.stats.recalc_if_dirty_for_job(player.job);
+        }
+    }
+
     /// Increment experience for the given player's magic and, if the
     /// underlying UserMagic changes, emit a MagicLeveled world event so the
     /// connection layer can notify the client via SMagicLeveled.
@@ -661,6 +710,8 @@ impl<P: WorldProvider> World<P> {
             spell_id: spell,
             delay,
         });
+
+        self.recompute_player_passives_for_session(session_id);
     }
 
     /// Apply the post-teleport effects for the wizard Teleport spell once a
@@ -776,6 +827,88 @@ impl<P: WorldProvider> World<P> {
         true
     }
 
+    /// Increment a player's experience and apply any resulting level-ups using
+    /// the ExpList.ini table. This mirrors the core levelling logic of the C#
+    /// PlayerObject.GainExp method: work on a local experience accumulator,
+    /// loop while it exceeds MaxExperience for the current level, and advance
+    /// levels while carrying spare experience forward into the new band.
+    ///
+    /// Returns true if the player leveled up at least once.
+    pub fn gain_experience_for_session(
+        &mut self,
+        session_id: SessionId,
+        amount: u32,
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        if amount == 0 {
+            return false;
+        }
+
+        // Snapshot current level/experience so we can compute the new values
+        // without holding a mutable borrow for the entire calculation.
+        let (old_level, level, experience) = {
+            let player = match self.players.get(&session_id) {
+                Some(p) => p,
+                None => return false,
+            };
+
+            let mut exp = player
+                .experience
+                .saturating_add(amount as i64);
+            let mut lvl = player.level;
+
+            // Apply level-ups while experience exceeds the per-level
+            // threshold. This uses the same EXP_TABLE convention as the
+            // login/select logic and clamps at the configured MAX_LEVEL.
+            loop {
+                if lvl == u16::MAX {
+                    break;
+                }
+
+                let max_exp = max_experience_for_level(lvl);
+                if max_exp <= 0 {
+                    break;
+                }
+
+                if exp < max_exp {
+                    break;
+                }
+
+                exp = exp.saturating_sub(max_exp);
+                lvl = lvl.saturating_add(1);
+            }
+
+            (player.level, lvl, exp)
+        };
+
+        let leveled = level != old_level;
+
+        if leveled {
+            // When the player leveled, update both level and experience via
+            // the shared helper so that stats, HP/MP and in-memory rankings
+            // stay in sync with the new level.
+            let _ = self.set_player_level_and_experience(session_id, level, experience);
+
+            // Emit a PlayerLevelChanged world event so the connection layer
+            // can send SLevelChanged and SObjectLeveled, matching C#
+            // PlayerObject.LevelUp.
+            let max_experience = max_experience_for_level(level);
+            events.push(WorldEvent::PlayerLevelChanged {
+                session_id,
+                level,
+                experience,
+                max_experience,
+            });
+        } else {
+            // No level change: just persist the new experience value.
+            if let Some(player) = self.players.get_mut(&session_id) {
+                player.experience = experience;
+            }
+        }
+
+        leveled
+    }
+
     pub fn snapshot_metrics(&self, connections: u32) -> CoreMetrics {
         let players = self.players.len() as u32;
         let monsters = self
@@ -815,6 +948,145 @@ impl<P: WorldProvider> World<P> {
                 job: p.job,
             })
             .collect()
+    }
+
+    /// Rebuild the in-memory rankings from the current set of online players.
+    ///
+    /// This is a simple, safe implementation that scans all players and
+    /// orders them by level and experience, mirroring the C# InsertRank
+    /// behaviour. It only considers online characters; offline characters
+    /// will be added later when database-backed rankings are implemented.
+    pub fn rebuild_rankings_from_players(&mut self) {
+        self.ranking.clear();
+        self.online_ranking_count = [0; 6];
+
+        let now = self.time_ms;
+        for player in self.players.values() {
+            if Self::is_player_gm(player) {
+                continue;
+            }
+
+            let info = RankCharacterInfo {
+                player_id: player.character_index as i64,
+                name: player.name.clone(),
+                class: player.job,
+                level: player.level,
+                experience: player.experience,
+                last_updated_ms: now,
+            };
+            self.ranking.add_or_update(info);
+        }
+        self.recalculate_online_ranking_counts();
+    }
+
+    /// Recompute the cached OnlineOnly counts for each ranking type based on
+    /// the current in-memory ranking tables.
+    fn recalculate_online_ranking_counts(&mut self) {
+        self.online_ranking_count[0] = self
+            .ranking
+            .overall()
+            .len()
+            .min(i32::MAX as usize) as i32;
+
+        self.online_ranking_count[1] = self
+            .ranking
+            .rankings_for_class(Job::Warrior)
+            .map(|slice| slice.len().min(i32::MAX as usize) as i32)
+            .unwrap_or(0);
+
+        self.online_ranking_count[2] = self
+            .ranking
+            .rankings_for_class(Job::Wizard)
+            .map(|slice| slice.len().min(i32::MAX as usize) as i32)
+            .unwrap_or(0);
+
+        self.online_ranking_count[3] = self
+            .ranking
+            .rankings_for_class(Job::Taoist)
+            .map(|slice| slice.len().min(i32::MAX as usize) as i32)
+            .unwrap_or(0);
+
+        self.online_ranking_count[4] = self
+            .ranking
+            .rankings_for_class(Job::Assassin)
+            .map(|slice| slice.len().min(i32::MAX as usize) as i32)
+            .unwrap_or(0);
+
+        self.online_ranking_count[5] = self
+            .ranking
+            .rankings_for_class(Job::Archer)
+            .map(|slice| slice.len().min(i32::MAX as usize) as i32)
+            .unwrap_or(0);
+    }
+
+    /// Incrementally update the ranking tables for a specific online player.
+    ///
+    /// This mirrors the C# Envir.CheckRankUpdate behaviour at a coarse
+    /// granularity: we rebuild the RankCharacterInfo for the given session
+    /// and reinsert it into the sorted ranking lists, skipping GM players.
+    pub fn update_ranking_for_session(&mut self, session_id: SessionId) {
+        let now = self.time_ms;
+
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if Self::is_player_gm(player) {
+            // Ensure GMs never appear in the ranking tables.
+            let player_id = player.character_index as i64;
+            self.ranking.remove_player(player_id);
+            self.recalculate_online_ranking_counts();
+            return;
+        }
+
+        let info = RankCharacterInfo {
+            player_id: player.character_index as i64,
+            name: player.name.clone(),
+            class: player.job,
+            level: player.level,
+            experience: player.experience,
+            last_updated_ms: now,
+        };
+
+        self.ranking.add_or_update(info);
+        self.recalculate_online_ranking_counts();
+    }
+
+    /// Remove a player's entry from the in-memory ranking tables when they
+    /// leave the world.
+    pub fn remove_ranking_for_session(&mut self, session_id: SessionId) {
+        let player_id = match self.players.get(&session_id) {
+            Some(p) => p.character_index as i64,
+            None => return,
+        };
+
+        self.ranking.remove_player(player_id);
+        self.recalculate_online_ranking_counts();
+    }
+
+    /// Return a cloned snapshot of the ranking list for the given type.
+    /// Callers can use this to build network packets without holding a
+    /// mutable borrow on the world. The snapshot is built from the
+    /// incrementally maintained in-memory ranking tables.
+    pub fn ranking_snapshot_for_type(&self, rank_type: RankType) -> Vec<RankCharacterInfo> {
+        self
+            .ranking
+            .rankings_for_type(rank_type)
+            .map(|slice| slice.to_vec())
+            .unwrap_or_default()
+    }
+
+    pub fn online_ranking_count_for_type(&self, rank_type: RankType) -> i32 {
+        let idx = rank_type.as_u8() as usize;
+        *self.online_ranking_count.get(idx).unwrap_or(&0)
+    }
+
+    fn is_player_gm(player: &PlayerState) -> bool {
+        player
+            .active_buffs
+            .iter()
+            .any(|b| b.buff_type == BuffType::GameMaster)
     }
 
     pub fn monster_position(&self, map_index: i32, monster_id: u64) -> Option<(i32, i32, u8)> {
@@ -2666,6 +2938,8 @@ impl<P: WorldProvider> World<P> {
         self.clear_player_buffs_on_exit(session_id);
 
         self.leave_party(session_id);
+        // Update in-memory ranking tables now that this player is leaving.
+        self.remove_ranking_for_session(session_id);
 
         if let Some(p) = self.players.remove(&session_id) {
             self.remove_player_from_occupancy(session_id, p.map_index, p.x, p.y);
@@ -2718,7 +2992,13 @@ impl<P: WorldProvider> World<P> {
                     (p.session_id, p.map_index, p.x, p.y, p.direction)
                 };
 
+                self.recompute_player_passives_for_session(sid);
+
                 self.add_player_to_occupancy(sid, p_map, px, py);
+                // Mirror C# behaviour where non-GM characters are added to the
+                // ranking tables on successful StartGame. GMs are filtered
+                // inside update_ranking_for_session.
+                self.update_ranking_for_session(sid);
             }
             WorldCommand::Turn {
                 session_id,
@@ -3974,6 +4254,7 @@ impl<P: WorldProvider> World<P> {
                 y: player.y,
                 amount,
                 new_hp,
+                show_healing_effect: false,
             });
         }
     }

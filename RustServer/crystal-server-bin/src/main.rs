@@ -1290,8 +1290,9 @@ async fn main() -> io::Result<()> {
                             map_index,
                             x,
                             y,
-                            amount: _,
+                            amount,
                             new_hp: _,
+                            show_healing_effect,
                         } => {
                             // Send HP/MP update to the healed player.
                             let (hp, mp) = {
@@ -1311,51 +1312,86 @@ async fn main() -> io::Result<()> {
                                     .push(encoded);
                             }
 
-                            // Emit a Healing visual effect for the player and
-                            // nearby viewers, approximating the behaviour of
-                            // C# SpellEffect.Healing triggered by SafeZone
-                            // Healing spell objects.
-                            let viewers = {
-                                let w = world_for_tick.lock().unwrap();
-                                w.sessions_in_range_for_map(
-                                    map_index,
-                                    x,
-                                    y,
-                                    LoginConnection::DATA_RANGE,
-                                )
-                            };
+                            if amount > 0 {
+                                let viewers = {
+                                    let w = world_for_tick.lock().unwrap();
+                                    w.sessions_in_range_for_map(
+                                        map_index,
+                                        x,
+                                        y,
+                                        LoginConnection::DATA_RANGE,
+                                    )
+                                };
 
-                            // SpellEffect.Healing has enum value 3 in the
-                            // original C# client.
-                            const HEALING_EFFECT: u8 = 3;
-                            let eff_pkt = SObjectEffect {
-                                object_id: session_id,
-                                effect: HEALING_EFFECT,
-                                effect_type: 0,
-                                delay_time: 0,
-                                time: 0,
-                            };
-
-                            if let Ok(raw) = eff_pkt.encode() {
-                                let encoded = raw.encode();
-                                let mut outboxes =
-                                    outboxes_for_world_events.lock().unwrap();
-
-                                // Always show the effect to the healed player.
-                                outboxes
-                                    .entry(session_id)
-                                    .or_default()
-                                    .push(encoded.clone());
-
-                                // Also broadcast to other nearby viewers.
-                                for sid in viewers {
-                                    if sid == session_id {
-                                        continue;
+                                if !viewers.is_empty() {
+                                    let dmg_pkt = crystal_shared_proto::scene::SDamageIndicator {
+                                        damage: amount,
+                                        damage_type: 0,
+                                        object_id: session_id,
+                                    };
+                                    if let Ok(pkt) = dmg_pkt.encode() {
+                                        let raw = pkt.encode();
+                                        let mut outboxes =
+                                            outboxes_for_world_events.lock().unwrap();
+                                        for sid in &viewers {
+                                            outboxes
+                                                .entry(*sid)
+                                                .or_default()
+                                                .push(raw.clone());
+                                        }
                                     }
+                                }
+                            }
+
+                            // Optionally emit a Healing visual effect for the
+                            // player and nearby viewers when requested by the
+                            // world event (e.g. SafeZone healing). This
+                            // mirrors C# SpellEffect.Healing from Healing
+                            // SpellObjects without showing visuals for natural
+                            // regen or Revival ring heals.
+                            if show_healing_effect {
+                                let viewers = {
+                                    let w = world_for_tick.lock().unwrap();
+                                    w.sessions_in_range_for_map(
+                                        map_index,
+                                        x,
+                                        y,
+                                        LoginConnection::DATA_RANGE,
+                                    )
+                                };
+
+                                // SpellEffect.Healing has enum value 3 in the
+                                // original C# client.
+                                const HEALING_EFFECT: u8 = 3;
+                                let eff_pkt = SObjectEffect {
+                                    object_id: session_id,
+                                    effect: HEALING_EFFECT,
+                                    effect_type: 0,
+                                    delay_time: 0,
+                                    time: 0,
+                                };
+
+                                if let Ok(raw) = eff_pkt.encode() {
+                                    let encoded = raw.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+
+                                    // Always show the effect to the healed player.
                                     outboxes
-                                        .entry(sid)
+                                        .entry(session_id)
                                         .or_default()
                                         .push(encoded.clone());
+
+                                    // Also broadcast to other nearby viewers.
+                                    for sid in viewers {
+                                        if sid == session_id {
+                                            continue;
+                                        }
+                                        outboxes
+                                            .entry(sid)
+                                            .or_default()
+                                            .push(encoded.clone());
+                                    }
                                 }
                             }
                         }

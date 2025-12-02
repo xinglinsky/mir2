@@ -446,7 +446,7 @@ namespace Client.MirScenes.Dialogs
 
             if (sender == CreatureRenameButton)
             {
-                MirInputBox inputBox = new MirInputBox("Please enter a new name for the creature.");
+                MirInputBox inputBox = new MirInputBox(GameLanguage.Creature_EnterNewName);
                 inputBox.InputTextBox.Text = GameScene.User.IntelligentCreatures[selectedCreature].CustomName;
                 inputBox.OKButton.Click += (o1, e1) =>
                 {
@@ -493,7 +493,7 @@ namespace Client.MirScenes.Dialogs
             }
             if (sender == ReleaseButton)
             {
-                MirInputBox verificationBox = new MirInputBox("Please enter the creature's name for verification.");
+                MirInputBox verificationBox = new MirInputBox(GameLanguage.Creature_EnterNameForVerification);
                 verificationBox.OKButton.Click += (o1, e1) =>
                 {
                     if (String.Compare(verificationBox.InputTextBox.Text, GameScene.User.IntelligentCreatures[selectedCreature].CustomName, StringComparison.OrdinalIgnoreCase) != 0)

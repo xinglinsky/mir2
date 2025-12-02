@@ -1,5 +1,4 @@
 use crate::stats::{Stat, Stats};
-use crate::world::monster::MonsterAiState;
 use crate::world::skills::{
     compute_magic_mana_cost, compute_pure_magic_attack_damage,
 };
@@ -225,7 +224,7 @@ pub fn cast_thunder_storm_flame_field<P: WorldProvider>(
     direction: u8,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, player_x, player_y, level, attacker_stats, drop_rate) = {
+    let (map_index, player_x, player_y, level, attacker_stats, _drop_rate) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,

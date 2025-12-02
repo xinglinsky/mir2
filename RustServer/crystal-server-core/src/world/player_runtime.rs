@@ -255,6 +255,7 @@ impl<P: WorldProvider> World<P> {
                         y: player.y,
                         amount,
                         new_hp,
+                        show_healing_effect: false,
                     });
                 }
             }
@@ -304,9 +305,9 @@ impl<P: WorldProvider> World<P> {
 
         let now = self.time_ms;
 
-        let mut map_index: i32 = 0;
-        let mut x: i32 = 0;
-        let mut y: i32 = 0;
+        let map_index: i32;
+        let x: i32;
+        let y: i32;
         let mut healed: i32 = 0;
         let mut new_hp: i32 = 0;
         let mut revived = false;
@@ -390,6 +391,7 @@ impl<P: WorldProvider> World<P> {
                 y,
                 amount: healed,
                 new_hp,
+                show_healing_effect: false,
             });
         }
 

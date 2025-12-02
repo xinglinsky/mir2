@@ -22,3 +22,4 @@ pub mod creature;
 pub mod item_types;
 pub mod map_types;
 pub mod notice;
+pub mod ranking;

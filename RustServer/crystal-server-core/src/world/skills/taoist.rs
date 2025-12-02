@@ -2,7 +2,7 @@ use crate::stats::{Stat, Stats};
 use crate::world::magic::{magic_damage, magic_power};
 use crate::world::monster::MonsterAiState;
 use crate::world::skills::compute_magic_mana_cost;
-use crate::world::types::{BuffType, PetKind, PoisonType};
+use crate::world::types::{BuffType, PetKind, PetMode, PoisonType};
 use crate::world::{Job, SessionId, World, WorldEvent, WorldProvider};
 use crate::world::Spell;
 use rand::{thread_rng, Rng};
@@ -159,6 +159,7 @@ pub fn cast_healing<P: WorldProvider>(
         y: player.y,
         amount,
         new_hp,
+        show_healing_effect: true,
     });
 
     world.level_up_magic_for_player(session_id, Spell::Healing as u8, events);
@@ -539,7 +540,7 @@ pub fn cast_poisoning<P: WorldProvider>(
     target_y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let now_ms = world.time_ms.max(0);
+    let _now_ms = world.time_ms.max(0);
 
     let (map_index, caster_x, caster_y, level, power) = {
         let player = match world.players.get_mut(&session_id) {
@@ -609,7 +610,6 @@ pub fn cast_poisoning<P: WorldProvider>(
     // Find a target monster at the clicked location, mirroring the targeting
     // approach used by Hallucination.
     let mut target_id: Option<u64> = None;
-    let mut target_monster_index: i32 = 0;
 
     if let Some(monsters) = world.monsters.get(&map_index) {
         for m in monsters {
@@ -618,7 +618,6 @@ pub fn cast_poisoning<P: WorldProvider>(
             }
             if m.x == target_x && m.y == target_y {
                 target_id = Some(m.id);
-                target_monster_index = m.monster_index;
                 break;
             }
         }
@@ -683,6 +682,15 @@ pub fn cast_poisoning<P: WorldProvider>(
         tick_speed_ms,
     ) {
         return;
+    }
+
+    // If the caster is in FocusMasterTarget pet mode, update their pets'
+    // focus target to this monster so that pet AI can concentrate on the
+    // same target, mirroring the C# PetMode.FocusMasterTarget behaviour.
+    if let Some(p) = world.players.get(&session_id) {
+        if PetMode::from_u8(p.pet_mode) == PetMode::FocusMasterTarget {
+            world.set_player_pet_focus_target_monster(session_id, Some(target_id));
+        }
     }
 
     world.level_up_magic_for_player(session_id, Spell::Poisoning as u8, events);
@@ -1082,6 +1090,7 @@ pub fn cast_mass_healing<P: WorldProvider>(
             y: player.y,
             amount,
             new_hp,
+            show_healing_effect: true,
         });
         trained = true;
     }

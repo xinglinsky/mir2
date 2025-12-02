@@ -479,6 +479,60 @@ impl LoginConnection {
             return true;
         }
 
+        if trimmed.eq_ignore_ascii_case("/unstuck")
+            || trimmed.eq_ignore_ascii_case("/stuck")
+        {
+            let (dest_map, dest_x, dest_y) = if let (
+                Some(ref account_id),
+                Some(char_idx),
+            ) = (self.account_id.as_ref(), self.current_char_index)
+            {
+                if let Ok(Some(pos)) = self.store.load_character_bind(account_id, char_idx) {
+                    (pos.map_index, pos.x, pos.y)
+                } else {
+                    (
+                        self.current_map_index,
+                        self.current_x,
+                        self.current_y,
+                    )
+                }
+            } else {
+                (
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                )
+            };
+
+            let (events, success) = {
+                let mut world = self.world.lock().unwrap();
+                let events = world.handle_command(world::WorldCommand::Teleport {
+                    session_id: self.session_id,
+                    map_index: dest_map,
+                    x: dest_x,
+                    y: dest_y,
+                });
+                let success = !events.is_empty();
+                (events, success)
+            };
+
+            if !success {
+                self.send_system_chat("Unable to find a safe position, please try again later.", out);
+                return true;
+            }
+
+            let map_changed = self.handle_world_events(events, out);
+            if map_changed {
+                self.known_monsters.clear();
+                self.known_npcs.clear();
+                self.update_visibility(out);
+            }
+
+            self.send_system_chat("You have been moved to a safe location.", out);
+
+            return true;
+        }
+
         // /kill
         if trimmed.eq_ignore_ascii_case("/kill") {
             if !self.is_gm {

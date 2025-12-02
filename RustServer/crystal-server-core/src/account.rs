@@ -54,6 +54,20 @@ pub struct CharacterStats {
     pub credit: i64,
 }
 
+/// Lightweight projection of a character suitable for global ranking queries.
+/// This is loaded directly from the account database and then converted into
+/// world-side RankCharacterInfo entries when building combined online/offline
+/// ranking tables.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CharacterRankRow {
+    pub account_id: String,
+    pub index: i32,
+    pub name: String,
+    pub class: u8,
+    pub level: u16,
+    pub experience: i64,
+}
+
 /// Account-wide item storage, mirroring the C# AccountInfo.Storage,
 /// HasExpandedStorage and ExpandedStorageExpiryDate fields. The slots vector
 /// contains the full set of storage cells for the account (including any
@@ -339,6 +353,29 @@ pub trait AccountStore: Send + Sync {
         index: i32,
         friends: &[StoredFriend],
     ) -> Result<(), StoreError>;
+
+    /// Load a page of global character ranking entries for the given RankType.
+    ///
+    /// RankType mapping mirrors the legacy C# server/client convention:
+    ///   0 = overall (all classes)
+    ///   1 = warrior
+    ///   2 = wizard
+    ///   3 = taoist
+    ///   4 = assassin
+    ///   5 = archer
+    /// Any other value returns an empty Vec. Results are ordered by
+    /// Level DESC, then Experience DESC, matching the C# InsertRank logic.
+    fn load_ranking_page(
+        &self,
+        rank_type: u8,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Vec<CharacterRankRow>, StoreError>;
+
+    /// Return the total number of characters that participate in the ranking
+    /// for the given RankType. This uses the same RankType mapping as
+    /// `load_ranking_page` and counts all characters (online and offline).
+    fn count_ranking_entries(&self, rank_type: u8) -> Result<i64, StoreError>;
 }
 
 pub fn hash_password(password: &str) -> String {

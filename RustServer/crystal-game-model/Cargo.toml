@@ -1,0 +1,7 @@
+[package]
+name = "crystal-game-model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 如后续需要可在此加入 serde 等通用依赖

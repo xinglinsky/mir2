@@ -1,7 +1,7 @@
 use crate::world::map;
 use crate::world::monster::{MonsterAiState, MonsterInstance};
 use crate::world::provider::WorldProvider;
-use crate::world::types::PetSkillId;
+use crate::world::types::{AttackMode, PetMode, PetSkillId};
 use crate::world::configs::pet_template;
 use crate::world::{SessionId, World, WorldEvent, PendingMagicHit};
 use crate::combat::compute_dc_vs_mac_with_crit;
@@ -35,7 +35,7 @@ impl<P: WorldProvider> World<P> {
             }
         };
 
-        let (owner_x, owner_y) = {
+        let (owner_x, owner_y, pet_mode, focus_target, owner_attack_mode) = {
             let p = match self.players.get(&owner_sid) {
                 Some(p) if !p.dead && p.hp > 0 && p.map_index == map_index => p,
                 _ => {
@@ -44,7 +44,14 @@ impl<P: WorldProvider> World<P> {
                     return;
                 }
             };
-            (p.x, p.y)
+            let pmode = PetMode::from_u8(p.pet_mode);
+            let focus = if pmode == PetMode::FocusMasterTarget {
+                p.pet_focus_target_monster_id
+            } else {
+                None
+            };
+            let amode = AttackMode::from_u8(p.attack_mode);
+            (p.x, p.y, pmode, focus, amode)
         };
 
         let pet_kind = match monster.pet_kind {
@@ -67,6 +74,14 @@ impl<P: WorldProvider> World<P> {
 
         let mut handled = false;
 
+        // Guard-style monsters share a small set of AI codes. When the pet's
+        // owner is in Peace attack mode, pets should not proactively attack
+        // these guards, mirroring C# behaviour where pets avoid engaging town
+        // guards unless specific PK conditions are met.
+        const GUARD_AIS: [u8; 8] = [6, 57, 58, 102, 103, 104, 105, 113];
+
+        let can_attack = !matches!(pet_mode, PetMode::MoveOnly | PetMode::None);
+
         // Taoist Shinsu has a custom Mode/attack-range behaviour in C#: when a
         // target exists, it toggles a 30s Mode window during which the pet is
         // visible (ObjectShow) and allowed to attack using a special
@@ -88,6 +103,17 @@ impl<P: WorldProvider> World<P> {
             let mut best_chase: Option<(i32, i32, i32)> = None;
 
             for &(tid, t_index, tx, ty) in hostile_monsters {
+                // In Peace mode, do not treat guard-type monsters as hostile
+                // targets for pets, so they will not initiate combat with
+                // town guards.
+                if owner_attack_mode == AttackMode::Peace {
+                    if let Some(info) = self.provider.get_monster_info(t_index) {
+                        if GUARD_AIS.contains(&info.ai) {
+                            continue;
+                        }
+                    }
+                }
+
                 let dx = tx - monster.x;
                 let dy = ty - monster.y;
                 let ax = dx.abs();
@@ -95,6 +121,12 @@ impl<P: WorldProvider> World<P> {
 
                 if ax == 0 && ay == 0 {
                     continue;
+                }
+
+                if let Some(focus_id) = focus_target {
+                    if tid != focus_id {
+                        continue;
+                    }
                 }
 
                 let dist = ax.max(ay);
@@ -106,23 +138,33 @@ impl<P: WorldProvider> World<P> {
                 {
                     match best_attack {
                         None => best_attack = Some((tid, t_index, tx, ty, dx, dy)),
-                        Some((_, _, _, _, _, _,)) => {
+                        Some((_, _, _, _, _, _)) => {
                             // Use distance from center (ax/ay) to prioritise
                             // closer targets.
-                            let current_best_dist =
-                                best_attack.map(|(_, _, _, _, bdx, bdy)| {
-                                    bdx.abs().max(bdy.abs())
-                                }).unwrap_or(i32::MAX);
+                            let current_best_dist = best_attack
+                                .as_ref()
+                                .map(|(_, _, _, _, bdx, bdy)| bdx.abs().max(bdy.abs()))
+                                .unwrap_or(i32::MAX);
                             if dist < current_best_dist {
                                 best_attack = Some((tid, t_index, tx, ty, dx, dy));
                             }
                         }
                     }
-                }
 
-                // Chase candidate: any hostile within leash distance of the
-                // pet. This approximates C# ProcessSearch/Target behaviour.
-                if dist <= leash_distance {
+                    // Chase candidate: any hostile within leash distance of the
+                    // pet. This approximates C# ProcessSearch/Target behaviour.
+                    if dist <= leash_distance {
+                        match best_chase {
+                            None => best_chase = Some((tx, ty, dist)),
+                            Some((_, _, best_dist)) if dist < best_dist => {
+                                best_chase = Some((tx, ty, dist));
+                            }
+                            _ => {}
+                        }
+                    }
+                } else if dist <= leash_distance {
+                    // Chase candidate: any hostile within leash distance of the
+                    // pet. This approximates C# ProcessSearch/Target behaviour.
                     match best_chase {
                         None => best_chase = Some((tx, ty, dist)),
                         Some((_, _, best_dist)) if dist < best_dist => {
@@ -213,9 +255,10 @@ impl<P: WorldProvider> World<P> {
                 }
             }
 
-            // Only allow Shinsu to attack while Mode is active, approximating
-            // the C# CanAttack && Mode property.
-            if monster.special_mode && now_ms >= monster.next_attack_time_ms {
+            // Only allow Shinsu to attack while Mode is active and the owner's
+            // pet mode permits attacking, approximating C# CanAttack && Mode
+            // together with Master.PMode rules.
+            if monster.special_mode && now_ms >= monster.next_attack_time_ms && can_attack {
                 if let Some((
                     target_id,
                     target_monster_index,
@@ -281,17 +324,30 @@ impl<P: WorldProvider> World<P> {
                         let ly = monster.y.saturating_add(line_dy * step);
 
                         for &(tid, t_index, tx2, ty2) in hostile_monsters {
-                            if tx2 == lx && ty2 == ly {
-                                pending_pet_attacks.push((
-                                    monster.id,
-                                    map_index,
-                                    tid,
-                                    t_index,
-                                    owner_sid,
-                                    monster.monster_index,
-                                ));
-                                scheduled_any = true;
+                            if tx2 != lx || ty2 != ly {
+                                continue;
                             }
+
+                            // In Peace mode, skip guard-type monsters so that
+                            // Shinsu's line attack does not accidentally hit
+                            // town guards when the owner is in Peace.
+                            if owner_attack_mode == AttackMode::Peace {
+                                if let Some(info) = self.provider.get_monster_info(t_index) {
+                                    if GUARD_AIS.contains(&info.ai) {
+                                        continue;
+                                    }
+                                }
+                            }
+
+                            pending_pet_attacks.push((
+                                monster.id,
+                                map_index,
+                                tid,
+                                t_index,
+                                owner_sid,
+                                monster.monster_index,
+                            ));
+                            scheduled_any = true;
                         }
                     }
 
@@ -318,8 +374,9 @@ impl<P: WorldProvider> World<P> {
             }
 
             // When not attacking, chase the closest hostile within leash
-            // distance as long as we remain reasonably close to the owner.
-            if !handled {
+            // distance as long as we remain reasonably close to the owner and
+            // the owner's pet mode permits attacking.
+            if !handled && can_attack {
                 if let Some((tx, ty, dist_to_target)) = best_chase {
                     let owner_dx = owner_x - monster.x;
                     let owner_dy = owner_y - monster.y;
@@ -430,11 +487,30 @@ impl<P: WorldProvider> World<P> {
             let mut best_chase: Option<(i32, i32, i32)> = None;
 
             for &(tid, t_index, tx, ty) in hostile_monsters {
+                // In Peace mode, do not treat guard-type monsters as hostile
+                // for generic pets so they will not start fights with town
+                // guards automatically.
+                if owner_attack_mode == AttackMode::Peace {
+                    if let Some(info) = self.provider.get_monster_info(t_index) {
+                        if GUARD_AIS.contains(&info.ai) {
+                            continue;
+                        }
+                    }
+                }
+
                 let dx = tx - monster.x;
                 let dy = ty - monster.y;
 
                 if dx == 0 && dy == 0 {
                     continue;
+                }
+
+                // In FocusMasterTarget mode, only consider the owner's
+                // focused monster as a valid target.
+                if let Some(focus_id) = focus_target {
+                    if tid != focus_id {
+                        continue;
+                    }
                 }
 
                 let dist = dx.abs().max(dy.abs());
@@ -463,199 +539,246 @@ impl<P: WorldProvider> World<P> {
                 }
             }
 
-            // Prefer attacking when in range and attack cooldown allows it.
-            if let Some((target_id, target_monster_index, tx, ty, _)) = best_attack {
-                if now_ms >= monster.next_attack_time_ms {
-                    let sx = (tx - monster.x).clamp(-1, 1);
-                    let sy = (ty - monster.y).clamp(-1, 1);
-                    let dir = match (sx, sy) {
-                        (0, -1) => 0,
-                        (1, -1) => 1,
-                        (1, 0) => 2,
-                        (1, 1) => 3,
-                        (0, 1) => 4,
-                        (-1, 1) => 5,
-                        (-1, 0) => 6,
-                        (-1, -1) => 7,
-                        _ => monster.direction,
-                    };
-                    monster.direction = dir;
+            // Prefer attacking when in range and attack cooldown allows it,
+            // and the owner's pet mode permits attacking.
+            if can_attack {
+                if let Some((target_id, target_monster_index, tx, ty, _)) = best_attack {
+                    if now_ms >= monster.next_attack_time_ms {
+                        let sx = (tx - monster.x).clamp(-1, 1);
+                        let sy = (ty - monster.y).clamp(-1, 1);
+                        let dir = match (sx, sy) {
+                            (0, -1) => 0,
+                            (1, -1) => 1,
+                            (1, 0) => 2,
+                            (1, 1) => 3,
+                            (0, 1) => 4,
+                            (-1, 1) => 5,
+                            (-1, 0) => 6,
+                            (-1, -1) => 7,
+                            _ => monster.direction,
+                        };
+                        monster.direction = dir;
 
-                    match primary_skill {
-                        PetSkillId::HolyDevaBolt => {
-                            // HolyDeva's ranged bolt: emit ObjectRangeAttack for
-                            // visuals and schedule a delayed MAC-based hit via
-                            // PendingMagicHit so that damage and drops/exp are
-                            // resolved through the shared magic pipeline.
-                            events.push(WorldEvent::ObjectRangeAttack {
-                                object_id: monster.id,
-                                map_index,
-                                x: monster.x,
-                                y: monster.y,
-                                direction: dir,
-                                target_id,
-                                target_x: tx,
-                                target_y: ty,
-                                spell: 0,
-                                level: 0,
-                                attack_type: 0,
-                            });
+                        match primary_skill {
+                            PetSkillId::HolyDevaBolt => {
+                                // HolyDeva's ranged bolt: emit ObjectRangeAttack for
+                                // visuals and schedule a delayed MAC-based hit via
+                                // PendingMagicHit so that damage and drops/exp are
+                                // resolved through the shared magic pipeline.
+                                events.push(WorldEvent::ObjectRangeAttack {
+                                    object_id: monster.id,
+                                    map_index,
+                                    x: monster.x,
+                                    y: monster.y,
+                                    direction: dir,
+                                    target_id,
+                                    target_x: tx,
+                                    target_y: ty,
+                                    spell: 0,
+                                    level: 0,
+                                    attack_type: 0,
+                                });
 
-                            // Compute DC-vs-MAC damage using the pet's stats
-                            // against the target monster's MAC, approximating
-                            // DefenceType.MAC behaviour. We then schedule a
-                            // PendingMagicHit attributed to the owning player
-                            // so XP/drops behave like other pet attacks.
-                            let damage_opt = {
-                                // Attacker (pet) stats
-                                let mut attacker_stats: Stats = match self
-                                    .provider
-                                    .get_monster_info(monster.monster_index)
-                                {
-                                    Some(info) => info.stats.clone(),
-                                    None => Stats::default(),
-                                };
-                                if let Some(monsters) = self.monsters.get(&map_index) {
-                                    if let Some(m) = monsters.iter().find(|m| m.id == monster.id) {
-                                        attacker_stats.add(&m.buff_stats);
-                                    }
-                                }
-
-                                // Defender stats
-                                let defender_stats = if let Some(info) =
-                                    self.provider.get_monster_info(target_monster_index)
-                                {
-                                    let mut s = info.stats.clone();
+                                // Compute DC-vs-MAC damage using the pet's stats
+                                // against the target monster's MAC, approximating
+                                // DefenceType.MAC behaviour. We then schedule a
+                                // PendingMagicHit attributed to the owning player
+                                // so XP/drops behave like other pet attacks.
+                                let damage_opt = {
+                                    // Attacker (pet) stats
+                                    let mut attacker_stats: Stats = match self
+                                        .provider
+                                        .get_monster_info(monster.monster_index)
+                                    {
+                                        Some(info) => info.stats.clone(),
+                                        None => Stats::default(),
+                                    };
                                     if let Some(monsters) = self.monsters.get(&map_index) {
                                         if let Some(m) =
-                                            monsters.iter().find(|m| m.id == target_id)
+                                            monsters.iter().find(|m| m.id == monster.id)
                                         {
-                                            s.add(&m.buff_stats);
+                                            attacker_stats.add(&m.buff_stats);
                                         }
                                     }
-                                    s
-                                } else {
-                                    Stats::default()
+
+                                    // Defender stats
+                                    let defender_stats = if let Some(info) =
+                                        self.provider.get_monster_info(target_monster_index)
+                                    {
+                                        let mut s = info.stats.clone();
+                                        if let Some(monsters) = self.monsters.get(&map_index) {
+                                            if let Some(m) =
+                                                monsters.iter().find(|m| m.id == target_id)
+                                            {
+                                                s.add(&m.buff_stats);
+                                            }
+                                        }
+                                        s
+                                    } else {
+                                        Stats::default()
+                                    };
+
+                                    if defender_stats.get(Stat::HP) <= 0 {
+                                        None
+                                    } else {
+                                        let (hit, dmg, dmg_type) =
+                                            compute_dc_vs_mac_with_crit(&attacker_stats, &defender_stats);
+                                        if hit && dmg > 0 {
+                                            Some((dmg, dmg_type))
+                                        } else {
+                                            None
+                                        }
+                                    }
                                 };
 
-                                if defender_stats.get(Stat::HP) <= 0 {
-                                    None
-                                } else {
-                                    let (hit, dmg, dmg_type) =
-                                        compute_dc_vs_mac_with_crit(&attacker_stats, &defender_stats);
-                                    if hit && dmg > 0 {
-                                        Some((dmg, dmg_type))
-                                    } else {
-                                        None
-                                    }
+                                if let Some((dmg, dmg_type)) = damage_opt {
+                                    let delay_ms: i64 = 500;
+                                    let due_time_ms = now_ms.saturating_add(delay_ms);
+                                    self.pending_magic_hits.push(PendingMagicHit {
+                                        due_time_ms,
+                                        attacker_session_id: owner_sid,
+                                        map_index,
+                                        target_monster_id: target_id,
+                                        monster_index: target_monster_index,
+                                        spell_id: 0,
+                                        damage: dmg,
+                                        damage_type: dmg_type,
+                                    });
                                 }
-                            };
 
-                            if let Some((dmg, dmg_type)) = damage_opt {
-                                let delay_ms: i64 = 500;
-                                let due_time_ms = now_ms.saturating_add(delay_ms);
-                                self.pending_magic_hits.push(PendingMagicHit {
-                                    due_time_ms,
-                                    attacker_session_id: owner_sid,
-                                    map_index,
-                                    target_monster_id: target_id,
-                                    monster_index: target_monster_index,
-                                    spell_id: 0,
-                                    damage: dmg,
-                                    damage_type: dmg_type,
-                                });
+                                let delay_ms =
+                                    Self::compute_monster_attack_delay_ms(attack_speed);
+                                monster.next_attack_time_ms = now_ms.saturating_add(delay_ms);
+
+                                handled = true;
                             }
+                            _ => {
+                                // Default melee-style pet attack (Skeleton and
+                                // other non-ranged pets).
+                                events.push(WorldEvent::ObjectAttack {
+                                    session_id: monster.id as u32,
+                                    map_index,
+                                    x: monster.x,
+                                    y: monster.y,
+                                    direction: dir,
+                                    spell: 0,
+                                    level: 0,
+                                    attack_type: 0,
+                                });
 
-                            let delay_ms =
-                                Self::compute_monster_attack_delay_ms(attack_speed);
-                            monster.next_attack_time_ms =
-                                now_ms.saturating_add(delay_ms);
+                                pending_pet_attacks.push((
+                                    monster.id,
+                                    map_index,
+                                    target_id,
+                                    target_monster_index,
+                                    owner_sid,
+                                    monster.monster_index,
+                                ));
 
-                            handled = true;
-                        }
-                        _ => {
-                            // Default melee-style pet attack (Skeleton and
-                            // other non-ranged pets).
-                            events.push(WorldEvent::ObjectAttack {
-                                session_id: monster.id as u32,
-                                map_index,
-                                x: monster.x,
-                                y: monster.y,
-                                direction: dir,
-                                spell: 0,
-                                level: 0,
-                                attack_type: 0,
-                            });
+                                let delay_ms =
+                                    Self::compute_monster_attack_delay_ms(attack_speed);
+                                monster.next_attack_time_ms = now_ms.saturating_add(delay_ms);
 
-                            pending_pet_attacks.push((
-                                monster.id,
-                                map_index,
-                                target_id,
-                                target_monster_index,
-                                owner_sid,
-                                monster.monster_index,
-                            ));
-
-                            let delay_ms =
-                                Self::compute_monster_attack_delay_ms(attack_speed);
-                            monster.next_attack_time_ms =
-                                now_ms.saturating_add(delay_ms);
-
-                            handled = true;
+                                handled = true;
+                            }
                         }
                     }
                 }
             }
 
             // When not attacking, chase the closest hostile within leash
-            // distance as long as we remain reasonably close to the owner.
-            if !handled {
+            // distance as long as we remain reasonably close to the owner and
+            // the owner's pet mode permits attacking.
+            if !handled && can_attack {
                 if let Some((tx, ty, dist_to_target)) = best_chase {
                     // Only chase freely while we have not strayed beyond our
-                    // leash limit from the owner.
+                    // leash limit from the owner, and do not continue stepping
+                    // once we are inside effective attack range.
                     let owner_dx = owner_x - monster.x;
                     let owner_dy = owner_y - monster.y;
                     let owner_dist = owner_dx.abs().max(owner_dy.abs());
 
-                    // Use a strict < comparison so that a single chase step
-                    // cannot push the pet outside the leash/DataRange.
                     if owner_dist < leash_distance && dist_to_target > attack_range {
                         if monster.next_move_time_ms == 0
                             || now_ms >= monster.next_move_time_ms
                         {
-                            let step_x = (tx - monster.x).clamp(-1, 1);
-                            let step_y = (ty - monster.y).clamp(-1, 1);
+                            // Derive the primary step towards the target
+                            // using the same 8-direction scheme as the
+                            // generic monster AI, then try that direction
+                            // plus up to 7 alternatives (rotating around the
+                            // base direction) to approximate C#
+                            // MonsterObject.MoveTo behaviour.
+                            let base_step_x = (tx - monster.x).clamp(-1, 1);
+                            let base_step_y = (ty - monster.y).clamp(-1, 1);
 
-                            let new_x = monster.x.saturating_add(step_x);
-                            let new_y = monster.y.saturating_add(step_y);
+                            if base_step_x != 0 || base_step_y != 0 {
+                                let base_dir: u8 = match (base_step_x, base_step_y) {
+                                    (0, -1) => 0,
+                                    (1, -1) => 1,
+                                    (1, 0) => 2,
+                                    (1, 1) => 3,
+                                    (0, 1) => 4,
+                                    (-1, 1) => 5,
+                                    (-1, 0) => 6,
+                                    (-1, -1) => 7,
+                                    _ => monster.direction,
+                                };
 
-                            if new_x >= 0 && new_y >= 0 {
-                                let from_x = monster.x as u16;
-                                let from_y = monster.y as u16;
-                                let to_x = new_x as u16;
-                                let to_y = new_y as u16;
+                                let mut candidate_dirs: [u8; 8] = [0; 8];
+                                candidate_dirs[0] = base_dir;
 
-                                if to_x < map.width
-                                    && to_y < map.height
-                                    && map.can_move(from_x, from_y, to_x, to_y)
-                                    && !self.is_cell_blocked(map_index, new_x, new_y)
-                                {
-                                    // Update facing based on the chase step,
-                                    // mirroring C# Functions.DirectionFromPoint
-                                    // so that generic pets (Skeleton,
-                                    // HolyDeva, etc.) face in the direction
-                                    // they move while chasing.
-                                    let dir = match (step_x, step_y) {
-                                        (0, -1) => 0,
-                                        (1, -1) => 1,
-                                        (1, 0) => 2,
-                                        (1, 1) => 3,
-                                        (0, 1) => 4,
-                                        (-1, 1) => 5,
-                                        (-1, 0) => 6,
-                                        (-1, -1) => 7,
-                                        _ => monster.direction,
+                                // Probe the primary direction first, then
+                                // rotate clockwise through the remaining 7
+                                // directions, approximating the C# MoveTo
+                                // behaviour for pathing around simple
+                                // obstacles.
+                                let mut dir = base_dir;
+                                for i in 1..8 {
+                                    dir = (dir + 1) & 7;
+                                    candidate_dirs[i] = dir;
+                                }
+
+                                for &dir in &candidate_dirs {
+                                    let (step_x, step_y) = match dir {
+                                        0 => (0, -1),
+                                        1 => (1, -1),
+                                        2 => (1, 0),
+                                        3 => (1, 1),
+                                        4 => (0, 1),
+                                        5 => (-1, 1),
+                                        6 => (-1, 0),
+                                        7 => (-1, -1),
+                                        _ => (0, 0),
                                     };
+
+                                    if step_x == 0 && step_y == 0 {
+                                        continue;
+                                    }
+
+                                    let new_x = monster.x.saturating_add(step_x);
+                                    let new_y = monster.y.saturating_add(step_y);
+
+                                    if new_x < 0 || new_y < 0 {
+                                        continue;
+                                    }
+
+                                    let from_x = monster.x as u16;
+                                    let from_y = monster.y as u16;
+                                    let to_x = new_x as u16;
+                                    let to_y = new_y as u16;
+
+                                    if to_x >= map.width || to_y >= map.height {
+                                        continue;
+                                    }
+
+                                    if !map.can_move(from_x, from_y, to_x, to_y) {
+                                        continue;
+                                    }
+
+                                    if self.is_cell_blocked(map_index, new_x, new_y) {
+                                        continue;
+                                    }
+
                                     monster.direction = dir;
 
                                     self.remove_monster_from_occupancy(
@@ -688,6 +811,7 @@ impl<P: WorldProvider> World<P> {
                                     });
 
                                     handled = true;
+                                    break;
                                 }
                             }
                         }
@@ -798,8 +922,6 @@ impl<P: WorldProvider> World<P> {
                     }
                 }
             }
-
-            handled = true;
         }
 
         // Within follow distance (or after handling attack/leash): stay near

@@ -7,4 +7,5 @@ members = [
     "crystal-server-admin",
     "crystal-server-core",
     "crystal-server-db",
+    "crystal-game-model",
 ]

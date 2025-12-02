@@ -15,6 +15,7 @@ use crystal_server_core::account::{
     CharacterSummary,
     CharacterStats,
     CharacterPosition,
+    CharacterRankRow,
     StoredMail,
     StoredFriend,
     hash_password,
@@ -1066,6 +1067,111 @@ impl AccountStore for SqliteAccountStore {
             }
         })
     }
+
+    fn load_ranking_page(
+        &self,
+        rank_type: u8,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Vec<CharacterRankRow>, StoreError> {
+        if rank_type > 5 {
+            return Ok(Vec::new());
+        }
+
+        let limit = limit.max(0) as i64;
+        let offset = offset.max(0) as i64;
+
+        self.with_conn(|conn| {
+            let mut rows: Vec<CharacterRankRow> = Vec::new();
+
+            if rank_type == 0 {
+                let mut stmt = Self::map_sql_err(conn.prepare(
+                    "SELECT c.account_id, c.idx, c.name, c.class, c.level, s.experience
+                     FROM characters c
+                     JOIN character_stats s
+                       ON c.account_id = s.account_id AND c.idx = s.idx
+                     ORDER BY c.level DESC, s.experience DESC
+                     LIMIT ?1 OFFSET ?2",
+                ))?;
+
+                let mapped = Self::map_sql_err(stmt.query_map((limit, offset), |row| {
+                    Ok(CharacterRankRow {
+                        account_id: row.get(0)?,
+                        index: row.get::<_, i64>(1)? as i32,
+                        name: row.get(2)?,
+                        class: row.get::<_, i64>(3)? as u8,
+                        level: row.get::<_, i64>(4)? as u16,
+                        experience: row.get(5)?,
+                    })
+                }))?;
+
+                for r in mapped {
+                    rows.push(Self::map_sql_err(r)?);
+                }
+            } else {
+                let class_val: i64 = (rank_type as i64) - 1;
+                let mut stmt = Self::map_sql_err(conn.prepare(
+                    "SELECT c.account_id, c.idx, c.name, c.class, c.level, s.experience
+                     FROM characters c
+                     JOIN character_stats s
+                       ON c.account_id = s.account_id AND c.idx = s.idx
+                     WHERE c.class = ?1
+                     ORDER BY c.level DESC, s.experience DESC
+                     LIMIT ?2 OFFSET ?3",
+                ))?;
+
+                let mapped = Self::map_sql_err(
+                    stmt.query_map((class_val, limit, offset), |row| {
+                        Ok(CharacterRankRow {
+                            account_id: row.get(0)?,
+                            index: row.get::<_, i64>(1)? as i32,
+                            name: row.get(2)?,
+                            class: row.get::<_, i64>(3)? as u8,
+                            level: row.get::<_, i64>(4)? as u16,
+                            experience: row.get(5)?,
+                        })
+                    }),
+                )?;
+
+                for r in mapped {
+                    rows.push(Self::map_sql_err(r)?);
+                }
+            }
+
+            Ok(rows)
+        })
+    }
+
+    fn count_ranking_entries(&self, rank_type: u8) -> Result<i64, StoreError> {
+        if rank_type > 5 {
+            return Ok(0);
+        }
+
+        self.with_conn(|conn| {
+            if rank_type == 0 {
+                let mut stmt = Self::map_sql_err(conn.prepare(
+                    "SELECT COUNT(*)
+                     FROM characters c
+                     JOIN character_stats s
+                       ON c.account_id = s.account_id AND c.idx = s.idx",
+                ))?;
+                let count: i64 = Self::map_sql_err(stmt.query_row([], |row| row.get(0)))?;
+                Ok(count)
+            } else {
+                let class_val: i64 = (rank_type as i64) - 1;
+                let mut stmt = Self::map_sql_err(conn.prepare(
+                    "SELECT COUNT(*)
+                     FROM characters c
+                     JOIN character_stats s
+                       ON c.account_id = s.account_id AND c.idx = s.idx
+                     WHERE c.class = ?1",
+                ))?;
+                let count: i64 =
+                    Self::map_sql_err(stmt.query_row([class_val], |row| row.get(0)))?;
+                Ok(count)
+            }
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1645,5 +1751,20 @@ impl AccountStore for AsyncAccountStore {
         self.tx
             .send(task)
             .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_friends failed: {}", e))))
+    }
+
+    fn load_ranking_page(
+        &self,
+        rank_type: u8,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Vec<CharacterRankRow>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_ranking_page(&inner, rank_type, offset, limit)
+    }
+
+    fn count_ranking_entries(&self, rank_type: u8) -> Result<i64, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::count_ranking_entries(&inner, rank_type)
     }
 }

@@ -10,7 +10,7 @@ use crystal_shared_proto::io::{write_bool, write_i32_le, write_string};
 use std::collections::HashMap;
 
 use super::{Job, PlayerStats, SessionId, World};
-use crate::world::types::AttackMode;
+use crate::world::types::{AttackMode, PetMode};
 
 #[derive(Clone, Debug)]
 pub struct FriendEntry {
@@ -35,6 +35,7 @@ pub struct PlayerState {
     pub gender: u8,
     pub guild_name: String,
     pub main_pet_id: Option<u64>,
+    pub pet_focus_target_monster_id: Option<u64>,
     pub allow_group: bool,
     pub party_id: Option<PartyId>,
     pub pending_group_invite_from: Option<SessionId>,
@@ -60,6 +61,7 @@ pub struct PlayerState {
     pub next_pk_decay_ms: i64,
     pub last_revival_time_ms: i64,
     pub attack_mode: u8,
+    pub pet_mode: u8,
     /// Active poisons applied to this player. This mirrors the legacy C#
     /// MapObject.PoisonList and is processed by player_runtime.
     pub poisons: Vec<crate::world::PoisonInstance>,
@@ -138,6 +140,7 @@ impl<P: WorldProvider> World<P> {
                     gender,
                     guild_name: String::new(),
                     main_pet_id: None,
+                    pet_focus_target_monster_id: None,
                     allow_group: true,
                     party_id: None,
                     pending_group_invite_from: None,
@@ -163,6 +166,7 @@ impl<P: WorldProvider> World<P> {
                     next_pk_decay_ms: 0,
                     last_revival_time_ms: 0,
                     attack_mode: 0,
+                    pet_mode: 0,
                     poisons: Vec::new(),
                     current_poison_mask: 0,
                     gs_purchases: HashMap::new(),
@@ -180,22 +184,39 @@ impl<P: WorldProvider> World<P> {
         level: u16,
         experience: i64,
     ) -> Option<()> {
-        let player = self.players.get_mut(&session_id)?;
-        player.level = level;
-        player.experience = experience;
-        let job = player.job;
-        player.stats.set_base_from_level(job, level);
-        player.stats.recalc_if_dirty_for_job(job);
+        // Update the underlying PlayerState first.
+        let updated = {
+            if let Some(player) = self.players.get_mut(&session_id) {
+                player.level = level;
+                player.experience = experience;
+                let job = player.job;
+                player.stats.set_base_from_level(job, level);
+                player.stats.recalc_if_dirty_for_job(job);
 
-        // After recalculating stats for the new level, reset the world-side
-        // current HP/MP to the new maxima. This mirrors the C# LevelUp
-        // behaviour where RefreshStats is followed by SetHP(Stats[HP]) and
-        // SetMP(Stats[MP]), ensuring that subsequent monster damage and
-        // SHealthChanged packets operate on the correct post-level values.
-        let max_hp = player.stats.total.get(Stat::HP).max(1);
-        let max_mp = player.stats.total.get(Stat::MP).max(0);
-        player.hp = max_hp;
-        player.mp = max_mp;
+                // After recalculating stats for the new level, reset the
+                // world-side current HP/MP to the new maxima. This mirrors
+                // the C# LevelUp behaviour where RefreshStats is followed by
+                // SetHP(Stats[HP]) and SetMP(Stats[MP]), ensuring that
+                // subsequent monster damage and SHealthChanged packets operate
+                // on the correct post-level values.
+                let max_hp = player.stats.total.get(Stat::HP).max(1);
+                let max_mp = player.stats.total.get(Stat::MP).max(0);
+                player.hp = max_hp;
+                player.mp = max_mp;
+                true
+            } else {
+                false
+            }
+        };
+
+        if !updated {
+            return None;
+        }
+
+        // Refresh the in-memory ranking tables for this player so that
+        // subsequent CGetRanking requests see the new level/experience.
+        self.update_ranking_for_session(session_id);
+
         Some(())
     }
 
@@ -323,6 +344,23 @@ impl<P: WorldProvider> World<P> {
         let amode = AttackMode::from_u8(mode);
         if let Some(player) = self.players.get_mut(&session_id) {
             player.attack_mode = amode.as_u8();
+        }
+    }
+
+    pub fn set_player_pet_mode(&mut self, session_id: SessionId, mode: u8) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let pmode = PetMode::from_u8(mode);
+            player.pet_mode = pmode.as_u8();
+        }
+    }
+
+    pub fn set_player_pet_focus_target_monster(
+        &mut self,
+        session_id: SessionId,
+        target_id: Option<u64>,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.pet_focus_target_monster_id = target_id;
         }
     }
 

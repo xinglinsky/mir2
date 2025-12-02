@@ -227,6 +227,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "crystal-game-model"
+version = "0.1.0"
+
+[[package]]
 name = "crystal-server-admin"
 version = "0.1.0"
 dependencies = [

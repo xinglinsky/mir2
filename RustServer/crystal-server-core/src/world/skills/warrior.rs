@@ -1,5 +1,4 @@
 use crate::stats::{Stat, Stats};
-use crate::world::buff::PlayerBuff;
 use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
@@ -535,11 +534,10 @@ pub fn cast_half_moon<P: WorldProvider>(
                 }
 
                 if monster_exp > 0 {
-                    if let Some(p) = world.players.get_mut(&session_id) {
-                        p.experience = p
-                            .experience
-                            .saturating_add(monster_exp as i64);
-                    }
+                    // Route experience gain through the shared helper so
+                    // that level-ups and ranking updates are applied
+                    // consistently for warrior skills.
+                    let _ = world.gain_experience_for_session(session_id, monster_exp, events);
 
                     events.push(WorldEvent::GainExperience {
                         session_id,

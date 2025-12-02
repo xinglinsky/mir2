@@ -21,6 +21,7 @@ use crystal_shared_proto::login::{
     CAttack,
     CCallNPC,
     CChangeAMode,
+    CChangePMode,
     CChangePassword,
     CClientVersion,
     CCollectParcel,
@@ -66,6 +67,7 @@ use crystal_shared_proto::login::{
     ClientPacketId,
     SConnected,
 };
+use crystal_shared_proto::ranking::CGetRanking;
 use crystal_shared_proto::user::group::{SDeleteGroup, SDeleteMember};
 use crystal_shared_proto::packet::RawPacket;
 
@@ -271,6 +273,11 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_change_attack_mode(msg, &mut out);
                 }
             }
+            ClientPacketId::ChangePMode => {
+                if let Ok(msg) = CChangePMode::decode(&packet.payload) {
+                    self.handle_change_pet_mode(msg, &mut out);
+                }
+            }
             ClientPacketId::Magic => {
                 if let Ok(msg) = CMagic::decode(&packet.payload) {
                     self.handle_magic(msg, &mut out);
@@ -289,6 +296,11 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::RequestMapInfo => {
                 if let Ok(msg) = CRequestMapInfo::decode(&packet.payload) {
                     self.handle_request_map_info(msg, &mut out);
+                }
+            }
+            ClientPacketId::GetRanking => {
+                if let Ok(msg) = CGetRanking::decode(&packet.payload) {
+                    self.handle_get_ranking(msg, &mut out);
                 }
             }
             ClientPacketId::TeleportToNPC => {

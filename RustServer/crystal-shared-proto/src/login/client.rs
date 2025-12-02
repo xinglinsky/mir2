@@ -424,6 +424,32 @@ impl CChangeAMode {
 }
 
 #[derive(Clone, Debug)]
+pub struct CChangePMode {
+    pub mode: u8,
+}
+
+impl CChangePMode {
+    pub fn encode(&self) -> RawPacket {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(self.mode);
+        RawPacket {
+            id: ClientPacketId::ChangePMode as i16,
+            payload: buf,
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CChangePMode payload must be exactly 1 byte",
+            ));
+        }
+        Ok(CChangePMode { mode: payload[0] })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CTownRevive;
 
 impl CTownRevive {

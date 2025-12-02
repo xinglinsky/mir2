@@ -28,6 +28,33 @@ impl Job {
     }
 }
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PetMode {
+    Both = 0,
+    MoveOnly = 1,
+    AttackOnly = 2,
+    None = 3,
+    FocusMasterTarget = 4,
+}
+
+impl PetMode {
+    pub fn from_u8(id: u8) -> PetMode {
+        match id {
+            0 => PetMode::Both,
+            1 => PetMode::MoveOnly,
+            2 => PetMode::AttackOnly,
+            3 => PetMode::None,
+            4 => PetMode::FocusMasterTarget,
+            _ => PetMode::Both,
+        }
+    }
+
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Monster {

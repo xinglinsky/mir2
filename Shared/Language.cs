@@ -208,6 +208,14 @@
 
                          Login_Disabled = "Logging in is currently disabled.",
                          Login_PasswordChangeRequired = "The account's password must be changed before logging in.",
+                         Login_SendingClientVersion = "Sending Client Version.",
+                         Login_DescAccountID = " Description: Account ID.\n Accepted characters: a-z A-Z 0-9.\n Length: between {0} and {1} characters.",
+                         Login_DescPassword = " Description: Password.\n Accepted characters: a-z A-Z 0-9.\n Length: between {0} and {1} characters.",
+                         Login_DescEMail = " Description: E-Mail Address.\n Format: Example@Example.Com.\n Max Length: 50 characters.\n Optional Field.",
+                         Login_DescUserName = " Description: User Name.\n Accepted characters: All.\n Length: between 0 and 20 characters.\n Optional Field.",
+                         Login_DescBirthDate = " Description: Birth Date.\n Format: {0}.\n Length: 10 characters.\n Optional Field.",
+                         Login_DescQuestion = " Description: Secret Question.\n Accepted characters: All.\n Length: between 0 and 30 characters.\n Optional Field.",
+                         Login_DescAnswer = " Description: Secret Answer.\n Accepted characters: All.\n Length: between 0 and 30 characters.\n Optional Field.",
 
                          Account_Banned = "This account is banned.\n\nReason: {0}\nExpiryDate: {1}\nDuration: {2:#,##0} Hours, {3} Minutes, {4} Seconds",
 
@@ -260,6 +268,9 @@
                          Item_CannotDrop = "You cannot drop {0}",
                          Creature_NameLengthInvalid = "Creature name must be between {0} and {1} characters.",
                          Creature_VerificationFailed = "Verification Failed!!",
+                         Creature_EnterName = "Please give your creature a name.",
+                         Creature_EnterNewName = "Please enter a new name for the creature.",
+                         Creature_EnterNameForVerification = "Please enter the creature's name for verification.",
                          Keyboard_ResetDefault = "Keyboard settings have been reset back to default.",
                          Mail_DeleteParcelWithItemsConfirm = "This parcel contains items or gold. Are you sure you want to delete it?",
                          Mail_NoParcels = "No parcels to collect.",
@@ -269,6 +280,47 @@
                          Item_CombineConfirm = "Do you want to try and combine these items?",
                          ItemRental_CancelledFaceOther = "Item rental cancelled.\r\nTo complete item rental please face the other party throughout the transaction.",
                          Guild_JoinRequest = "Do you want to join the {0} guild?",
+                         Guild_CreateEnterName = "Please enter a guild name, length must be 3~20 characters.",
+                         Guild_WarEnterName = "Please enter the guild you would like to go to war with.",
+                         Item_SoulboundTo = "Soulbound to: {0}",
+                         Item_Cursed = "Cursed",
+                         Item_GemCannotUse = "Cannot be used on any item.",
+                         Item_GemCanUseOn = "Can be used on: ",
+                         Item_GemUseOnWeapon = "-Weapon",
+                         Item_GemUseOnArmour = "-Armour",
+                         Item_GemUseOnHelmet = "-Helmet",
+                         Item_GemUseOnNecklace = "-Necklace",
+                         Item_GemUseOnBracelet = "-Bracelet",
+                         Item_GemUseOnRing = "-Ring",
+                         Item_GemUseOnAmulet = "-Amulet",
+                         Item_GemUseOnBelt = "-Belt",
+                         Item_GemUseOnBoots = "-Boots",
+                         Item_GemUseOnStone = "-Stone",
+                         Item_GemUseOnCandle = "-Candle",
+                         Item_SoulBindsOnEquip = "SoulBinds on equip",
+                         Item_CannotBeUsedByHero = "Cannot be used by Hero",
+                         Item_ExpiresIn = "Expires in {0}",
+                         Item_Expired = "Expired",
+                         Item_SealedFor = "Sealed for {0}",
+                         Item_RentalFrom = "Item rented from: {0}",
+                         Item_RentalExpiresIn = "Rental expires in: {0}",
+                         Item_RentalExpired = "Rental expired",
+                         Item_RentalLockExpiresIn = "Rental lock expires in: {0}",
+                         Item_RentalLockExpired = "Rental lock expired",
+                         Item_CantSpecialRepair = "Can't special repair",
+                         Item_BreaksOnDeath = "Breaks on death",
+                         Item_DestroyedWhenDropped = "Destroyed when dropped",
+                         Item_CannotBeWeddingRing = "Cannot be a Wedding Ring",
+                         Item_GemHint_RepairPartialWeaponAccessory = "Hold CTRL and left click to partially repair\nweapons and accessory items.",
+                         Item_GemHint_RepairPartialArmourDrapery = "Hold CTRL and left click to partially repair\narmour and drapery items.",
+                         Item_GemHint_CombineMaybeDestroy = "Hold CTRL and left click to combine with an item.\nHas chance to destroy combining item.",
+                         Item_GemHint_CombineNoDestroy = "Hold CTRL and left click to combine with an item.\nWill NOT destroy combining item.",
+                         Item_GemHint_RepairFullWeaponAccessory = "Hold CTRL and left click to completely repair\nweapons and accessory items.",
+                         Item_GemHint_RepairFullArmourDrapery = "Hold CTRL and left click to completely repair\narmour and drapery items.",
+                         Item_GemHint_SealItem = "Hold CTRL and left click to seal an item.",
+                         Item_CreditScroll_AddCredits = "Adds {0} Credits to your Account.",
+                         Item_CreatedByGameMaster = "Created by Game Master",
+                         Mail_GoldLabel = "Gold: {0}",
                          Marriage_Request = "{0} has asked for your hand in marriage.",
                          Divorce_Request = "{0} has requested a divorce",
                          Mentor_Request = "{0} (Level {1}) has requested you teach him the ways of the {2}.",
@@ -876,6 +928,14 @@
 
         GameLanguage.Login_Disabled = reader.ReadString("Language", "Login_Disabled", GameLanguage.Login_Disabled);
         GameLanguage.Login_PasswordChangeRequired = reader.ReadString("Language", "Login_PasswordChangeRequired", GameLanguage.Login_PasswordChangeRequired);
+        GameLanguage.Login_SendingClientVersion = reader.ReadString("Language", "Login_SendingClientVersion", GameLanguage.Login_SendingClientVersion);
+        GameLanguage.Login_DescAccountID = reader.ReadString("Language", "Login_DescAccountID", GameLanguage.Login_DescAccountID);
+        GameLanguage.Login_DescPassword = reader.ReadString("Language", "Login_DescPassword", GameLanguage.Login_DescPassword);
+        GameLanguage.Login_DescEMail = reader.ReadString("Language", "Login_DescEMail", GameLanguage.Login_DescEMail);
+        GameLanguage.Login_DescUserName = reader.ReadString("Language", "Login_DescUserName", GameLanguage.Login_DescUserName);
+        GameLanguage.Login_DescBirthDate = reader.ReadString("Language", "Login_DescBirthDate", GameLanguage.Login_DescBirthDate);
+        GameLanguage.Login_DescQuestion = reader.ReadString("Language", "Login_DescQuestion", GameLanguage.Login_DescQuestion);
+        GameLanguage.Login_DescAnswer = reader.ReadString("Language", "Login_DescAnswer", GameLanguage.Login_DescAnswer);
 
         GameLanguage.Account_Banned = reader.ReadString("Language", "Account_Banned", GameLanguage.Account_Banned);
 
@@ -921,6 +981,9 @@
         GameLanguage.Item_CannotDrop = reader.ReadString("Language", "Item_CannotDrop", GameLanguage.Item_CannotDrop);
         GameLanguage.Creature_NameLengthInvalid = reader.ReadString("Language", "Creature_NameLengthInvalid", GameLanguage.Creature_NameLengthInvalid);
         GameLanguage.Creature_VerificationFailed = reader.ReadString("Language", "Creature_VerificationFailed", GameLanguage.Creature_VerificationFailed);
+        GameLanguage.Creature_EnterName = reader.ReadString("Language", "Creature_EnterName", GameLanguage.Creature_EnterName);
+        GameLanguage.Creature_EnterNewName = reader.ReadString("Language", "Creature_EnterNewName", GameLanguage.Creature_EnterNewName);
+        GameLanguage.Creature_EnterNameForVerification = reader.ReadString("Language", "Creature_EnterNameForVerification", GameLanguage.Creature_EnterNameForVerification);
         GameLanguage.Keyboard_ResetDefault = reader.ReadString("Language", "Keyboard_ResetDefault", GameLanguage.Keyboard_ResetDefault);
         GameLanguage.Mail_DeleteParcelWithItemsConfirm = reader.ReadString("Language", "Mail_DeleteParcelWithItemsConfirm", GameLanguage.Mail_DeleteParcelWithItemsConfirm);
         GameLanguage.Mail_NoParcels = reader.ReadString("Language", "Mail_NoParcels", GameLanguage.Mail_NoParcels);
@@ -929,7 +992,48 @@
         GameLanguage.Potion_UseSpecialConfirm = reader.ReadString("Language", "Potion_UseSpecialConfirm", GameLanguage.Potion_UseSpecialConfirm);
         GameLanguage.Item_CombineConfirm = reader.ReadString("Language", "Item_CombineConfirm", GameLanguage.Item_CombineConfirm);
         GameLanguage.ItemRental_CancelledFaceOther = reader.ReadString("Language", "ItemRental_CancelledFaceOther", GameLanguage.ItemRental_CancelledFaceOther);
+        GameLanguage.Item_SoulboundTo = reader.ReadString("Language", "Item_SoulboundTo", GameLanguage.Item_SoulboundTo);
+        GameLanguage.Item_Cursed = reader.ReadString("Language", "Item_Cursed", GameLanguage.Item_Cursed);
+        GameLanguage.Item_GemCannotUse = reader.ReadString("Language", "Item_GemCannotUse", GameLanguage.Item_GemCannotUse);
+        GameLanguage.Item_GemCanUseOn = reader.ReadString("Language", "Item_GemCanUseOn", GameLanguage.Item_GemCanUseOn);
+        GameLanguage.Item_GemUseOnWeapon = reader.ReadString("Language", "Item_GemUseOnWeapon", GameLanguage.Item_GemUseOnWeapon);
+        GameLanguage.Item_GemUseOnArmour = reader.ReadString("Language", "Item_GemUseOnArmour", GameLanguage.Item_GemUseOnArmour);
+        GameLanguage.Item_GemUseOnHelmet = reader.ReadString("Language", "Item_GemUseOnHelmet", GameLanguage.Item_GemUseOnHelmet);
+        GameLanguage.Item_GemUseOnNecklace = reader.ReadString("Language", "Item_GemUseOnNecklace", GameLanguage.Item_GemUseOnNecklace);
+        GameLanguage.Item_GemUseOnBracelet = reader.ReadString("Language", "Item_GemUseOnBracelet", GameLanguage.Item_GemUseOnBracelet);
+        GameLanguage.Item_GemUseOnRing = reader.ReadString("Language", "Item_GemUseOnRing", GameLanguage.Item_GemUseOnRing);
+        GameLanguage.Item_GemUseOnAmulet = reader.ReadString("Language", "Item_GemUseOnAmulet", GameLanguage.Item_GemUseOnAmulet);
+        GameLanguage.Item_GemUseOnBelt = reader.ReadString("Language", "Item_GemUseOnBelt", GameLanguage.Item_GemUseOnBelt);
+        GameLanguage.Item_GemUseOnBoots = reader.ReadString("Language", "Item_GemUseOnBoots", GameLanguage.Item_GemUseOnBoots);
+        GameLanguage.Item_GemUseOnStone = reader.ReadString("Language", "Item_GemUseOnStone", GameLanguage.Item_GemUseOnStone);
+        GameLanguage.Item_GemUseOnCandle = reader.ReadString("Language", "Item_GemUseOnCandle", GameLanguage.Item_GemUseOnCandle);
+        GameLanguage.Item_SoulBindsOnEquip = reader.ReadString("Language", "Item_SoulBindsOnEquip", GameLanguage.Item_SoulBindsOnEquip);
+        GameLanguage.Item_CannotBeUsedByHero = reader.ReadString("Language", "Item_CannotBeUsedByHero", GameLanguage.Item_CannotBeUsedByHero);
+        GameLanguage.Item_ExpiresIn = reader.ReadString("Language", "Item_ExpiresIn", GameLanguage.Item_ExpiresIn);
+        GameLanguage.Item_Expired = reader.ReadString("Language", "Item_Expired", GameLanguage.Item_Expired);
+        GameLanguage.Item_SealedFor = reader.ReadString("Language", "Item_SealedFor", GameLanguage.Item_SealedFor);
+        GameLanguage.Item_RentalFrom = reader.ReadString("Language", "Item_RentalFrom", GameLanguage.Item_RentalFrom);
+        GameLanguage.Item_RentalExpiresIn = reader.ReadString("Language", "Item_RentalExpiresIn", GameLanguage.Item_RentalExpiresIn);
+        GameLanguage.Item_RentalExpired = reader.ReadString("Language", "Item_RentalExpired", GameLanguage.Item_RentalExpired);
+        GameLanguage.Item_RentalLockExpiresIn = reader.ReadString("Language", "Item_RentalLockExpiresIn", GameLanguage.Item_RentalLockExpiresIn);
+        GameLanguage.Item_RentalLockExpired = reader.ReadString("Language", "Item_RentalLockExpired", GameLanguage.Item_RentalLockExpired);
+        GameLanguage.Item_CantSpecialRepair = reader.ReadString("Language", "Item_CantSpecialRepair", GameLanguage.Item_CantSpecialRepair);
+        GameLanguage.Item_BreaksOnDeath = reader.ReadString("Language", "Item_BreaksOnDeath", GameLanguage.Item_BreaksOnDeath);
+        GameLanguage.Item_DestroyedWhenDropped = reader.ReadString("Language", "Item_DestroyedWhenDropped", GameLanguage.Item_DestroyedWhenDropped);
+        GameLanguage.Item_CannotBeWeddingRing = reader.ReadString("Language", "Item_CannotBeWeddingRing", GameLanguage.Item_CannotBeWeddingRing);
+        GameLanguage.Item_GemHint_RepairPartialWeaponAccessory = reader.ReadString("Language", "Item_GemHint_RepairPartialWeaponAccessory", GameLanguage.Item_GemHint_RepairPartialWeaponAccessory);
+        GameLanguage.Item_GemHint_RepairPartialArmourDrapery = reader.ReadString("Language", "Item_GemHint_RepairPartialArmourDrapery", GameLanguage.Item_GemHint_RepairPartialArmourDrapery);
+        GameLanguage.Item_GemHint_CombineMaybeDestroy = reader.ReadString("Language", "Item_GemHint_CombineMaybeDestroy", GameLanguage.Item_GemHint_CombineMaybeDestroy);
+        GameLanguage.Item_GemHint_CombineNoDestroy = reader.ReadString("Language", "Item_GemHint_CombineNoDestroy", GameLanguage.Item_GemHint_CombineNoDestroy);
+        GameLanguage.Item_GemHint_RepairFullWeaponAccessory = reader.ReadString("Language", "Item_GemHint_RepairFullWeaponAccessory", GameLanguage.Item_GemHint_RepairFullWeaponAccessory);
+        GameLanguage.Item_GemHint_RepairFullArmourDrapery = reader.ReadString("Language", "Item_GemHint_RepairFullArmourDrapery", GameLanguage.Item_GemHint_RepairFullArmourDrapery);
+        GameLanguage.Item_GemHint_SealItem = reader.ReadString("Language", "Item_GemHint_SealItem", GameLanguage.Item_GemHint_SealItem);
+        GameLanguage.Item_CreditScroll_AddCredits = reader.ReadString("Language", "Item_CreditScroll_AddCredits", GameLanguage.Item_CreditScroll_AddCredits);
+        GameLanguage.Item_CreatedByGameMaster = reader.ReadString("Language", "Item_CreatedByGameMaster", GameLanguage.Item_CreatedByGameMaster);
+        GameLanguage.Mail_GoldLabel = reader.ReadString("Language", "Mail_GoldLabel", GameLanguage.Mail_GoldLabel);
         GameLanguage.Guild_JoinRequest = reader.ReadString("Language", "Guild_JoinRequest", GameLanguage.Guild_JoinRequest);
+        GameLanguage.Guild_CreateEnterName = reader.ReadString("Language", "Guild_CreateEnterName", GameLanguage.Guild_CreateEnterName);
+        GameLanguage.Guild_WarEnterName = reader.ReadString("Language", "Guild_WarEnterName", GameLanguage.Guild_WarEnterName);
         GameLanguage.Marriage_Request = reader.ReadString("Language", "Marriage_Request", GameLanguage.Marriage_Request);
         GameLanguage.Divorce_Request = reader.ReadString("Language", "Divorce_Request", GameLanguage.Divorce_Request);
         GameLanguage.Mentor_Request = reader.ReadString("Language", "Mentor_Request", GameLanguage.Mentor_Request);
@@ -1413,6 +1517,14 @@
 
         reader.Write("Language", "Login_Disabled", GameLanguage.Login_Disabled);
         reader.Write("Language", "Login_PasswordChangeRequired", GameLanguage.Login_PasswordChangeRequired);
+        reader.Write("Language", "Login_SendingClientVersion", GameLanguage.Login_SendingClientVersion);
+        reader.Write("Language", "Login_DescAccountID", GameLanguage.Login_DescAccountID);
+        reader.Write("Language", "Login_DescPassword", GameLanguage.Login_DescPassword);
+        reader.Write("Language", "Login_DescEMail", GameLanguage.Login_DescEMail);
+        reader.Write("Language", "Login_DescUserName", GameLanguage.Login_DescUserName);
+        reader.Write("Language", "Login_DescBirthDate", GameLanguage.Login_DescBirthDate);
+        reader.Write("Language", "Login_DescQuestion", GameLanguage.Login_DescQuestion);
+        reader.Write("Language", "Login_DescAnswer", GameLanguage.Login_DescAnswer);
 
         reader.Write("Language", "Account_Banned", GameLanguage.Account_Banned);
 
@@ -1457,6 +1569,9 @@
         reader.Write("Language", "Trade_Request", GameLanguage.Trade_Request);
         reader.Write("Language", "Item_CannotDrop", GameLanguage.Item_CannotDrop);
         reader.Write("Language", "Creature_NameLengthInvalid", GameLanguage.Creature_NameLengthInvalid);
+        reader.Write("Language", "Creature_EnterName", GameLanguage.Creature_EnterName);
+        reader.Write("Language", "Creature_EnterNewName", GameLanguage.Creature_EnterNewName);
+        reader.Write("Language", "Creature_EnterNameForVerification", GameLanguage.Creature_EnterNameForVerification);
         reader.Write("Language", "Keyboard_ResetDefault", GameLanguage.Keyboard_ResetDefault);
         reader.Write("Language", "Mail_DeleteParcelWithItemsConfirm", GameLanguage.Mail_DeleteParcelWithItemsConfirm);
         reader.Write("Language", "Mail_NoParcels", GameLanguage.Mail_NoParcels);
@@ -1465,7 +1580,48 @@
         reader.Write("Language", "Potion_UseSpecialConfirm", GameLanguage.Potion_UseSpecialConfirm);
         reader.Write("Language", "Item_CombineConfirm", GameLanguage.Item_CombineConfirm);
         reader.Write("Language", "ItemRental_CancelledFaceOther", GameLanguage.ItemRental_CancelledFaceOther);
+        reader.Write("Language", "Item_SoulboundTo", GameLanguage.Item_SoulboundTo);
+        reader.Write("Language", "Item_Cursed", GameLanguage.Item_Cursed);
+        reader.Write("Language", "Item_GemCannotUse", GameLanguage.Item_GemCannotUse);
+        reader.Write("Language", "Item_GemCanUseOn", GameLanguage.Item_GemCanUseOn);
+        reader.Write("Language", "Item_GemUseOnWeapon", GameLanguage.Item_GemUseOnWeapon);
+        reader.Write("Language", "Item_GemUseOnArmour", GameLanguage.Item_GemUseOnArmour);
+        reader.Write("Language", "Item_GemUseOnHelmet", GameLanguage.Item_GemUseOnHelmet);
+        reader.Write("Language", "Item_GemUseOnNecklace", GameLanguage.Item_GemUseOnNecklace);
+        reader.Write("Language", "Item_GemUseOnBracelet", GameLanguage.Item_GemUseOnBracelet);
+        reader.Write("Language", "Item_GemUseOnRing", GameLanguage.Item_GemUseOnRing);
+        reader.Write("Language", "Item_GemUseOnAmulet", GameLanguage.Item_GemUseOnAmulet);
+        reader.Write("Language", "Item_GemUseOnBelt", GameLanguage.Item_GemUseOnBelt);
+        reader.Write("Language", "Item_GemUseOnBoots", GameLanguage.Item_GemUseOnBoots);
+        reader.Write("Language", "Item_GemUseOnStone", GameLanguage.Item_GemUseOnStone);
+        reader.Write("Language", "Item_GemUseOnCandle", GameLanguage.Item_GemUseOnCandle);
+        reader.Write("Language", "Item_SoulBindsOnEquip", GameLanguage.Item_SoulBindsOnEquip);
+        reader.Write("Language", "Item_CannotBeUsedByHero", GameLanguage.Item_CannotBeUsedByHero);
+        reader.Write("Language", "Item_ExpiresIn", GameLanguage.Item_ExpiresIn);
+        reader.Write("Language", "Item_Expired", GameLanguage.Item_Expired);
+        reader.Write("Language", "Item_SealedFor", GameLanguage.Item_SealedFor);
+        reader.Write("Language", "Item_RentalFrom", GameLanguage.Item_RentalFrom);
+        reader.Write("Language", "Item_RentalExpiresIn", GameLanguage.Item_RentalExpiresIn);
+        reader.Write("Language", "Item_RentalExpired", GameLanguage.Item_RentalExpired);
+        reader.Write("Language", "Item_RentalLockExpiresIn", GameLanguage.Item_RentalLockExpiresIn);
+        reader.Write("Language", "Item_RentalLockExpired", GameLanguage.Item_RentalLockExpired);
+        reader.Write("Language", "Item_CantSpecialRepair", GameLanguage.Item_CantSpecialRepair);
+        reader.Write("Language", "Item_BreaksOnDeath", GameLanguage.Item_BreaksOnDeath);
+        reader.Write("Language", "Item_DestroyedWhenDropped", GameLanguage.Item_DestroyedWhenDropped);
+        reader.Write("Language", "Item_CannotBeWeddingRing", GameLanguage.Item_CannotBeWeddingRing);
+        reader.Write("Language", "Item_GemHint_RepairPartialWeaponAccessory", GameLanguage.Item_GemHint_RepairPartialWeaponAccessory);
+        reader.Write("Language", "Item_GemHint_RepairPartialArmourDrapery", GameLanguage.Item_GemHint_RepairPartialArmourDrapery);
+        reader.Write("Language", "Item_GemHint_CombineMaybeDestroy", GameLanguage.Item_GemHint_CombineMaybeDestroy);
+        reader.Write("Language", "Item_GemHint_CombineNoDestroy", GameLanguage.Item_GemHint_CombineNoDestroy);
+        reader.Write("Language", "Item_GemHint_RepairFullWeaponAccessory", GameLanguage.Item_GemHint_RepairFullWeaponAccessory);
+        reader.Write("Language", "Item_GemHint_RepairFullArmourDrapery", GameLanguage.Item_GemHint_RepairFullArmourDrapery);
+        reader.Write("Language", "Item_GemHint_SealItem", GameLanguage.Item_GemHint_SealItem);
+        reader.Write("Language", "Item_CreditScroll_AddCredits", GameLanguage.Item_CreditScroll_AddCredits);
+        reader.Write("Language", "Item_CreatedByGameMaster", GameLanguage.Item_CreatedByGameMaster);
+        reader.Write("Language", "Mail_GoldLabel", GameLanguage.Mail_GoldLabel);
         reader.Write("Language", "Guild_JoinRequest", GameLanguage.Guild_JoinRequest);
+        reader.Write("Language", "Guild_CreateEnterName", GameLanguage.Guild_CreateEnterName);
+        reader.Write("Language", "Guild_WarEnterName", GameLanguage.Guild_WarEnterName);
         reader.Write("Language", "Marriage_Request", GameLanguage.Marriage_Request);
         reader.Write("Language", "Divorce_Request", GameLanguage.Divorce_Request);
         reader.Write("Language", "Mentor_Request", GameLanguage.Mentor_Request);

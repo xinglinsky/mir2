@@ -57,7 +57,7 @@ use crate::world::skills::taoist::{
     cast_summon_skeleton,
     cast_ultimate_enhancer,
 };
-use crate::world::types::{AttackMode, BuffType, PoisonType};
+use crate::world::types::{AttackMode, BuffType, PetMode, PoisonType};
 use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell, PoisonInstance};
 
 impl<P: WorldProvider> World<P> {
@@ -70,6 +70,7 @@ impl<P: WorldProvider> World<P> {
     /// front of the core ApplyPoison-style logic implemented by
     /// apply_poison_to_player_from_monster. This does not itself enforce any
     /// IsAttackTarget rules; callers should ensure the target is valid.
+    #[allow(dead_code)]
     pub(crate) fn poison_target_player(
         &mut self,
         attacker_monster_id: u64,
@@ -207,7 +208,7 @@ impl<P: WorldProvider> World<P> {
             return false;
         }
 
-        let mut new_poison = PoisonInstance {
+        let new_poison = PoisonInstance {
             owner_session_id: Some(attacker_sid),
             poison_type,
             value,
@@ -261,12 +262,32 @@ impl<P: WorldProvider> World<P> {
         true
     }
 
+    /// When a player in FocusMasterTarget pet mode acquires a valid monster
+    /// target (via melee or attack-command driven magic), update their pets'
+    /// focus target so that pet AI can mirror C# PetMode.FocusMasterTarget
+    /// behaviour and only attack that monster.
+    fn maybe_update_pet_focus_target_for_player_on_monster(
+        &mut self,
+        session_id: SessionId,
+        monster_id: u64,
+    ) {
+        let pmode = match self.players.get(&session_id) {
+            Some(p) => PetMode::from_u8(p.pet_mode),
+            None => return,
+        };
+
+        if pmode == PetMode::FocusMasterTarget {
+            self.set_player_pet_focus_target_monster(session_id, Some(monster_id));
+        }
+    }
+
     /// Apply a poison from a monster to a player, approximating the core
     /// behaviour of C# MonsterObject.PoisonTarget together with
     /// HumanObject.ApplyPoison for Green/Red poisons. This handles poison
     /// resist checks, optional MAC-based reduction for Green poison and
     /// PoisonRecovery-based duration reduction, and reuses the same stacking
     /// rules as apply_poison_to_monster_from_player.
+    #[allow(dead_code)]
     pub(crate) fn apply_poison_to_player_from_monster(
         &mut self,
         _attacker_monster_id: u64,
@@ -346,7 +367,7 @@ impl<P: WorldProvider> World<P> {
             }
         }
 
-        let mut new_poison = PoisonInstance {
+        let new_poison = PoisonInstance {
             // For monster-origin poisons we do not currently attribute the
             // owner to a specific player session; poison damage is applied
             // directly to the player rather than via PendingMagicHit.
@@ -1907,6 +1928,10 @@ impl<P: WorldProvider> World<P> {
             None => None,
         };
         if let Some((id, monster_index)) = target_info {
+            // Update pet focus target when the player is using
+            // FocusMasterTarget pet mode so that pets mirror the C# behaviour
+            // of concentrating on the master's current target.
+            self.maybe_update_pet_focus_target_for_player_on_monster(session_id, id);
             let mut dead = false;
 
             // For Thrusting we need to distinguish between a normal adjacent
@@ -2097,16 +2122,31 @@ impl<P: WorldProvider> World<P> {
                 raw_damage,
             );
 
-            // Finally, approximate multi-hit skills such as DoubleSlash
-            // and TwinDrakeBlade by doubling the final damage. In the C#
-            // HumanObject implementation these skills schedule two
-            // DelayedAction damage entries with the same magic-scaled
-            // damage value; here we aggregate them into a single hit with
-            // twice the damage to keep the world-event model simple while
-            // preserving total DPS.
-            if effective_spell == Spell::DoubleSlash as u8
-                || effective_spell == Spell::TwinDrakeBlade as u8
-            {
+            // For TwinDrakeBlade, schedule a second delayed hit against the
+            // same monster using the PendingMagicHit pipeline so that the
+            // total damage is delivered as two separate strikes, mirroring the
+            // C# HumanObject TwinDrakeBlade behaviour.
+            if effective_spell == Spell::TwinDrakeBlade as u8 && hit && raw_damage > 0 {
+                let delay_ms: i64 = 400;
+                let base_time = self.time_ms.max(0);
+                let due_time_ms = base_time.saturating_add(delay_ms);
+
+                self.pending_magic_hits.push(PendingMagicHit {
+                    due_time_ms,
+                    attacker_session_id: session_id,
+                    map_index,
+                    target_monster_id: id,
+                    monster_index,
+                    spell_id: effective_spell,
+                    damage: raw_damage,
+                    damage_type,
+                });
+            }
+
+            // Approximate other multi-hit skills such as DoubleSlash by doubling
+            // the final damage, keeping a single hit event while preserving
+            // overall DPS.
+            if effective_spell == Spell::DoubleSlash as u8 {
                 raw_damage = raw_damage.saturating_mul(2);
             }
 
@@ -2384,11 +2424,10 @@ impl<P: WorldProvider> World<P> {
                 });
 
                 if monster_exp > 0 {
-                    if let Some(p) = self.players.get_mut(&session_id) {
-                        p.experience = p
-                            .experience
-                            .saturating_add(monster_exp as i64);
-                    }
+                    // Apply experience gain (and any resulting level-ups)
+                    // through the shared helper so that stats and
+                    // rankings stay in sync with the new level/exp.
+                    let _ = self.gain_experience_for_session(session_id, monster_exp, events);
 
                     events.push(WorldEvent::GainExperience {
                         session_id,

@@ -12,6 +12,7 @@ use crystal_shared_proto::login::{
     CMagicKey,
     CMagic,
     CChangeAMode,
+    CChangePMode,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::magic::{
@@ -47,8 +48,16 @@ use crystal_shared_proto::scene::{
     SPauseBuff,
     SObjectShow,
     SObjectHide,
+    SLevelChanged,
+    SObjectLeveled,
 };
-use crystal_shared_proto::user::{SChangeAMode, SUserLocation, SHealthChanged, SUserSlotsRefresh};
+use crystal_shared_proto::user::{
+    SChangeAMode,
+    SChangePMode,
+    SUserLocation,
+    SHealthChanged,
+    SUserSlotsRefresh,
+};
 use tracing::debug;
 
 use super::{LoginConnection, Stage};
@@ -86,6 +95,27 @@ impl LoginConnection {
         // sync with the server-side value, mirroring the original C#
         // MirConnection.ChangeAMode behaviour.
         let pkt = SChangeAMode { mode };
+        let raw = pkt.encode();
+        out.push(Self::encode_raw(raw));
+    }
+
+    pub(crate) fn handle_change_pet_mode(
+        &mut self,
+        msg: CChangePMode,
+        out: &mut Vec<Vec<u8>>,
+    ) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let mode = msg.mode;
+        let mut world = self.world.lock().unwrap();
+        world.set_player_pet_mode(self.session_id, mode);
+        drop(world);
+
+        // Mirror C# MirConnection.ChangePMode: echo the new pet mode back to
+        // the client so its local PMode and pet-mode UI stay in sync.
+        let pkt = SChangePMode { mode };
         let raw = pkt.encode();
         out.push(Self::encode_raw(raw));
     }
@@ -439,6 +469,43 @@ impl LoginConnection {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+                world::WorldEvent::PlayerLevelChanged {
+                    session_id,
+                    level,
+                    experience,
+                    max_experience,
+                } => {
+                    if session_id == self.session_id {
+                        // Notify the owner about their new level/experience
+                        // band using SLevelChanged, matching the behaviour
+                        // in the GM /level command.
+                        let lvl_pkt = SLevelChanged {
+                            level,
+                            experience,
+                            max_experience,
+                        };
+                        if let Ok(raw) = lvl_pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+
+                        // Broadcast ObjectLeveled to self and nearby
+                        // observers so clients can play level-up effects,
+                        // mirroring C# PlayerObject.LevelUp.
+                        let obj_pkt = SObjectLeveled {
+                            object_id: self.session_id,
+                        };
+                        if let Ok(pkt) = obj_pkt.encode() {
+                            let raw = Self::encode_raw(pkt);
+                            out.push(raw.clone());
+                            self.enqueue_for_viewers(
+                                self.current_map_index,
+                                self.current_x,
+                                self.current_y,
+                                raw,
+                            );
                         }
                     }
                 }
@@ -952,6 +1019,7 @@ impl LoginConnection {
                     y,
                     amount: _,
                     new_hp,
+                    show_healing_effect,
                 } => {
                     // Update HP/MP for the healed player on their own
                     // connection, mirroring the behaviour of the original
@@ -969,32 +1037,34 @@ impl LoginConnection {
                         }
                     }
 
-                    // Also emit a Healing visual effect around the healed
-                    // player, approximating the C# SpellEffect.Healing that
-                    // is normally produced by Healing/HealingCircle
-                    // SpellObjects. We always show it to the healed player
-                    // and broadcast it to nearby viewers.
-                    const HEALING_EFFECT: u8 = 3; // SpellEffect.Healing
-                    let eff_pkt = SObjectEffect {
-                        object_id: session_id,
-                        effect: HEALING_EFFECT,
-                        effect_type: 0,
-                        delay_time: 0,
-                        time: 0,
-                    };
+                    // Optionally emit a Healing visual effect around the
+                    // healed player when requested by the world event (e.g.
+                    // Taoist Healing / MassHealing). This mirrors
+                    // SpellEffect.Healing from C# Healing/HealingCircle
+                    // SpellObjects without showing visuals for passive regen.
+                    if show_healing_effect {
+                        const HEALING_EFFECT: u8 = 3; // SpellEffect.Healing
+                        let eff_pkt = SObjectEffect {
+                            object_id: session_id,
+                            effect: HEALING_EFFECT,
+                            effect_type: 0,
+                            delay_time: 0,
+                            time: 0,
+                        };
 
-                    if let Ok(raw) = eff_pkt.encode() {
-                        let bytes = Self::encode_raw(raw);
+                        if let Ok(raw) = eff_pkt.encode() {
+                            let bytes = Self::encode_raw(raw);
 
-                        // Always send the effect to the healed player if this
-                        // connection corresponds to them.
-                        if session_id == self.session_id {
-                            out.push(bytes.clone());
+                            // Always send the effect to the healed player if this
+                            // connection corresponds to them.
+                            if session_id == self.session_id {
+                                out.push(bytes.clone());
+                            }
+
+                            // And broadcast to other nearby viewers around the
+                            // healed player's location.
+                            self.enqueue_for_viewers(map_index, x, y, bytes);
                         }
-
-                        // And broadcast to other nearby viewers around the
-                        // healed player's location.
-                        self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
                 world::WorldEvent::SpellToggle {
@@ -1251,7 +1321,7 @@ impl LoginConnection {
         // Determine the bind location for this character (equivalent to C#
         // BindMapIndex/BindLocation). If none is stored, fall back to the
         // current map/position.
-        let (mut dest_map, mut dest_x, mut dest_y, mut dest_dir) = if let (
+        let (mut dest_map, mut dest_x, mut dest_y, dest_dir) = if let (
             Some(ref account_id),
             Some(char_idx),
         ) = (self.account_id.as_ref(), self.current_char_index)
