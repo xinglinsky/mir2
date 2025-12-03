@@ -13,6 +13,8 @@ const SKELETON_AMULET_COUNT: u16 = 1;
 const SHINSU_AMULET_COUNT: u16 = 5;
 const HOLY_DEVA_AMULET_COUNT: u16 = 2;
 const DEFAULT_AMULET_SHAPE: i16 = 0;
+const POISON_SHAPE_GREEN: i16 = 1;
+const POISON_SHAPE_RED: i16 = 2;
 pub fn cast_healing<P: WorldProvider>(
     world: &mut World<P>,
     session_id: SessionId,
@@ -542,7 +544,7 @@ pub fn cast_poisoning<P: WorldProvider>(
 ) {
     let _now_ms = world.time_ms.max(0);
 
-    let (map_index, caster_x, caster_y, level, power) = {
+    let (map_index, caster_x, caster_y, level, power, poison_slot, poison_type) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -556,6 +558,50 @@ pub fn cast_poisoning<P: WorldProvider>(
         let level = magic.level;
         let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
             .unwrap_or(0);
+
+        // Find an equipped poison amulet (Shape 1 = Green, Shape 2 = Red),
+        // mirroring C# HumanObject.GetPoison(count:1, shape:0) which scans the
+        // equipment array for ItemType.Amulet with Shape 1 or 2.
+        let mut poison_slot: Option<usize> = None;
+        let mut poison_type: Option<PoisonType> = None;
+
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            let ptype = match info.shape {
+                POISON_SHAPE_GREEN => PoisonType::Green,
+                POISON_SHAPE_RED => PoisonType::Red,
+                _ => continue,
+            };
+
+            if item.count as u32 >= 1 {
+                poison_slot = Some(idx);
+                poison_type = Some(ptype);
+                break;
+            }
+        }
+
+        let poison_slot = match poison_slot {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        let poison_type = match poison_type {
+            Some(pt) => pt,
+            None => PoisonType::Green,
+        };
 
         if player.mp < cost {
             return;
@@ -604,7 +650,15 @@ pub fn cast_poisoning<P: WorldProvider>(
             base_sc.max(0)
         };
 
-        (player.map_index, player.x, player.y, level, power)
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            power,
+            poison_slot,
+            poison_type,
+        )
     };
 
     // Find a target monster at the clicked location, mirroring the targeting
@@ -632,10 +686,6 @@ pub fn cast_poisoning<P: WorldProvider>(
         return;
     }
 
-    // For now, always use Green poison; Red poison support via different
-    // poison items can be added later.
-    let poison_type = PoisonType::Green;
-
     // Duration in ticks: (power * 2) + ((Level + 1) * 7), matching
     // HumanObject.Process(DelayedAction) for Spell.Poisoning.
     let mut duration: i64 = (power.saturating_mul(2) as i64)
@@ -647,8 +697,11 @@ pub fn cast_poisoning<P: WorldProvider>(
     // Tick speed: 2000ms per tick.
     let tick_speed_ms: i64 = 2_000;
 
-    // Per-tick damage: value / 15 + magic.Level + 1 + rand(PoisonAttack).
-    let poison_value = {
+    // Per-tick damage for Green poison: value / 15 + magic.Level + 1 +
+    // rand(PoisonAttack). Red poison in the C# server does not apply DOT
+    // damage; it instead reduces armour while active. We approximate this by
+    // using a non-damaging poison (value = 0) for Red.
+    let poison_value = if poison_type == PoisonType::Green {
         let player = match world.players.get(&session_id) {
             Some(p) => p,
             None => return,
@@ -670,6 +723,8 @@ pub fn cast_poisoning<P: WorldProvider>(
             v = 1;
         }
         v
+    } else {
+        0
     };
 
     if !world.apply_poison_to_monster_from_player(
@@ -682,6 +737,21 @@ pub fn cast_poisoning<P: WorldProvider>(
         tick_speed_ms,
     ) {
         return;
+    }
+
+    // Consume one poison amulet from the selected equipment slot on
+    // successful application, mirroring C# HumanObject.Poisoning which calls
+    // ConsumeItem(GetPoison(...), 1).
+    if let Some(player) = world.players.get_mut(&session_id) {
+        if let Some(slot) = player.equipment.slots.get_mut(poison_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
     }
 
     // If the caster is in FocusMasterTarget pet mode, update their pets'

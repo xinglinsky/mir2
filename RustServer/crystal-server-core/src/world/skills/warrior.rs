@@ -3,7 +3,7 @@ use crate::world::monster::MonsterAiState;
 use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
 use crate::world::skills::compute_magic_mana_cost;
-use crate::world::types::BuffType;
+use crate::world::types::{BuffType, PoisonType};
 use crate::world::{SessionId, Spell, World, WorldEvent};
 use crate::combat::compute_physical_melee_with_crit;
 use rand::{thread_rng, Rng};
@@ -307,11 +307,34 @@ pub fn cast_half_moon<P: WorldProvider>(
                 Vec<crate::world::drop::DropInfo>,
             ) = if let Some(info) = world.provider.get_monster_info(monster_index) {
                 let max_hp = info.stats.get(Stat::HP).max(1);
+                let mut defender_stats = info.stats.clone();
+                if let Some(monsters) = world.monsters.get(&map_index) {
+                    if let Some(m) = monsters.iter().find(|m| m.id == id) {
+                        defender_stats.add(&m.buff_stats);
+
+                        // Apply red-poison armour reduction for monsters by scaling
+                        // MinAC/MaxAC when the defender currently has Red poison
+                        // active, approximating C# MonsterObject.ArmourRate.
+                        let red_mask = PoisonType::Red.as_u16();
+                        if (m.current_poison_mask & red_mask) != 0 {
+                            let percent: i32 = 50;
+                            let min_ac = defender_stats.get(Stat::MinAC);
+                            let max_ac = defender_stats.get(Stat::MaxAC);
+                            let scaled_min =
+                                (min_ac as i64 * percent as i64 / 100) as i32;
+                            let scaled_max =
+                                (max_ac as i64 * percent as i64 / 100) as i32;
+                            defender_stats.set(Stat::MinAC, scaled_min);
+                            defender_stats.set(Stat::MaxAC, scaled_max);
+                        }
+                    }
+                }
+
                 (
                     info.experience,
                     info.undead,
                     max_hp,
-                    info.stats.clone(),
+                    defender_stats,
                     info.drops.clone(),
                 )
             } else {
@@ -583,11 +606,34 @@ pub fn cast_cross_half_moon<P: WorldProvider>(
                 Vec<crate::world::drop::DropInfo>,
             ) = if let Some(info) = world.provider.get_monster_info(monster_index) {
                 let max_hp = info.stats.get(Stat::HP).max(1);
+                let mut defender_stats = info.stats.clone();
+                if let Some(monsters) = world.monsters.get(&map_index) {
+                    if let Some(m) = monsters.iter().find(|m| m.id == id) {
+                        defender_stats.add(&m.buff_stats);
+
+                        // Apply red-poison armour reduction for monsters by scaling
+                        // MinAC/MaxAC when the defender currently has Red poison
+                        // active, approximating C# MonsterObject.ArmourRate.
+                        let red_mask = PoisonType::Red.as_u16();
+                        if (m.current_poison_mask & red_mask) != 0 {
+                            let percent: i32 = 50;
+                            let min_ac = defender_stats.get(Stat::MinAC);
+                            let max_ac = defender_stats.get(Stat::MaxAC);
+                            let scaled_min =
+                                (min_ac as i64 * percent as i64 / 100) as i32;
+                            let scaled_max =
+                                (max_ac as i64 * percent as i64 / 100) as i32;
+                            defender_stats.set(Stat::MinAC, scaled_min);
+                            defender_stats.set(Stat::MaxAC, scaled_max);
+                        }
+                    }
+                }
+
                 (
                     info.experience,
                     info.undead,
                     max_hp,
-                    info.stats.clone(),
+                    defender_stats,
                     info.drops.clone(),
                 )
             } else {

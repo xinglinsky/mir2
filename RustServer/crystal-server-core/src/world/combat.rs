@@ -1689,9 +1689,25 @@ impl<P: WorldProvider> World<P> {
 
             if let Some(target_session_id) = player_target {
                 // Snapshot defender stats for damage calculation.
-                let defender_stats = {
+                let mut defender_stats = {
                     if let Some(t) = self.players.get(&target_session_id) {
-                        t.stats.total.clone()
+                        let mut s = t.stats.total.clone();
+
+                        // Apply red-poison armour reduction for players by scaling
+                        // MinAC/MaxAC when the defender currently has Red poison
+                        // active, approximating C# HumanObject.ArmourRate.
+                        let red_mask = PoisonType::Red.as_u16();
+                        if (t.current_poison_mask & red_mask) != 0 {
+                            let percent: i32 = 90;
+                            let min_ac = s.get(Stat::MinAC);
+                            let max_ac = s.get(Stat::MaxAC);
+                            let scaled_min = (min_ac as i64 * percent as i64 / 100) as i32;
+                            let scaled_max = (max_ac as i64 * percent as i64 / 100) as i32;
+                            s.set(Stat::MinAC, scaled_min);
+                            s.set(Stat::MaxAC, scaled_max);
+                        }
+
+                        s
                     } else {
                         return;
                     }
@@ -1972,6 +1988,20 @@ impl<P: WorldProvider> World<P> {
                 if let Some(monsters) = self.monsters.get(&map_index) {
                     if let Some(m) = monsters.iter().find(|m| m.id == id) {
                         defender_stats.add(&m.buff_stats);
+
+                        // Apply red-poison armour reduction for monsters by scaling
+                        // MinAC/MaxAC when the defender currently has Red poison
+                        // active, approximating C# MonsterObject.ArmourRate.
+                        let red_mask = PoisonType::Red.as_u16();
+                        if (m.current_poison_mask & red_mask) != 0 {
+                            let percent: i32 = 50;
+                            let min_ac = defender_stats.get(Stat::MinAC);
+                            let max_ac = defender_stats.get(Stat::MaxAC);
+                            let scaled_min = (min_ac as i64 * percent as i64 / 100) as i32;
+                            let scaled_max = (max_ac as i64 * percent as i64 / 100) as i32;
+                            defender_stats.set(Stat::MinAC, scaled_min);
+                            defender_stats.set(Stat::MaxAC, scaled_max);
+                        }
                     }
                 }
 

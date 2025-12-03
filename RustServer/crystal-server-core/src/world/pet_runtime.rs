@@ -4,6 +4,7 @@ use crate::world::provider::WorldProvider;
 use crate::world::types::{AttackMode, PetMode, PetSkillId};
 use crate::world::configs::pet_template;
 use crate::world::{SessionId, World, WorldEvent, PendingMagicHit};
+use crate::world::PoisonType;
 use crate::combat::compute_dc_vs_mac_with_crit;
 use crate::stats::{Stat, Stats};
 use tracing::debug;
@@ -611,6 +612,25 @@ impl<P: WorldProvider> World<P> {
                                                 monsters.iter().find(|m| m.id == target_id)
                                             {
                                                 s.add(&m.buff_stats);
+
+                                                // Apply red-poison armour reduction for monsters by
+                                                // scaling MinMAC/MaxMAC when the defender currently
+                                                // has Red poison active, approximating C#
+                                                // MonsterObject.ArmourRate for MAC-based attacks.
+                                                let red_mask = PoisonType::Red.as_u16();
+                                                if (m.current_poison_mask & red_mask) != 0 {
+                                                    let percent: i32 = 50;
+                                                    let min_mac = s.get(Stat::MinMAC);
+                                                    let max_mac = s.get(Stat::MaxMAC);
+                                                    let scaled_min =
+                                                        (min_mac as i64 * percent as i64 / 100)
+                                                            as i32;
+                                                    let scaled_max =
+                                                        (max_mac as i64 * percent as i64 / 100)
+                                                            as i32;
+                                                    s.set(Stat::MinMAC, scaled_min);
+                                                    s.set(Stat::MaxMAC, scaled_max);
+                                                }
                                             }
                                         }
                                         s

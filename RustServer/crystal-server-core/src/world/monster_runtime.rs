@@ -1566,7 +1566,22 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
-            let defender_stats: Stats = player.stats.total.clone();
+            let mut defender_stats: Stats = player.stats.total.clone();
+
+            // Apply red-poison armour reduction for players by scaling
+            // MinAC/MaxAC when the defender currently has Red poison active,
+            // approximating C# HumanObject.ArmourRate.
+            let red_mask = PoisonType::Red.as_u16();
+            if (player.current_poison_mask & red_mask) != 0 {
+                let percent: i32 = 90;
+                let min_ac = defender_stats.get(Stat::MinAC);
+                let max_ac = defender_stats.get(Stat::MaxAC);
+                let scaled_min = (min_ac as i64 * percent as i64 / 100) as i32;
+                let scaled_max = (max_ac as i64 * percent as i64 / 100) as i32;
+                defender_stats.set(Stat::MinAC, scaled_min);
+                defender_stats.set(Stat::MaxAC, scaled_max);
+            }
+
             let max_hp = defender_stats.get(Stat::HP).max(1);
             if max_hp <= 0 {
                 continue;
@@ -1689,11 +1704,24 @@ impl<P: WorldProvider> World<P> {
                 Vec<crate::world::drop::DropInfo>,
             ) = if let Some(info) = self.provider.get_monster_info(target_monster_index) {
                 let max_hp = info.stats.get(Stat::HP).max(1);
-
                 let mut defender_stats = info.stats.clone();
                 if let Some(monsters) = self.monsters.get(&map_index) {
                     if let Some(m) = monsters.iter().find(|m| m.id == target_id) {
                         defender_stats.add(&m.buff_stats);
+
+                        // Apply red-poison armour reduction for monsters by scaling
+                        // MinAC/MaxAC when the defender currently has Red poison
+                        // active, approximating C# MonsterObject.ArmourRate.
+                        let red_mask = PoisonType::Red.as_u16();
+                        if (m.current_poison_mask & red_mask) != 0 {
+                            let percent: i32 = 50;
+                            let min_ac = defender_stats.get(Stat::MinAC);
+                            let max_ac = defender_stats.get(Stat::MaxAC);
+                            let scaled_min = (min_ac as i64 * percent as i64 / 100) as i32;
+                            let scaled_max = (max_ac as i64 * percent as i64 / 100) as i32;
+                            defender_stats.set(Stat::MinAC, scaled_min);
+                            defender_stats.set(Stat::MaxAC, scaled_max);
+                        }
                     }
                 }
 
@@ -2477,7 +2505,22 @@ impl<P: WorldProvider> World<P> {
                 continue;
             }
 
-            let defender_stats: Stats = player.stats.total.clone();
+            let mut defender_stats: Stats = player.stats.total.clone();
+
+            // Apply red-poison armour reduction for players by scaling
+            // MinAC/MaxAC when the defender currently has Red poison active,
+            // approximating C# HumanObject.ArmourRate.
+            let red_mask = PoisonType::Red.as_u16();
+            if (player.current_poison_mask & red_mask) != 0 {
+                let percent: i32 = 90;
+                let min_ac = defender_stats.get(Stat::MinAC);
+                let max_ac = defender_stats.get(Stat::MaxAC);
+                let scaled_min = (min_ac as i64 * percent as i64 / 100) as i32;
+                let scaled_max = (max_ac as i64 * percent as i64 / 100) as i32;
+                defender_stats.set(Stat::MinAC, scaled_min);
+                defender_stats.set(Stat::MaxAC, scaled_max);
+            }
+
             let max_hp = defender_stats.get(Stat::HP).max(1);
             if max_hp <= 0 {
                 continue;
