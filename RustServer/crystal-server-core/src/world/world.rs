@@ -642,6 +642,51 @@ impl<P: WorldProvider> World<P> {
                                     .set(Stat::Accuracy, current.saturating_add(bonus));
                             }
                         }
+                        Spell::Slaying => {
+                            let level_idx = magic.level as usize;
+
+                            // Accuracy bonus: +Level, matching C# RefreshSkills.
+                            let acc_bonus = magic.level as i32;
+                            if acc_bonus != 0 {
+                                let current = player.stats.passives.get(Stat::Accuracy);
+                                player
+                                    .stats
+                                    .passives
+                                    .set(Stat::Accuracy, current.saturating_add(acc_bonus));
+                            }
+
+                            // MaxDC bonus: slayingLvPlus[level] with table
+                            // {5, 6, 7, 8} for levels 0..3.
+                            const SLAYING_DC_PLUS: [i32; 4] = [5, 6, 7, 8];
+                            let dc_bonus = SLAYING_DC_PLUS
+                                .get(level_idx)
+                                .copied()
+                                .unwrap_or(*SLAYING_DC_PLUS.last().unwrap());
+                            if dc_bonus != 0 {
+                                let current = player.stats.passives.get(Stat::MaxDC);
+                                player
+                                    .stats
+                                    .passives
+                                    .set(Stat::MaxDC, current.saturating_add(dc_bonus));
+                            }
+                        }
+                        Spell::SpiritSword => {
+                            // Accuracy bonus: spiritSwordLvPlus[level] with
+                            // table {0, 3, 5, 8} for levels 0..3.
+                            const SPIRIT_SWORD_ACC_PLUS: [i32; 4] = [0, 3, 5, 8];
+                            let level_idx = magic.level as usize;
+                            let acc_bonus = SPIRIT_SWORD_ACC_PLUS
+                                .get(level_idx)
+                                .copied()
+                                .unwrap_or(*SPIRIT_SWORD_ACC_PLUS.last().unwrap());
+                            if acc_bonus != 0 {
+                                let current = player.stats.passives.get(Stat::Accuracy);
+                                player
+                                    .stats
+                                    .passives
+                                    .set(Stat::Accuracy, current.saturating_add(acc_bonus));
+                            }
+                        }
                         _ => {}
                     }
                 }

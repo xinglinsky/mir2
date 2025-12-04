@@ -438,6 +438,24 @@ impl LoginConnection {
                             out.push(Self::encode_raw(raw));
                         }
 
+                        // Persist updated experience to the character stats so that
+                        // gains survive logout and character switching, mirroring the
+                        // C# PlayerObject.GainExp behaviour where CharacterInfo.Experience
+                        // is updated whenever experience is gained.
+                        if let Some(ref mut stats) = self.current_stats {
+                            let add = amount as i64;
+                            let new_exp = stats.experience.saturating_add(add);
+                            stats.experience = new_exp;
+
+                            if let (Some(ref account_id), Some(char_idx)) =
+                                (self.account_id.as_ref(), self.current_char_index)
+                            {
+                                let _ = self
+                                    .store
+                                    .save_character_stats(account_id, char_idx, stats);
+                            }
+                        }
+
                         // Mirror C# PlayerObject.GainExp guild experience
                         // behaviour: whenever a player gains experience and
                         // is in a non-newbie guild, award guild experience as
@@ -479,6 +497,21 @@ impl LoginConnection {
                     max_experience,
                 } => {
                     if session_id == self.session_id {
+                        // Sync in-memory stats with the new level-band experience so that
+                        // subsequent logouts persist the correct value even when the level
+                        // changes due to normal gameplay or GM commands.
+                        if let Some(ref mut stats) = self.current_stats {
+                            stats.experience = experience;
+
+                            if let (Some(ref account_id), Some(char_idx)) =
+                                (self.account_id.as_ref(), self.current_char_index)
+                            {
+                                let _ = self
+                                    .store
+                                    .save_character_stats(account_id, char_idx, stats);
+                            }
+                        }
+
                         // Notify the owner about their new level/experience
                         // band using SLevelChanged, matching the behaviour
                         // in the GM /level command.
