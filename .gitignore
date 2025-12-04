@@ -366,3 +366,4 @@ RustServer/target/
 RustServer/deploy/
 .windsurf/
 .cursor/
+CppServer/build/
