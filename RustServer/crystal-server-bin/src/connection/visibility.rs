@@ -9,7 +9,7 @@ use crystal_shared_proto::scene::{
     SObjectNpc,
     SObjectRemove,
 };
-use tracing::debug;
+// use tracing::debug;
 use crystal_shared_proto::user::SObjectPlayer;
 
 use super::LoginConnection;
@@ -201,17 +201,17 @@ impl LoginConnection {
                         (info.name.clone(), -1, false)
                     };
 
-                    debug!(
-                        "update_visibility: session_id={} new monster id={} index={} name={} is_pet={} map={} pos=({}, {})",
-                        self.session_id,
-                        monster.id,
-                        monster.monster_index,
-                        info.name,
-                        monster.is_pet,
-                        map_index,
-                        monster.x,
-                        monster.y
-                    );
+                    // debug!(
+                    //     "update_visibility: session_id={} new monster id={} index={} name={} is_pet={} map={} pos=({}, {})",
+                    //     self.session_id,
+                    //     monster.id,
+                    //     monster.monster_index,
+                    //     info.name,
+                    //     monster.is_pet,
+                    //     map_index,
+                    //     monster.x,
+                    //     monster.y
+                    // );
 
                     // Mirror the pet image override used in
                     // send_monsters_for_map so that Taoist pets use the
@@ -301,15 +301,15 @@ impl LoginConnection {
                 if let Some(m) = monsters.iter().find(|m| m.id == id) {
                     if m.is_pet && m.owner_session_id == Some(self.session_id) {
                         skip_remove = true;
-                        debug!(
-                            "update_visibility: session_id={} skipping remove for own pet id={} index={} map={} pos=({}, {})",
-                            self.session_id,
-                            m.id,
-                            m.monster_index,
-                            map_index,
-                            m.x,
-                            m.y
-                        );
+                        // debug!(
+                        //     "update_visibility: session_id={} skipping remove for own pet id={} index={} map={} pos=({}, {})",
+                        //     self.session_id,
+                        //     m.id,
+                        //     m.monster_index,
+                        //     map_index,
+                        //     m.x,
+                        //     m.y
+                        // );
                     }
                 }
             }
@@ -318,12 +318,12 @@ impl LoginConnection {
                 continue;
             }
 
-            debug!(
-                "update_visibility: session_id={} removing monster id={} from view on map={}",
-                self.session_id,
-                id,
-                map_index
-            );
+            // debug!(
+            //     "update_visibility: session_id={} removing monster id={} from view on map={}",
+            //     self.session_id,
+            //     id,
+            //     map_index
+            // );
 
             let pkt = SObjectRemove { object_id: id as u32 };
             if let Ok(raw) = pkt.encode() {
@@ -407,6 +407,11 @@ impl LoginConnection {
                 };
 
                 if let Some(snap) = snapshot {
+                    let is_hidden = {
+                        let world = self.world.lock().unwrap();
+                        world.player_hidden(sid)
+                    };
+
                     let pkt = SObjectPlayer {
                         object_id: sid,
                         name: snap.name,
@@ -426,7 +431,7 @@ impl LoginConnection {
                         armour: 0,
                         poison: 0,
                         dead: false,
-                        hidden: false,
+                        hidden: is_hidden,
                         effect: 0,
                         wing_effect: 0,
                         extra: false,
@@ -442,6 +447,43 @@ impl LoginConnection {
                     };
                     if let Ok(raw) = pkt.encode() {
                         out.push(Self::encode_raw(raw));
+                    }
+
+                    // Also send an initial ObjectHealth packet for this
+                    // newly-visible player so the client can render their
+                    // head HP bar. This mirrors the C#
+                    // MapObject.BroadcastHealthChange behaviour, which sends
+                    // S.ObjectHealth on spawn/teleport and HP changes.
+                    let percent_opt = {
+                        let world = self.world.lock().unwrap();
+                        if let (Some((max_hp, _)), Some((cur_hp, _))) = (
+                            world.player_max_hp_mp(sid),
+                            world.player_current_hp_mp(sid),
+                        ) {
+                            if max_hp > 0 {
+                                let clamped = cur_hp.max(0).min(max_hp);
+                                let pct =
+                                    ((clamped as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8;
+                                Some(pct)
+                            } else {
+                                Some(0)
+                            }
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(percent) = percent_opt {
+                        let hp_pkt = SObjectHealth {
+                            object_id: sid,
+                            percent,
+                            // Use a small expire window; the client will
+                            // refresh this whenever damage or healing occurs.
+                            expire: 5,
+                        };
+                        if let Ok(raw) = hp_pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
                     }
                 }
             }

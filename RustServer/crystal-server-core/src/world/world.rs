@@ -313,6 +313,17 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
     },
+    /// Toggle the logical Hidden state for an object (typically a player),
+    /// mirroring the C# MapObject.Hidden property and S.ObjectHidden packet.
+    /// This is used by spells such as Taoist Hiding/MassHiding and assassin
+    /// stealth buffs (MoonLight/DarkBody/ClearRing).
+    ObjectHidden {
+        object_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        hidden: bool,
+    },
     MonsterHitPlayer {
         attacker_monster_id: u64,
         session_id: SessionId,
@@ -1146,6 +1157,13 @@ impl<P: WorldProvider> World<P> {
         self.players
             .get(&session_id)
             .map(|p| (p.map_index, p.x, p.y, p.direction))
+    }
+
+    pub fn player_hidden(&self, session_id: SessionId) -> bool {
+        self.players
+            .get(&session_id)
+            .map(|p| p.hidden)
+            .unwrap_or(false)
     }
 
     pub fn player_in_safe_zone(&self, session_id: SessionId) -> bool {
@@ -3069,6 +3087,11 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
+                // Mirror C# HumanObject.Walk/Run semantics: moving while under
+                // skill-based invisibility (Hiding/MoonLight/DarkBody) cancels
+                // those buffs immediately and breaks Hidden state.
+                self.remove_invisibility_buffs_on_move(session_id, &mut events);
+
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -3090,6 +3113,11 @@ impl<P: WorldProvider> World<P> {
                 session_id,
                 direction,
             } => {
+                // As with Walk, any movement should break skill-based
+                // invisibility buffs so that players emerge from Hiding when
+                // they move.
+                self.remove_invisibility_buffs_on_move(session_id, &mut events);
+
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
@@ -4058,6 +4086,124 @@ impl<P: WorldProvider> World<P> {
                 }
             }
         }
+
+        // After mutating the buff list, recompute the player's Hidden state
+        // based on invisibility-related buffs and emit an ObjectHidden event
+        // if it changed. This mirrors the C# MapObject.AddBuff/RemoveBuff
+        // behaviour where BuffType.Hiding/MoonLight/DarkBody/ClearRing toggle
+        // the Hidden property.
+        self.update_player_hidden_from_buffs(session_id, events);
+    }
+
+    pub(crate) fn update_player_hidden_from_buffs(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let (map_index, x, y, new_hidden, old_hidden) = {
+            let player = match self.players.get(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            let new_hidden = player.active_buffs.iter().any(|b| {
+                matches!(
+                    b.buff_type,
+                    BuffType::Hiding | BuffType::MoonLight | BuffType::DarkBody | BuffType::ClearRing
+                )
+            });
+
+            (
+                player.map_index,
+                player.x,
+                player.y,
+                new_hidden,
+                player.hidden,
+            )
+        };
+
+        if new_hidden == old_hidden {
+            return;
+        }
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.hidden = new_hidden;
+        }
+
+        events.push(WorldEvent::ObjectHidden {
+            object_id: session_id,
+            map_index,
+            x,
+            y,
+            hidden: new_hidden,
+        });
+    }
+
+    /// 在玩家发生位移（走/跑/冲刺等）时，如果身上存在由技能产生的隐身类 Buff，
+    /// 需要按 C# HumanObject.Run/Walk 的语义立刻移除这些 Buff，从而打破隐身。
+    /// 这里仅处理技能类隐身（Hiding/MoonLight/DarkBody），不影响 ClearRing 这类
+    /// 装备型隐身。移除后会同步 RemoveBuff 事件并重新计算 Hidden 状态。
+    fn remove_invisibility_buffs_on_move(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        use crate::world::types::BuffType;
+
+        let mut to_remove: Vec<usize> = Vec::new();
+
+        if let Some(player) = self.players.get(&session_id) {
+            for (idx, buff) in player.active_buffs.iter().enumerate() {
+                if matches!(
+                    buff.buff_type,
+                    BuffType::Hiding | BuffType::MoonLight | BuffType::DarkBody
+                ) {
+                    to_remove.push(idx);
+                }
+            }
+        }
+
+        if to_remove.is_empty() {
+            return;
+        }
+
+        to_remove.sort_unstable_by(|a, b| b.cmp(a));
+
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let mut stats_changed = false;
+
+            for idx in to_remove {
+                if idx >= player.active_buffs.len() {
+                    continue;
+                }
+
+                let buff = player.active_buffs.remove(idx);
+                stats_changed = true;
+
+                if buff.buff_type == BuffType::FlamingSword {
+                    events.push(WorldEvent::SpellToggle {
+                        session_id,
+                        spell_id: Spell::FlamingSword as u8,
+                        enabled: false,
+                    });
+                } else {
+                    events.push(WorldEvent::RemoveBuff {
+                        session_id,
+                        buff_type: buff.buff_type.as_u8(),
+                    });
+                }
+            }
+
+            if stats_changed {
+                player.stats.buffs.clear();
+                for b in &player.active_buffs {
+                    player.stats.buffs.add(&b.stats);
+                }
+                player.stats.recalc_if_dirty_for_job(player.job);
+            }
+        }
+
+        self.update_player_hidden_from_buffs(session_id, events);
     }
 
     /// 清理玩家在死亡时需要移除的 Buff（带 BuffProperty::RemoveOnDeath），
@@ -4117,6 +4263,8 @@ impl<P: WorldProvider> World<P> {
             }
             player.stats.recalc_if_dirty_for_job(player.job);
         }
+
+        self.update_player_hidden_from_buffs(session_id, events);
     }
 
     /// 当玩家下线或连接断开时，移除带 BuffProperty::RemoveOnExit 的 Buff，
@@ -4155,6 +4303,8 @@ impl<P: WorldProvider> World<P> {
             }
             player.stats.recalc_if_dirty_for_job(player.job);
         }
+
+        self.update_player_hidden_from_buffs(session_id, &mut Vec::new());
     }
 
     pub fn add_monster_buff(

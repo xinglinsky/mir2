@@ -24,6 +24,7 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
     SObjectShow,
     SObjectHide,
+    SObjectHidden,
     SStruck,
 };
 use crystal_shared_proto::magic::{SObjectEffect, SObjectRangeAttack, SRemoveBuff};
@@ -709,6 +710,41 @@ async fn main() -> io::Result<()> {
                                 }
                             }
                         }
+                        world::WorldEvent::ObjectHidden {
+                            object_id,
+                            map_index,
+                            x,
+                            y,
+                            hidden,
+                        } => {
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            if viewers.is_empty() {
+                                continue;
+                            }
+
+                            let pkt = SObjectHidden { object_id, hidden };
+
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(encoded.clone());
+                                }
+                            }
+                        }
                         world::WorldEvent::TeleportToBindRequested { .. } => {}
                         world::WorldEvent::ObjectAttack {
                             session_id,
@@ -1291,14 +1327,14 @@ async fn main() -> io::Result<()> {
                             x,
                             y,
                             amount,
-                            new_hp: _,
+                            new_hp,
                             show_healing_effect,
                         } => {
                             // Send HP/MP update to the healed player.
                             let (hp, mp) = {
                                 let w = world_for_tick.lock().unwrap();
                                 w.player_current_hp_mp(session_id)
-                                    .unwrap_or((0, 0))
+                                    .unwrap_or((new_hp, 0))
                             };
 
                             let hc_pkt = SHealthChanged { hp, mp };
@@ -1310,6 +1346,55 @@ async fn main() -> io::Result<()> {
                                     .entry(session_id)
                                     .or_default()
                                     .push(encoded);
+                            }
+
+                            // Also send an ObjectHealth update so that the
+                            // healed player's head HP bar is refreshed for
+                            // themselves and any nearby viewers, mirroring
+                            // C# MapObject.BroadcastHealthChange.
+                            let health_percent: u8 = {
+                                let w = world_for_tick.lock().unwrap();
+                                if let Some((max_hp, _)) = w.player_max_hp_mp(session_id) {
+                                    if max_hp > 0 {
+                                        ((new_hp as i64 * 100 / max_hp as i64)
+                                            .clamp(0, 100)) as u8
+                                    } else {
+                                        0
+                                    }
+                                } else {
+                                    0
+                                }
+                            };
+
+                            let viewers = {
+                                let w = world_for_tick.lock().unwrap();
+                                w.sessions_in_range_for_map(
+                                    map_index,
+                                    x,
+                                    y,
+                                    LoginConnection::DATA_RANGE,
+                                )
+                            };
+
+                            let health_pkt = crystal_shared_proto::scene::SObjectHealth {
+                                object_id: session_id,
+                                percent: health_percent,
+                                expire: 5,
+                            };
+                            if let Ok(pkt) = health_pkt.encode() {
+                                let raw = pkt.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                for sid in &viewers {
+                                    outboxes
+                                        .entry(*sid)
+                                        .or_default()
+                                        .push(raw.clone());
+                                }
+                                outboxes
+                                    .entry(session_id)
+                                    .or_default()
+                                    .push(raw);
                             }
 
                             if amount > 0 {

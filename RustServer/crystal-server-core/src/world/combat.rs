@@ -49,7 +49,9 @@ use crate::world::skills::taoist::{
     cast_energy_shield,
     cast_hallucination,
     cast_healing,
+    cast_hiding,
     cast_mass_healing,
+    cast_mass_hiding,
     cast_poisoning,
     cast_soul_shield,
     cast_summon_holy_deva,
@@ -1354,6 +1356,16 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::BlessedArmour as u8 {
             cast_blessed_armour(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Hiding as u8 {
+            cast_hiding(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::MassHiding as u8 {
+            cast_mass_hiding(self, session_id, spell, direction, x, y, events);
             return;
         }
 

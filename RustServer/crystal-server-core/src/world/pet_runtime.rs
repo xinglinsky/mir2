@@ -184,14 +184,14 @@ impl<P: WorldProvider> World<P> {
             // combat.
             let has_target = best_attack.is_some() || best_chase.is_some();
 
-            debug!(
-                "pet_ai_shinsu_targets: pet_id={} map={} best_attack_present={} best_chase_present={} has_target={}",
-                monster.id,
-                map_index,
-                best_attack.is_some(),
-                best_chase.is_some(),
-                has_target,
-            );
+            // debug!(
+            //     "pet_ai_shinsu_targets: pet_id={} map={} best_attack_present={} best_chase_present={} has_target={}",
+            //     monster.id,
+            //     map_index,
+            //     best_attack.is_some(),
+            //     best_chase.is_some(),
+            //     has_target,
+            // );
 
             // Update Shinsu Mode timers and emit ObjectShow/ObjectHide,
             // mirroring Shinsu.ProcessAI.

@@ -15,6 +15,458 @@ const HOLY_DEVA_AMULET_COUNT: u16 = 2;
 const DEFAULT_AMULET_SHAPE: i16 = 0;
 const POISON_SHAPE_GREEN: i16 = 1;
 const POISON_SHAPE_RED: i16 = 2;
+
+pub fn cast_hiding<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    _x: i32,
+    _y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    debug!(
+        "cast_hiding: session_id={} spell={} dir={} starting",
+        session_id,
+        spell,
+        direction
+    );
+
+    let (map_index, caster_x, caster_y, level, duration_ms) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => {
+                debug!(
+                    "cast_hiding: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
+        };
+
+        debug!(
+            "cast_hiding: session_id={} mp_before={} map={} pos=({}, {})",
+            session_id,
+            player.mp,
+            player.map_index,
+            player.x,
+            player.y
+        );
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => {
+                debug!(
+                    "cast_hiding: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
+        };
+
+        let level = magic.level;
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
+
+        debug!(
+            "cast_hiding: session_id={} magic_level={} mp_before={} cost_mp={}",
+            session_id,
+            level,
+            player.mp,
+            cost
+        );
+
+        if player.mp < cost {
+            debug!(
+                "cast_hiding: session_id={} mp={} < cost={} (insufficient MP)",
+                session_id,
+                player.mp,
+                cost
+            );
+            return;
+        }
+
+        let mut amulet_slot: Option<usize> = None;
+
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    "cast_hiding: session_id={} has no suitable amulet (ItemType.Amulet, Shape={})",
+                    session_id,
+                    DEFAULT_AMULET_SHAPE,
+                );
+                return;
+            }
+        };
+
+        player.mp -= cost;
+
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
+
+        let stats_total = &player.stats.total;
+        let min_sc = stats_total.get(Stat::MinSC);
+        let max_sc = stats_total.get(Stat::MaxSC);
+        let luck = stats_total.get(Stat::Luck);
+
+        const MAX_LUCK_FOR_MAGIC: i32 = 10;
+
+        let mut rng = thread_rng();
+        let base_sc = {
+            let min = min_sc.max(0);
+            let max = max_sc.max(min);
+
+            if luck > 0 {
+                if luck > rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    max
+                } else {
+                    min
+                }
+            } else if luck < 0 {
+                if luck < -rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    min
+                } else {
+                    max
+                }
+            } else if max <= min {
+                min
+            } else {
+                rng.gen_range(min..=max)
+            }
+        };
+
+        let mut value: i64 = base_sc as i64 + (level as i64 + 1) * 5;
+        if value <= 0 {
+            value = 1;
+        }
+        let duration_ms = value.saturating_mul(1_000);
+
+        debug!(
+            "cast_hiding: session_id={} base_sc={} level={} duration_ms={}",
+            session_id,
+            base_sc,
+            level,
+            duration_ms
+        );
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            duration_ms,
+        )
+    };
+
+    debug!(
+        "cast_hiding: session_id={} applying Hiding buff on map={} at=({}, {}) duration_ms={}",
+        session_id,
+        map_index,
+        caster_x,
+        caster_y,
+        duration_ms
+    );
+
+    world.add_player_buff(
+        session_id,
+        BuffType::Hiding,
+        duration_ms,
+        Stats::default(),
+        Vec::new(),
+        events,
+    );
+
+    world.level_up_magic_for_player(session_id, Spell::Hiding as u8, events);
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
+
+pub fn cast_mass_hiding<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    center_x: i32,
+    center_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    debug!(
+        "cast_mass_hiding: session_id={} spell={} dir={} center=({}, {}) starting",
+        session_id,
+        spell,
+        direction,
+        center_x,
+        center_y
+    );
+
+    let (map_index, caster_x, caster_y, level, duration_ms) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => {
+                debug!(
+                    "cast_mass_hiding: session_id={} no player found in world",
+                    session_id
+                );
+                return;
+            }
+        };
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => {
+                debug!(
+                    "cast_mass_hiding: session_id={} has no UserMagic entry for spell {}",
+                    session_id,
+                    spell
+                );
+                return;
+            }
+        };
+
+        let level = magic.level;
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
+
+        debug!(
+            "cast_mass_hiding: session_id={} magic_level={} mp_before={} cost_mp={}",
+            session_id,
+            level,
+            player.mp,
+            cost
+        );
+
+        let mut amulet_slot: Option<usize> = None;
+
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    "cast_mass_hiding: session_id={} has no suitable amulet (ItemType.Amulet, Shape={})",
+                    session_id,
+                    DEFAULT_AMULET_SHAPE,
+                );
+                return;
+            }
+        };
+
+        if player.mp < cost {
+            debug!(
+                "cast_mass_hiding: session_id={} mp={} < cost={} (insufficient MP)",
+                session_id,
+                player.mp,
+                cost
+            );
+            return;
+        }
+
+        player.mp -= cost;
+
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
+
+        let stats_total = &player.stats.total;
+        let min_sc = stats_total.get(Stat::MinSC);
+        let max_sc = stats_total.get(Stat::MaxSC);
+        let luck = stats_total.get(Stat::Luck);
+
+        const MAX_LUCK_FOR_MAGIC: i32 = 10;
+
+        let mut rng = thread_rng();
+        let base_sc = {
+            let min = min_sc.max(0);
+            let max = max_sc.max(min);
+
+            if luck > 0 {
+                if luck > rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    max
+                } else {
+                    min
+                }
+            } else if luck < 0 {
+                if luck < -rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    min
+                } else {
+                    max
+                }
+            } else if max <= min {
+                min
+            } else {
+                rng.gen_range(min..=max)
+            }
+        };
+
+        let mut value: i64 = (base_sc as i64 / 2).saturating_add((level as i64 + 1) * 2);
+        if value <= 0 {
+            value = 1;
+        }
+        let duration_ms = value.saturating_mul(1_000);
+
+        debug!(
+            "cast_mass_hiding: session_id={} base_sc={} level={} duration_ms={}",
+            session_id,
+            base_sc,
+            level,
+            duration_ms
+        );
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            duration_ms,
+        )
+    };
+
+    const RADIUS: i32 = 2;
+
+    let mut any_applied = false;
+    let mut applied_count: usize = 0;
+
+    let player_ids: Vec<SessionId> = world.players.keys().cloned().collect();
+    for sid in player_ids {
+        if let Some(p) = world.players.get(&sid) {
+            if p.map_index != map_index || p.dead {
+                continue;
+            }
+
+            let dx = p.x - center_x;
+            let dy = p.y - center_y;
+            if dx.abs().max(dy.abs()) > RADIUS {
+                continue;
+            }
+
+            let friendly = if sid == session_id {
+                true
+            } else {
+                let caster_party = world
+                    .players
+                    .get(&session_id)
+                    .and_then(|c| c.party_id);
+                let target_party = p.party_id;
+                caster_party.is_some() && caster_party == target_party
+            };
+
+            if !friendly {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        world.add_player_buff(
+            sid,
+            BuffType::Hiding,
+            duration_ms,
+            Stats::default(),
+            Vec::new(),
+            events,
+        );
+        any_applied = true;
+        applied_count = applied_count.saturating_add(1);
+    }
+
+    debug!(
+        "cast_mass_hiding: session_id={} map={} center=({}, {}) duration_ms={} applied_count={} any_applied={}",
+        session_id,
+        map_index,
+        center_x,
+        center_y,
+        duration_ms,
+        applied_count,
+        any_applied
+    );
+
+    if any_applied {
+        world.level_up_magic_for_player(session_id, Spell::MassHiding as u8, events);
+    }
+
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
 pub fn cast_healing<P: WorldProvider>(
     world: &mut World<P>,
     session_id: SessionId,

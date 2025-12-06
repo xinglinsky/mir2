@@ -20,6 +20,7 @@ use crystal_shared_proto::magic::{
     SMagicCast,
     SMagicDelay,
     SObjectEffect,
+    SObjectHidden,
     SObjectMagic,
     SObjectRangeAttack,
     SObjectSpell,
@@ -714,6 +715,27 @@ impl LoginConnection {
                         self.enqueue_for_viewers(map_index, x, y, bytes);
                     }
                 }
+                world::WorldEvent::ObjectHidden {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    hidden,
+                } => {
+                    let pkt = SObjectHidden {
+                        object_id,
+                        hidden,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+
+                        if object_id == self.session_id {
+                            out.push(bytes.clone());
+                        }
+
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
                 world::WorldEvent::ObjectShow {
                     object_id,
                     map_index,
@@ -1067,6 +1089,47 @@ impl LoginConnection {
                             if let Ok(raw) = pkt.encode() {
                                 out.push(Self::encode_raw(raw));
                             }
+                        }
+                    }
+
+                    // Broadcast an ObjectHealth update so that nearby
+                    // clients can render the healed player's head HP bar,
+                    // mirroring C# MapObject.BroadcastHealthChange for
+                    // regen/healing.
+                    let percent_opt = {
+                        let world = self.world.lock().unwrap();
+                        if let Some((max_hp, _)) = world.player_max_hp_mp(session_id) {
+                            if max_hp > 0 {
+                                let clamped = new_hp.max(0).min(max_hp);
+                                let pct =
+                                    ((clamped as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8;
+                                Some(pct)
+                            } else {
+                                Some(0)
+                            }
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(percent) = percent_opt {
+                        let health = SObjectHealth {
+                            object_id: session_id,
+                            percent,
+                            expire: 5,
+                        };
+                        if let Ok(pkt) = health.encode() {
+                            let raw = Self::encode_raw(pkt);
+
+                            // Always send to the healed player when this
+                            // connection corresponds to them.
+                            if session_id == self.session_id {
+                                out.push(raw.clone());
+                            }
+
+                            // And broadcast to other nearby viewers around
+                            // the healed player's map/x/y.
+                            self.enqueue_for_viewers(map_index, x, y, raw);
                         }
                     }
 

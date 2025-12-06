@@ -78,17 +78,36 @@ impl<P: WorldProvider> World<P> {
                 if dest_x < 0 || dest_y < 0 {
                     tracing::debug!(
                         "[move] Map movement blocked: dest out of bounds ({}, {}) on map {}",
-                        dest_x, dest_y, dest_map_index
+                        dest_x,
+                        dest_y,
+                        dest_map_index,
                     );
                     return;
                 }
 
                 let ux = dest_x as u16;
                 let uy = dest_y as u16;
-                if ux >= dest_map.width || uy >= dest_map.height || !dest_map.is_walkable(ux, uy) {
+
+                if ux >= dest_map.width || uy >= dest_map.height {
                     tracing::debug!(
-                        "[move] Map movement blocked: dest not walkable on map {} at ({}, {})",
-                        dest_map_index, dest_x, dest_y
+                        "[move] Map movement blocked: dest out of bounds on map {} at ({}, {}), map_size=({}, {})",
+                        dest_map_index,
+                        dest_x,
+                        dest_y,
+                        dest_map.width,
+                        dest_map.height,
+                    );
+                    return;
+                }
+
+                if !dest_map.is_walkable(ux, uy) {
+                    let attr = dest_map.cell(ux, uy).map(|c| &c.attribute);
+                    tracing::debug!(
+                        "[move] Map movement blocked: dest not walkable on map {} at ({}, {}), attr={:?}",
+                        dest_map_index,
+                        dest_x,
+                        dest_y,
+                        attr,
                     );
                     return;
                 }

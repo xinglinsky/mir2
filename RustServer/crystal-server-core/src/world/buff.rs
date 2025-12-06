@@ -76,7 +76,7 @@ pub fn load_default_buff_infos(game_master_effect: bool) -> Vec<BuffInfo> {
 
     // Magics
     list.push(BuffInfo { buff_type: T::TemporalFlux, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
-    list.push(BuffInfo { buff_type: T::Hiding, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
+    list.push(BuffInfo { buff_type: T::Hiding, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::Haste, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: false });
     list.push(BuffInfo { buff_type: T::SwiftFeet, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });
     list.push(BuffInfo { buff_type: T::Fury, stack_type: S::ResetDuration, properties_mask: P::None.as_u8(), icon: 0, visible: true });

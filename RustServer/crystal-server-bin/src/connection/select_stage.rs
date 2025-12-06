@@ -676,6 +676,24 @@ impl LoginConnection {
             };
             out.push(Self::encode_raw(base_stats_pkt.encode()));
 
+            // After sending BaseStatsInfo and initial HP/MP, also send an
+            // initial ObjectHealth packet for this player so the client can
+            // render their head HP bar immediately on login, mirroring the
+            // C# MapObject.BroadcastHealthChange behaviour on spawn.
+            let initial_hp_percent: u8 = if max_hp > 0 {
+                ((stats.hp as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8
+            } else {
+                0
+            };
+            let self_hp_pkt = crystal_shared_proto::scene::SObjectHealth {
+                object_id: self.session_id,
+                percent: initial_hp_percent,
+                expire: 5,
+            };
+            if let Ok(raw) = self_hp_pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
             // Mirror the C# StartGameSuccess sequence: after BaseStatsInfo,
             // send TimeOfDay, ChangeAMode, ChangePMode and SwitchGroup so the
             // client's UI (light level, attack mode, pet mode, group toggle)

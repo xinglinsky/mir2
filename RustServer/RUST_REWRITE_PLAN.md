@@ -121,32 +121,50 @@
 
 ### 目标
 
-- 迁移 C# `PlayerObject` 核心逻辑。
-- 物品系统与基础交互。
+- 迁移 C# `PlayerObject` 核心逻辑.
+- 物品系统与基础交互.
 - 战斗闭环（物理/魔法）。
 
-**当前进度概览（2025-11-28 更新）**
+**当前进度概览（2025-12-06 更新）**
 - **已完成**：
-  - `PlayerState` 及属性/背包/装备系统。
-  - 物品移动/穿脱/使用（药水/回城卷/随机卷）已实现。
-  - **掉落与拾取**：`DropItem` / `PickUp` 已实现，支持金币与物品。
+  - `PlayerState` 及属性/背包/装备系统；角色登陆后背包、装备、魔法列表、攻击/宠物模式等均可在 Rust 服中正确加载与保存.
+  - 物品移动/穿脱/使用（药水/回城卷/随机卷）已实现，并通过 `connection::item` / `world::World` 对应 C# 行为.
+  - **掉落与拾取**：`DropItem` / `PickUp` 已实现，支持金币与物品，并走统一的 `MapItem` 过期清理与可见性管线.
   - **基础战斗**：
-    - 物理攻击（Player vs Monster）已实现，包含命中/暴击/防御计算。
-    - 怪物反击（Monster vs Player）已实现。
-    - 死亡与经验获取已实现。
-    - `FatalSword` 技能逻辑已作为样例实现。
-  - **玩家交易系统**：在 `connection::trade` 与 `world::World` 中实现玩家间交易邀请 / 锁定 / 金币与物品交换 / 取消回滚，并复用了现有背包/装备/`MapItem` 结构。
+    - 物理攻击（Player vs Monster）已实现，包含命中/暴击/防御计算，落地到 `world::combat`；
+    - 怪物反击（Monster vs Player）已实现，使用统一的 `MonsterHitPlayer` / `ObjectStruck` 世界事件与 SObjectStruck/SDamageIndicator；
+    - 经验获取与升级：`World::gain_experience_for_session`、`WorldEvent::GainExperience` / `PlayerLevelChanged` 已接入，客户端通过 `SGainExperience` / `SLevelChanged` / `SObjectLeveled` 与 C# 行为对齐；
+    - 玩家死亡后的死亡包与基础死亡状态已实现，服务端会发送 `SObjectDied` 等场景包.
+  - **战斗相关被动与 Buff/毒**：
+    - Warrior：Slaying/Fencing/SpiritSword 被动通过 `recompute_player_passives_for_session` 影响 Accuracy/MaxDC；
+    - Assassin：MoonLight/DarkBody 开场一击加成、SwiftFeet/Haste 等 Buff 已在 `world::skills::assassin` 中实现，并通过 Buff 系统下发；
+    - Taoist/Wizard：SoulShield/BlessedArmour/UltimateEnhancer/EnergyShield 等 Buff 技能已接入 `add_player_buff` / `WorldEvent::AddBuff` / `SpellToggle`；
+    - 绿色/红色毒（Poisoning）与怪物来源毒均已通过 `PoisonInstance` 管理，玩家/怪物的毒 Tick 与叠加/抵抗规则在 `world::combat` / `monster_runtime` 中实现，并映射到 `S.Poisoned` / `S.ObjectPoisoned`.
+  - **魔法/技能系统（进展）**：
+    - 共用的 `compute_pure_magic_attack_damage`、`compute_magic_mana_cost`、`check_and_update_magic_cooldown`、`level_up_magic_for_player` 已在 `world::skills` / `world::world` 中实现，对齐 `MagicInfo` / `UserMagic` 数据与耗蓝/冷却/熟练度逻辑；
+    - Warrior：`FlamingSword`、`Rage`、`ImmortalSkin`、`CounterAttack`、`Fury`、`HalfMoon` / `CrossHalfMoon` / `Thrusting` 等核心技能在 `world::skills::warrior` 与 `world::combat` 中完成迁移，含掉落/经验归属与红毒护甲减免等细节；
+    - Wizard：单体与 AoE 魔法（`FireBall`/`GreatFireBall`/`SoulFireBall`/`ThunderBolt` 以及 `FireBang`/`IceStorm`、`ThunderStorm`/`FlameField`、`Blizzard`、`Lightning`、`HellFire`、`FireWall` 等）已实现完整的伤害、命中范围与 `SMagic`/`SObjectMagic` 可视事件；
+    - Taoist：`Healing`/`MassHealing`、`Poisoning`、`SoulShield`/`BlessedArmour`、`EnergyShield`、`UltimateEnhancer` 以及 Skeleton/Shinsu/HolyDeva 等召唤与宠物模式逻辑已在 `world::skills::taoist` 中落地；
+    - Assassin：MoonLight/DarkBody、SwiftFeet、Haste 等核心技能已接入战斗与 Buff 管线；
+    - 魔法升级与延迟：`WorldEvent::MagicLeveled` / `MagicDelay` / `MagicCast` 均通过 `connection::movement::handle_world_events` 映射为 `SMagicLeveled` / `SMagicDelay` / `SMagicCast`，保持客户端技能栏冷却/熟练度表现一致.
+  - **玩家交易系统**：在 `connection::trade` 与 `world::World` 中实现玩家间交易邀请 / 回复 / 锁定 / 确认 / 取消回滚，覆盖金币与物品交换，并做基础容量与金币上限检查.
 
 - **待办事项**：
-  - **魔法/技能系统**：除 `FatalSword` 以及部分 Warrior 技能（如 `FlamingSword`、`Rage`、`ImmortalSkin`、`CounterAttack`、`HalfMoon`/`CrossHalfMoon` 等）的基础实现外，大部分技能仍未完全迁移/对齐（如火球术、治愈术等）。
-  - **玩家死亡与复活**：虽然有 `SDeath`，但完整的死亡惩罚（掉装备）、复活（原地/回城）流程需完善。
-  - **交易系统边界与风控**：对照 C# `PlayerObject.Trade` 回归断线/越距/背包不足等场景，补齐日志、防刷与异常恢复策略。
-  - **组队系统**：经验共享逻辑（基础 AllowGroup/邀请/入队/踢人 已在 `world::World` / `connection::group` 中实现）。
+  - **技能覆盖与数值对齐**：
+    - 个别高级或罕见技能（如部分弓手技能、少数怪物/宠物专用法术）的数值与范围仍需对照 C# 回归；
+    - 需要增加系统化的 Record/Replay 或脚本化战斗用例，对 FireBall/ThunderBolt/Blizzard/HellFire 等关键技能的伤害分布与命中行为做批量比对.
+  - **玩家死亡与复活**：
+    - `world::combat` 已实现玩家死亡掉落（普通/红名）、BindMode/Rental/婚戒/Spirit 套等规则的大部分语义，并通过 `SObjectDied`/地面掉落包驱动客户端表现；
+    - 原地复活/回城/绑定点复活的完整流程（含 `SRevived` / `SObjectRevived`、复活点选择与死亡惩罚 UI 提示）仍需按 C# `PlayerObject.Die` / `RedDeathDrop` / `TownRevive` / 复活道具行为补齐，并接入 `revive_player_in_place` / `revive_player_to_position` 等世界辅助函数.
+  - **交易系统边界与风控**：对照 C# `PlayerObject.Trade` 补齐断线、越距、背包不足、金币上限、租赁/绑定物品等场景下的防刷逻辑与结构化日志，并视情况暴露 Admin/GM 监控入口.
+  - **组队系统**：
+    - 组队基础逻辑（AllowGroup / 邀请 / 入队 / 踢人）已经在 `world::World` / `connection::group` 中实现；
+    - 组队经验共享与加成仍按单人经验发放，需要实现 `PlayerObject.WinExp` 等价逻辑，将 `WorldEvent::GainExperience` 接入组队分配，并通过日志/GM 工具抽样对比 C# 与 Rust 数值.
 
 ### 接下来计划
 
 1. **技能系统子计划（3.1，可与 3.2/3.3/3.4 并行）**
-   - 3.1.1：对齐 `MagicInfo` / `UserMagic` 数据与学习/升级/快捷键逻辑，保证 `magic_damage` 行为与 C# 等价。
+   - 3.1.1：对齐 `MagicInfo` / `UserMagic` 数据与学习/升级/快捷键逻辑，保证 `magic_damage` 行为与 C# 等价.
    - 3.1.2：实现单体攻击类技能（如 `FireBall` / `SoulFireBall`），完善射程、目标选取与伤害计算，对照 C# `PlayerObject`.
    - 3.1.3：补完 Rage / ImmortalSkin / CounterAttack / FlamingSword 等 Buff 类技能在服务器端的 Buff 叠加与 `SAddBuff` / `SpellToggle` 协议.
 

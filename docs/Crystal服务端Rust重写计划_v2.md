@@ -561,6 +561,15 @@ trait NpcScript {
 - **M5：高级玩法级重构上线（阶段 5 完成）**
   - AOI/寻路/战斗逻辑的重做经过充分测试与灰度，正式对外发布。
 
+## 当前进度快照（2025-12-06）
+
+- **整体状态**：RustServer workspace 已经可以跑通从登录 → 选角 → 进游戏 → 打怪升级 → 掉落与拾取 → 交易/邮件/行会基础 → 退出存档的完整日常闭环，核心玩法可用于小规模内测。
+- **子计划 1（协议 & 连接层）**：`crystal-server-bin/src/connection` + `crystal-shared-proto` 已完成登录/注册/改密、角色管理、地图加载、行走/跑步/攻击、NPC 商店 & GameShop、邮件、基础行会与组队、玩家交易等主要 C* 包的迁移；Market/Quest/Harvest 等高级协议仍按计划分阶段补齐。
+- **子计划 2（世界时间 & 地图）**：`world::World` + `world::monster_runtime` 已实现地图加载、刷怪与 Respawn、怪物 AI（巡逻/追击/攻击）、掉落与地面物品过期、玩家自然回复与安全区回复、Buff 过期与基础 Tick 逻辑，日常刷怪/练级与 C# 行为基本对齐。
+- **子计划 3（玩家 / 物品 / 战斗）**：玩家属性/背包/装备/PK 值、物品使用与移动、物理战斗、绝大部分 Warrior/Wizard/Taoist/Assassin 技能（含 Buff、毒、召唤与群体治疗）、怪物反击与经验获取、玩家死亡掉落、玩家间交易等已在 `crystal-server-core::world` 与 `world::skills`/`world::combat` 中完成首轮迁移；死亡复活细节、组队经验分配与部分罕见技能仍在对齐中，详见 `RustServer/RUST_REWRITE_PLAN.md` 的子计划 3 更新。
+- **子计划 4（高级系统 & Admin）**：行会基础（创建/邀请/仓库/行会经验）与邮件系统已可用，Admin HTTP/Metrics 已上线；任务系统、攻城战、全局 Market/拍卖行仍按照路线图保留在后续阶段实现。
+- **详细子任务与最新 checklist**：请参考 `RustServer/RUST_REWRITE_PLAN.md`，其中按「子计划 1–4」维护了更细粒度的“已完成/待办/下一步”列表，并会随实际开发进度滚动更新。
+
 
 ---
 

@@ -1047,7 +1047,7 @@ impl<P: WorldProvider> World<P> {
         let player_positions: Vec<(u32, i32, i32, i32, u8)> = self
             .players
             .iter()
-            .filter(|(_, p)| !p.dead && p.hp > 0)
+            .filter(|(_, p)| !p.dead && p.hp > 0 && !p.hidden)
             .map(|(&sid, p)| (sid, p.map_index, p.x, p.y, p.direction))
             .collect();
 

@@ -229,7 +229,7 @@ fn load_cells_v1(bytes: &[u8]) -> io::Result<(u16, u16, Vec<MapCell>)> {
             offset += 5;
 
             let _light = bytes[offset];
-            offset += 1;
+            offset += 2;
 
             cells.push(MapCell { attribute: attr });
         }

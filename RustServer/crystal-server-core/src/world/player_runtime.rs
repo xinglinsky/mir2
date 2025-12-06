@@ -1,6 +1,6 @@
 use crate::stats::Stat;
 use crate::world::types::{BuffProperty, BuffType, PoisonType};
-use crate::world::Spell;
+use crate::world::{SessionId, Spell};
 use crate::world::provider::WorldProvider;
 
 use super::{World, WorldEvent};
@@ -101,6 +101,31 @@ impl<P: WorldProvider> World<P> {
                     player.stats.buffs.add(&b.stats);
                 }
                 player.stats.recalc_if_dirty_for_job(player.job);
+            }
+
+            // After processing expirations for this player, recompute whether
+            // they should be logically Hidden based on remaining buffs. This
+            // mirrors the C# MapObject.RemoveBuff / HumanObject.ProcessBuffs
+            // behaviour where Hiding/MoonLight/DarkBody/ClearRing control the
+            // Hidden flag.
+            let old_hidden = player.hidden;
+            let new_hidden = player.active_buffs.iter().any(|b| {
+                matches!(
+                    b.buff_type,
+                    BuffType::Hiding | BuffType::MoonLight | BuffType::DarkBody | BuffType::ClearRing
+                )
+            });
+
+            if new_hidden != old_hidden {
+                player.hidden = new_hidden;
+
+                events.push(WorldEvent::ObjectHidden {
+                    object_id: session_id,
+                    map_index: player.map_index,
+                    x: player.x,
+                    y: player.y,
+                    hidden: new_hidden,
+                });
             }
         }
     }
