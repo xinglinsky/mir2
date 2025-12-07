@@ -13,6 +13,7 @@ const SKELETON_AMULET_COUNT: u16 = 1;
 const SHINSU_AMULET_COUNT: u16 = 5;
 const HOLY_DEVA_AMULET_COUNT: u16 = 2;
 const DEFAULT_AMULET_SHAPE: i16 = 0;
+const REINCARNATION_AMULET_SHAPE: i16 = 3;
 const POISON_SHAPE_GREEN: i16 = 1;
 const POISON_SHAPE_RED: i16 = 2;
 
@@ -799,17 +800,26 @@ pub fn cast_soul_shield<P: WorldProvider>(
     session_id: SessionId,
     spell: u8,
     direction: u8,
-    _x: i32,
-    _y: i32,
+    center_x: i32,
+    center_y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
     debug!(
-        "cast_summon_shinsu: session_id={} spell={} dir={} starting",
+        "cast_soul_shield: session_id={} spell={} dir={} starting",
         session_id,
         spell,
         direction
     );
-    let (map_index, caster_x, caster_y, level, duration_ms, stats) = {
+
+    let (
+        map_index,
+        caster_x,
+        caster_y,
+        level,
+        duration_ms,
+        caster_party_id,
+        caster_guild_name,
+    ) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -819,7 +829,7 @@ pub fn cast_soul_shield<P: WorldProvider>(
             Some(m) => m,
             None => {
                 debug!(
-                    "cast_summon_shinsu: session_id={} has no UserMagic entry for spell {}",
+                    "cast_soul_shield: session_id={} has no UserMagic entry for spell {}",
                     session_id,
                     spell
                 );
@@ -829,17 +839,18 @@ pub fn cast_soul_shield<P: WorldProvider>(
 
         let level = magic.level;
         debug!(
-            "cast_summon_shinsu: session_id={} magic_level={} mp_before={}",
+            "cast_soul_shield: session_id={} magic_level={} mp_before={}",
             session_id,
             level,
             player.mp
         );
+
         let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
         {
             Some(c) => c,
             None => {
                 debug!(
-                    "cast_summon_shinsu: session_id={} no MagicInfo / cost for spell {} level {}",
+                    "cast_soul_shield: session_id={} no MagicInfo / cost for spell {} level {}",
                     session_id,
                     spell,
                     level
@@ -852,22 +863,104 @@ pub fn cast_soul_shield<P: WorldProvider>(
             return;
         }
 
+        // Find a generic Taoist amulet (ItemType.Amulet, Shape=0) and
+        // consume one, mirroring C# GetAmulet(1)/ConsumeItem for
+        // SoulShield/BlessedArmour.
+        let mut amulet_slot: Option<usize> = None;
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    "cast_soul_shield: session_id={} has no suitable amulet (ItemType.Amulet, Shape={})",
+                    session_id,
+                    DEFAULT_AMULET_SHAPE,
+                );
+                return;
+            }
+        };
+
         player.mp -= cost;
 
-        let mut duration_sec: i64 = 0;
-        if let Some(info) = world.provider.get_magic_info(spell) {
-            let mut rng = thread_rng();
-            let power = magic_power(info, level, &mut rng).max(1);
-            duration_sec = power as i64;
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
         }
-        if duration_sec <= 0 {
-            duration_sec = 60;
-        }
-        let duration_ms = duration_sec.saturating_mul(1_000);
 
-        let mut stats = Stats::default();
-        let bonus = (player.level as i32 / 7).saturating_add(4);
-        stats.set(Stat::MaxMAC, bonus);
+        // Compute SC-based power similarly to GetAttackPower(MinSC,MaxSC)
+        // and derive the duration in seconds as
+        //   value = power * 4 + (level + 1) * 50
+        // mirroring HumanObject.SoulShield and Map.SoulShield handling.
+        let stats_total = &player.stats.total;
+        let min_sc = stats_total.get(Stat::MinSC);
+        let max_sc = stats_total.get(Stat::MaxSC);
+        let luck = stats_total.get(Stat::Luck);
+
+        const MAX_LUCK_FOR_MAGIC: i32 = 10;
+
+        let mut rng = thread_rng();
+        let damage_base = {
+            let min = min_sc.max(0);
+            let max = max_sc.max(min);
+
+            if luck > 0 {
+                if luck > rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    max
+                } else {
+                    min
+                }
+            } else if luck < 0 {
+                if luck < -rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    min
+                } else {
+                    max
+                }
+            } else if max <= min {
+                min
+            } else {
+                rng.gen_range(min..=max)
+            }
+        };
+
+        let mut value_sec: i64 = (damage_base as i64)
+            .saturating_mul(4)
+            .saturating_add((level as i64 + 1).saturating_mul(50));
+        if value_sec <= 0 {
+            value_sec = 1;
+        }
+        let duration_ms = value_sec.saturating_mul(1_000);
+
+        let caster_party_id = player.party_id;
+        let caster_guild_name = player.guild_name.clone();
 
         (
             player.map_index,
@@ -875,22 +968,170 @@ pub fn cast_soul_shield<P: WorldProvider>(
             player.y,
             level,
             duration_ms,
-            stats,
+            caster_party_id,
+            caster_guild_name,
         )
     };
 
-    world.add_player_buff(
+    // 7x7 area around the clicked location (center_x, center_y).
+    let range = 3;
+    let min_x = center_x - range;
+    let max_x = center_x + range;
+    let min_y = center_y - range;
+    let max_y = center_y + range;
+
+    let mut trained = false;
+
+    // Collect candidate friendly player sessions first.
+    let mut targets: Vec<SessionId> = Vec::new();
+    for (&sid, p) in &world.players {
+        if p.map_index != map_index || p.dead || p.hp <= 0 {
+            continue;
+        }
+        if p.x < min_x || p.x > max_x || p.y < min_y || p.y > max_y {
+            continue;
+        }
+
+        let is_self = sid == session_id;
+        let same_party = match (caster_party_id, p.party_id) {
+            (Some(a), Some(b)) if a == b => true,
+            _ => false,
+        };
+        let same_guild = !caster_guild_name.is_empty()
+            && !p.guild_name.is_empty()
+            && p.guild_name.eq_ignore_ascii_case(&caster_guild_name);
+
+        if !is_self && !same_party && !same_guild {
+            continue;
+        }
+
+        targets.push(sid);
+    }
+
+    for sid in targets {
+        let player = match world.players.get_mut(&sid) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let bonus = (player.level as i32 / 7).saturating_add(4);
+        if bonus <= 0 {
+            continue;
+        }
+
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxMAC, bonus);
+
+        world.add_player_buff(
+            sid,
+            BuffType::SoulShield,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
+
+        trained = true;
+    }
+
+    // Also buff friendly pets (monsters with is_pet=true whose owner is
+    // the caster or a friendly player in the same party/guild) that
+    // stand inside the same 7x7 area. Each pet uses its
+    // MonsterInfo.Level to compute the bonus in the same way as
+    // players (level / 7 + 4), mirroring the C# behaviour where
+    // SoulShield can affect heroes/pets.
+    let mut pet_targets: Vec<(u64, i32)> = Vec::new();
+    {
+        if let Some(monsters) = world.monsters.get(&map_index) {
+            for m in monsters.iter() {
+                if !m.is_pet || m.hp <= 0 {
+                    continue;
+                }
+                if m.x < min_x || m.x > max_x || m.y < min_y || m.y > max_y {
+                    continue;
+                }
+
+                // Resolve the pet's owner to determine if it is friendly
+                // (self, same party or same guild as the caster).
+                let Some(owner_sid) = m.owner_session_id else {
+                    continue;
+                };
+
+                let Some(owner) = world.players.get(&owner_sid) else {
+                    continue;
+                };
+
+                let is_self_owner = owner_sid == session_id;
+                let same_party_owner = match (caster_party_id, owner.party_id) {
+                    (Some(a), Some(b)) if a == b => true,
+                    _ => false,
+                };
+                let same_guild_owner = !caster_guild_name.is_empty()
+                    && !owner.guild_name.is_empty()
+                    && owner
+                        .guild_name
+                        .eq_ignore_ascii_case(&caster_guild_name);
+
+                if !is_self_owner && !same_party_owner && !same_guild_owner {
+                    continue;
+                }
+
+                let bonus = if let Some(info) = world.provider.get_monster_info(m.monster_index) {
+                    (info.level as i32 / 7).saturating_add(4)
+                } else {
+                    0
+                };
+
+                if bonus <= 0 {
+                    continue;
+                }
+
+                pet_targets.push((m.id, bonus));
+            }
+        }
+    }
+
+    for (monster_id, bonus) in pet_targets {
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxMAC, bonus);
+
+        world.add_monster_buff(map_index, monster_id, BuffType::SoulShield, duration_ms, stats);
+
+        trained = true;
+    }
+
+    if trained {
+        world.level_up_magic_for_player(session_id, Spell::SoulShield as u8, events);
+    }
+
+    // Drive SoulShield visuals in the same way as wizard AoE spells by
+    // emitting both ObjectMagic (for nearby viewers) and Magic (for the
+    // caster) in addition to a generic ObjectAttack.
+    events.push(WorldEvent::ObjectMagic {
         session_id,
-        BuffType::SoulShield,
-        duration_ms,
-        stats,
-        Vec::new(),
-        events,
-    );
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        target_id: 0,
+        target_x: center_x,
+        target_y: center_y,
+    });
 
-    world.level_up_magic_for_player(session_id, Spell::SoulShield as u8, events);
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id: spell,
+        target_id: 0,
+        x: center_x,
+        y: center_y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
+    });
 
-    // Emit a generic ObjectAttack so the client can play the SoulShield
+    // Emit a generic ObjectAttack so the client can still play the
     // animation and start the skill icon cooldown.
     events.push(WorldEvent::ObjectAttack {
         session_id,
@@ -909,11 +1150,19 @@ pub fn cast_blessed_armour<P: WorldProvider>(
     session_id: SessionId,
     spell: u8,
     direction: u8,
-    _x: i32,
-    _y: i32,
+    center_x: i32,
+    center_y: i32,
     events: &mut Vec<WorldEvent>,
 ) {
-    let (map_index, caster_x, caster_y, level, duration_ms, stats) = {
+    let (
+        map_index,
+        caster_x,
+        caster_y,
+        level,
+        duration_ms,
+        caster_party_id,
+        caster_guild_name,
+    ) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -935,22 +1184,98 @@ pub fn cast_blessed_armour<P: WorldProvider>(
             return;
         }
 
+        // Same amulet requirement as SoulShield: generic Taoist amulet.
+        let mut amulet_slot: Option<usize> = None;
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != DEFAULT_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => {
+                debug!(
+                    "cast_blessed_armour: session_id={} has no suitable amulet (ItemType.Amulet, Shape={})",
+                    session_id,
+                    DEFAULT_AMULET_SHAPE,
+                );
+                return;
+            }
+        };
+
         player.mp -= cost;
 
-        let mut duration_sec: i64 = 0;
-        if let Some(info) = world.provider.get_magic_info(spell) {
-            let mut rng = thread_rng();
-            let power = magic_power(info, level, &mut rng).max(1);
-            duration_sec = power as i64;
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
         }
-        if duration_sec <= 0 {
-            duration_sec = 60;
-        }
-        let duration_ms = duration_sec.saturating_mul(1_000);
 
-        let mut stats = Stats::default();
-        let bonus = (player.level as i32 / 7).saturating_add(4);
-        stats.set(Stat::MaxAC, bonus);
+        let stats_total = &player.stats.total;
+        let min_sc = stats_total.get(Stat::MinSC);
+        let max_sc = stats_total.get(Stat::MaxSC);
+        let luck = stats_total.get(Stat::Luck);
+
+        const MAX_LUCK_FOR_MAGIC: i32 = 10;
+
+        let mut rng = thread_rng();
+        let damage_base = {
+            let min = min_sc.max(0);
+            let max = max_sc.max(min);
+
+            if luck > 0 {
+                if luck > rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    max
+                } else {
+                    min
+                }
+            } else if luck < 0 {
+                if luck < -rng.gen_range(0..MAX_LUCK_FOR_MAGIC) {
+                    min
+                } else {
+                    max
+                }
+            } else if max <= min {
+                min
+            } else {
+                rng.gen_range(min..=max)
+            }
+        };
+
+        let mut value_sec: i64 = (damage_base as i64)
+            .saturating_mul(4)
+            .saturating_add((level as i64 + 1).saturating_mul(50));
+        if value_sec <= 0 {
+            value_sec = 1;
+        }
+        let duration_ms = value_sec.saturating_mul(1_000);
+
+        let caster_party_id = player.party_id;
+        let caster_guild_name = player.guild_name.clone();
 
         (
             player.map_index,
@@ -958,20 +1283,166 @@ pub fn cast_blessed_armour<P: WorldProvider>(
             player.y,
             level,
             duration_ms,
-            stats,
+            caster_party_id,
+            caster_guild_name,
         )
     };
 
-    world.add_player_buff(
-        session_id,
-        BuffType::BlessedArmour,
-        duration_ms,
-        stats,
-        Vec::new(),
-        events,
-    );
+    let range = 3;
+    let min_x = center_x - range;
+    let max_x = center_x + range;
+    let min_y = center_y - range;
+    let max_y = center_y + range;
 
-    world.level_up_magic_for_player(session_id, Spell::BlessedArmour as u8, events);
+    let mut trained = false;
+
+    let mut targets: Vec<SessionId> = Vec::new();
+    for (&sid, p) in &world.players {
+        if p.map_index != map_index || p.dead || p.hp <= 0 {
+            continue;
+        }
+        if p.x < min_x || p.x > max_x || p.y < min_y || p.y > max_y {
+            continue;
+        }
+
+        let is_self = sid == session_id;
+        let same_party = match (caster_party_id, p.party_id) {
+            (Some(a), Some(b)) if a == b => true,
+            _ => false,
+        };
+        let same_guild = !caster_guild_name.is_empty()
+            && !p.guild_name.is_empty()
+            && p.guild_name.eq_ignore_ascii_case(&caster_guild_name);
+
+        if !is_self && !same_party && !same_guild {
+            continue;
+        }
+
+        targets.push(sid);
+    }
+
+    for sid in targets {
+        let player = match world.players.get_mut(&sid) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let bonus = (player.level as i32 / 7).saturating_add(4);
+        if bonus <= 0 {
+            continue;
+        }
+
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxAC, bonus);
+
+        world.add_player_buff(
+            sid,
+            BuffType::BlessedArmour,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
+
+        trained = true;
+    }
+
+    // Extend BlessedArmour to also affect friendly pets within the same
+    // 7x7 area. Pets are considered friendly when their owner is the
+    // caster or a player in the same party/guild. The AC bonus is based
+    // on MonsterInfo.Level, mirroring the C# friendly target semantics
+    // for SoulShield/BlessedArmour.
+    let mut pet_targets: Vec<(u64, i32)> = Vec::new();
+    {
+        if let Some(monsters) = world.monsters.get(&map_index) {
+            for m in monsters.iter() {
+                if !m.is_pet || m.hp <= 0 {
+                    continue;
+                }
+                if m.x < min_x || m.x > max_x || m.y < min_y || m.y > max_y {
+                    continue;
+                }
+
+                // Resolve the pet's owner and check if it is friendly to
+                // the caster (self, same party or same guild).
+                let Some(owner_sid) = m.owner_session_id else {
+                    continue;
+                };
+
+                let Some(owner) = world.players.get(&owner_sid) else {
+                    continue;
+                };
+
+                let is_self_owner = owner_sid == session_id;
+                let same_party_owner = match (caster_party_id, owner.party_id) {
+                    (Some(a), Some(b)) if a == b => true,
+                    _ => false,
+                };
+                let same_guild_owner = !caster_guild_name.is_empty()
+                    && !owner.guild_name.is_empty()
+                    && owner
+                        .guild_name
+                        .eq_ignore_ascii_case(&caster_guild_name);
+
+                if !is_self_owner && !same_party_owner && !same_guild_owner {
+                    continue;
+                }
+
+                let bonus = if let Some(info) = world.provider.get_monster_info(m.monster_index) {
+                    (info.level as i32 / 7).saturating_add(4)
+                } else {
+                    0
+                };
+
+                if bonus <= 0 {
+                    continue;
+                }
+
+                pet_targets.push((m.id, bonus));
+            }
+        }
+    }
+
+    for (monster_id, bonus) in pet_targets {
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxAC, bonus);
+
+        world.add_monster_buff(map_index, monster_id, BuffType::BlessedArmour, duration_ms, stats);
+
+        trained = true;
+    }
+
+    if trained {
+        world.level_up_magic_for_player(session_id, Spell::BlessedArmour as u8, events);
+    }
+
+    // BlessedArmour uses the same visual pattern as SoulShield: send an
+    // ObjectMagic event for viewers and a Magic event for the caster so
+    // the client plays the correct spell animation in addition to the
+    // generic ObjectAttack swing.
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        target_id: 0,
+        target_x: center_x,
+        target_y: center_y,
+    });
+
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id: spell,
+        target_id: 0,
+        x: center_x,
+        y: center_y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
+    });
 
     events.push(WorldEvent::ObjectAttack {
         session_id,
@@ -1623,6 +2094,181 @@ pub fn cast_mass_healing<P: WorldProvider>(
 
     // Emit a generic ObjectAttack event so that the client can play the
     // MassHealing animation and start icon cooldown.
+    events.push(WorldEvent::ObjectAttack {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell,
+        level,
+        attack_type: 0,
+    });
+}
+
+pub fn cast_reincarnation<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    target_x: i32,
+    target_y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let now_ms = world.time_ms;
+
+    let (map_index, caster_x, caster_y, level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Some(info) = world.provider.get_map_info(player.map_index) {
+            if info.no_reincarnation {
+                return;
+            }
+        }
+
+        let level = player
+            .magics
+            .iter()
+            .find(|m| m.spell == spell)
+            .map(|m| m.level)
+            .unwrap_or(0);
+
+        let cost = compute_magic_mana_cost(&world.provider, &player.stats.total, spell, level)
+            .unwrap_or(0);
+
+        if player.mp < cost {
+            return;
+        }
+
+        let mut amulet_slot: Option<usize> = None;
+        for (idx, slot) in player.equipment.slots.iter().enumerate() {
+            let item = match slot.as_ref() {
+                Some(i) => i,
+                None => continue,
+            };
+
+            let info = match world.provider.get_item_info(item.item_index) {
+                Some(i) => i,
+                None => continue,
+            };
+
+            if info.item_type != ITEM_TYPE_AMULET {
+                continue;
+            }
+
+            if info.shape != REINCARNATION_AMULET_SHAPE {
+                continue;
+            }
+
+            if item.count as u32 >= 1 {
+                amulet_slot = Some(idx);
+                break;
+            }
+        }
+
+        let amulet_slot = match amulet_slot {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        player.mp -= cost;
+
+        if let Some(slot) = player.equipment.slots.get_mut(amulet_slot) {
+            if let Some(item) = slot.as_mut() {
+                if item.count > 1 {
+                    item.count = item.count.saturating_sub(1);
+                } else {
+                    *slot = None;
+                }
+            }
+        }
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+        )
+    };
+
+    let mut target_session_id: Option<SessionId> = None;
+    for (&sid, p) in &world.players {
+        if sid == session_id {
+            continue;
+        }
+        if p.map_index != map_index || !p.dead || p.hp > 0 {
+            continue;
+        }
+        if p.x != target_x || p.y != target_y {
+            continue;
+        }
+
+        let dx = p.x - caster_x;
+        let dy = p.y - caster_y;
+        if dx.abs().max(dy.abs()) > 7 {
+            continue;
+        }
+
+        target_session_id = Some(sid);
+        break;
+    }
+
+    let target_session_id = match target_session_id {
+        Some(sid) => sid,
+        None => return,
+    };
+
+    {
+        let target = match world.players.get(&target_session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        if !target.dead || target.hp > 0 {
+            return;
+        }
+
+        if target.reincarnation_host_session_id.is_some() {
+            return;
+        }
+    }
+
+    let _ = world.cancel_reincarnation_for_session(session_id);
+    let _ = world.cancel_reincarnation_for_session(target_session_id);
+
+    let mut rng = thread_rng();
+    let lvl_i32 = i32::from(level);
+    let threshold = (1 + lvl_i32).saturating_mul(10);
+    let roll = rng.gen_range(0..30);
+    if roll > threshold {
+        events.push(WorldEvent::PartySystemMessage {
+            session_id,
+            message: "Reincarnation attempt failed.".to_string(),
+        });
+        return;
+    }
+
+    if let Some(host) = world.players.get_mut(&session_id) {
+        host.reincarnation_ready = true;
+        host.reincarnation_target_session_id = Some(target_session_id);
+        host.reincarnation_expire_time_ms = now_ms.saturating_add(6_000);
+    }
+
+    if let Some(target) = world.players.get_mut(&target_session_id) {
+        target.reincarnation_host_session_id = Some(session_id);
+        target.reincarnation_expire_time_ms = now_ms.saturating_add(6_000);
+    }
+
+    world.level_up_magic_for_player(session_id, Spell::Reincarnation as u8, events);
+
+    events.push(WorldEvent::ReincarnationRequested {
+        host_session_id: session_id,
+        target_session_id,
+    });
+
     events.push(WorldEvent::ObjectAttack {
         session_id,
         map_index,

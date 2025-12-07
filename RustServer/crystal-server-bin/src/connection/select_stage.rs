@@ -24,13 +24,16 @@ use crystal_shared_proto::login::{
     SStartGame,
 };
 use crystal_shared_proto::map::SMapInformation;
-use crystal_shared_proto::item::{SNewItemInfo, SUserStorage, SResizeStorage};
+use crystal_shared_proto::quest::{SChangeQuest, SCompleteQuest};
+use crystal_shared_proto::item::{SNewItemInfo, SNewRecipeInfo, SUserStorage, SResizeStorage};
 use crystal_shared_proto::scene::{
     SBaseStatsInfo,
     SObjectTeleportIn,
     SObjectTeleportOut,
     STeleportIn,
     SDefaultNpc,
+    SObjectHidden,
+    SObjectHealth,
 };
 use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
 use crystal_shared_proto::notice::{NoticeData, SUpdateNotice};
@@ -39,6 +42,7 @@ use crystal_shared_proto::mail::SReceiveMail;
 use crystal_shared_proto::user::{
     SChangeAMode,
     SChangePMode,
+    SHealthChanged,
     STimeOfDay,
     SSwitchGroup,
     SUserInformation,
@@ -216,6 +220,24 @@ impl LoginConnection {
                 if let Ok(pkt) = SNewItemInfo::from_item_info(info) {
                     if let Ok(raw) = pkt.encode() {
                         out.push(Self::encode_raw(raw));
+                    }
+                }
+            }
+
+            {
+                let world = self.world.lock().unwrap();
+                for recipe in &self.world_db.recipe_infos {
+                    if let Some(uid) =
+                        world.get_runtime_recipe_uid_by_item_index(recipe.item_index)
+                    {
+                        if let Some(runtime) = world.get_runtime_recipe_by_uid(uid) {
+                            let pkt = SNewRecipeInfo {
+                                recipe_bytes: runtime.client_bytes.clone(),
+                            };
+                            if let Ok(raw) = pkt.encode() {
+                                out.push(Self::encode_raw(raw));
+                            }
+                        }
                     }
                 }
             }
@@ -666,31 +688,63 @@ impl LoginConnection {
                 out.push(Self::encode_raw(raw));
             }
 
-            // Send BaseStatsInfo after UserInformation so the client has
-            // CoreStats formulas available once the User object is
-            // initialised, mirroring the C# PlayerObject.SendBaseStats
-            // behaviour where BaseStatsInfo is enqueued after GetUserInfo.
+            let hc_pkt = SHealthChanged {
+                hp: stats.hp,
+                mp: stats.mp,
+            };
+            if let Ok(raw) = hc_pkt.encode() {
+                tracing::debug!(
+                    "start_game: send SHealthChanged -> session_id={} hp={} mp={}",
+                    self.session_id,
+                    stats.hp,
+                    stats.mp,
+                );
+                out.push(Self::encode_raw(raw));
+            }
+
             let base_stats_bytes = base_stats::encode_base_stats_for_job(job);
             let base_stats_pkt = SBaseStatsInfo {
                 stats_bytes: base_stats_bytes,
             };
             out.push(Self::encode_raw(base_stats_pkt.encode()));
 
-            // After sending BaseStatsInfo and initial HP/MP, also send an
-            // initial ObjectHealth packet for this player so the client can
-            // render their head HP bar immediately on login, mirroring the
-            // C# MapObject.BroadcastHealthChange behaviour on spawn.
             let initial_hp_percent: u8 = if max_hp > 0 {
                 ((stats.hp as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8
             } else {
                 0
             };
-            let self_hp_pkt = crystal_shared_proto::scene::SObjectHealth {
+            let self_hp_pkt = SObjectHealth {
                 object_id: self.session_id,
                 percent: initial_hp_percent,
                 expire: 5,
             };
             if let Ok(raw) = self_hp_pkt.encode() {
+                tracing::debug!(
+                    "start_game: send initial SObjectHealth -> session_id={} object_id={} percent={} expire={}",
+                    self.session_id,
+                    self.session_id,
+                    initial_hp_percent,
+                    5,
+                );
+                out.push(Self::encode_raw(raw));
+            }
+
+            // Explicitly clear any stale Hidden state for this session's
+            // player object so that the client renders them as visible on
+            // login, even if previous buffs or reconnections left the
+            // server-side flag set. The legacy C# server assumes Hidden is
+            // false on spawn; sending an explicit ObjectHidden(false) here is
+            // a safe approximation.
+            let unhide_pkt = SObjectHidden {
+                object_id: self.session_id,
+                hidden: false,
+            };
+            if let Ok(raw) = unhide_pkt.encode() {
+                tracing::debug!(
+                    "start_game: send SObjectHidden(false) -> session_id={} object_id={}",
+                    self.session_id,
+                    self.session_id,
+                );
                 out.push(Self::encode_raw(raw));
             }
 
@@ -744,6 +798,54 @@ impl LoginConnection {
             };
             if let Ok(raw) = slots_refresh.encode() {
                 out.push(Self::encode_raw(raw));
+            }
+
+            // After the player has spawned and inventory/equipment have been
+            // synchronised, mirror the C# StartGameSuccess quest sync by
+            // sending the completed quest list followed by all active quest
+            // progresses as ChangeQuest(Add) packets.
+            {
+                let (now_ms, active_quests, completed_quests) = {
+                    let world = self.world.lock().unwrap();
+                    let now_ms = world.current_time_ms();
+                    let quests = world.quests_for_player(self.session_id);
+                    let completed = world.completed_quests_for_player(self.session_id);
+                    (now_ms, quests, completed)
+                };
+
+                if !completed_quests.is_empty() {
+                    let pkt = SCompleteQuest {
+                        completed_quests,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
+
+                const QUEST_STATE_ADD: u8 = 0;
+
+                for progress in active_quests {
+                    let quest_bytes = match progress.to_client_progress_bytes(now_ms) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            tracing::debug!(
+                                "start_game: failed to encode quest progress for session_id={} quest_id=? err={:?}",
+                                self.session_id,
+                                e,
+                            );
+                            continue;
+                        }
+                    };
+
+                    let pkt = SChangeQuest {
+                        quest_bytes,
+                        quest_state: QUEST_STATE_ADD,
+                        track_quest: false,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
             }
 
             let mut storage_bytes = Vec::new();

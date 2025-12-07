@@ -203,6 +203,10 @@ impl<P: WorldProvider> World<P> {
 
         self.process_player_pk(now_ms);
 
+        // Process Taoist Reincarnation timers so that expired attempts are
+        // cancelled and appropriate notifications are emitted.
+        self.process_reincarnation(now_ms, &mut events);
+
         // SafeZoneHealing: periodically heal players standing inside any
         // configured SafeZone when Settings.SafeZoneHealing is enabled. This
         // mirrors the effect of C# Healing spell objects placed by
@@ -423,12 +427,12 @@ impl<P: WorldProvider> World<P> {
                     fw.cells.len(),
                 );
                 for &(x, y) in &fw.cells {
-                    self.remove_map_spell(fw.map_index, x, y, Spell::FireWall as u8);
+                    self.remove_map_spell(fw.map_index, x, y, spell_id);
                     events.push(WorldEvent::MapSpellRemoved {
                         map_index: fw.map_index,
                         x,
                         y,
-                        spell: Spell::FireWall as u8,
+                        spell: spell_id,
                     });
                 }
                 continue;
@@ -832,6 +836,7 @@ impl<P: WorldProvider> World<P> {
 
         // Monster death: update respawn counts, drops and experience.
         self.mark_monster_dead(map_index, target_monster_id);
+        let _ = self.apply_quest_kill_for_player(attacker_session_id, monster_index);
 
         if !monster_drops.is_empty() {
             let (item_offset, gold_offset) = if let Some(p) = self.players.get(&attacker_session_id)
@@ -1820,6 +1825,8 @@ impl<P: WorldProvider> World<P> {
                 // Remove the monster from the world state and update respawn
                 // counts before handling drops and experience.
                 self.mark_monster_dead(map_index, target_id);
+                let _ =
+                    self.apply_quest_kill_for_player(owner_sid, target_monster_index);
 
                 if !monster_drops.is_empty() {
                     let item_offset = owner_stats.get(Stat::ItemDropRatePercent);

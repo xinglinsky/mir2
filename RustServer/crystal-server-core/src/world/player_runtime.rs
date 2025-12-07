@@ -1,6 +1,6 @@
 use crate::stats::Stat;
 use crate::world::types::{BuffProperty, BuffType, PoisonType};
-use crate::world::{SessionId, Spell};
+use crate::world::Spell;
 use crate::world::provider::WorldProvider;
 
 use super::{World, WorldEvent};
@@ -116,6 +116,28 @@ impl<P: WorldProvider> World<P> {
                 )
             });
 
+            // Debug: whenever a player is or becomes hidden due to buffs,
+            // log their state so we can diagnose unexpected permanent
+            // invisibility in SafeZones.
+            if new_hidden || old_hidden {
+                let buff_types: Vec<u8> = player
+                    .active_buffs
+                    .iter()
+                    .map(|b| b.buff_type as u8)
+                    .collect();
+                tracing::debug!(
+                    "process_player_buffs: session_id={} map={} pos=({}, {}) in_safe_zone={} old_hidden={} new_hidden={} buff_types={:?}",
+                    session_id,
+                    player.map_index,
+                    player.x,
+                    player.y,
+                    in_safe_zone,
+                    old_hidden,
+                    new_hidden,
+                    buff_types,
+                );
+            }
+
             if new_hidden != old_hidden {
                 player.hidden = new_hidden;
 
@@ -125,6 +147,42 @@ impl<P: WorldProvider> World<P> {
                     x: player.x,
                     y: player.y,
                     hidden: new_hidden,
+                });
+            }
+        }
+    }
+
+    /// Cancel any in-progress Taoist Reincarnation attempts whose
+    /// ReincarnationExpireTime has passed, mirroring the legacy C#
+    /// HumanObject timer logic which resets ReincarnationReady /
+    /// ActiveReincarnation and notifies the caster that the attempt failed.
+    pub fn process_reincarnation(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        use crate::world::SessionId;
+
+        let mut hosts: Vec<SessionId> = Vec::new();
+
+        for (&sid, p) in &self.players {
+            if !p.reincarnation_ready {
+                continue;
+            }
+            if p.reincarnation_target_session_id.is_none() {
+                continue;
+            }
+            if p.reincarnation_expire_time_ms > 0
+                && now_ms >= p.reincarnation_expire_time_ms
+            {
+                hosts.push(sid);
+            }
+        }
+
+        for host_sid in hosts {
+            if self.cancel_reincarnation_for_session(host_sid).is_some() {
+                events.push(WorldEvent::PartySystemMessage {
+                    session_id: host_sid,
+                    message: "Reincarnation failed.".to_string(),
+                });
+                events.push(WorldEvent::ReincarnationCancelled {
+                    session_id: host_sid,
                 });
             }
         }

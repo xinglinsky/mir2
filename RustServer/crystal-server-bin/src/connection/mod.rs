@@ -26,6 +26,7 @@ pub mod item;
 pub mod trade;
 pub mod friend;
 pub mod ranking;
+pub mod quest;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {

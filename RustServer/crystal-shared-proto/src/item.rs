@@ -584,6 +584,28 @@ impl SResizeStorage {
 }
 
 #[derive(Clone, Debug)]
+pub struct SNewRecipeInfo {
+    /// Raw bytes representing the serialized ClientRecipeInfo as written by
+    /// the C# ClientRecipeInfo.Save(BinaryWriter) method.
+    pub recipe_bytes: Vec<u8>,
+}
+
+impl SNewRecipeInfo {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        Ok(RawPacket {
+            id: ServerPacketId::NewRecipeInfo as i16,
+            payload: self.recipe_bytes.clone(),
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        Ok(SNewRecipeInfo {
+            recipe_bytes: payload.to_vec(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SCombineItem {
     pub grid: u8,
     pub id_from: u64,
@@ -622,6 +644,28 @@ impl SCombineItem {
             success,
             destroy,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SCraftItem {
+    pub success: bool,
+}
+
+impl SCraftItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::CraftItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let success = read_bool(&mut c)?;
+        Ok(SCraftItem { success })
     }
 }
 

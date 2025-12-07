@@ -247,6 +247,22 @@ async fn main() -> io::Result<()> {
         }
     }
 
+    match world::map::load_quest_infos_from_mirdb(&cfg.server_mirdb_path) {
+        Ok(quests) => {
+            tracing::debug!(
+                "[core] Loaded {} QuestInfo entries from Server.MirDB",
+                quests.len()
+            );
+            world_db.quest_infos = quests;
+        }
+        Err(e) => {
+            tracing::debug!(
+                "[core] Failed to load Server.MirDB (QuestInfoList): {} (continuing without Quest DB)",
+                e
+            );
+        }
+    }
+
     // Load MagicInfoList so that the combat/skill system can access real spell
     // definitions (costs, ranges, power, etc.) from the MirDB.
     match world::map::load_magic_infos_from_mirdb(&cfg.server_mirdb_path) {
@@ -570,7 +586,8 @@ async fn main() -> io::Result<()> {
                             let mi = map_index as u32 & 0x0FFF;
                             let ux = x.max(0) as u32 & 0x03FF;
                             let uy = y.max(0) as u32 & 0x03FF;
-                            let object_id = (mi << 20) | (ux << 10) | uy;
+                            let base = (mi << 20) | (ux << 10) | uy;
+                            let object_id = base | 0x8000_0000;
 
                             let pkt = SObjectRemove { object_id };
 
@@ -734,6 +751,15 @@ async fn main() -> io::Result<()> {
                             let pkt = SObjectHidden { object_id, hidden };
 
                             if let Ok(raw) = pkt.encode() {
+                                tracing::debug!(
+                                    "tick: send SObjectHidden -> object_id={} hidden={} map={} pos=({}, {}) viewers={}",
+                                    object_id,
+                                    hidden,
+                                    map_index,
+                                    x,
+                                    y,
+                                    viewers.len(),
+                                );
                                 let encoded = raw.encode();
                                 let mut outboxes =
                                     outboxes_for_world_events.lock().unwrap();
@@ -872,6 +898,16 @@ async fn main() -> io::Result<()> {
                                 expire: 5,
                             };
                             if let Ok(pkt) = health_pkt.encode() {
+                                tracing::debug!(
+                                    "tick: send SObjectHealth(Struck) -> object_id={} percent={} expire={} map={} pos=({}, {}) viewers={}",
+                                    object_id,
+                                    health_percent,
+                                    5,
+                                    map_index,
+                                    x,
+                                    y,
+                                    viewers.len(),
+                                );
                                 let raw = pkt.encode();
                                 let mut outboxes =
                                     outboxes_for_world_events.lock().unwrap();
@@ -1047,6 +1083,18 @@ async fn main() -> io::Result<()> {
                                 expire: 2,
                             };
                             if let Ok(pkt) = health_pkt.encode() {
+                                tracing::debug!(
+                                    "tick: send SObjectHealth(PlayerHealed) -> object_id={} percent={} expire={} map={} pos=({}, {}) viewers={} show_fx={} in_safezone={}",
+                                    object_id,
+                                    health_percent,
+                                    2,
+                                    map_index,
+                                    x,
+                                    y,
+                                    viewers.len(),
+                                    false,
+                                    false,
+                                );
                                 let raw = pkt.encode();
                                 let mut outboxes =
                                     outboxes_for_world_events.lock().unwrap();
@@ -1080,13 +1128,19 @@ async fn main() -> io::Result<()> {
                             if let Some((hp, mp)) = hp_mp {
                                 let hc_pkt = SHealthChanged { hp, mp };
                                 if let Ok(raw) = hc_pkt.encode() {
+                                    tracing::debug!(
+                                        "tick: send SHealthChanged(PlayerHealed) -> session_id={} hp={} mp={} map={} pos=({}, {})",
+                                        session_id,
+                                        hp,
+                                        mp,
+                                        map_index,
+                                        x,
+                                        y,
+                                    );
                                     let encoded = raw.encode();
                                     let mut outboxes =
                                         outboxes_for_world_events.lock().unwrap();
-                                    outboxes
-                                        .entry(session_id)
-                                        .or_default()
-                                        .push(encoded);
+                                    outboxes.entry(session_id).or_default().push(encoded);
                                 }
 
                                 if hp <= 0 {

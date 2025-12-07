@@ -53,6 +53,7 @@ use crate::world::skills::taoist::{
     cast_mass_healing,
     cast_mass_hiding,
     cast_poisoning,
+    cast_reincarnation,
     cast_soul_shield,
     cast_summon_holy_deva,
     cast_summon_shinsu,
@@ -1409,6 +1410,11 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if spell == Spell::Reincarnation as u8 {
+            cast_reincarnation(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
         if spell == Spell::SummonHolyDeva as u8 {
             cast_summon_holy_deva(self, session_id, spell, direction, x, y, events);
             return;
@@ -1701,7 +1707,7 @@ impl<P: WorldProvider> World<P> {
 
             if let Some(target_session_id) = player_target {
                 // Snapshot defender stats for damage calculation.
-                let mut defender_stats = {
+                let defender_stats = {
                     if let Some(t) = self.players.get(&target_session_id) {
                         let mut s = t.stats.total.clone();
 
@@ -2333,6 +2339,7 @@ impl<P: WorldProvider> World<P> {
 
             if dead {
                 self.mark_monster_dead(map_index, id);
+                let _ = self.apply_quest_kill_for_player(session_id, monster_index);
 
                 if let Some(info) = self.provider.get_monster_info(monster_index) {
                     tracing::trace!(

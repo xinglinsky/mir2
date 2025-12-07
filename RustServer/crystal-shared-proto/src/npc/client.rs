@@ -41,6 +41,59 @@ impl CCallNPC {
 }
 
 #[derive(Clone, Debug)]
+pub struct CCraftItem {
+    pub unique_id: u64,
+    pub count: u16,
+    pub slots: Vec<i32>,
+}
+
+impl CCraftItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+
+        let len: i32 = self
+            .slots
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many craft slots"))?;
+        write_i32_le(&mut buf, len)?;
+        for slot in &self.slots {
+            write_i32_le(&mut buf, *slot)?;
+        }
+
+        Ok(RawPacket {
+            id: ClientPacketId::CraftItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        let slots_len = read_i32_le(&mut c)?;
+        if slots_len < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative craft slots length",
+            ));
+        }
+        let mut slots = Vec::with_capacity(slots_len as usize);
+        for _ in 0..slots_len {
+            let slot = read_i32_le(&mut c)?;
+            slots.push(slot);
+        }
+        Ok(CCraftItem {
+            unique_id,
+            count,
+            slots,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CBuyItem {
     pub item_index: u64,
     pub count: u16,

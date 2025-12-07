@@ -2,7 +2,9 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use crystal_shared_proto::item_types::ItemInfoData;
+use crystal_shared_proto::io::{write_i32_le, write_u32_le};
+use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
+use crate::item::create_fresh_user_item;
 
 #[derive(Clone, Debug)]
 pub struct RecipeItemRequirement {
@@ -29,6 +31,69 @@ pub struct RecipeInfo {
 impl RecipeInfo {
     pub fn matches_product(&self, item_index: i32) -> bool {
         self.item_index == item_index
+    }
+
+    pub fn encode_client_recipe_bytes(
+        &self,
+        item_infos: &[ItemInfoData],
+        recipe_unique_id: u64,
+    ) -> io::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+
+        let product_info = item_infos
+            .iter()
+            .find(|i| i.index == self.item_index)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown recipe product item_index {}", self.item_index),
+                )
+            })?;
+
+        let mut product = create_fresh_user_item(product_info, recipe_unique_id, self.amount);
+        product.is_shop_item = true;
+
+        write_u32_le(&mut buf, self.gold)?;
+        buf.push(self.chance);
+
+        let product_bytes = product.encode_to_bytes()?;
+        buf.extend_from_slice(&product_bytes);
+
+        let mut tools_encoded: Vec<UserItemData> = Vec::new();
+        for req in &self.tools {
+            if let Some(info) = item_infos.iter().find(|i| i.index == req.item_index) {
+                let mut item = create_fresh_user_item(info, 0, req.count.max(1));
+                item.is_shop_item = true;
+                tools_encoded.push(item);
+            }
+        }
+
+        write_i32_le(&mut buf, tools_encoded.len() as i32)?;
+        for tool in tools_encoded {
+            let bytes = tool.encode_to_bytes()?;
+            buf.extend_from_slice(&bytes);
+        }
+
+        let mut ingredients_encoded: Vec<UserItemData> = Vec::new();
+        for req in &self.ingredients {
+            if let Some(info) = item_infos.iter().find(|i| i.index == req.item_index) {
+                let mut item = create_fresh_user_item(info, 0, req.count);
+                item.is_shop_item = true;
+                if let Some(dura) = req.current_dura {
+                    let d = dura.min(item.max_dura);
+                    item.current_dura = d;
+                }
+                ingredients_encoded.push(item);
+            }
+        }
+
+        write_i32_le(&mut buf, ingredients_encoded.len() as i32)?;
+        for ing in ingredients_encoded {
+            let bytes = ing.encode_to_bytes()?;
+            buf.extend_from_slice(&bytes);
+        }
+
+        Ok(buf)
     }
 }
 

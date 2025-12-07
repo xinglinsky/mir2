@@ -1954,6 +1954,11 @@
     private static readonly Dictionary<string, string> MagicNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> QuestNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> MapNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> BuffNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> PoisonNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> StatNameById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> BuffDescriptionById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> PoisonDescriptionById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public static string GetItemName(string englishName)
     {
@@ -1965,6 +1970,79 @@
 
         string value;
         if (ItemNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetBuffDescription(string id, string fallback)
+    {
+        if (string.IsNullOrEmpty(id))
+            return fallback ?? string.Empty;
+
+        string key = "BuffDesc_" + id;
+
+        string value;
+        if (BuffDescriptionById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return fallback ?? string.Empty;
+    }
+
+    public static string GetPoisonDescription(string id, string fallback)
+    {
+        if (string.IsNullOrEmpty(id))
+            return fallback ?? string.Empty;
+
+        string key = "PoisonDesc_" + id;
+
+        string value;
+        if (PoisonDescriptionById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return fallback ?? string.Empty;
+    }
+
+    public static string GetBuffName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty).Replace("-", string.Empty);
+        string key = "Buff_" + id;
+
+        string value;
+        if (BuffNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetPoisonName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty).Replace("-", string.Empty);
+        string key = "Poison_" + id;
+
+        string value;
+        if (PoisonNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
+            return value;
+
+        return englishName;
+    }
+
+    public static string GetStatName(string englishName)
+    {
+        if (string.IsNullOrEmpty(englishName))
+            return englishName ?? string.Empty;
+
+        string id = englishName.Replace(" ", string.Empty).Replace("(", string.Empty).Replace(")", string.Empty).Replace("-", string.Empty);
+        string key = "Stat_" + id;
+
+        string value;
+        if (StatNameById.TryGetValue(key, out value) && !string.IsNullOrEmpty(value))
             return value;
 
         return englishName;
@@ -2298,6 +2376,11 @@
         MagicNameById.Clear();
         QuestNameById.Clear();
         MapNameById.Clear();
+        BuffNameById.Clear();
+        PoisonNameById.Clear();
+        StatNameById.Clear();
+        BuffDescriptionById.Clear();
+        PoisonDescriptionById.Clear();
 
         if (!File.Exists(languageIniPath))
             return;
@@ -2358,6 +2441,26 @@
             else if (key.StartsWith("Map_", StringComparison.OrdinalIgnoreCase))
             {
                 MapNameById[key] = value;
+            }
+            else if (key.StartsWith("Buff_", StringComparison.OrdinalIgnoreCase))
+            {
+                BuffNameById[key] = value;
+            }
+            else if (key.StartsWith("Poison_", StringComparison.OrdinalIgnoreCase))
+            {
+                PoisonNameById[key] = value;
+            }
+            else if (key.StartsWith("Stat_", StringComparison.OrdinalIgnoreCase))
+            {
+                StatNameById[key] = value;
+            }
+            else if (key.StartsWith("BuffDesc_", StringComparison.OrdinalIgnoreCase))
+            {
+                BuffDescriptionById[key] = value;
+            }
+            else if (key.StartsWith("PoisonDesc_", StringComparison.OrdinalIgnoreCase))
+            {
+                PoisonDescriptionById[key] = value;
             }
         }
     }

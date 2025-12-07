@@ -59,6 +59,10 @@ use crystal_shared_proto::user::{
     SHealthChanged,
     SUserSlotsRefresh,
 };
+use crystal_shared_proto::user::group::{
+    SRequestReincarnation,
+    SCancelReincarnation,
+};
 use tracing::debug;
 
 use super::{LoginConnection, Stage};
@@ -689,6 +693,16 @@ impl LoginConnection {
                         };
                         if let Ok(pkt) = health.encode() {
                             let raw = Self::encode_raw(pkt);
+                            tracing::debug!(
+                                "move: send SObjectHealth(ObjectStruck/self-attack) -> sid={} object_id={} percent={} expire={} map={} pos=({}, {})",
+                                self.session_id,
+                                object_id,
+                                health_percent,
+                                5,
+                                map_index,
+                                x,
+                                y,
+                            );
                             out.push(raw.clone());
                             self.enqueue_for_viewers(map_index, x, y, raw);
                         }
@@ -728,6 +742,16 @@ impl LoginConnection {
                     };
                     if let Ok(raw) = pkt.encode() {
                         let bytes = Self::encode_raw(raw);
+
+                        tracing::debug!(
+                            "move: send SObjectHidden -> sid={} object_id={} hidden={} map={} pos=({}, {})",
+                            self.session_id,
+                            object_id,
+                            hidden,
+                            map_index,
+                            x,
+                            y,
+                        );
 
                         if object_id == self.session_id {
                             out.push(bytes.clone());
@@ -1329,6 +1353,23 @@ impl LoginConnection {
                         self.send_system_chat(&message, out);
                     }
                 }
+                world::WorldEvent::ReincarnationRequested {
+                    host_session_id: _,
+                    target_session_id,
+                } => {
+                    if target_session_id == self.session_id {
+                        let pkt = SRequestReincarnation;
+                        let raw = pkt.encode();
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
+                world::WorldEvent::ReincarnationCancelled { session_id } => {
+                    if session_id == self.session_id {
+                        let pkt = SCancelReincarnation;
+                        let raw = pkt.encode();
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
             }
         }
 
@@ -1353,6 +1394,25 @@ impl LoginConnection {
         };
 
         let _ = self.handle_world_events(events, out);
+
+        // 施法后主动从世界读取当前 HP/MP，并发一帧 SHealthChanged，
+        // 确保客户端蓝条与服务器同步，匹配 C# MirConnection.Magic 的行为。
+        let (hp, mp) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .unwrap_or((0, 0))
+        };
+
+        if let Some(stats) = self.current_stats.as_mut() {
+            stats.hp = hp;
+            stats.mp = mp;
+        }
+
+        let hc = SHealthChanged { hp, mp };
+        if let Ok(raw) = hc.encode() {
+            out.push(Self::encode_raw(raw));
+        }
     }
 
     pub(crate) fn handle_attack(&mut self, msg: CAttack, out: &mut Vec<Vec<u8>>) {
@@ -1370,6 +1430,25 @@ impl LoginConnection {
         };
 
         let _ = self.handle_world_events(events, out);
+
+        // 对通过普通攻击键触发的技能（包括消耗 MP 的近战/魔法）也在攻击后
+        // 主动同步一次 HP/MP，避免仅依赖后续伤害或回复事件间接刷新。
+        let (hp, mp) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .unwrap_or((0, 0))
+        };
+
+        if let Some(stats) = self.current_stats.as_mut() {
+            stats.hp = hp;
+            stats.mp = mp;
+        }
+
+        let hc = SHealthChanged { hp, mp };
+        if let Ok(raw) = hc.encode() {
+            out.push(Self::encode_raw(raw));
+        }
         self.update_visibility(out);
     }
 
@@ -1527,6 +1606,64 @@ impl LoginConnection {
         }
     }
 
+    pub(crate) fn handle_accept_reincarnation(&mut self, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let (map_index, x, y, direction, hp, mp) = {
+            let mut world = self.world.lock().unwrap();
+            let Some((map_index, x, y, direction, hp, mp)) =
+                world.accept_reincarnation_for_session(self.session_id)
+            else {
+                drop(world);
+                // Mirror the legacy behaviour where the target is notified
+                // when a Reincarnation attempt is no longer valid.
+                self.send_system_chat("Reincarnation failed.", out);
+                return;
+            };
+            (map_index, x, y, direction, hp, mp)
+        };
+
+        self.current_map_index = map_index;
+        self.current_x = x;
+        self.current_y = y;
+        self.direction = direction;
+
+        if let Some(stats) = self.current_stats.as_mut() {
+            stats.hp = hp;
+            stats.mp = mp;
+        }
+
+        let hc = SHealthChanged { hp, mp };
+        if let Ok(raw) = hc.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        let revived = SRevived;
+        let raw = revived.encode();
+        out.push(Self::encode_raw(raw));
+
+        let obj_revived = SObjectRevived {
+            object_id: self.session_id,
+            effect: true,
+        };
+        if let Ok(pkt) = obj_revived.encode() {
+            let raw = Self::encode_raw(pkt);
+            out.push(raw.clone());
+            self.enqueue_for_viewers(map_index, x, y, raw);
+        }
+    }
+
+    pub(crate) fn handle_cancel_reincarnation(&mut self, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let mut world = self.world.lock().unwrap();
+        world.expire_reincarnation_from_session(self.session_id);
+    }
+
     pub(crate) fn send_safezone_border_spells(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
         if !self.world_config.safe_zone_border {
             return;
@@ -1574,6 +1711,12 @@ impl LoginConnection {
         let mi = map_index as u32 & 0xFFF; // 12 bits for map index
         let ux = x.max(0) as u32 & 0x3FF; // 10 bits for x
         let uy = y.max(0) as u32 & 0x3FF; // 10 bits for y
-        (mi << 20) | (ux << 10) | uy
+
+        // Place safe-zone border spell object IDs into a high, reserved range
+        // so they do not collide with real runtime object IDs such as player
+        // SessionId or monster/NPC ids. We keep the original bit-packing for
+        // map/x/y and then force the top bit on.
+        let base = (mi << 20) | (ux << 10) | uy;
+        base | 0x8000_0000
     }
 }

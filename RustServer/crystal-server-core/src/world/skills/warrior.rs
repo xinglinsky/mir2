@@ -432,6 +432,7 @@ pub fn cast_half_moon<P: WorldProvider>(
 
             if dead {
                 world.mark_monster_dead(map_index, id);
+                let _ = world.apply_quest_kill_for_player(session_id, monster_index);
 
                 if let Some(info) = world.provider.get_monster_info(monster_index) {
                     tracing::trace!(

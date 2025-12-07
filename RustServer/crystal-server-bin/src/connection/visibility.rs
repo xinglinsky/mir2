@@ -9,7 +9,7 @@ use crystal_shared_proto::scene::{
     SObjectNpc,
     SObjectRemove,
 };
-// use tracing::debug;
+use tracing::debug;
 use crystal_shared_proto::user::SObjectPlayer;
 
 use super::LoginConnection;
@@ -446,6 +446,15 @@ impl LoginConnection {
                         level_effects: 0,
                     };
                     if let Ok(raw) = pkt.encode() {
+                        debug!(
+                            "vis: send SObjectPlayer -> session_id={} target_sid={} map={} pos=({}, {}) hidden={}",
+                            self.session_id,
+                            sid,
+                            map_index,
+                            x,
+                            y,
+                            is_hidden,
+                        );
                         out.push(Self::encode_raw(raw));
                     }
 
@@ -482,6 +491,13 @@ impl LoginConnection {
                             expire: 5,
                         };
                         if let Ok(raw) = hp_pkt.encode() {
+                            debug!(
+                                "vis: send SObjectHealth -> session_id={} object_id={} percent={} expire={} (reason=new player in view)",
+                                self.session_id,
+                                sid,
+                                percent,
+                                5,
+                            );
                             out.push(Self::encode_raw(raw));
                         }
                     }

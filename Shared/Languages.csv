@@ -3473,3 +3473,139 @@ WhisperLover;Client;Whisper Lover;给爱人密语
 WizardDes;Client;Wizards are a class of low strength and stamina, but have the ability to use powerful spells. Their offensive spells are very effective, but because it takes time to cast these spells, they're likely to leave themselves open for enemy's attacks. Therefore, the physically weak wizards must aim to attack their enemies from a safe distance.;法师力量和体力较弱，但能施放强大的魔法。攻击法术十分有效，但施法需要时间，容易在施法时受到攻击，适合在安全距离输出.
 YouGained;Client;You gained {0}.;你获得了 {0}。
 YouGained2;Client;You gained {0:###,###,###} {1};你获得了 {0:###,###,###} {1}
+Buff_Fury;Both;Fury;狂暴
+Buff_Rage;Both;Rage;狂怒
+Buff_ImmortalSkin;Both;ImmortalSkin;金刚不坏
+Buff_CounterAttack;Both;CounterAttack;反击
+Buff_MagicBooster;Both;MagicBooster;魔力增幅
+Buff_MagicShield;Both;MagicShield;魔法盾
+Buff_Hiding;Both;Hiding;隐身术
+Buff_ClearRing;Both;ClearRing;清明戒指
+Buff_Haste;Both;Haste;疾速
+Buff_SoulShield;Both;SoulShield;幽灵盾
+Buff_BlessedArmour;Both;BlessedArmour;神圣战甲术
+Buff_ProtectionField;Both;ProtectionField;护体结界
+Buff_UltimateEnhancer;Both;UltimateEnhancer;极限强化
+Buff_Curse;Both;Curse;诅咒术
+Buff_EnergyShield;Both;EnergyShield;能量护盾
+Buff_SwiftFeet;Both;SwiftFeet;疾风步
+Buff_LightBody;Both;LightBody;轻身术
+Buff_MoonLight;Both;MoonLight;月光斩
+Buff_DarkBody;Both;DarkBody;暗影之躯
+Buff_Concentration;Both;Concentration;集中射击
+Buff_VampireShot;Both;VampireShot;吸血箭
+Buff_PoisonShot;Both;PoisonShot;剧毒箭
+Buff_MentalState;Both;MentalState;心灵专注
+Buff_TemporalFlux;Both;TemporalFlux;时间回溯
+Buff_GameMaster;Both;GameMaster;GM 状态
+Buff_Guild;Both;Guild;行会增益
+Buff_Newbie;Both;Newbie;新手增益
+Buff_Exp;Both;Exp;经验加成
+Buff_Drop;Both;Drop;掉落加成
+Buff_Gold;Both;Gold;金币加成
+Buff_BagWeight;Both;BagWeight;负重提升
+Buff_Transform;Both;Transform;变身
+Buff_Lover;Both;Lover;情侣增益
+Buff_Mentee;Both;Mentee;徒弟增益
+Buff_Mentor;Both;Mentor;师父增益
+Buff_Rested;Both;Rested;休息状态
+Buff_Skill;Both;Skill;技能增益
+Buff_Impact;Both;Impact;物理强化
+Buff_Magic;Both;Magic;魔法强化
+Buff_Taoist;Both;Taoist;道术强化
+Buff_Storm;Both;Storm;风暴强化
+Poison_Green;Both;Green;中毒
+Poison_Red;Both;Red;护甲削弱
+Poison_Slow;Both;Slow;减速
+Poison_Frozen;Both;Frozen;冰冻
+Poison_Stun;Both;Stun;昏迷
+Poison_Paralysis;Both;Paralysis;麻痹
+Poison_DelayedExplosion;Both;DelayedExplosion;延时爆炸
+Poison_Bleeding;Both;Bleeding;流血
+Poison_LRParalysis;Both;LRParalysis;长效麻痹
+Poison_Blindness;Both;Blindness;致盲
+Poison_Dazed;Both;Dazed;眩晕
+Stat_MinAC;Both;MinAC;最小防御
+Stat_MaxAC;Both;MaxAC;最大防御
+Stat_MinMAC;Both;MinMAC;最小魔御
+Stat_MaxMAC;Both;MaxMAC;最大魔御
+Stat_MinDC;Both;MinDC;最小攻击
+Stat_MaxDC;Both;MaxDC;最大攻击
+Stat_MinMC;Both;MinMC;最小魔攻
+Stat_MaxMC;Both;MaxMC;最大魔攻
+Stat_MinSC;Both;MinSC;最小道术
+Stat_MaxSC;Both;MaxSC;最大道术
+Stat_Accuracy;Both;Accuracy;准确
+Stat_Agility;Both;Agility;敏捷
+Stat_HP;Both;HP;生命值
+Stat_MP;Both;MP;魔法值
+Stat_AttackSpeed;Both;AttackSpeed;攻击速度
+Stat_BagWeight;Both;BagWeight;包裹负重
+Stat_HandWeight;Both;HandWeight;手持负重
+Stat_WearWeight;Both;WearWeight;穿戴负重
+Stat_Holy;Both;Holy;神圣
+Stat_Freezing;Both;Freezing;冰冻
+Stat_PoisonAttack;Both;PoisonAttack;毒性攻击
+Stat_MagicResist;Both;MagicResist;魔法抗性
+Stat_PoisonResist;Both;PoisonResist;毒性抗性
+Stat_HealthRecovery;Both;HealthRecovery;生命恢复
+Stat_SpellRecovery;Both;SpellRecovery;法力恢复
+Stat_PoisonRecovery;Both;PoisonRecovery;中毒恢复
+Stat_CriticalRate;Both;CriticalRate;暴击率
+Stat_CriticalDamage;Both;CriticalDamage;暴击伤害
+Stat_MaxACRatePercent;Both;MaxACRatePercent;防御
+Stat_MaxMACRatePercent;Both;MaxMACRatePercent;魔御
+Stat_MaxDCRatePercent;Both;MaxDCRatePercent;攻击
+Stat_MaxMCRatePercent;Both;MaxMCRatePercent;魔攻
+Stat_MaxSCRatePercent;Both;MaxSCRatePercent;道术
+Stat_AttackSpeedRatePercent;Both;AttackSpeedRatePercent;攻击速度
+Stat_HPRatePercent;Both;HPRatePercent;生命值
+Stat_MPRatePercent;Both;MPRatePercent;魔法值
+Stat_HPDrainRatePercent;Both;HPDrainRatePercent;吸血
+Stat_ExpRatePercent;Both;ExpRatePercent;经验获取
+Stat_ItemDropRatePercent;Both;ItemDropRatePercent;物品掉落
+Stat_GoldDropRatePercent;Both;GoldDropRatePercent;金币掉落
+Stat_MineRatePercent;Both;MineRatePercent;挖矿收获
+Stat_GemRatePercent;Both;GemRatePercent;宝石产出
+Stat_FishRatePercent;Both;FishRatePercent;钓鱼收获
+Stat_CraftRatePercent;Both;CraftRatePercent;制造成功率
+Stat_SkillGainMultiplier;Both;SkillGainMultiplier;技能成长倍率
+Stat_AttackBonus;Both;AttackBonus;额外伤害
+Stat_LoverExpRatePercent;Both;LoverExpRatePercent;情侣经验
+Stat_MentorDamageRatePercent;Both;MentorDamageRatePercent;师徒伤害加成
+Stat_MentorExpRatePercent;Both;MentorExpRatePercent;师徒经验加成
+Stat_DamageReductionPercent;Both;DamageReductionPercent;伤害减免
+Stat_EnergyShieldPercent;Both;EnergyShieldPercent;能量护盾触发几率
+Stat_EnergyShieldHPGain;Both;EnergyShieldHPGain;能量护盾回复生命
+Stat_ManaPenaltyPercent;Both;ManaPenaltyPercent;技能耗蓝
+Stat_TeleportManaPenaltyPercent;Both;TeleportManaPenaltyPercent;传送耗蓝
+BuffDesc_GameMaster_GM;Client;Hidden;隐身
+BuffDesc_GameMaster_Superman;Client;Superman Mode;超人模式
+BuffDesc_GameMaster_Observer;Client;Observer Mode;观察者模式
+BuffDesc_MentalState_Mode0;Client;Mode: Attack (full damage), cannot shoot through walls.;模式：进攻（全额伤害），无法穿墙射击。
+BuffDesc_MentalState_Mode1;Client;Mode: Wall (reduced damage), can shoot through walls.;模式：穿墙（伤害降低），可以穿墙射击。
+BuffDesc_MentalState_Mode2;Client;Mode: Group (medium damage), does not steal aggro.;模式：团战（中等伤害），不抢仇恨。
+BuffDesc_Hiding;Client;Invisible to most monsters.;对大部分怪物隐身。
+BuffDesc_MoonLight;Client;Invisible to players and most monsters beyond a certain distance.;在一定距离外，对玩家和大部分怪物隐身。
+BuffDesc_EnergyShield;Client;When attacked, there is a {0}% chance to restore {1} Health.;被攻击时有 {0}% 几率回复 {1} 点生命值。
+BuffDesc_DarkBody;Client;Invisible to most monsters and can move.;对大部分怪物隐身并可移动。
+BuffDesc_VampireShot;Client;Grants a life steal effect available to certain skills.;获得可由部分技能释放的吸血效果。
+BuffDesc_PoisonShot;Client;Grants a poison effect available to certain skills.;获得可由部分技能释放的中毒效果。
+BuffDesc_Concentration;Client;Increases chance to extract elements.;提高元素提取成功率。
+BuffDesc_MagicBooster_Line1;Client;Increases Magic Attack by {0}-{1}.;提升魔法攻击 {0}-{1} 点。
+BuffDesc_MagicBooster_Line2;Client;Increases Mana consumption by {0}%.;法力消耗提高 {0}%。
+BuffDesc_Transform;Client;Changes your appearance.;改变外观。
+BuffDesc_Mentee;Client;Doubles the speed of gaining skill proficiency.;技能熟练度获取速度翻倍。
+BuffDesc_BlindnessBuff;Client;Reduces your field of view.;视野范围降低。
+BuffDesc_Newbie;Client;Provides buffs intended for new players.;对新手玩家提供的增益效果。
+PoisonDesc_Green;Client;Every {0} seconds, you take {1} damage.;每 {0} 秒受到 {1} 点伤害。
+PoisonDesc_Red;Client;Every {0} seconds, your Armour is reduced by 10%.;每 {0} 秒护甲降低 10%。
+PoisonDesc_Slow;Client;Movement speed is reduced.;移动速度降低。
+PoisonDesc_Frozen;Client;You cannot cast, move, or attack.;无法施法、移动和攻击。
+PoisonDesc_Stun;Client;Every {0} seconds, damage you take is increased by 20%.;每 {0} 秒所受伤害提高 20%。
+PoisonDesc_Paralysis;Client;You cannot move or attack.;无法移动和攻击。
+PoisonDesc_DelayedExplosion;Client;A delayed explosion will occur.;延时爆炸效果。
+PoisonDesc_Bleeding;Client;Every {0} seconds, you take {1} bleeding damage.;每 {0} 秒受到 {1} 点流血伤害。
+PoisonDesc_LRParalysis;Client;You cannot move or attack, the effect ends when you are hit.;无法移动和攻击，被攻击时解除。
+PoisonDesc_Blindness;Client;Causes temporary blindness.;造成暂时失明。
+PoisonDesc_Dazed;Client;You cannot perform attacks.;无法进行攻击。

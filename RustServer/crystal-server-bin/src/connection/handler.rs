@@ -8,13 +8,18 @@ use crystal_shared_proto::guild::{
     CEditGuildMember,
     CEditGuildNotice,
     CRequestGuildInfo,
+    CGuildInvite,
+    CGuildNameReturn,
     CGuildStorageGoldChange,
     CGuildStorageItemChange,
 };
 use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem};
-use crystal_shared_proto::npc::{CBuyItem, CDepositTradeItem, CRetrieveTradeItem};
+use crystal_shared_proto::npc::{CBuyItem, CCraftItem, CDepositTradeItem, CRetrieveTradeItem};
 use crystal_shared_proto::login::{
+    CAbandonQuest,
+    CAcceptQuest,
+    CAcceptReincarnation,
     CAddFriend,
     CAddMember,
     CAddMemo,
@@ -29,17 +34,14 @@ use crystal_shared_proto::login::{
     CDeleteMail,
     CDelMember,
     CEquipItem,
-    CGameshopBuy,
-    CGuildInvite,
-    CGuildNameReturn,
-    CGroupInvite,
+    CFinishQuest,
     CKeepAlive,
     CLockMail,
     CLogin,
-    CMagic,
-    CMagicKey,
     CMailCost,
     CMailLockedItem,
+    CMagic,
+    CMagicKey,
     CMoveItem,
     CNewAccount,
     CNewCharacter,
@@ -49,11 +51,13 @@ use crystal_shared_proto::login::{
     CRemoveFriend,
     CRemoveItem,
     CRequestMapInfo,
+    CSearchMap,
     CRun,
     CSendMail,
-    CSearchMap,
+    CShareQuest,
     CStartGame,
     CSwitchGroup,
+    CGroupInvite,
     CTeleportToNPC,
     CTownRevive,
     CTradeCancel,
@@ -64,6 +68,8 @@ use crystal_shared_proto::login::{
     CTurn,
     CUseItem,
     CWalk,
+    CCancelReincarnation,
+    CGameshopBuy,
     ClientPacketId,
     SConnected,
 };
@@ -115,6 +121,20 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::NewAccount => {
                 if let Ok(msg) = CNewAccount::decode(&packet.payload) {
                     self.handle_new_account(msg, &mut out);
+                }
+            }
+            ClientPacketId::CraftItem => {
+                match CCraftItem::decode(&packet.payload) {
+                    Ok(msg) => {
+                        self.handle_craft_item(msg, &mut out);
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to decode CCraftItem from session_id={} err={:?}",
+                            self.session_id,
+                            e,
+                        );
+                    }
                 }
             }
             ClientPacketId::ClientVersion => {
@@ -565,45 +585,35 @@ impl ConnectionHandler for LoginConnection {
                     }
                 }
             }
-            // Quest protocols (stub - not implemented yet)
+            // Quest protocols
             ClientPacketId::AcceptQuest => {
-                tracing::debug!("AcceptQuest packet received but not implemented yet");
-                // TODO: Implement accept quest logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "任务系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CAcceptQuest::decode(&packet.payload) {
+                    self.handle_accept_quest(msg, &mut out);
                 }
             }
             ClientPacketId::FinishQuest => {
-                tracing::debug!("FinishQuest packet received but not implemented yet");
-                // TODO: Implement finish quest logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "任务系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CFinishQuest::decode(&packet.payload) {
+                    self.handle_finish_quest(msg, &mut out);
                 }
             }
             ClientPacketId::AbandonQuest => {
-                tracing::debug!("AbandonQuest packet received but not implemented yet");
-                // TODO: Implement abandon quest logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "任务系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CAbandonQuest::decode(&packet.payload) {
+                    self.handle_abandon_quest(msg, &mut out);
                 }
             }
             ClientPacketId::ShareQuest => {
-                tracing::debug!("ShareQuest packet received but not implemented yet");
-                // TODO: Implement share quest logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "任务系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CShareQuest::decode(&packet.payload) {
+                    self.handle_share_quest(msg, &mut out);
+                }
+            }
+            ClientPacketId::AcceptReincarnation => {
+                if let Ok(_) = CAcceptReincarnation::decode(&packet.payload) {
+                    self.handle_accept_reincarnation(&mut out);
+                }
+            }
+            ClientPacketId::CancelReincarnation => {
+                if let Ok(_) = CCancelReincarnation::decode(&packet.payload) {
+                    self.handle_cancel_reincarnation(&mut out);
                 }
             }
             // Group protocols (stub - not implemented yet)

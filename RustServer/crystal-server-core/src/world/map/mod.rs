@@ -11,6 +11,7 @@ pub use mirdb::{
     load_item_infos_from_mirdb,
     load_monster_infos_from_mirdb,
     load_npc_infos_from_mirdb,
+    load_quest_infos_from_mirdb,
     load_magic_infos_from_mirdb,
     load_game_shop_items_from_mirdb,
     GameShopItemRecord,

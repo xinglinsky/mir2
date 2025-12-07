@@ -10,6 +10,7 @@ use crystal_shared_proto::io::{write_bool, write_i32_le, write_string};
 use std::collections::HashMap;
 
 use super::{Job, PlayerStats, SessionId, World};
+use crate::quest::{QuestId, QuestProgress};
 use crate::world::types::{AttackMode, PetMode};
 
 #[derive(Clone, Debug)]
@@ -72,6 +73,12 @@ pub struct PlayerState {
     pub gs_purchases: HashMap<i32, i32>,
     pub npc_data: HashMap<String, String>,
     pub friends: Vec<FriendEntry>,
+    pub quests: HashMap<QuestId, QuestProgress>,
+    pub completed_quests: Vec<i32>,
+    pub reincarnation_host_session_id: Option<SessionId>,
+    pub reincarnation_ready: bool,
+    pub reincarnation_target_session_id: Option<SessionId>,
+    pub reincarnation_expire_time_ms: i64,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -113,6 +120,10 @@ impl<P: WorldProvider> World<P> {
                 p.job = job;
                 p.gender = gender;
                 p.dead = false;
+                p.reincarnation_host_session_id = None;
+                p.reincarnation_ready = false;
+                p.reincarnation_target_session_id = None;
+                p.reincarnation_expire_time_ms = 0;
                 p.stats.set_base_from_level(job, level);
                 p.stats.recalc_if_dirty_for_job(job);
             })
@@ -174,6 +185,12 @@ impl<P: WorldProvider> World<P> {
                     gs_purchases: HashMap::new(),
                     npc_data: HashMap::new(),
                     friends: Vec::new(),
+                    quests: HashMap::new(),
+                    completed_quests: Vec::new(),
+                    reincarnation_host_session_id: None,
+                    reincarnation_ready: false,
+                    reincarnation_target_session_id: None,
+                    reincarnation_expire_time_ms: 0,
                 }
             });
 
@@ -591,6 +608,142 @@ impl<P: WorldProvider> World<P> {
             player.hp,
             player.mp,
         ))
+    }
+
+    pub fn accept_reincarnation_for_session(
+        &mut self,
+        session_id: SessionId,
+    ) -> Option<(i32, i32, i32, u8, i32, i32)> {
+        let now = self.time_ms;
+
+        let host_session_id = {
+            let player = self.players.get(&session_id)?;
+
+            if !player.dead && player.hp > 0 {
+                return None;
+            }
+
+            if player.reincarnation_expire_time_ms > 0
+                && now > player.reincarnation_expire_time_ms
+            {
+                return None;
+            }
+
+            match player.reincarnation_host_session_id {
+                Some(h) => h,
+                None => return None,
+            }
+        };
+
+        {
+            let host = self.players.get(&host_session_id)?;
+
+            if !host.reincarnation_ready {
+                return None;
+            }
+
+            if host.reincarnation_target_session_id != Some(session_id) {
+                return None;
+            }
+
+            if host.reincarnation_expire_time_ms > 0
+                && now > host.reincarnation_expire_time_ms
+            {
+                return None;
+            }
+        }
+
+        let (map_index, x, y, direction, hp, mp) = {
+            let player = self.players.get_mut(&session_id)?;
+
+            let max_hp = player.stats.total.get(Stat::HP).max(1);
+            let new_hp = (max_hp / 2).max(1);
+            let new_mp = player.mp;
+
+            player.hp = new_hp;
+            player.dead = false;
+            player.reincarnation_host_session_id = None;
+            player.reincarnation_expire_time_ms = 0;
+
+            (
+                player.map_index,
+                player.x,
+                player.y,
+                player.direction,
+                new_hp,
+                new_mp,
+            )
+        };
+
+        if let Some(host) = self.players.get_mut(&host_session_id) {
+            if host.reincarnation_target_session_id == Some(session_id) {
+                host.reincarnation_target_session_id = None;
+            }
+            host.reincarnation_ready = false;
+            host.reincarnation_expire_time_ms = 0;
+        }
+
+        Some((map_index, x, y, direction, hp, mp))
+    }
+
+    pub fn cancel_reincarnation_for_session(
+        &mut self,
+        session_id: SessionId,
+    ) -> Option<SessionId> {
+        let (host_session_id, target_session_id) = {
+            let player = self.players.get(&session_id)?;
+
+            if let Some(host) = player.reincarnation_host_session_id {
+                (host, session_id)
+            } else if let Some(target) = player.reincarnation_target_session_id {
+                (session_id, target)
+            } else {
+                return None;
+            }
+        };
+
+        if let Some(host) = self.players.get_mut(&host_session_id) {
+            if host.reincarnation_target_session_id == Some(target_session_id) {
+                host.reincarnation_target_session_id = None;
+            }
+            host.reincarnation_ready = false;
+            host.reincarnation_expire_time_ms = 0;
+        }
+
+        if let Some(target) = self.players.get_mut(&target_session_id) {
+            if target.reincarnation_host_session_id == Some(host_session_id) {
+                target.reincarnation_host_session_id = None;
+            }
+            target.reincarnation_expire_time_ms = 0;
+        }
+
+        Some(host_session_id)
+    }
+
+    /// Mark an in-progress Taoist Reincarnation attempt as expired from the
+    /// perspective of the given session without immediately clearing all
+    /// state. This mirrors the legacy client CancelReincarnation behaviour
+    /// where only ReincarnationExpireTime is moved forward; the actual
+    /// cleanup and S.CancelReincarnation emission happens when the world
+    /// processes timers.
+    pub fn expire_reincarnation_from_session(&mut self, session_id: SessionId) {
+        let mut host_session_id: Option<SessionId> = None;
+
+        if let Some(player) = self.players.get(&session_id) {
+            if let Some(host) = player.reincarnation_host_session_id {
+                host_session_id = Some(host);
+            } else if player.reincarnation_target_session_id.is_some() {
+                host_session_id = Some(session_id);
+            }
+        }
+
+        if let Some(host_sid) = host_session_id {
+            if let Some(host) = self.players.get_mut(&host_sid) {
+                if host.reincarnation_ready && host.reincarnation_target_session_id.is_some() {
+                    host.reincarnation_expire_time_ms = self.time_ms;
+                }
+            }
+        }
     }
 
     pub fn player_items(&self, session_id: SessionId) -> Option<(Inventory, Equipment)> {

@@ -1,5 +1,6 @@
 use std::io::{self, Read};
 
+use crate::quest::{QuestId, QuestInfo as CoreQuestInfo, QuestType, RequiredClass};
 use crate::world::magic::MagicInfo;
 
 use super::header::*;
@@ -22,23 +23,74 @@ pub struct GameShopItemRecord {
     pub can_buy_gold: bool,
 }
 
-pub(super) fn skip_quest_info<R: Read>(r: &mut R, _version: i32, _custom_version: i32) -> io::Result<()> {
+/// Read a single QuestInfo record from the MirDB stream.
+///
+/// This mirrors QuestInfo.Save in Server/MirDatabase/QuestInfo.cs and only
+/// materialises the static metadata stored in MirDB. Per-quest script
+/// content (Descriptions, Tasks, Rewards) is not present in MirDB and is
+/// therefore initialised as empty/default here.
+pub(super) fn read_quest_info<R: Read>(
+    r: &mut R,
+    _version: i32,
+    _custom_version: i32,
+) -> io::Result<CoreQuestInfo> {
     // QuestInfo.Save layout from Server/MirDatabase/QuestInfo.cs
-    let _index = read_i32(r)?;
-    let _name = read_string(r)?;
-    let _group = read_string(r)?;
-    let _file_name = read_string(r)?;
-    let _required_min_level = read_i32(r)?;
-    let _required_max_level = read_i32(r)?;
-    let _required_quest = read_i32(r)?;
-    let _required_class = read_u8(r)?;
-    let _quest_type = read_u8(r)?;
-    let _goto_message = read_string(r)?;
-    let _kill_message = read_string(r)?;
-    let _item_message = read_string(r)?;
-    let _flag_message = read_string(r)?;
-    let _time_limit_in_seconds = read_i32(r)?;
+    let index = read_i32(r)?;
+    let name = read_string(r)?;
+    let group = read_string(r)?;
+    let file_name = read_string(r)?;
+    let required_min_level = read_i32(r)?;
+    let mut required_max_level = read_i32(r)?;
+    let required_quest = read_i32(r)?;
+    let required_class = read_u8(r)?;
+    let quest_type = read_u8(r)?;
+    let goto_message = read_string(r)?;
+    let kill_message = read_string(r)?;
+    let item_message = read_string(r)?;
+    let flag_message = read_string(r)?;
+    let time_limit_in_seconds = read_i32(r)?;
 
+    // Match the C# loader behaviour where a max level of 0 means "no upper
+    // limit" and is normalised to ushort.MaxValue.
+    if required_max_level == 0 {
+        required_max_level = u16::MAX as i32;
+    }
+
+    Ok(CoreQuestInfo {
+        id: QuestId(index),
+        npc_index: 0,
+        finish_npc_index: 0,
+        name,
+        group,
+        file_name,
+        goto_message,
+        kill_message,
+        item_message,
+        flag_message,
+        description: Vec::new(),
+        task_description: Vec::new(),
+        return_description: Vec::new(),
+        completion_description: Vec::new(),
+        required_min_level,
+        required_max_level,
+        required_quest,
+        required_class: RequiredClass(required_class),
+        quest_type: QuestType(quest_type),
+        time_limit_seconds: time_limit_in_seconds,
+        carry_items: Vec::new(),
+        kill_tasks: Vec::new(),
+        item_tasks: Vec::new(),
+        flag_tasks: Vec::new(),
+        fixed_rewards: Vec::new(),
+        select_rewards: Vec::new(),
+        gold_reward: 0,
+        exp_reward: 0,
+        credit_reward: 0,
+    })
+}
+
+pub(super) fn skip_quest_info<R: Read>(r: &mut R, version: i32, custom_version: i32) -> io::Result<()> {
+    let _ = read_quest_info(r, version, custom_version)?;
     Ok(())
 }
 

@@ -5,6 +5,7 @@ use crate::world::magic::MagicInfo;
 use crate::world::buff::BuffInfo;
 use crate::world::recipe::RecipeInfo;
 use crate::world::types::BuffType;
+use crate::quest::QuestInfo;
 use crystal_shared_proto::item_types::ItemInfoData;
 
 static EMPTY_BUFF_INFOS: &[BuffInfo] = &[];
@@ -20,6 +21,7 @@ pub struct WorldDatabase {
     pub buff_infos: Vec<BuffInfo>,
     pub recipe_infos: Vec<RecipeInfo>,
     pub game_shop_items: Vec<GameShopItemRecord>,
+    pub quest_infos: Vec<QuestInfo>,
 }
 
 pub trait WorldProvider {
@@ -28,6 +30,7 @@ pub trait WorldProvider {
     fn monster_infos(&self) -> &[MonsterInfo];
     fn npc_infos(&self) -> &[NpcInfo];
     fn magic_infos(&self) -> &[MagicInfo];
+    fn quest_infos(&self) -> &[QuestInfo];
 
     fn buff_infos(&self) -> &[BuffInfo] {
         EMPTY_BUFF_INFOS
@@ -76,6 +79,10 @@ pub trait WorldProvider {
             .find(|i| i.name.eq_ignore_ascii_case(name))
     }
 
+    fn get_quest_info(&self, id: i32) -> Option<&QuestInfo> {
+        self.quest_infos().iter().find(|q| q.id.0 == id)
+    }
+
     fn get_buff_info(&self, buff_type: BuffType) -> Option<&BuffInfo> {
         self.buff_infos()
             .iter()
@@ -108,6 +115,10 @@ impl WorldProvider for WorldDatabase {
 
     fn magic_infos(&self) -> &[MagicInfo] {
         &self.magic_infos
+    }
+
+    fn quest_infos(&self) -> &[QuestInfo] {
+        &self.quest_infos
     }
 
     fn buff_infos(&self) -> &[BuffInfo] {

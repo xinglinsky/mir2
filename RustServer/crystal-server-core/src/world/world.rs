@@ -1,5 +1,6 @@
  use std::collections::HashMap;
 
+use rand::{thread_rng, Rng};
 use super::Job;
 use crate::ranking::{RankCharacterInfo, RankingTables, RankType};
 use crate::stats::{Stat, Stats};
@@ -14,6 +15,7 @@ use crate::world::configs::{
     pet_template,
 };
 use crate::item::create_fresh_user_item;
+use crate::quest::{QuestId, QuestProgress};
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
 use crate::world::map_item::MapItem;
@@ -83,6 +85,13 @@ pub struct FireWallInstance {
     pub expire_time_ms: i64,
     pub tick_speed_ms: i64,
     pub next_tick_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeRecipe {
+    pub unique_id: u64,
+    pub item_index: i32,
+    pub client_bytes: Vec<u8>,
 }
 
 /// Global/per-player timer information mirroring Server.MirEnvir.Timer.
@@ -459,6 +468,20 @@ pub enum WorldEvent {
         session_id: SessionId,
         message: String,
     },
+    /// Notify the connection layer that a Taoist Reincarnation attempt has
+    /// succeeded and the target player should be prompted with the
+    /// resurrection confirmation UI. The `host_session_id` is the caster and
+    /// `target_session_id` is the dead player.
+    ReincarnationRequested {
+        host_session_id: SessionId,
+        target_session_id: SessionId,
+    },
+    /// Notify the connection layer that any in-progress Reincarnation cast
+    /// has been cancelled or expired for the given caster session so the
+    /// client can clear its local ReincarnationStopTime.
+    ReincarnationCancelled {
+        session_id: SessionId,
+    },
     /// Player-level poison status change, mirroring C# S.Poisoned. The
     /// `poison` field is a bitmask of active PoisonType flags.
     Poisoned {
@@ -516,6 +539,8 @@ pub struct World<P: WorldProvider> {
     /// In-memory level-based rankings built from current online players.
     pub(crate) ranking: RankingTables,
     pub(crate) online_ranking_count: [i32; 6],
+    pub(crate) runtime_recipes_by_uid: HashMap<u64, RuntimeRecipe>,
+    pub(crate) runtime_recipes_by_item_index: HashMap<i32, u64>,
 }
 
 impl<P: WorldProvider> World<P> {
@@ -523,7 +548,7 @@ impl<P: WorldProvider> World<P> {
         let spawn_multiplier = config.spawn_multiplier;
         let respawn_base_spawn_rate_minutes = config.respawn_base_spawn_rate_minutes;
         let drop_rate = config.drop_rate;
-        World {
+        let mut world = World {
             provider,
             config,
             time_ms: 0,
@@ -551,7 +576,355 @@ impl<P: WorldProvider> World<P> {
             timers: HashMap::new(),
             ranking: RankingTables::new(),
             online_ranking_count: [0; 6],
+            runtime_recipes_by_uid: HashMap::new(),
+            runtime_recipes_by_item_index: HashMap::new(),
+        };
+
+        world.init_runtime_recipes();
+
+        world
+    }
+
+    fn init_runtime_recipes(&mut self) {
+        let item_infos = self.provider.item_infos();
+        let recipes = self.provider.recipe_infos();
+        if recipes.is_empty() {
+            return;
         }
+
+        let mut counter: u64 = 0;
+        for recipe in recipes {
+            counter = counter.saturating_add(1);
+            let unique_id: u64 = 0x8000_0000_0000_0000 | counter;
+
+            let client_bytes = match recipe.encode_client_recipe_bytes(item_infos, unique_id) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!(
+                        "[world] failed to encode client recipe info for item_index {}: {}",
+                        recipe.item_index,
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            let runtime = RuntimeRecipe {
+                unique_id,
+                item_index: recipe.item_index,
+                client_bytes,
+            };
+
+            self.runtime_recipes_by_item_index
+                .entry(recipe.item_index)
+                .or_insert(unique_id);
+            self.runtime_recipes_by_uid.insert(unique_id, runtime);
+        }
+    }
+
+    pub fn get_runtime_recipe_by_uid(&self, unique_id: u64) -> Option<&RuntimeRecipe> {
+        self.runtime_recipes_by_uid.get(&unique_id)
+    }
+
+    pub fn get_runtime_recipe_uid_by_item_index(&self, item_index: i32) -> Option<u64> {
+        self.runtime_recipes_by_item_index.get(&item_index).copied()
+    }
+
+    pub fn craft_item(
+        &mut self,
+        session_id: SessionId,
+        recipe_uid: u64,
+        count: u16,
+        slots: &[i32],
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        if count == 0 {
+            return false;
+        }
+
+        // Look up the runtime recipe by its unique id and resolve both the
+        // static ItemInfo for the product and the underlying RecipeInfo so we
+        // can respect the configured Amount/Chance values. Do this in a
+        // separate scope so that the immutable borrows on `self` do not
+        // overlap with the mutable `self.players` borrow below.
+        let (item_info, recipe) = {
+            let runtime = match self.get_runtime_recipe_by_uid(recipe_uid) {
+                Some(r) => r,
+                None => {
+                    return false;
+                }
+            };
+
+            let item_info = match self.provider.get_item_info(runtime.item_index) {
+                Some(info) => info.clone(),
+                None => {
+                    return false;
+                }
+            };
+
+            let recipes = self.provider.recipe_infos();
+            let recipe = match recipes
+                .iter()
+                .find(|r| r.item_index == runtime.item_index)
+            {
+                Some(r) => r.clone(),
+                None => {
+                    return false;
+                }
+            };
+
+            (item_info, recipe)
+        };
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => {
+                return false;
+            }
+        };
+
+        // Compute the total stack count requested using RecipeInfo.amount as
+        // the per-craft output, mirroring the C# goods.Count * count logic.
+        let base_amount: u16 = recipe.amount.max(1);
+        let total_count: u32 = (base_amount as u32).saturating_mul(count as u32);
+
+        if total_count == 0 {
+            return false;
+        }
+
+        // Enforce the target item's StackSize so we do not create an
+        // over-sized stack that the client cannot represent.
+        if item_info.stack_size > 0 {
+            let max_stack = item_info.stack_size as u32;
+            if total_count > max_stack {
+                return false;
+            }
+        }
+
+        // Pre-flight resource check: ensure all required tools and ingredients
+        // are present in the specified slots with sufficient durability/count,
+        // and that each requirement maps to a distinct inventory slot (no
+        // re-use), mirroring NPCScript.Craft.
+        let inv_len = player.inventory.slots.len();
+        if inv_len == 0 {
+            return false;
+        }
+
+        // Normalise and bound-check the incoming slot indices.
+        let mut candidate_indices: Vec<usize> = Vec::new();
+        for &raw in slots {
+            if raw < 0 {
+                continue;
+            }
+            let idx = raw as usize;
+            if idx >= inv_len {
+                continue;
+            }
+            candidate_indices.push(idx);
+        }
+
+        let mut used_slots: Vec<usize> = Vec::new();
+        let mut tool_slots: Vec<usize> = Vec::new();
+        let mut ingredient_consumptions: Vec<(usize, u16)> = Vec::new();
+
+        // Check tools: for each tool requirement, find a distinct slot from
+        // the candidate list containing the exact item_index with enough
+        // durability to cover `count` crafts (CurrentDura / 1000 >= count).
+        for tool in &recipe.tools {
+            let mut found_slot: Option<usize> = None;
+
+            for &idx in &candidate_indices {
+                if used_slots.contains(&idx) {
+                    continue;
+                }
+
+                let item_opt = player.inventory.slots.get(idx).and_then(|s| s.as_ref());
+                let item = match item_opt {
+                    Some(it) => it,
+                    None => continue,
+                };
+
+                if item.item_index != tool.item_index {
+                    continue;
+                }
+
+                let available_uses = (item.current_dura as u32) / 1000;
+                if available_uses < count as u32 {
+                    // Not enough durability on this tool stack.
+                    continue;
+                }
+
+                found_slot = Some(idx);
+                break;
+            }
+
+            let idx = match found_slot {
+                Some(i) => i,
+                None => {
+                    return false;
+                }
+            };
+
+            used_slots.push(idx);
+            tool_slots.push(idx);
+        }
+
+        // Check ingredients: each ingredient must come from a single distinct
+        // slot with matching item_index and sufficient count. We also honour a
+        // simple minimum-durability requirement when `current_dura` is set on
+        // the RecipeItemRequirement by requiring item.current_dura >= that
+        // value.
+        for ing in &recipe.ingredients {
+            let required_total: u32 = (ing.count as u32).saturating_mul(count as u32);
+            if required_total == 0 || required_total > u16::MAX as u32 {
+                return false;
+            }
+
+            let mut found: Option<(usize, u16)> = None;
+
+            for &idx in &candidate_indices {
+                if used_slots.contains(&idx) {
+                    continue;
+                }
+
+                let item_opt = player.inventory.slots.get(idx).and_then(|s| s.as_ref());
+                let item = match item_opt {
+                    Some(it) => it,
+                    None => continue,
+                };
+
+                if item.item_index != ing.item_index {
+                    continue;
+                }
+
+                if let Some(req_dura) = ing.current_dura {
+                    if item.current_dura < req_dura {
+                        // This stack does not meet the minimum durability
+                        // requirement for this ingredient.
+                        continue;
+                    }
+                }
+
+                if required_total > item.count as u32 {
+                    // This stack cannot satisfy the full requirement; try
+                    // other slots first.
+                    continue;
+                }
+
+                found = Some((idx, required_total as u16));
+                break;
+            }
+
+            let (idx, consume) = match found {
+                Some(v) => v,
+                None => {
+                    return false;
+                }
+            };
+
+            used_slots.push(idx);
+            ingredient_consumptions.push((idx, consume));
+        }
+
+        if used_slots.len() != (recipe.tools.len() + recipe.ingredients.len()) {
+            return false;
+        }
+
+        // Capacity check: ensure we have somewhere to place the crafted item,
+        // mirroring the C# CanGainItem check. This does not mutate state and
+        // is done before we consume any resources.
+        let slot_index = match Self::pickup_slot_for_item(player, &item_info) {
+            Some(i) => i,
+            None => {
+                return false;
+            }
+        };
+
+        // At this point we are committed to the attempt: all checks have
+        // passed, so we consume tool durability and ingredient counts before
+        // rolling success chance, just like the C# NPCScript.Craft logic. Gold
+        // is handled separately at the connection layer.
+
+        // Consume tool durability: for each matched tool slot, subtract
+        // count * 1000 from current_dura, clamping at zero.
+        for idx in &tool_slots {
+            if let Some(slot_opt) = player.inventory.slots.get_mut(*idx) {
+                if let Some(item) = slot_opt.as_mut() {
+                    let cost: u32 = (count as u32).saturating_mul(1000);
+                    let cur = item.current_dura as u32;
+                    let new = cur.saturating_sub(cost);
+                    item.current_dura = new as u16;
+                }
+            }
+        }
+
+        // Consume ingredients: for each ingredient slot, either reduce the
+        // stack count or clear the slot entirely.
+        for (idx, consume) in &ingredient_consumptions {
+            if let Some(slot_opt) = player.inventory.slots.get_mut(*idx) {
+                if let Some(item) = slot_opt.as_mut() {
+                    if (item.count as u16) > *consume {
+                        item.count = item.count.saturating_sub(*consume);
+                    } else {
+                        *slot_opt = None;
+                    }
+                }
+            }
+        }
+
+        // Apply the recipe's success chance combined with the player's
+        // CraftRatePercent stat, mirroring the legacy
+        //   if Random.Next(100) >= recipe.Chance + Stats[CraftRatePercent]
+        //       -> failure (resources consumed, no item)
+        // behaviour. Returning true here signals that the crafting attempt
+        // executed (and consumed resources) even if it did not yield a
+        // product.
+        let craft_rate = player.stats.total.get(Stat::CraftRatePercent).max(0);
+        let mut chance: i32 = recipe.chance as i32 + craft_rate;
+        if chance < 0 {
+            chance = 0;
+        } else if chance > 100 {
+            chance = 100;
+        }
+
+        if chance > 0 {
+            let mut rng = thread_rng();
+            let roll: i32 = rng.gen_range(0..100);
+            if roll >= chance {
+                events.push(WorldEvent::PartySystemMessage {
+                    session_id,
+                    message: "Crafting attempt failed.".to_string(),
+                });
+                return true;
+            }
+        }
+
+        // Derive a unique_id for the crafted stack. For now we reuse the
+        // session_id + next_map_item_id pattern used by dropped items so that
+        // crafted items remain distinct from existing inventory entries.
+        let unique_id: u64 = {
+            let map_item_id = self.next_map_item_id;
+            ((session_id as u64) << 32) | (map_item_id & 0xFFFF_FFFF)
+        };
+
+        let mut item = create_fresh_user_item(&item_info, unique_id, total_count as u16);
+        item.is_shop_item = false;
+
+        player.inventory.slots[slot_index] = Some(item.clone());
+
+        events.push(WorldEvent::PlayerGainedItem {
+            session_id,
+            item,
+        });
+
+        true
+    }
+
+    /// Return the current world time in milliseconds. This mirrors the C#
+    /// Envir.Time value and is used by the connection layer when stamping
+    /// quest progress for packets such as SChangeQuest.
+    pub fn current_time_ms(&self) -> i64 {
+        self.time_ms
     }
 
     /// Create or replace a timer with the given full key. This mirrors the
@@ -634,6 +1007,434 @@ impl<P: WorldProvider> World<P> {
         }
 
         Self::compare_i64(op, remaining, time_secs)
+    }
+
+    pub fn set_global_timer(&mut self, base_key: &str, seconds: i32, timer_type: u8) {
+        let full_key = format!("_-{}", base_key);
+        self.set_timer(full_key, seconds, timer_type);
+    }
+
+    pub fn set_player_timer(
+        &mut self,
+        session_id: SessionId,
+        base_key: &str,
+        seconds: i32,
+        timer_type: u8,
+    ) {
+        if let Some(name) = self.player_name(session_id) {
+            let full_key = format!("{}-{}", name, base_key);
+            self.set_timer(full_key, seconds, timer_type);
+        }
+    }
+
+    pub fn expire_global_timer(&mut self, base_key: &str) {
+        let full_key = format!("_-{}", base_key);
+        self.remove_timer(&full_key);
+    }
+
+    pub fn expire_player_timer(&mut self, session_id: SessionId, base_key: &str) {
+        if let Some(name) = self.player_name(session_id) {
+            let full_key = format!("{}-{}", name, base_key);
+            self.remove_timer(&full_key);
+        }
+    }
+
+    pub fn take_quest_for_player(
+        &mut self,
+        session_id: SessionId,
+        quest_id: i32,
+        now_ms: i64,
+    ) -> Option<QuestProgress> {
+        let info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => {
+                tracing::debug!(
+                    "[quest] take_quest_for_player: no QuestInfo found for session_id={} quest_id={}",
+                    session_id,
+                    quest_id,
+                );
+                return None;
+            }
+        };
+        let qid = QuestId(quest_id);
+
+        let (level, job, current_quest_count, completed_quests, already_taken) = {
+            let player = match self.players.get(&session_id) {
+                Some(p) => p,
+                None => {
+                    tracing::debug!(
+                        "[quest] take_quest_for_player: no PlayerState for session_id={} quest_id={}",
+                        session_id,
+                        quest_id,
+                    );
+                    return None;
+                }
+            };
+
+            (
+                i32::from(player.level),
+                player.job,
+                player.quests.len(),
+                player.completed_quests.clone(),
+                player.quests.contains_key(&qid),
+            )
+        };
+
+        if already_taken {
+            tracing::debug!(
+                "[quest] take_quest_for_player: quest already taken for session_id={} quest_id={}",
+                session_id,
+                quest_id,
+            );
+            return None;
+        }
+
+        if info.required_min_level > level || info.required_max_level < level {
+            tracing::debug!(
+                "[quest] take_quest_for_player: level out of range for session_id={} quest_id={} level={} min={} max={}",
+                session_id,
+                quest_id,
+                level,
+                info.required_min_level,
+                info.required_max_level,
+            );
+            return None;
+        }
+
+        let class_bit = match job {
+            Job::Warrior => 1,
+            Job::Wizard => 2,
+            Job::Taoist => 4,
+            Job::Assassin => 8,
+            Job::Archer => 16,
+        };
+        if (info.required_class.0 & class_bit) == 0 {
+            tracing::debug!(
+                "[quest] take_quest_for_player: class mismatch for session_id={} quest_id={} job={:?} required_class_bits={}",
+                session_id,
+                quest_id,
+                job,
+                info.required_class.0,
+            );
+            return None;
+        }
+
+        let mut required = info.required_quest;
+        while required != 0 {
+            if !completed_quests.contains(&required) {
+                tracing::debug!(
+                    "[quest] take_quest_for_player: missing required quest {} for session_id={} quest_id={}",
+                    required,
+                    session_id,
+                    quest_id,
+                );
+                return None;
+            }
+            required = match self.provider.get_quest_info(required) {
+                Some(q) => q.required_quest,
+                None => {
+                    tracing::debug!(
+                        "[quest] take_quest_for_player: required quest {} not found when checking chain for session_id={} quest_id={}",
+                        required,
+                        session_id,
+                        quest_id,
+                    );
+                    0
+                }
+            };
+        }
+
+        const MAX_CONCURRENT_QUESTS: usize = 20;
+        if current_quest_count >= MAX_CONCURRENT_QUESTS {
+            tracing::debug!(
+                "[quest] take_quest_for_player: too many concurrent quests for session_id={} quest_id={} current={} max={}",
+                session_id,
+                quest_id,
+                current_quest_count,
+                MAX_CONCURRENT_QUESTS,
+            );
+            return None;
+        }
+
+        const QUEST_TYPE_REPEATABLE: u8 = 2;
+        if info.quest_type.0 != QUEST_TYPE_REPEATABLE && completed_quests.contains(&quest_id) {
+            tracing::debug!(
+                "[quest] take_quest_for_player: quest already completed (non-repeatable) for session_id={} quest_id={}",
+                session_id,
+                quest_id,
+            );
+            return None;
+        }
+
+        let player = self.players.get_mut(&session_id)?;
+
+        let mut progress = QuestProgress::new_from_quest(info);
+        if progress.start_time_ms.is_none() {
+            progress.start_time_ms = Some(now_ms);
+        }
+
+        let item_infos = self.provider.item_infos();
+        let _ = progress.check_completed(info, item_infos, now_ms);
+
+        let progress_clone = progress.clone();
+        player.quests.insert(qid, progress);
+
+        if info.time_limit_seconds > 0 {
+            let key = format!("Quest-{}", quest_id);
+            self.set_player_timer(session_id, &key, info.time_limit_seconds, 1);
+        }
+
+        Some(progress_clone)
+    }
+
+    pub fn abandon_quest_for_player(
+        &mut self,
+        session_id: SessionId,
+        quest_id: i32,
+    ) -> Option<QuestProgress> {
+        let player = self.players.get_mut(&session_id)?;
+        let qid = QuestId(quest_id);
+
+        let progress = match player.quests.remove(&qid) {
+            Some(p) => p,
+            None => return None,
+        };
+
+        let key = format!("Quest-{}", quest_id);
+        self.expire_player_timer(session_id, &key);
+
+        Some(progress)
+    }
+
+    pub fn complete_quest_for_player(
+        &mut self,
+        session_id: SessionId,
+        quest_id: i32,
+        now_ms: i64,
+    ) -> Option<QuestProgress> {
+        let info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => return None,
+        };
+
+        let player = self.players.get_mut(&session_id)?;
+        let qid = QuestId(quest_id);
+
+        let item_infos = self.provider.item_infos();
+
+        // First, re-check completion and capture a snapshot of the quest
+        // progress before we remove it from the player's active quest list so
+        // that the connection layer can encode a matching ClientQuestProgress
+        // payload for SChangeQuest.
+        let completed_progress = {
+            let progress = match player.quests.get_mut(&qid) {
+                Some(p) => p,
+                None => return None,
+            };
+
+            let _ = progress.check_completed(info, item_infos, now_ms);
+            if progress.completed() {
+                Some(progress.clone())
+            } else {
+                None
+            }
+        };
+
+        let completed_progress = match completed_progress {
+            Some(p) => p,
+            None => return None,
+        };
+
+        const QUEST_TYPE_REPEATABLE: u8 = 2;
+        if info.quest_type.0 != QUEST_TYPE_REPEATABLE {
+            if !player.completed_quests.contains(&quest_id) {
+                player.completed_quests.push(quest_id);
+            }
+        }
+
+        player.quests.remove(&qid);
+
+        let key = format!("Quest-{}", quest_id);
+        self.expire_player_timer(session_id, &key);
+
+        Some(completed_progress)
+    }
+
+    /// Return a cloned list of completed quest IDs for the given player
+    /// session. This mirrors the CompletedQuests list used by the C# server
+    /// when sending S.CompleteQuest.
+    pub fn completed_quests_for_player(&self, session_id: SessionId) -> Vec<i32> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.completed_quests.clone())
+            .unwrap_or_default()
+    }
+
+    /// Return a cloned list of active quest progresses for the given player
+    /// session. This mirrors the CurrentQuests list used by the C# server
+    /// when sending S.ChangeQuest(QuestState.Add) during StartGameSuccess.
+    pub fn quests_for_player(&self, session_id: SessionId) -> Vec<QuestProgress> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.quests.values().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Apply a monster kill event to all active quests for this player that
+    /// still need kills of the given monster. This mirrors the C#
+    /// PlayerObject.CheckNeedQuestKill behaviour, but only mutates the
+    /// in-memory QuestProgress (counts and task list) and does not send any
+    /// network packets or grant rewards.
+    pub fn apply_quest_kill_for_player(
+        &mut self,
+        session_id: SessionId,
+        monster_index: i32,
+    ) -> bool {
+        // Snapshot the current quest IDs for this player so we can safely
+        // mutate quests in-place without holding long-lived borrows.
+        let quest_ids: Vec<QuestId> = match self.players.get(&session_id) {
+            Some(p) => p.quests.keys().cloned().collect(),
+            None => return false,
+        };
+
+        if quest_ids.is_empty() {
+            return false;
+        }
+
+        // Clone item infos once so QuestProgress::update_tasks can generate
+        // the client-facing task strings without borrowing from self.
+        let item_infos: Vec<ItemInfoData> = self.provider.item_infos().to_vec();
+
+        let mut any_updated = false;
+
+        for qid in quest_ids {
+            // Clone QuestInfo so we don't borrow self.provider during the
+            // mutation of self.players.
+            let info = match self.provider.get_quest_info(qid.0) {
+                Some(i) => i.clone(),
+                None => continue,
+            };
+
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => break,
+            };
+
+            let progress = match player.quests.get_mut(&qid) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            if !progress.need_kill(monster_index) {
+                continue;
+            }
+
+            progress.process_kill(monster_index);
+            progress.update_tasks(&info, &item_infos);
+            any_updated = true;
+        }
+
+        any_updated
+    }
+
+    /// Recompute item-based quest progress for any active quests on this
+    /// player that still require the given item. This corresponds to the core
+    /// of C# PlayerObject.CheckNeedQuestItem, but operates over the main
+    /// inventory only and does not implement a separate quest inventory.
+    pub fn apply_quest_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        item_index: i32,
+    ) -> bool {
+        // Snapshot quest IDs and a copy of the player's inventory slots so we
+        // can call QuestProgress::process_item without borrowing self.
+        let (quest_ids, inventory_slots) = match self.players.get(&session_id) {
+            Some(p) => (p.quests.keys().cloned().collect::<Vec<_>>(), p.inventory.slots.clone()),
+            None => return false,
+        };
+
+        if quest_ids.is_empty() {
+            return false;
+        }
+
+        let item_infos: Vec<ItemInfoData> = self.provider.item_infos().to_vec();
+        let mut any_updated = false;
+
+        for qid in quest_ids {
+            let info = match self.provider.get_quest_info(qid.0) {
+                Some(i) => i.clone(),
+                None => continue,
+            };
+
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => break,
+            };
+
+            let progress = match player.quests.get_mut(&qid) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            if !progress.need_item(item_index) {
+                continue;
+            }
+
+            progress.process_item(&inventory_slots);
+            progress.update_tasks(&info, &item_infos);
+            any_updated = true;
+        }
+
+        any_updated
+    }
+
+    /// Apply a flag change to any active quests that watch the given flag
+    /// number. The caller must supply the up-to-date flag array for the
+    /// player, matching the semantics of C# QuestProgressInfo.ProcessFlag.
+    pub fn apply_quest_flag_for_player(
+        &mut self,
+        session_id: SessionId,
+        flag_number: i32,
+        flags: &[bool],
+    ) -> bool {
+        let quest_ids: Vec<QuestId> = match self.players.get(&session_id) {
+            Some(p) => p.quests.keys().cloned().collect(),
+            None => return false,
+        };
+
+        if quest_ids.is_empty() {
+            return false;
+        }
+
+        let item_infos: Vec<ItemInfoData> = self.provider.item_infos().to_vec();
+        let mut any_updated = false;
+
+        for qid in quest_ids {
+            let info = match self.provider.get_quest_info(qid.0) {
+                Some(i) => i.clone(),
+                None => continue,
+            };
+
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => break,
+            };
+
+            let progress = match player.quests.get_mut(&qid) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            if !progress.need_flag(flag_number) {
+                continue;
+            }
+
+            progress.process_flag(flags);
+            progress.update_tasks(&info, &item_infos);
+            any_updated = true;
+        }
+
+        any_updated
     }
 
     fn recompute_player_passives_for_session(&mut self, session_id: SessionId) {
@@ -3414,7 +4215,7 @@ impl<P: WorldProvider> World<P> {
                                 None => return events,
                             };
 
-                            if let Some(player_state) =
+                            let placed = if let Some(player_state) =
                                 self.players.get_mut(&session_id)
                             {
                                 if let Some(slot) =
@@ -3422,29 +4223,39 @@ impl<P: WorldProvider> World<P> {
                                 {
                                     player_state.inventory.slots[slot] =
                                         Some(user_item.clone());
-
-                                    if let Some(items) =
-                                        self.map_items.get_mut(&map_index)
-                                    {
-                                        if let Some(pos) = items
-                                            .iter()
-                                            .position(|mi| mi.id == map_item.id)
-                                        {
-                                            items.swap_remove(pos);
-                                        }
-                                    }
-
-                                    events.push(WorldEvent::PlayerGainedItem {
-                                        session_id,
-                                        item: user_item,
-                                    });
-                                    events.push(WorldEvent::MapItemRemoved {
-                                        object_id: map_item.id,
-                                        map_index,
-                                        x: map_item.x,
-                                        y: map_item.y,
-                                    });
+                                    true
+                                } else {
+                                    false
                                 }
+                            } else {
+                                false
+                            };
+
+                            if placed {
+                                if let Some(items) =
+                                    self.map_items.get_mut(&map_index)
+                                {
+                                    if let Some(pos) = items
+                                        .iter()
+                                        .position(|mi| mi.id == map_item.id)
+                                    {
+                                        items.swap_remove(pos);
+                                    }
+                                }
+
+                                let _ =
+                                    self.apply_quest_item_for_player(session_id, info.index);
+
+                                events.push(WorldEvent::PlayerGainedItem {
+                                    session_id,
+                                    item: user_item,
+                                });
+                                events.push(WorldEvent::MapItemRemoved {
+                                    object_id: map_item.id,
+                                    map_index,
+                                    x: map_item.x,
+                                    y: map_item.y,
+                                });
                             }
                         }
                     }

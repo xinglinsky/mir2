@@ -273,7 +273,7 @@ namespace Client.MirScenes.Dialogs
 
         public string BuffString(ClientBuff buff)
         {
-            string text = RegexFunctions.SeperateCamelCase(buff.Type.ToString()) + "\n";
+            string text = GetBuffDisplayName(buff.Type) + "\n";
             bool overridestats = false;
 
             switch (buff.Type)
@@ -281,65 +281,76 @@ namespace Client.MirScenes.Dialogs
                 case BuffType.GameMaster:
                     GMOptions options = (GMOptions)buff.Values[0];
 
-                    if (options.HasFlag(GMOptions.GameMaster)) text += "-Invisible\n";
-                    if (options.HasFlag(GMOptions.Superman)) text += "-Superman\n";
-                    if (options.HasFlag(GMOptions.Observer)) text += "-Observer\n";
+                    if (options.HasFlag(GMOptions.GameMaster))
+                        text += "-" + GameLanguage.GetBuffDescription("GameMaster_GM", "隐身") + "\n";
+                    if (options.HasFlag(GMOptions.Superman))
+                        text += "-" + GameLanguage.GetBuffDescription("GameMaster_Superman", "超人模式") + "\n";
+                    if (options.HasFlag(GMOptions.Observer))
+                        text += "-" + GameLanguage.GetBuffDescription("GameMaster_Observer", "观察者模式") + "\n";
                     break;
                 case BuffType.MentalState:
                     switch (buff.Values[0])
                     {
                         case 0:
-                            text += "Agressive (Full damage)\nCan't shoot over walls.\n";
+                            text += GameLanguage.GetBuffDescription("MentalState_Mode0", "模式：进攻（全额伤害），无法穿墙射击。") + "\n";
                             break;
                         case 1:
-                            text += "Trick shot (Minimal damage)\nCan shoot over walls.\n";
+                            text += GameLanguage.GetBuffDescription("MentalState_Mode1", "模式：穿墙（伤害降低），可以穿墙射击。") + "\n";
                             break;
                         case 2:
-                            text += "Group Mode (Medium damage)\nDon't steal agro.\n";
+                            text += GameLanguage.GetBuffDescription("MentalState_Mode2", "模式：团战（中等伤害），不抢仇恨。") + "\n";
                             break;
                     }
                     break;
                 case BuffType.Hiding:
                 case BuffType.ClearRing:
-                    text += "Invisible to many monsters.\n";
+                    text += GameLanguage.GetBuffDescription("Hiding", "对大部分怪物隐身。") + "\n";
                     break;
                 case BuffType.MoonLight:
-                    text += "Invisible to players and many\nmonsters when at a distance.\n";
+                    text += GameLanguage.GetBuffDescription("MoonLight", "在一定距离外，对玩家和大部分怪物隐身。") + "\n";
                     break;
                 case BuffType.EnergyShield:
                     overridestats = true;
-                    text += string.Format("{0}% chance to gain {1} HP when attacked.\n", buff.Stats[Stat.EnergyShieldPercent], buff.Stats[Stat.EnergyShieldHPGain]);
+                    {
+                        string format = GameLanguage.GetBuffDescription("EnergyShield", "被攻击时有 {0}% 几率回复 {1} 点生命值。");
+                        text += string.Format(format, buff.Stats[Stat.EnergyShieldPercent], buff.Stats[Stat.EnergyShieldHPGain]) + "\n";
+                    }
                     break;
                 case BuffType.DarkBody:
-                    text += "Invisible to many monsters and able to move.\n";
+                    text += GameLanguage.GetBuffDescription("DarkBody", "对大部分怪物隐身并可移动。") + "\n";
                     break;
                 case BuffType.VampireShot:
-                    text += "Gives you a vampiric ability\nthat can be released with\ncertain skills.\n";
+                    text += GameLanguage.GetBuffDescription("VampireShot", "获得可由部分技能释放的吸血效果。") + "\n";
                     break;
                 case BuffType.PoisonShot:
-                    text += "Gives you a poison ability\nthat can be released with\ncertain skills.\n";
+                    text += GameLanguage.GetBuffDescription("PoisonShot", "获得可由部分技能释放的中毒效果。") + "\n";
                     break;
                 case BuffType.Concentration:
-                    text += "Increases chance on element extraction.\n";
+                    text += GameLanguage.GetBuffDescription("Concentration", "提高元素提取成功率。") + "\n";
                     break;
                 case BuffType.MagicBooster:
                     overridestats = true;
-                    text += string.Format("Increases MC by: {0}-{1}.\nIncreases consumption by {2}%.\n", buff.Stats[Stat.MinMC], buff.Stats[Stat.MaxMC], buff.Stats[Stat.ManaPenaltyPercent]);
+                    {
+                        string line1 = GameLanguage.GetBuffDescription("MagicBooster_Line1", "提升魔法攻击 {0}-{1} 点。");
+                        string line2 = GameLanguage.GetBuffDescription("MagicBooster_Line2", "法力消耗提高 {0}%。");
+                        text += string.Format(line1, buff.Stats[Stat.MinMC], buff.Stats[Stat.MaxMC]) + "\n";
+                        text += string.Format(line2, buff.Stats[Stat.ManaPenaltyPercent]) + "\n";
+                    }
                     break;
                 case BuffType.Transform:
-                    text += "Disguises your appearance.\n";
+                    text += GameLanguage.GetBuffDescription("Transform", "改变外观。") + "\n";
                     break;
                 case BuffType.Mentee:
-                    text += "Learn skill points twice as quick.\n";
+                    text += GameLanguage.GetBuffDescription("Mentee", "技能熟练度获取速度翻倍。") + "\n";
                     break;
                 case BuffType.Guild:
                     text += GameScene.Scene.GuildDialog.ActiveStats;
                     break;
                 case BuffType.Blindness:
-                    text += "Reduces visibility\n";
+                    text += GameLanguage.GetBuffDescription("BlindnessBuff", "视野范围降低。") + "\n";
                     break;
                 case BuffType.Newbie:
-                    text += "A boost provided to members of your guild.\n";
+                    text += GameLanguage.GetBuffDescription("Newbie", "对新手玩家提供的增益效果。") + "\n";
                     break;
             }
 
@@ -347,21 +358,7 @@ namespace Client.MirScenes.Dialogs
             {
                 foreach (var val in buff.Stats.Values)
                 {
-                    var c = val.Value < 0 ? "Decreases" : "Increases";
-                    var key = val.Key.ToString();
-
-                    var strKey = RegexFunctions.SeperateCamelCase(key.Replace("Rate", "").Replace("Multiplier", "").Replace("Percent", ""));
-
-                    var sign = "";
-
-                    if (key.Contains("Percent"))
-                        sign = "%";
-                    else if (key.Contains("Multiplier"))
-                        sign = "x";
-
-                    var txt = $"{c} {strKey} by: {val.Value}{sign}.\n";
-
-                    text += txt;
+                    text += FormatStatChange(val);
                 }
             }
 
@@ -378,14 +375,14 @@ namespace Client.MirScenes.Dialogs
                 text += string.Format(GameLanguage.Expire, Functions.PrintTimeSpanFromSeconds(Math.Round((buff.ExpireTime - CMain.Time) / 1000D)));
             }
 
-            if (!string.IsNullOrEmpty(buff.Caster)) text += string.Format("\nCaster: {0}", buff.Caster);
+            if (!string.IsNullOrEmpty(buff.Caster)) text += string.Format("\n施法者: {0}", buff.Caster);
 
             return text;
         }
 
         private string CombinedBuffText()
         {
-            string text = "Active Buffs\n";
+            string text = "当前增益总计\n";
             var stats = new Stats();
 
             for (var i = 0; i < _buffList.Count; i++)
@@ -397,24 +394,40 @@ namespace Client.MirScenes.Dialogs
 
             foreach (var val in stats.Values)
             {
-                var c = val.Value < 0 ? "Decreased" : "Increased";
-                var key = val.Key.ToString();
-
-                var strKey = RegexFunctions.SeperateCamelCase(key.Replace("Rate", "").Replace("Multiplier", "").Replace("Percent", ""));
-
-                var sign = "";
-
-                if (key.Contains("Percent"))
-                    sign = "%";
-                else if (key.Contains("Multiplier"))
-                    sign = "x";
-
-                var txt = $"{c} {strKey} by: {val.Value}{sign}.\n";
-
-                text += txt;
+                text += FormatStatChange(val);
             }
 
             return text;
+        }
+
+        private string GetBuffDisplayName(BuffType type)
+        {
+            return GameLanguage.GetBuffName(type.ToString());
+        }
+
+        private string FormatStatChange(KeyValuePair<Stat, int> stat)
+        {
+            var value = stat.Value;
+            if (value == 0) return string.Empty;
+
+            var key = stat.Key.ToString();
+            var sign = string.Empty;
+
+            if (key.Contains("Percent"))
+                sign = "%";
+            else if (key.Contains("Multiplier"))
+                sign = "x";
+
+            var prefix = value < 0 ? "降低" : "提高";
+            var amount = Math.Abs(value);
+            var name = GetStatDisplayName(stat.Key);
+
+            return $"{prefix}{name}{amount}{sign}。\n";
+        }
+
+        private string GetStatDisplayName(Stat stat)
+        {
+            return GameLanguage.GetStatName(stat.ToString());
         }
 
         private int BuffImage(BuffType type)
@@ -644,68 +657,64 @@ namespace Client.MirScenes.Dialogs
 
         public string BuffString(ClientPoisonBuff buff)
         {
-            string text = RegexFunctions.SeperateCamelCase(buff.Type.ToString()) + "\n";
+            string text = GetPoisonDisplayName(buff.Type) + "\n";
 
             switch (buff.Type)
             {
                 case PoisonType.Green:
                     {
                         var tick = buff.TickSpeed / 1000;
-                        var tickName = tick > 1 ? "seconds" : "second";
-
-                        text += $"Recieve {buff.Value} damage every {tick} {tickName}.\n";
+                        string format = GameLanguage.GetPoisonDescription("Green", "每 {0} 秒受到 {1} 点伤害。");
+                        text += string.Format(format, tick, buff.Value) + "\n";
                     }
                     break;
                 case PoisonType.Red:
                     {
                         var tick = buff.TickSpeed / 1000;
-                        var tickName = tick > 1 ? "seconds" : "second";
-
-                        text += $"Reduces armour rate by 10% every {tick} {tickName}.\n";
+                        string format = GameLanguage.GetPoisonDescription("Red", "每 {0} 秒护甲降低 10%。");
+                        text += string.Format(format, tick) + "\n";
                     }
                     break;
                 case PoisonType.Slow:
-                    text += "Reduces movement speed.\n";
+                    text += GameLanguage.GetPoisonDescription("Slow", "移动速度降低。") + "\n";
                     break;
                 case PoisonType.Frozen:
-                    text += "Prevents casting, movin\nand attacking.\n";
+                    text += GameLanguage.GetPoisonDescription("Frozen", "无法施法、移动和攻击。") + "\n";
                     break;
                 case PoisonType.Stun:
                     {
                         var tick = buff.TickSpeed / 1000;
-                        var tickName = tick > 1 ? "seconds" : "second";
-
-                        text += $"Increases damage received by 20% every {tick} {tickName}.\n";
+                        string format = GameLanguage.GetPoisonDescription("Stun", "每 {0} 秒所受伤害提高 20%。");
+                        text += string.Format(format, tick) + "\n";
                     }
                     break;
                 case PoisonType.Paralysis:
-                    text += "Prevents moving and attacking.\n";
+                    text += GameLanguage.GetPoisonDescription("Paralysis", "无法移动和攻击。") + "\n";
                     break;
                 case PoisonType.DelayedExplosion:
-                    text += "Ticking time bomb.\n";
+                    text += GameLanguage.GetPoisonDescription("DelayedExplosion", "延时爆炸效果。") + "\n";
                     break;
                 case PoisonType.Bleeding:
                     {
                         var tick = buff.TickSpeed / 1000;
-                        var tickName = tick > 1 ? "seconds" : "second";
-
-                        text += $"Recieve {buff.Value} damage every {tick} {tickName}.\n";
+                        string format = GameLanguage.GetPoisonDescription("Bleeding", "每 {0} 秒受到 {1} 点流血伤害。");
+                        text += string.Format(format, tick, buff.Value) + "\n";
                     }
                     break;
                 case PoisonType.LRParalysis:
-                    text += "Prevents moving and attacking.\nCancels when attacked\n";
+                    text += GameLanguage.GetPoisonDescription("LRParalysis", "无法移动和攻击，被攻击时解除。") + "\n";
                     break;
                 case PoisonType.Blindness:
-                    text += "Causes temporary blindness.\n";
+                    text += GameLanguage.GetPoisonDescription("Blindness", "造成暂时失明。") + "\n";
                     break;
                 case PoisonType.Dazed:
-                    text += "Prevents attacking.\n";
+                    text += GameLanguage.GetPoisonDescription("Dazed", "无法进行攻击。") + "\n";
                     break;
             }
 
             text += string.Format(GameLanguage.Expire, Functions.PrintTimeSpanFromSeconds(Math.Round((buff.ExpireTime - CMain.Time) / 1000D)));
 
-            if (!string.IsNullOrEmpty(buff.Caster)) text += string.Format("\nCaster: {0}", buff.Caster);
+            if (!string.IsNullOrEmpty(buff.Caster)) text += string.Format("\n施加者: {0}", buff.Caster);
 
             return text;
         }
@@ -889,9 +898,14 @@ namespace Client.MirScenes.Dialogs
 
         private string CombinedBuffText()
         {
-            string text = "Active Poisons\n";
+            string text = "当前负面状态\n";
 
             return text;
+        }
+
+        private string GetPoisonDisplayName(PoisonType type)
+        {
+            return GameLanguage.GetPoisonName(type.ToString());
         }
     }
 

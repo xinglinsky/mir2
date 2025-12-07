@@ -875,6 +875,147 @@ impl CTradeCancel {
 }
 
 #[derive(Clone, Debug)]
+pub struct CAcceptQuest {
+    pub npc_index: u32,
+    pub quest_index: i32,
+}
+
+impl CAcceptQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_index)?;
+        write_i32_le(&mut buf, self.quest_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AcceptQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_index = read_u32_le(&mut c)?;
+        let quest_index = read_i32_le(&mut c)?;
+        Ok(CAcceptQuest { npc_index, quest_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CFinishQuest {
+    pub quest_index: i32,
+    pub selected_item_index: i32,
+}
+
+impl CFinishQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.quest_index)?;
+        write_i32_le(&mut buf, self.selected_item_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::FinishQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let quest_index = read_i32_le(&mut c)?;
+        let selected_item_index = read_i32_le(&mut c)?;
+        Ok(CFinishQuest {
+            quest_index,
+            selected_item_index,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAbandonQuest {
+    pub quest_index: i32,
+}
+
+impl CAbandonQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.quest_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AbandonQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let quest_index = read_i32_le(&mut c)?;
+        Ok(CAbandonQuest { quest_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CShareQuest {
+    pub quest_index: i32,
+}
+
+impl CShareQuest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.quest_index)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ShareQuest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let quest_index = read_i32_le(&mut c)?;
+        Ok(CShareQuest { quest_index })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAcceptReincarnation;
+
+impl CAcceptReincarnation {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::AcceptReincarnation as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CAcceptReincarnation payload must be empty",
+            ));
+        }
+        Ok(CAcceptReincarnation)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCancelReincarnation;
+
+impl CCancelReincarnation {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::CancelReincarnation as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CCancelReincarnation payload must be empty",
+            ));
+        }
+        Ok(CCancelReincarnation)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CGameshopBuy {
     pub g_index: i32,
     pub quantity: u8,

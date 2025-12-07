@@ -6,10 +6,12 @@ use std::path::{Path, PathBuf};
 use crystal_server_core::account::AccountStorage;
 use crystal_server_core::world;
 use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
-use crystal_shared_proto::item::{SNewItemInfo, SUserStorage};
+use crystal_shared_proto::item::{SNewItemInfo, SUserStorage, SCraftItem};
+
 use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 use crystal_shared_proto::login::{CCallNPC, SDisconnect};
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll, CCraftItem};
+
 use crystal_shared_proto::scene::SNpcResponse;
 use crystal_shared_proto::notice::{SOpenBrowser, SPlaySound, SSetTimer, SExpireTimer};
 use crystal_shared_proto::user::SLoseGold;
@@ -18,6 +20,7 @@ use rand::{thread_rng, Rng};
 use super::{LoginConnection, Stage};
 
 impl LoginConnection {
+
     pub(crate) fn normalize_npc_key(key: &str) -> String {
         let mut s = key.trim().to_ascii_uppercase();
         if s.starts_with('[') && s.ends_with(']') && s.len() >= 3 {
@@ -30,18 +33,15 @@ impl LoginConnection {
     }
 
     pub(crate) fn find_npc_script_path(root: &Path, file_name: &str) -> Option<PathBuf> {
+
         // In the original C# server, NpcInfo.FileName stores a path relative to the
         // Envir/NPCs folder, for example "BichonProvince\\BichonWall\\BookStore".
         // First try interpreting the value as such a relative path (with or without
         // ".txt" extension). If that fails, fall back to a recursive search by
         // basename as before.
 
-        // Normalise separators to forward slashes for portability.
-        let rel = file_name.replace('\\', "/");
-        let rel_path = Path::new(&rel);
-
         // Candidate 1: root / rel_path (as-is).
-        let candidate1 = root.join(rel_path);
+        let candidate1 = root.join(file_name);
         if candidate1.is_file() {
             return Some(candidate1);
         }
@@ -82,6 +82,20 @@ impl LoginConnection {
         }
 
         None
+    }
+
+    /// Handle a CraftItem request from the client. For now this only performs
+    /// very basic validation and replies with SCraftItem { success: false } as
+    /// a stub; full crafting logic will be wired through the World layer.
+    pub(crate) fn handle_craft_item(&mut self, _msg: CCraftItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        let resp = SCraftItem { success: false };
+        if let Ok(raw) = resp.encode() {
+            out.push(Self::encode_raw(raw));
+        }
     }
 
     /// Scan the #ACT block for the given key for an OPENBROWSER command and
