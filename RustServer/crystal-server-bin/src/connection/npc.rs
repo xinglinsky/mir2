@@ -1817,11 +1817,20 @@ impl LoginConnection {
             return;
         }
 
+        let npc_index_opt = super::npc_index_from_object_id(msg.object_id);
+
         if let Some(npc) = self
             .world_db
             .npc_infos
             .iter()
-            .find(|n| n.index as u32 == msg.object_id && n.map_index == self.current_map_index)
+            .find(|n| {
+                let matches_id = if let Some(npc_index) = npc_index_opt {
+                    n.index == npc_index
+                } else {
+                    n.index as u32 == msg.object_id
+                };
+                matches_id && n.map_index == self.current_map_index
+            })
         {
             tracing::debug!(
                 "CallNPC: map={} npc_index={} file_name='{}' key='{}'",
@@ -2021,6 +2030,7 @@ impl LoginConnection {
                                                 if map_changed {
                                                     self.known_monsters.clear();
                                                     self.known_npcs.clear();
+                                                    self.known_heroes.clear();
                                                     self.update_visibility(out);
                                                 }
 
@@ -2045,6 +2055,7 @@ impl LoginConnection {
                                         if map_changed {
                                             self.known_monsters.clear();
                                             self.known_npcs.clear();
+                                            self.known_heroes.clear();
                                             self.update_visibility(out);
                                         }
 
@@ -2168,7 +2179,7 @@ impl LoginConnection {
                                 // that subsequent StoreItem/TakeBackItem requests can be
                                 // validated against NPC proximity, similar to C#
                                 // PlayerObject.NPCPage/NPCObjectID.
-                                self.current_storage_npc_id = Some(msg.object_id);
+                                self.current_storage_npc_id = Some(npc.index as u32);
 
                                 if let Some(ref account_id) = self.account_id {
                                     let account_storage =
@@ -2375,6 +2386,7 @@ impl LoginConnection {
                     if map_changed {
                         self.known_monsters.clear();
                         self.known_npcs.clear();
+                        self.known_heroes.clear();
                         self.update_visibility(out);
                     }
 

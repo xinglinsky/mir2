@@ -49,6 +49,113 @@ pub struct SUserSlotsRefresh {
     pub equipment: Vec<Option<UserItemData>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SPlayerInspect {
+    pub name: String,
+    pub guild_name: String,
+    pub guild_rank: String,
+    pub equipment: Vec<Option<UserItemData>>,
+    pub class: u8,
+    pub gender: u8,
+    pub hair: u8,
+    pub level: u16,
+    pub lover_name: String,
+    pub allow_observe: bool,
+    pub is_hero: bool,
+}
+
+impl SPlayerInspect {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+
+        write_string(&mut buf, &self.name)?;
+        write_string(&mut buf, &self.guild_name)?;
+        write_string(&mut buf, &self.guild_rank)?;
+
+        let eq_len: i32 = self
+            .equipment
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many equipment slots"))?;
+        write_i32_le(&mut buf, eq_len)?;
+        for slot in &self.equipment {
+            match slot {
+                None => write_bool(&mut buf, false)?,
+                Some(item) => {
+                    write_bool(&mut buf, true)?;
+                    item.encode(&mut buf)?;
+                }
+            }
+        }
+
+        buf.push(self.class);
+        buf.push(self.gender);
+        buf.push(self.hair);
+        write_u16_le(&mut buf, self.level)?;
+        write_string(&mut buf, &self.lover_name)?;
+        write_bool(&mut buf, self.allow_observe)?;
+        write_bool(&mut buf, self.is_hero)?;
+
+        Ok(RawPacket {
+            id: ServerPacketId::PlayerInspect as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+
+        let name = read_string(&mut c)?;
+        let guild_name = read_string(&mut c)?;
+        let guild_rank = read_string(&mut c)?;
+
+        let eq_len = read_i32_le(&mut c)?;
+        if eq_len < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative equipment length",
+            ));
+        }
+
+        let mut equipment = Vec::with_capacity(eq_len as usize);
+        for _ in 0..eq_len {
+            let has_item = read_bool(&mut c)?;
+            if has_item {
+                let item = UserItemData::decode(&mut c)?;
+                equipment.push(Some(item));
+            } else {
+                equipment.push(None);
+            }
+        }
+
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let class = one[0];
+        c.read_exact(&mut one)?;
+        let gender = one[0];
+        c.read_exact(&mut one)?;
+        let hair = one[0];
+        let level = read_u16_le(&mut c)?;
+        let lover_name = read_string(&mut c)?;
+        let allow_observe = read_bool(&mut c)?;
+        let is_hero = read_bool(&mut c)?;
+
+        Ok(SPlayerInspect {
+            name,
+            guild_name,
+            guild_rank,
+            equipment,
+            class,
+            gender,
+            hair,
+            level,
+            lover_name,
+            allow_observe,
+            is_hero,
+        })
+    }
+}
+
 impl SUserSlotsRefresh {
     pub fn encode(&self) -> io::Result<RawPacket> {
         let mut buf = Vec::new();

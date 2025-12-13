@@ -1,4 +1,3 @@
-use std::io::{self, Cursor};
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
@@ -13,7 +12,6 @@ use crystal_shared_proto::guild::{
     CGuildStorageGoldChange,
     CGuildStorageItemChange,
 };
-use crystal_shared_proto::io::read_string;
 use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem};
 use crystal_shared_proto::npc::{CBuyItem, CCraftItem, CDepositTradeItem, CRetrieveTradeItem};
 use crystal_shared_proto::login::{
@@ -30,6 +28,7 @@ use crystal_shared_proto::login::{
     CChangePassword,
     CClientVersion,
     CCollectParcel,
+    CChat,
     CDeleteCharacter,
     CDeleteMail,
     CDelMember,
@@ -70,6 +69,10 @@ use crystal_shared_proto::login::{
     CWalk,
     CCancelReincarnation,
     CGameshopBuy,
+    CInspect,
+    CObserve,
+    CRequestUserName,
+    CRequestChatItem,
     ClientPacketId,
     SConnected,
 };
@@ -186,12 +189,8 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::Chat => {
-                if let Ok(message) = (|| {
-                    let mut c = Cursor::new(&packet.payload);
-                    let text = read_string(&mut c)?;
-                    Ok::<String, io::Error>(text)
-                })() {
-                    self.handle_chat(message, &mut out);
+                if let Ok(msg) = CChat::decode(&packet.payload) {
+                    self.handle_chat(msg, &mut out);
                 }
             }
             ClientPacketId::MoveItem => {
@@ -331,6 +330,16 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::SearchMap => {
                 if let Ok(msg) = CSearchMap::decode(&packet.payload) {
                     self.handle_search_map(msg, &mut out);
+                }
+            }
+            ClientPacketId::Inspect => {
+                if let Ok(msg) = CInspect::decode(&packet.payload) {
+                    self.handle_inspect(msg, &mut out);
+                }
+            }
+            ClientPacketId::Observe => {
+                if let Ok(msg) = CObserve::decode(&packet.payload) {
+                    self.handle_observe(msg, &mut out);
                 }
             }
             ClientPacketId::EditGuildMember => {
@@ -555,6 +564,16 @@ impl ConnectionHandler for LoginConnection {
                         "市场/拍卖行系统尚未在 Rust 服务器上实现。",
                         &mut out,
                     );
+                }
+            }
+            ClientPacketId::RequestUserName => {
+                if let Ok(msg) = CRequestUserName::decode(&packet.payload) {
+                    self.handle_request_user_name(msg, &mut out);
+                }
+            }
+            ClientPacketId::RequestChatItem => {
+                if let Ok(msg) = CRequestChatItem::decode(&packet.payload) {
+                    self.handle_request_chat_item(msg, &mut out);
                 }
             }
             ClientPacketId::DepositTradeItem => {

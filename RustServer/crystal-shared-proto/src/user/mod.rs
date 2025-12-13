@@ -13,7 +13,7 @@ pub mod system;
 
 // Keep existing public API: crate::user::SUserInformation, etc.
 // 基础信息和位移相关类型从对应子模块导出，其余暂时仍从 flat 透出。
-pub use information::{SUserInformation, SUserSlotsRefresh};
+pub use information::{SUserInformation, SUserSlotsRefresh, SPlayerInspect};
 pub use location::{
     SUserLocation,
     SUserDash,

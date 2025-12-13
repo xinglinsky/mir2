@@ -253,6 +253,7 @@ impl LoginConnection {
                     if map_changed {
                         self.known_monsters.clear();
                         self.known_npcs.clear();
+                        self.known_heroes.clear();
                         self.update_visibility(out);
                     }
 
@@ -300,6 +301,7 @@ impl LoginConnection {
                     if map_changed {
                         self.known_monsters.clear();
                         self.known_npcs.clear();
+                        self.known_heroes.clear();
                         self.update_visibility(out);
                     }
 
@@ -344,6 +346,7 @@ impl LoginConnection {
                                     if map_changed {
                                         self.known_monsters.clear();
                                         self.known_npcs.clear();
+                                        self.known_heroes.clear();
                                         self.update_visibility(out);
                                     }
 

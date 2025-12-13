@@ -23,6 +23,10 @@ namespace Client
         public static Graphics Graphics;
         public static Point MPoint;
 
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTCAPTION = 0x0002;
+        private const int WindowDragRegionHeight = 32;
+
         public readonly static Stopwatch Timer = Stopwatch.StartNew();
         public readonly static DateTime StartTime = DateTime.UtcNow;
         public static long Time;
@@ -66,7 +70,9 @@ namespace Client
 
 
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.Selectable, true);
-            FormBorderStyle = Settings.FullScreen || Settings.Borderless ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
+            FormBorderStyle = Settings.FullScreen ? FormBorderStyle.None : FormBorderStyle.FixedSingle;
+            MaximizeBox = false;
+            MinimizeBox = !Settings.FullScreen;
 
             Graphics = CreateGraphics();
             Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -571,7 +577,9 @@ namespace Client
         {
             Settings.FullScreen = !Settings.FullScreen;
 
-            Program.Form.FormBorderStyle = Settings.FullScreen || Settings.Borderless ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
+            Program.Form.FormBorderStyle = Settings.FullScreen ? FormBorderStyle.None : FormBorderStyle.FixedSingle;
+            Program.Form.MaximizeBox = false;
+            Program.Form.MinimizeBox = !Settings.FullScreen;
 
             Program.Form.TopMost = Settings.FullScreen;
 
@@ -714,6 +722,20 @@ namespace Client
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_NCHITTEST && FormBorderStyle == FormBorderStyle.None && !Settings.FullScreen)
+            {
+                int x = (short)(m.LParam.ToInt64() & 0xFFFF);
+                int y = (short)((m.LParam.ToInt64() >> 16) & 0xFFFF);
+
+                Point point = PointToClient(new Point(x, y));
+
+                if (point.Y >= 0 && point.Y < WindowDragRegionHeight)
+                {
+                    m.Result = (IntPtr)HTCAPTION;
+                    return;
+                }
+            }
+
             if (m.Msg == 0x0112) // WM_SYSCOMMAND
             {
                 if (m.WParam.ToInt32() == 0xF100) // SC_KEYMENU

@@ -28,6 +28,7 @@ use crystal_shared_proto::quest::{SChangeQuest, SCompleteQuest};
 use crystal_shared_proto::item::{SNewItemInfo, SNewRecipeInfo, SUserStorage, SResizeStorage};
 use crystal_shared_proto::scene::{
     SBaseStatsInfo,
+    SHeroBaseStatsInfo,
     SObjectTeleportIn,
     SObjectTeleportOut,
     STeleportIn,
@@ -43,6 +44,7 @@ use crystal_shared_proto::user::{
     SChangeAMode,
     SChangePMode,
     SHealthChanged,
+    SHeroHealthChanged,
     STimeOfDay,
     SSwitchGroup,
     SUserInformation,
@@ -57,6 +59,7 @@ use crystal_shared_proto::io::{
     write_string,
     write_u64_le,
 };
+use crystal_shared_proto::hero::{SHeroInformation, SUpdateHeroSpawnState};
 
 use super::{LoginConnection, Stage};
 
@@ -163,6 +166,14 @@ impl LoginConnection {
             self.stage = Stage::InGame;
             self.current_char_index = Some(ch.index);
 
+            let (hair, allow_observe) = {
+                let world = self.world.lock().unwrap();
+                (
+                    world.player_hair(self.session_id).unwrap_or(0),
+                    world.player_allow_observe(self.session_id).unwrap_or(false),
+                )
+            };
+
             {
                 let mut map = self.player_summaries.lock().unwrap();
                 map.insert(
@@ -175,7 +186,7 @@ impl LoginConnection {
                         class: ch.class,
                         gender: ch.gender,
                         level: ch.level,
-                        hair: 0,
+                        hair,
                     },
                 );
             }
@@ -655,7 +666,7 @@ impl LoginConnection {
 
             let user = SUserInformation {
                 object_id: self.session_id,
-                real_id: self.session_id,
+                real_id: ch.index as u32,
                 name: ch.name,
                 guild_name,
                 guild_rank: guild_rank_name,
@@ -666,26 +677,98 @@ impl LoginConnection {
                 location_x: self.current_x,
                 location_y: self.current_y,
                 direction: self.direction,
-                hair: 0,
+                hair,
                 hp: stats.hp,
                 mp: stats.mp,
                 experience: stats.experience,
                 max_experience,
                 level_effects: 0,
-                has_hero: false,
+                has_hero: true,
                 hero_behaviour: 0,
                 gold: stats.gold as u32,
                 credit: stats.credit as u32,
                 has_expanded_storage: account_storage.has_expanded_storage,
                 expanded_storage_expiry_binary: account_storage.expanded_storage_expiry_binary,
-                magics: magic_bytes,
+                magics: magic_bytes.clone(),
                 summoned_creature_type: 0,
                 creature_summoned: false,
-                allow_observe: false,
+                allow_observe,
                 observer: false,
             };
             if let Ok(raw) = user.encode() {
                 out.push(Self::encode_raw(raw));
+            }
+
+            // Minimal hero bootstrap: send HeroInformation so the client can
+            // construct GameScene.Hero (UserHeroObject) and open hero UI.
+            {
+                let hero_id = super::hero_object_id(self.session_id);
+                let mut core_bytes = Vec::new();
+                if write_u32_le(&mut core_bytes, hero_id).is_ok()
+                    && write_string(&mut core_bytes, "Hero").is_ok()
+                {
+                    core_bytes.push(ch.class);
+                    core_bytes.push(ch.gender);
+                    let _ = write_u16_le(&mut core_bytes, ch.level);
+                    core_bytes.push(hair);
+
+                    let _ = write_i32_le(&mut core_bytes, stats.hp);
+                    let _ = write_i32_le(&mut core_bytes, stats.mp);
+
+                    let _ = write_i64_le(&mut core_bytes, stats.experience);
+                    let _ = write_i64_le(&mut core_bytes, max_experience);
+
+                    // Inventory (fixed 46 slots)
+                    let _ = write_bool(&mut core_bytes, true);
+                    let _ = write_i32_le(&mut core_bytes, 46);
+                    for _ in 0..46 {
+                        let _ = write_bool(&mut core_bytes, false);
+                    }
+
+                    // Equipment (fixed 14 slots)
+                    let _ = write_bool(&mut core_bytes, true);
+                    let _ = write_i32_le(&mut core_bytes, 14);
+                    for _ in 0..14 {
+                        let _ = write_bool(&mut core_bytes, false);
+                    }
+
+                    // Magics: count + raw ClientMagic bytes
+                    let _ = write_i32_le(&mut core_bytes, magic_bytes.len() as i32);
+                    for m in &magic_bytes {
+                        core_bytes.extend_from_slice(m);
+                    }
+
+                    let hero_pkt = SHeroInformation {
+                        core_bytes,
+                        auto_pot: false,
+                        auto_hp_percent: 0,
+                        auto_mp_percent: 0,
+                        hp_item_index: -1,
+                        mp_item_index: -1,
+                    };
+                    if let Ok(raw) = hero_pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+
+                    let hero_base_stats_bytes = base_stats::encode_base_stats_for_job(job);
+                    let hero_base_stats_pkt = SHeroBaseStatsInfo {
+                        stats_bytes: hero_base_stats_bytes,
+                    };
+                    out.push(Self::encode_raw(hero_base_stats_pkt.encode()));
+
+                    let hero_hc_pkt = SHeroHealthChanged {
+                        hp: stats.hp,
+                        mp: stats.mp,
+                    };
+                    if let Ok(raw) = hero_hc_pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+
+                    // Tell the client that the hero is spawned so hero panels
+                    // become visible.
+                    let state_pkt = SUpdateHeroSpawnState { state: 2 };
+                    out.push(Self::encode_raw(state_pkt.encode()));
+                }
             }
 
             let hc_pkt = SHealthChanged {
@@ -911,6 +994,7 @@ impl LoginConnection {
             self.current_map_index = map_info_core.index;
             self.known_monsters.clear();
             self.known_npcs.clear();
+            self.known_heroes.clear();
             self.update_visibility(out);
 
             // Send the GameShop list to the client, mirroring the C#

@@ -1,6 +1,7 @@
 use crystal_server_core::account::StoredFriend;
-use crystal_shared_proto::login::SDisconnect;
+use crystal_shared_proto::login::{CChat, SDisconnect};
 use crystal_shared_proto::scene::SChat;
+use crystal_shared_proto::user::SAllowObserve;
 
 use super::{LoginConnection, Stage};
 
@@ -15,12 +16,12 @@ impl LoginConnection {
         }
     }
 
-    pub(crate) fn handle_chat(&mut self, message: String, out: &mut Vec<Vec<u8>>) {
+    pub(crate) fn handle_chat(&mut self, msg: CChat, out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
             return;
         }
 
-        let trimmed = message.trim();
+        let trimmed = msg.message.trim();
 
         // Mirror C# MirConnection.Chat: if the message exceeds Globals.MaxChatLength,
         // immediately disconnect the client with reason=2 (Packet Error).
@@ -43,6 +44,40 @@ impl LoginConnection {
             );
         }
 
+        if !msg.linked_items.is_empty() {
+            let items_opt = {
+                let world = self.world.lock().unwrap();
+                world.player_items(self.session_id)
+            };
+
+            if let Some((inv, eq)) = items_opt {
+                let mut cache = self.chat_item_cache.lock().unwrap();
+                if cache.len() > 2048 {
+                    cache.clear();
+                }
+
+                for link in &msg.linked_items {
+                    let found = match link.grid {
+                        1 => inv
+                            .slots
+                            .iter()
+                            .find(|s| s.as_ref().map(|i| i.unique_id) == Some(link.unique_id))
+                            .and_then(|s| s.as_ref()),
+                        2 => eq
+                            .slots
+                            .iter()
+                            .find(|s| s.as_ref().map(|i| i.unique_id) == Some(link.unique_id))
+                            .and_then(|s| s.as_ref()),
+                        _ => None,
+                    };
+
+                    if let Some(item) = found {
+                        cache.insert(link.unique_id, item.clone());
+                    }
+                }
+            }
+        }
+
         // Delegate all GM/admin commands to the gm_commands module.
         if self.handle_gm_chat(trimmed, out) {
             return;
@@ -56,6 +91,21 @@ impl LoginConnection {
         if trimmed.eq_ignore_ascii_case("@ADDSTORAGE") {
             // Reuse the existing /addstorage implementation in gm_commands.
             let _ = self.handle_gm_chat("/addstorage", out);
+            return;
+        }
+
+        if trimmed.eq_ignore_ascii_case("@ALLOWOBSERVE") {
+            let allow_opt = {
+                let mut world = self.world.lock().unwrap();
+                world.toggle_player_allow_observe(self.session_id)
+            };
+
+            if let Some(allow) = allow_opt {
+                let pkt = SAllowObserve { allow };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
             return;
         }
 

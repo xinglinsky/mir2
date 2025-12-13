@@ -426,6 +426,7 @@ impl LoginConnection {
                         if map_changed2 {
                             self.known_monsters.clear();
                             self.known_npcs.clear();
+                            self.known_heroes.clear();
                             self.update_visibility(out);
                         }
                     }
@@ -1145,6 +1146,13 @@ impl LoginConnection {
                         if let Ok(pkt) = health.encode() {
                             let raw = Self::encode_raw(pkt);
 
+                            // Also send to the current connection (typically
+                            // the caster) so it can render the healed
+                            // player's head HP bar update immediately.
+                            if session_id != self.session_id {
+                                out.push(raw.clone());
+                            }
+
                             // Always send to the healed player when this
                             // connection corresponds to them.
                             if session_id == self.session_id {
@@ -1175,6 +1183,13 @@ impl LoginConnection {
                         if let Ok(raw) = eff_pkt.encode() {
                             let bytes = Self::encode_raw(raw);
 
+                            // Also send to the current connection (typically
+                            // the caster) so it can render the healing visual
+                            // effect even when healing other players.
+                            if session_id != self.session_id {
+                                out.push(bytes.clone());
+                            }
+
                             // Always send the effect to the healed player if this
                             // connection corresponds to them.
                             if session_id == self.session_id {
@@ -1183,6 +1198,47 @@ impl LoginConnection {
 
                             // And broadcast to other nearby viewers around the
                             // healed player's location.
+                            self.enqueue_for_viewers(map_index, x, y, bytes);
+                        }
+                    }
+                }
+                world::WorldEvent::MonsterHealed {
+                    monster_id,
+                    map_index,
+                    x,
+                    y,
+                    amount: _,
+                    new_hp: _,
+                    health_percent,
+                    show_healing_effect,
+                } => {
+                    let object_id = monster_id as u32;
+
+                    let health = SObjectHealth {
+                        object_id,
+                        percent: health_percent,
+                        expire: 5,
+                    };
+
+                    if let Ok(pkt) = health.encode() {
+                        let raw = Self::encode_raw(pkt);
+                        out.push(raw.clone());
+                        self.enqueue_for_viewers(map_index, x, y, raw);
+                    }
+
+                    if show_healing_effect {
+                        const HEALING_EFFECT: u8 = 3; // SpellEffect.Healing
+                        let eff_pkt = SObjectEffect {
+                            object_id,
+                            effect: HEALING_EFFECT,
+                            effect_type: 0,
+                            delay_time: 0,
+                            time: 0,
+                        };
+
+                        if let Ok(raw) = eff_pkt.encode() {
+                            let bytes = Self::encode_raw(raw);
+                            out.push(bytes.clone());
                             self.enqueue_for_viewers(map_index, x, y, bytes);
                         }
                     }
@@ -1573,6 +1629,7 @@ impl LoginConnection {
         if map_changed {
             self.known_monsters.clear();
             self.known_npcs.clear();
+            self.known_heroes.clear();
             self.update_visibility(out);
         }
 

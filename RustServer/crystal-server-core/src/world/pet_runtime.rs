@@ -263,25 +263,25 @@ impl<P: WorldProvider> World<P> {
                 if let Some((
                     target_id,
                     target_monster_index,
-                    tx,
-                    ty,
+                    _tx,
+                    _ty,
                     dx,
                     dy,
                 )) = best_attack
                 {
-                    debug!(
-                        "pet_ai_shinsu_attack: pet_id={} map={} pet_pos=({}, {}) target_id={} target_pos=({}, {}) dx={} dy={} now_ms={}",
-                        monster.id,
-                        map_index,
-                        monster.x,
-                        monster.y,
-                        target_id,
-                        tx,
-                        ty,
-                        dx,
-                        dy,
-                        now_ms,
-                    );
+                    // debug!(
+                    //     "pet_ai_shinsu_attack: pet_id={} map={} pet_pos=({}, {}) target_id={} target_pos=({}, {}) dx={} dy={} now_ms={}",
+                    //     monster.id,
+                    //     map_index,
+                    //     monster.x,
+                    //     monster.y,
+                    //     target_id,
+                    //     tx,
+                    //     ty,
+                    //     dx,
+                    //     dy,
+                    //     now_ms,
+                    // );
 
                     let sx = dx.clamp(-1, 1);
                     let sy = dy.clamp(-1, 1);

@@ -16,6 +16,7 @@ use super::{LoginConnection, Stage};
 impl LoginConnection {
     /// Send a SNewQuestInfo packet to the owning client using a pre-encoded
     /// ClientQuestInfo.Save payload.
+    #[allow(dead_code)]
     pub(crate) fn send_new_quest_info_bytes(
         &self,
         quest_bytes: Vec<u8>,

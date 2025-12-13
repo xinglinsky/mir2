@@ -402,6 +402,16 @@ pub enum WorldEvent {
         new_hp: i32,
         show_healing_effect: bool,
     },
+    MonsterHealed {
+        monster_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        amount: i32,
+        new_hp: i32,
+        health_percent: u8,
+        show_healing_effect: bool,
+    },
     /// Notify a specific player about the result of a magic cast, including
     /// target information, mirroring the legacy C# S.Magic packet. The
     /// legacy client uses this to drive local spell animations and
@@ -555,7 +565,7 @@ impl<P: WorldProvider> World<P> {
             players: HashMap::new(),
             maps: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             monsters: HashMap::new(),
-            next_monster_id: 0,
+            next_monster_id: 0x4000_0000,
             map_items: HashMap::new(),
             next_map_item_id: 1_000_000_000,
             occupancy: HashMap::new(),
@@ -2061,6 +2071,60 @@ impl<P: WorldProvider> World<P> {
         self.players.get(&session_id).map(|p| p.name.clone())
     }
 
+    pub fn player_location(&self, session_id: SessionId) -> Option<(i32, i32, i32, u8)> {
+        self.players
+            .get(&session_id)
+            .map(|p| (p.map_index, p.x, p.y, p.direction))
+    }
+
+    pub fn player_hair(&self, session_id: SessionId) -> Option<u8> {
+        self.players.get(&session_id).map(|p| p.hair)
+    }
+
+    pub fn player_allow_observe(&self, session_id: SessionId) -> Option<bool> {
+        self.players.get(&session_id).map(|p| p.allow_observe)
+    }
+
+    pub fn toggle_player_allow_observe(&mut self, session_id: SessionId) -> Option<bool> {
+        let p = self.players.get_mut(&session_id)?;
+        p.allow_observe = !p.allow_observe;
+        Some(p.allow_observe)
+    }
+
+    pub fn session_id_from_object_id(&self, object_id: u32) -> Option<SessionId> {
+        let sid = object_id as SessionId;
+        if self.players.contains_key(&sid) {
+            Some(sid)
+        } else {
+            None
+        }
+    }
+    pub fn player_inspect_snapshot(
+        &self,
+        session_id: SessionId,
+    ) -> Option<(
+        String,
+        String,
+        u8,
+        u8,
+        u8,
+        u16,
+        Vec<Option<UserItemData>>,
+        bool,
+    )> {
+        let p = self.players.get(&session_id)?;
+        Some((
+            p.name.clone(),
+            p.guild_name.clone(),
+            p.job.as_u8(),
+            p.gender,
+            p.hair,
+            p.level,
+            p.equipment.slots.clone(),
+            p.allow_observe,
+        ))
+    }
+
     /// Look up the character_index for a given session. This is used by the
     /// connection layer when it needs to resolve CharacterStats for another
     /// online player (e.g. for trade gold capacity checks mirroring the C#
@@ -2076,6 +2140,13 @@ impl<P: WorldProvider> World<P> {
             .players
             .iter()
             .find(|(_, p)| p.name.eq_ignore_ascii_case(name))
+            .map(|(&sid, _)| sid)
+    }
+    pub fn find_session_by_character_index(&self, character_index: i32) -> Option<SessionId> {
+        self
+            .players
+            .iter()
+            .find(|(_, p)| p.character_index == character_index)
             .map(|(&sid, _)| sid)
     }
 

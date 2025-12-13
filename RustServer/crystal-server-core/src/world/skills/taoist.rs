@@ -1,5 +1,5 @@
 use crate::stats::{Stat, Stats};
-use crate::world::magic::{magic_damage, magic_power};
+use crate::world::magic::magic_damage;
 use crate::world::monster::MonsterAiState;
 use crate::world::skills::compute_magic_mana_cost;
 use crate::world::types::{BuffType, PetKind, PetMode, PoisonType};
@@ -573,64 +573,193 @@ pub fn cast_healing<P: WorldProvider>(
         return;
     }
 
-    // Choose a target player at the clicked location if present; otherwise,
-    // fall back to healing the caster. This approximates the C# behaviour
-    // where Healing can be used on friendly targets.
-    let mut target_session = session_id;
+    // Choose a friendly target at the clicked location if present. This
+    // follows the spirit of C# MapObject.IsFriendlyTarget: Taoist Healing can
+    // be cast on self, party/guild members and their pets.
 
-    for (sid, p) in &world.players {
+    // 1) Try friendly players at the clicked location.
+    let mut healed_any = false;
+
+    let caster_party_id;
+    let caster_guild_name;
+    {
+        let caster = match world.players.get(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+        caster_party_id = caster.party_id;
+        caster_guild_name = caster.guild_name.clone();
+    }
+
+    for (&sid, p) in &mut world.players {
         if p.map_index != map_index || p.dead || p.hp <= 0 {
             continue;
         }
-        if p.x == target_x && p.y == target_y {
-            target_session = *sid;
-            break;
+        if p.x != target_x || p.y != target_y {
+            continue;
+        }
+
+        let is_self = sid == session_id;
+        let same_party = match (caster_party_id, p.party_id) {
+            (Some(a), Some(b)) if a == b => true,
+            _ => false,
+        };
+        let same_guild = !caster_guild_name.is_empty()
+            && !p.guild_name.is_empty()
+            && p.guild_name.eq_ignore_ascii_case(&caster_guild_name);
+
+        if !is_self && !same_party && !same_guild {
+            continue;
+        }
+
+        let max_hp = p.stats.total.get(Stat::HP).max(1);
+        if p.hp >= max_hp {
+            continue;
+        }
+
+        let old_hp = p.hp;
+        let new_hp = (old_hp + heal_value).min(max_hp);
+        if new_hp <= old_hp {
+            continue;
+        }
+
+        let amount = new_hp - old_hp;
+        p.hp = new_hp;
+
+        events.push(WorldEvent::PlayerHealed {
+            session_id: p.session_id,
+            map_index,
+            x: p.x,
+            y: p.y,
+            amount,
+            new_hp,
+            show_healing_effect: true,
+        });
+
+        healed_any = true;
+        break;
+    }
+
+    // 2) If no player was healed, try friendly pets (monsters with is_pet)
+    // at the clicked location. We treat pets as friendly when their owner is
+    // the caster or a member of the same party/guild.
+    if !healed_any {
+        if let Some(monsters) = world.monsters.get_mut(&map_index) {
+            for m in monsters.iter_mut() {
+                if !m.is_pet || m.hp <= 0 {
+                    continue;
+                }
+                if m.x != target_x || m.y != target_y {
+                    continue;
+                }
+
+                let Some(owner_sid) = m.owner_session_id else {
+                    continue;
+                };
+
+                let Some(owner) = world.players.get(&owner_sid) else {
+                    continue;
+                };
+
+                let is_self_owner = owner_sid == session_id;
+                let same_party_owner = match (caster_party_id, owner.party_id) {
+                    (Some(a), Some(b)) if a == b => true,
+                    _ => false,
+                };
+                let same_guild_owner = !caster_guild_name.is_empty()
+                    && !owner.guild_name.is_empty()
+                    && owner
+                        .guild_name
+                        .eq_ignore_ascii_case(&caster_guild_name);
+
+                if !is_self_owner && !same_party_owner && !same_guild_owner {
+                    continue;
+                }
+
+                let max_hp = if let Some(info) = world.provider.get_monster_info(m.monster_index)
+                {
+                    info.stats.get(Stat::HP).max(1)
+                } else {
+                    1
+                };
+
+                if m.hp >= max_hp {
+                    continue;
+                }
+
+                let old_hp = m.hp;
+                let new_hp = (old_hp + heal_value).min(max_hp);
+                if new_hp <= old_hp {
+                    continue;
+                }
+
+                let amount = new_hp - old_hp;
+                m.hp = new_hp;
+
+                let percent: u8 = ((new_hp as i64 * 100 / max_hp as i64)
+                    .clamp(0, 100)) as u8;
+
+                events.push(WorldEvent::MonsterHealed {
+                    monster_id: m.id,
+                    map_index,
+                    x: m.x,
+                    y: m.y,
+                    amount,
+                    new_hp,
+                    health_percent: percent,
+                    show_healing_effect: true,
+                });
+
+                healed_any = true;
+                break;
+            }
         }
     }
 
-    let player = match world.players.get_mut(&target_session) {
-        Some(p) => p,
-        None => return,
-    };
-
-    let max_hp = player.stats.total.get(Stat::HP).max(1);
-    if player.hp >= max_hp {
-        return;
+    if !healed_any {
+        // If we found no valid friendly target at the clicked tile, fall back
+        // to healing the caster themselves when they are below max HP.
+        if let Some(p) = world.players.get_mut(&session_id) {
+            if p.map_index == map_index && !p.dead {
+                let max_hp = p.stats.total.get(Stat::HP).max(1);
+                if p.hp < max_hp {
+                    let old_hp = p.hp;
+                    let new_hp = (old_hp + heal_value).min(max_hp);
+                    if new_hp > old_hp {
+                        let amount = new_hp - old_hp;
+                        p.hp = new_hp;
+                        events.push(WorldEvent::PlayerHealed {
+                            session_id: p.session_id,
+                            map_index,
+                            x: p.x,
+                            y: p.y,
+                            amount,
+                            new_hp,
+                            show_healing_effect: true,
+                        });
+                        healed_any = true;
+                    }
+                }
+            }
+        }
     }
 
-    let old_hp = player.hp;
-    let new_hp = (old_hp + heal_value).min(max_hp);
-    if new_hp <= old_hp {
-        return;
+    if healed_any {
+        world.level_up_magic_for_player(session_id, Spell::Healing as u8, events);
+
+        // Emit a generic ObjectAttack event so that the client can play the
+        // Healing animation and start icon cooldown, mirroring other spells.
+        events.push(WorldEvent::ObjectAttack {
+            session_id,
+            map_index,
+            x: caster_x,
+            y: caster_y,
+            direction,
+            spell,
+            level,
+            attack_type: 0,
+        });
     }
-
-    let amount = new_hp - old_hp;
-    player.hp = new_hp;
-
-    events.push(WorldEvent::PlayerHealed {
-        session_id: player.session_id,
-        map_index,
-        x: player.x,
-        y: player.y,
-        amount,
-        new_hp,
-        show_healing_effect: true,
-    });
-
-    world.level_up_magic_for_player(session_id, Spell::Healing as u8, events);
-
-    // Emit a generic ObjectAttack event so that the client can play the
-    // Healing animation and start icon cooldown, mirroring other spells.
-    events.push(WorldEvent::ObjectAttack {
-        session_id,
-        map_index,
-        x: caster_x,
-        y: caster_y,
-        direction,
-        spell,
-        level,
-        attack_type: 0,
-    });
 }
 
 pub fn cast_hallucination<P: WorldProvider>(

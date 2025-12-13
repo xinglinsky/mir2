@@ -2,6 +2,22 @@
 
 > 本计划遵循 `RUST_SERVER_RULES`（行为与 C# 保持一致、仅修改 RustServer 目录、错误处理避免 panic、单文件不超过 800 行并按职责拆分模块等）。
 
+## 〇、进度口径与现状核验（2025-12-13）
+
+为避免“看起来实现了，但实际客户端走不到”的情况，本计划后续统一按以下口径描述进度：
+
+- **Implemented（已实现）**：Rust 侧已有对应数据结构/核心逻辑代码。
+- **Wired（已接入）**：连接层 `crystal-server-bin/src/connection/handler.rs` 已把对应 `ClientPacketId` 分发到具体 handler，客户端实际可触发。
+- **Verified（已验证）**：与 C# 服务端对照验证通过（至少包含：协议字段一致、关键边界一致、可复现的回归用例）。
+
+**当前代码事实（必须以此为准）**：
+
+- **连接层唯一分发入口**：当前 Rust 服网络入口使用 `LoginConnection`，其包分发由 `crystal-server-bin/src/connection/handler.rs` 的 `match ClientPacketId` 决定。
+- **已确认 Stub（Wired 但未实现业务）**：`Harvest`、全套 `Market*`/`ConsignItem`、`GuildWarReturn` 等目前只返回“未实现”的系统消息。
+- **已确认缺失（未接入 / Unhandled）**：大量 C# `MirConnection.ProcessPacket` 中存在的包在 Rust `handler.rs` 中没有分支（例如 `MergeItem/SplitItem/Refine*`、`DropGold`、`Inspect/Observe`、`RangeAttack`、`SpellToggle`、`RequestUserName/RequestChatItem`、`NewHero/Fishing*/Awakening*`、`Marriage/Mentor`、`IntelligentCreature*`、`Rental*`、`Opendoor` 等）。这些功能即使在 core/world 中已有部分代码，也需要先完成 **Wired** 才能进入“可玩/可测”。
+
+---
+
 ## 一、总体依赖关系
 
 - **子计划1：协议 & 连接层重写**  
@@ -30,24 +46,56 @@
  - 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
  - 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
 
-**当前进度概览（2025-12-01 更新）**
-- **已完成**：
-  - 登录 / 注册 / 改密 / 角色列表 / 新建 / 删除 / StartGame / LogOut 等基础流转已在 `crystal-server-bin/src/connection` 中实现，并拆分为 `login_stage`, `select_stage` 以及按领域划分的子模块（`session`, `visibility`, `movement`, `npc`, `chat`, `gm_commands`, `guild`, `map`, `market`, `item` 等）；原 `ingame_stage.rs` 已拆空并删除。
-  - `ClientPacketId` / `RawPacket` 解码和大部分核心 C* / S* 包已在 `crystal-shared-proto` 中实现，ID 数值与 C# 完全一致。
-  - 世界命令对接（StartGame / Turn / Walk / Run / Attack / PickUp / DropItem 等）已通过 `world::WorldCommand` 与 `World::handle_command` 路由打通。
-  - 基础战斗命令（Attack）已连接到 `combat` 模块。
-  - `handler.rs` 大文件拆分已完成。
-  - 组队相关协议（`SwitchGroup`, `AddMember`, `DellMember`, `GroupInvite`）已在 `crystal-server-bin/src/connection/group.rs` 中对接 `WorldCommand`，基础行为对齐 C#。
-  - 账号存储层：在 `crystal-server-core::account` / `crystal-server-db` 中扩展 `accounts` 表（`banned` / `ban_reason` / `ban_expires_at` / `require_password_change` / `wrong_password_count`），并通过 `AccountStatus` 与 `AccountStore::load_account_status` / `save_account_status` 在登录 / 改密流程中复现了 C# `AccountInfo` / `Envir.Login` / `Envir.ChangePassword` 的封禁与 `RequirePasswordChange` 语义。
-  - NPC 买卖与 GameShop：在 `connection::market` / `connection::gameshop` 中实现 NPC 商店买卖与 BuyBack 列表，使用脚本 [TRADE] 配置物品。
-  - 玩家交易系统：`connection::trade` 与 `world::World` 支持交易邀请 / 锁定 / 金币与物品交换 / 取消回滚，并做基础的容量与金币上限检查。
-  - 邮件系统协议：`connection::mail` + `crystal-server-core::account::StoredMail` + `world::configs::mail_config` 完成邮件收发、附件/金币寄送与邮资计算，并在收件人在线时推送 `SReceiveMail`。
-  - 行会扩展协议：在 `connection::guild` 中实现行会仓库物品/金币操作、行会经验广播与 `SGuildStatus` 刷新，桥接 `world::GuildManager` / `guild_settings`。
+**当前进度概览（2025-12-13 更新，口径：Implemented/Wired/Verified）**
 
-- **待办事项**：
-  - **缺失的协议处理**：全局 `Market` 拍卖行相关 C* 包（`ConsignItem`, `MarketSearch`, `MarketRefresh`, `MarketPage`, `MarketBuy`, `MarketGetBack`, `MarketSellNow`）、`Quest` (任务)、`Harvest` (采集) 以及与任务/市场相关的部分 NPC 指令。
-  - **IP 封禁策略**：已在传输层（`crystal-server-net::run_server` + `ServerConfig.max_ip` / `ip_block_seconds`）实现基于 IP 的最大并发连接数限制与短期封禁；基于登录失败/异常包/账号创建次数等的 IP 封禁与解封逻辑仍待迁移。
-  - **边界情况处理**：对照 C# 完善错误码返回和异常流程保护，并为 Trade / Mail / NPC 商店等复杂协议补充日志与测试用例。
+### 2.1 已接入（Wired）的协议（客户端可触发）
+
+- **账号/选角流程（Wired，部分 Verified）**：
+  - `ClientVersion` / `NewAccount` / `Login` / `ChangePassword` / `NewCharacter` / `DeleteCharacter` / `StartGame` / `LogOut`。
+- **基础移动与战斗闭环（Wired，需系统回归 Verified）**：
+  - `Turn` / `Walk` / `Run` / `Attack` / `Magic` / `MagicKey`。
+  - `PickUp` / `DropItem`。
+- **NPC 与地图相关（Wired）**：
+  - `CallNPC` / `BuyItem` / `SellItem` / `CraftItem`。
+  - `RequestMapInfo` / `TeleportToNPC` / `SearchMap`。
+- **行会/组队/交易/邮件/好友（Wired，边界需回归 Verified）**：
+  - 组队：`SwitchGroup` / `AddMember` / `DellMember` / `GroupInvite`。
+  - 交易：`TradeRequest` / `TradeReply` / `TradeGold` / `TradeConfirm` / `TradeCancel` / `DepositTradeItem` / `RetrieveTradeItem`。
+  - 邮件：`SendMail` / `ReadMail` / `CollectParcel` / `DeleteMail` / `LockMail` / `MailLockedItem` / `MailCost`。
+  - 好友：`AddFriend` / `RemoveFriend` / `RefreshFriends` / `AddMemo`。
+  - 行会：`EditGuildMember` / `EditGuildNotice` / `GuildInvite` / `GuildNameReturn` / `RequestGuildInfo` / `GuildStorageGoldChange` / `GuildStorageItemChange`。
+- **其他（Wired）**：
+  - `KeepAlive` / `Disconnect`。
+  - `TownRevive`（复活流程尚需对齐 C# 细节 Verified）。
+  - `AcceptQuest` / `FinishQuest` / `AbandonQuest` / `ShareQuest`（当前奖励发放与队伍共享行为为最小实现，需补齐 Verified）。
+  - `AcceptReincarnation` / `CancelReincarnation`。
+  - `GetRanking` / `GameshopBuy`。
+
+### 2.2 已接入但仍为 Stub（Wired 但未实现业务）
+
+- `Harvest`。
+- 全套拍卖行：`ConsignItem` / `MarketSearch` / `MarketRefresh` / `MarketPage` / `MarketBuy` / `MarketGetBack` / `MarketSellNow`。
+- `GuildWarReturn`。
+
+### 2.3 目前缺失的协议（未接入 / Unhandled，优先级极高）
+
+以下在 C# `MirConnection.ProcessPacket` 中存在，但在 Rust `handler.rs` 中暂未分发：
+
+- **物品/锻造/精炼链路**：`MergeItem` / `SplitItem` / `RemoveSlotItem` / `DropGold` / `DepositRefineItem` / `RetrieveRefineItem` / `RefineCancel` / `RefineItem` / `CheckRefine` / `ReplaceWedRing` / `BuyItemBack` / `RepairItem` / `SRepairItem` / `EquipSlotItem` / `CombineItem`。
+- **观察/查看/聊天物品/用户名**：`Inspect` / `Observe` / `RequestUserName` / `RequestChatItem`。
+- **战斗补全**：`RangeAttack` / `ChangeTrade` / `SpellToggle`。
+- **英雄/钓鱼/觉醒/宠物智能体**：`NewHero` / `SetAutoPotValue` / `SetAutoPotItem` / `SetHeroBehaviour` / `ChangeHero` / `FishingCast` / `FishingChangeAutocast` / `AwakeningNeedMaterials` / `AwakeningLockedItem` / `Awakening` / `DisassembleItem` / `DowngradeAwakening` / `ResetAddedItem` / `UpdateIntelligentCreature` / `IntelligentCreaturePickup` / `RequestIntelligentCreatureUpdates`。
+- **社交扩展**：`MarriageRequest` / `MarriageReply` / `ChangeMarriage` / `DivorceRequest` / `DivorceReply` / `AddMentor` / `MentorReply` / `AllowMentor` / `CancelMentor`。
+- **运维与杂项**：`GuildBuffUpdate` / `NPCConfirmInput` / `ReportIssue` / `Opendoor` / `GetRentedItems` / 全套 `ItemRental*` / `GuildTerritoryPage` / `PurchaseGuildTerritory`。
+
+> 说明：上述缺失项会直接影响“严格对齐 C#”这一目标，因为客户端路径与服务器状态机不完整。子计划 1 的下一阶段应首先把这些包处理补齐到 **至少 Wired**。
+
+### 2.4 IP 封禁与限流（需对齐 C# 行为）
+
+- 传输层已存在 `max_ip` / `ip_block_seconds` 级别的限制，但仍需对齐 C# `Envir.UpdateIPBlock`：
+  - 登录失败次数与周期重置；
+  - 异常包（解码失败、超包量、越权操作）的封禁与日志；
+  - 管理端解封与查询。
 
 ### 主要涉及代码
 
@@ -63,17 +111,36 @@
 
 ### 接下来计划
 
-- **1. 补齐剩余协议与分发**
-  - 在各 `connection` 子模块中（`npc.rs`, `guild.rs`, `item.rs`, `map.rs`, `market.rs`, `quest.rs` 等）补齐全局 `Market`(拍卖行)、`Quest`、`Harvest` 等高级玩法相关包的处理分支，并将其路由到 `world::WorldCommand` / Admin 模块。
-  - 对暂时没有完整业务逻辑的部分，先返回明确错误/提示，并记录日志，避免 silent fail。
+1. **协议全量对齐（优先级最高，目标：覆盖 C# `MirConnection.ProcessPacket`）**
+   - 1.1：补齐并接入“物品/锻造/精炼链路”相关包（`MergeItem/SplitItem/Refine*`、`DropGold`、`BuyItemBack/Repair*` 等），并以 C# 为准实现：
+     - 栈合并/拆分与背包容量边界；
+     - 金币上限/溢出处理；
+     - NPC 交互距离与 NPCPage 校验；
+     - 各类失败原因的返回包/提示（**中文本土化**，但语义必须等价）。
+   - 1.2：补齐并接入“观察/查看/聊天物品/用户名”链路（`Inspect/Observe/RequestUserName/RequestChatItem`），这是大量客户端 UI 的基础能力。
+   - 1.3：补齐战斗相关未覆盖包（`RangeAttack/SpellToggle/ChangeTrade`）并对齐 C# 触发条件。
+   - 1.4：补齐“英雄/钓鱼/觉醒/智能宠物”等系统的协议接入与最小可用闭环（先 Wired，再完善业务）。
+   - 1.5：补齐“运维与杂项”协议（`Opendoor`、`Rental*`、`GuildTerritory*`、`ReportIssue` 等）。
 
-- **2. IP 封禁与安全策略**
-  - 在现有传输层 `max_ip` / `ip_block_seconds` 基础上，参考 C# `Envir.UpdateIPBlock` 行为，实现登录失败次数统计、异常包/超量包、过多新建账号/角色等触发的 IP 封禁/解封逻辑。
-  - 在 Admin 或内部控制命令中预留“查看/解除封禁”能力（与高级系统子计划协同）。
+2. **一致性验证体系（目标：让“严格一致”可量化）**
+   - 2.1：建立 **Packet 覆盖矩阵**（C# packet → Rust handler → world command/event），每个条目必须标注 Implemented/Wired/Verified。
+   - 2.2：引入 **Record/Replay**：
+     - 从客户端侧记录 `ClientPacketId` 序列与 payload（或从 C# 服务端日志/抓包导出），在 Rust 侧回放并对比关键输出包序列与世界状态摘要。
+   - 2.3：关键公式与随机一致性：实现并使用 **.NET Random 等价实现**（避免 `rand` 与 C# `Random` 分布差异导致掉落/伤害/寻路随机不一致）。
+   - 2.4：为高风险路径补齐自动化用例：交易、邮件、拍卖行、复活/掉落、任务奖励、封禁策略。
 
-- **3. 边界情况与错误码对齐**
-  - 登录 / 注册 / 改密 流程的错误码与封禁语义（账号不存在 / 密码错误 / 版本不符 / LoginBanned / ChangePasswordBanned / RequirePasswordChange）已在 Rust 侧基本对齐 C# `MirConnection` / `Envir`。
-  - 其余协议（如 StartGame / 删除角色 / 未来的 Market / Trade / Quest 等）的错误分支与结构化日志仍需按 C# 行为补齐。
+3. **性能最优实现策略（前提：不改变语义）**
+   - 3.1：降低 `world: Mutex<World>` 的锁竞争：将连接线程改为只做解码/校验，把 `WorldCommand` 通过队列投递给世界线程处理（Actor/Command Queue），输出 `WorldEvent` 再异步分发。
+   - 3.2：避免热路径重复 IO：地图文件加载应缓存（例如在 WorldDatabase 或 World 内维护 Map 缓存），禁止在技能/传送路径中频繁 `load_map_from_file`。
+   - 3.3：热点数据结构优化：可见列表/范围查询（`sessions_in_range_for_map`）按地图建立空间索引（网格桶/分块），减少 O(n) 扫描。
+   - 3.4：日志与指标：保持 `tracing` 结构化日志，但在热路径避免过多 `debug!`，使用采样或按模块开关。
+
+4. **消息通知中文本土化（目标：统一、可维护、可审计）**
+   - 4.1：禁止在业务代码中散落硬编码字符串；统一使用 `i18n`/`msg` 模块：`msg(key, args...) -> String`。
+   - 4.2：支持从配置加载中文语言表（建议兼容 `Configs/Language.ini` 或 RustServer 自有 `i18n/zh-CN.toml`），并保留 fallback。
+   - 4.3：对标 C# 系统消息语义：
+     - 文本可中文化，但触发时机、错误码、断线原因必须与 C# 一致；
+     - 对外可见的 GM/系统广播也必须走同一套本土化入口，避免出现“部分中文、部分英文、部分硬编码”。
 
 ---
 

@@ -10,9 +10,9 @@ use crystal_shared_proto::scene::{
     SObjectRemove,
 };
 use tracing::debug;
-use crystal_shared_proto::user::SObjectPlayer;
+use crystal_shared_proto::user::{SObjectHero, SObjectPlayer};
 
-use super::LoginConnection;
+use super::{hero_object_id, LoginConnection};
 
 impl LoginConnection {
     #[allow(dead_code)]
@@ -112,8 +112,9 @@ impl LoginConnection {
             .iter()
             .filter(|n| n.map_index == map_index)
         {
+            let npc_object_id = super::npc_object_id(npc.index);
             let packet = SObjectNpc {
-                object_id: npc.index as u32,
+                object_id: npc_object_id,
                 name: npc.name.clone(),
                 // Match C# NPCObject default: NameColour = Color.Lime.
                 name_colour_argb: 0xFF00FF00u32 as i32,
@@ -348,8 +349,9 @@ impl LoginConnection {
                 visible_npc_ids.insert(npc.index);
 
                 if !self.known_npcs.contains(&npc.index) {
+                    let npc_object_id = super::npc_object_id(npc.index);
                     let packet = SObjectNpc {
-                        object_id: npc.index as u32,
+                        object_id: npc_object_id,
                         name: npc.name.clone(),
                         name_colour_argb: 0xFF00FF00u32 as i32,
                         image: npc.image,
@@ -375,7 +377,9 @@ impl LoginConnection {
             .collect();
 
         for id in removed_npcs {
-            let pkt = SObjectRemove { object_id: id as u32 };
+            let pkt = SObjectRemove {
+                object_id: super::npc_object_id(id),
+            };
             if let Ok(raw) = pkt.encode() {
                 out.push(Self::encode_raw(raw));
             }
@@ -521,5 +525,114 @@ impl LoginConnection {
         }
 
         self.known_players = visible_player_ids;
+
+        // Heroes in view.
+        let heroes_in_view: Vec<(world::SessionId, i32, i32, u8)> = {
+            let world = self.world.lock().unwrap();
+            world.players_in_view_for_map(map_index, self.current_x, self.current_y, range, None)
+        };
+
+        let mut visible_hero_owner_ids: HashSet<world::SessionId> = HashSet::new();
+
+        for (sid, x, y, direction) in heroes_in_view {
+            if sid != self.session_id {
+                continue;
+            }
+
+            visible_hero_owner_ids.insert(sid);
+
+            if !self.known_heroes.contains(&sid) {
+                let snapshot = {
+                    let map = self.player_summaries.lock().unwrap();
+                    map.get(&sid).cloned()
+                };
+
+                if let Some(snap) = snapshot {
+                    let is_hidden = {
+                        let world = self.world.lock().unwrap();
+                        world.player_hidden(sid)
+                    };
+
+                    let base = SObjectPlayer {
+                        object_id: hero_object_id(sid),
+                        name: "Hero".to_string(),
+                        guild_name: snap.guild_name,
+                        guild_rank_name: snap.guild_rank_name,
+                        // Use C# HeroObject default name colour: MediumOrchid.
+                        name_colour_argb: 0xFFBA55D3u32 as i32,
+                        class: snap.class,
+                        gender: snap.gender,
+                        level: snap.level,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                        hair: snap.hair,
+                        light: 0,
+                        weapon: 0,
+                        weapon_effect: 0,
+                        armour: 0,
+                        poison: 0,
+                        dead: false,
+                        hidden: is_hidden,
+                        effect: 0,
+                        wing_effect: 0,
+                        extra: false,
+                        mount_type: 0,
+                        riding_mount: false,
+                        fishing: false,
+                        transform_type: 0,
+                        element_orb_effect: 0,
+                        element_orb_lvl: 0,
+                        element_orb_max: 0,
+                        buffs: Vec::new(),
+                        level_effects: 0,
+                    };
+                    let pkt = SObjectHero {
+                        base,
+                        owner_name: snap.name,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        debug!(
+                            "vis: send SObjectHero -> session_id={} owner_sid={} map={} pos=({}, {}) hidden={} hero_object_id={}",
+                            self.session_id,
+                            sid,
+                            map_index,
+                            x,
+                            y,
+                            is_hidden,
+                            hero_object_id(sid)
+                        );
+                        out.push(Self::encode_raw(raw));
+                    }
+
+                    let hp_pkt = SObjectHealth {
+                        object_id: hero_object_id(sid),
+                        percent: 100,
+                        expire: 5,
+                    };
+                    if let Ok(raw) = hp_pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
+            }
+        }
+
+        let removed_heroes: Vec<world::SessionId> = self
+            .known_heroes
+            .iter()
+            .filter(|sid| !visible_hero_owner_ids.contains(sid))
+            .cloned()
+            .collect();
+
+        for sid in removed_heroes {
+            let pkt = SObjectRemove {
+                object_id: hero_object_id(sid),
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        }
+
+        self.known_heroes = visible_hero_owner_ids;
     }
 }

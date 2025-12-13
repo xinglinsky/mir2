@@ -21,6 +21,86 @@ pub struct CClientVersion {
     pub version_hash: Vec<u8>,
 }
 
+#[derive(Clone, Debug)]
+pub struct CChatItem {
+    pub unique_id: u64,
+    pub title: String,
+    pub grid: u8,
+}
+
+impl CChatItem {
+    pub fn encode(&self, buf: &mut Vec<u8>) -> io::Result<()> {
+        write_u64_le(buf, self.unique_id)?;
+        write_string(buf, &self.title)?;
+        buf.push(self.grid);
+        Ok(())
+    }
+
+    pub fn decode_from_cursor(c: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let unique_id = read_u64_le(c)?;
+        let title = read_string(c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        Ok(CChatItem {
+            unique_id,
+            title,
+            grid: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CChat {
+    pub message: String,
+    pub linked_items: Vec<CChatItem>,
+}
+
+impl CChat {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.message)?;
+
+        let count: i32 = self
+            .linked_items
+            .len()
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "too many linked items"))?;
+        write_i32_le(&mut buf, count)?;
+        for item in &self.linked_items {
+            item.encode(&mut buf)?;
+        }
+
+        Ok(RawPacket {
+            id: ClientPacketId::Chat as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let message = read_string(&mut c)?;
+        let count = read_i32_le(&mut c)?;
+        if count < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "negative LinkedItems length",
+            ));
+        }
+        if count > 128 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "LinkedItems length too large",
+            ));
+        }
+
+        let mut linked_items = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            linked_items.push(CChatItem::decode_from_cursor(&mut c)?);
+        }
+        Ok(CChat { message, linked_items })
+    }
+}
+
 impl CClientVersion {
     pub fn encode(&self) -> io::Result<RawPacket> {
         let mut buf = Vec::new();
@@ -577,6 +657,104 @@ impl CSearchMap {
         let mut c = Cursor::new(payload);
         let text = read_string(&mut c)?;
         Ok(CSearchMap { text })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CInspect {
+    pub object_id: u32,
+    pub ranking: bool,
+    pub hero: bool,
+}
+
+impl CInspect {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.object_id)?;
+        write_bool(&mut buf, self.ranking)?;
+        write_bool(&mut buf, self.hero)?;
+        Ok(RawPacket {
+            id: ClientPacketId::Inspect as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let object_id = read_u32_le(&mut c)?;
+        let ranking = read_bool(&mut c)?;
+        let hero = read_bool(&mut c)?;
+        Ok(CInspect {
+            object_id,
+            ranking,
+            hero,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CObserve {
+    pub name: String,
+}
+
+impl CObserve {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ClientPacketId::Observe as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(CObserve { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRequestUserName {
+    pub user_id: u32,
+}
+
+impl CRequestUserName {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.user_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RequestUserName as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let user_id = read_u32_le(&mut c)?;
+        Ok(CRequestUserName { user_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRequestChatItem {
+    pub chat_item_id: u64,
+}
+
+impl CRequestChatItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.chat_item_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RequestChatItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let chat_item_id = read_u64_le(&mut c)?;
+        Ok(CRequestChatItem { chat_item_id })
     }
 }
 

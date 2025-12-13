@@ -8,6 +8,7 @@ use std::{
 use std::collections::HashMap;
 
 use crate::connection::{LoginConnection, PlayerVisual};
+use crystal_shared_proto::item_types::UserItemData;
 
 use crystal_server_net::{run_server, ConnectionHandler, HandlerFactory};
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase, WorldProvider, configs};
@@ -1550,6 +1551,8 @@ async fn main() -> io::Result<()> {
     let player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    let chat_item_cache: Arc<Mutex<HashMap<u64, UserItemData>>> = Arc::new(Mutex::new(HashMap::new()));
+
     let next_session_id = Arc::new(AtomicU32::new(1));
 
     let active_connections = Arc::new(AtomicU32::new(0));
@@ -1561,6 +1564,7 @@ async fn main() -> io::Result<()> {
         let world = Arc::clone(&world);
         let exp_table = Arc::clone(&exp_table);
         let player_summaries = Arc::clone(&player_summaries);
+        let chat_item_cache = Arc::clone(&chat_item_cache);
         let next_session_id = Arc::clone(&next_session_id);
         let outboxes = Arc::clone(&outboxes);
         let online_accounts = Arc::clone(&online_accounts);
@@ -1576,6 +1580,7 @@ async fn main() -> io::Result<()> {
                 Arc::clone(&world),
                 Arc::clone(&exp_table),
                 Arc::clone(&player_summaries),
+                Arc::clone(&chat_item_cache),
                 Arc::clone(&outboxes),
                 Arc::clone(&online_accounts),
                 Arc::clone(&active_connections),

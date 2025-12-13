@@ -14,6 +14,7 @@ use crystal_shared_proto::packet::RawPacket;
 use crystal_shared_proto::scene::{SMagicLeveled, SNewMagic};
 use crystal_shared_proto::select::{SelectInfo, SLogOutFailed, SLogOutSuccess};
 use crystal_shared_proto::user::group::{SDeleteGroup, SDeleteMember};
+use crystal_shared_proto::item_types::UserItemData;
 
 use super::{LoginConnection, PlayerVisual, Stage};
 
@@ -33,6 +34,7 @@ impl LoginConnection {
         world: Arc<Mutex<world::World<WorldDatabase>>>,
         exp_table: Arc<Vec<i64>>,
         player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
+        chat_item_cache: Arc<Mutex<HashMap<u64, UserItemData>>>,
         outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
         online_accounts: Arc<Mutex<HashMap<String, world::SessionId>>>,
         active_connections: Arc<AtomicU32>,
@@ -58,8 +60,10 @@ impl LoginConnection {
             known_monsters: HashSet::new(),
             known_npcs: HashSet::new(),
             known_players: HashSet::new(),
+            known_heroes: HashSet::new(),
             current_storage_npc_id: None,
             player_summaries,
+            chat_item_cache,
             outboxes,
             active_connections,
             last_active: Instant::now(),

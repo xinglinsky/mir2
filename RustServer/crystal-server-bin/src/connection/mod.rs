@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicU32;
 
 use crystal_server_core::account::{AccountStore, CharacterStats};
 use crystal_server_core::world::{self, WorldConfig, WorldDatabase};
+use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::select::SelectInfo;
 
 pub mod session;
@@ -27,6 +28,32 @@ pub mod trade;
 pub mod friend;
 pub mod ranking;
 pub mod quest;
+pub mod inspect;
+
+pub(crate) const NPC_OBJECT_ID_BASE: u32 = 0x2000_0000;
+pub(crate) const HERO_OBJECT_ID_BASE: u32 = 0x4000_0000;
+
+pub(crate) fn npc_object_id(npc_index: i32) -> u32 {
+    NPC_OBJECT_ID_BASE | (npc_index as u32)
+}
+
+pub(crate) fn npc_index_from_object_id(object_id: u32) -> Option<i32> {
+    if (object_id & NPC_OBJECT_ID_BASE) != NPC_OBJECT_ID_BASE {
+        return None;
+    }
+    Some((object_id & !NPC_OBJECT_ID_BASE) as i32)
+}
+
+pub(crate) fn hero_object_id(owner_session_id: world::SessionId) -> u32 {
+    HERO_OBJECT_ID_BASE | (owner_session_id as u32)
+}
+
+pub(crate) fn hero_owner_session_from_object_id(object_id: u32) -> Option<world::SessionId> {
+    if (object_id & HERO_OBJECT_ID_BASE) != HERO_OBJECT_ID_BASE {
+        return None;
+    }
+    Some((object_id & !HERO_OBJECT_ID_BASE) as world::SessionId)
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Stage {
@@ -68,11 +95,13 @@ pub(crate) struct LoginConnection {
     pub(crate) known_monsters: HashSet<u64>,
     pub(crate) known_npcs: HashSet<i32>,
     pub(crate) known_players: HashSet<world::SessionId>,
+    pub(crate) known_heroes: HashSet<world::SessionId>,
     /// NPC index (as sent in CCallNPC.object_id) for which the storage page
     /// is currently open, if any. Used to validate StoreItem/TakeBackItem
     /// requests similarly to C# PlayerObject.NPCPage/NPCObjectID.
     pub(crate) current_storage_npc_id: Option<u32>,
     pub(crate) player_summaries: Arc<Mutex<HashMap<world::SessionId, PlayerVisual>>>,
+    pub(crate) chat_item_cache: Arc<Mutex<HashMap<u64, UserItemData>>>,
     pub(crate) outboxes: Arc<Mutex<HashMap<world::SessionId, Vec<Vec<u8>>>>>,
     pub(crate) active_connections: Arc<AtomicU32>,
     pub(crate) last_active: Instant,
