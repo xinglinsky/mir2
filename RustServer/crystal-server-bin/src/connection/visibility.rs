@@ -16,7 +16,7 @@ use crystal_shared_proto::user::{SObjectHero, SObjectPlayer};
 use super::{hero_object_id, LoginConnection};
 
 impl LoginConnection {
-    fn get_real_item<'a>(
+    pub(crate) fn get_real_item<'a>(
         origin: &'a ItemInfoData,
         level: u16,
         job: u8,
@@ -559,9 +559,9 @@ impl LoginConnection {
                         (weapon, weapon_effect, armour, wing_effect, light, mount_type)
                     };
 
-                    let is_hidden = {
+                    let (is_hidden, is_riding_mount) = {
                         let world = self.world.lock().unwrap();
-                        world.player_hidden(sid)
+                        (world.player_hidden(sid), world.player_riding_mount(sid))
                     };
 
                     let pkt = SObjectPlayer {
@@ -588,7 +588,7 @@ impl LoginConnection {
                         wing_effect,
                         extra: false,
                         mount_type,
-                        riding_mount: false,
+                        riding_mount: is_riding_mount,
                         fishing: false,
                         transform_type: 0,
                         element_orb_effect: 0,
@@ -759,9 +759,9 @@ impl LoginConnection {
                     (weapon, weapon_effect, armour, wing_effect, light, mount_type)
                 };
 
-                let is_hidden = {
+                let (is_hidden, is_riding_mount) = {
                     let world = self.world.lock().unwrap();
-                    world.player_hidden(sid)
+                    (world.player_hidden(sid), world.player_riding_mount(sid))
                 };
 
                 let base = SObjectPlayer {
@@ -789,7 +789,7 @@ impl LoginConnection {
                     wing_effect,
                     extra: false,
                     mount_type,
-                    riding_mount: false,
+                    riding_mount: is_riding_mount,
                     fishing: false,
                     transform_type: 0,
                     element_orb_effect: 0,

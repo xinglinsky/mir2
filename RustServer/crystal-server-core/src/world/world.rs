@@ -1977,6 +1977,29 @@ impl<P: WorldProvider> World<P> {
             .unwrap_or(false)
     }
 
+    pub fn player_job(&self, session_id: SessionId) -> Option<Job> {
+        self.players.get(&session_id).map(|p| p.job)
+    }
+
+    pub fn player_riding_mount(&self, session_id: SessionId) -> bool {
+        self.players
+            .get(&session_id)
+            .map(|p| p.riding_mount)
+            .unwrap_or(false)
+    }
+
+    pub fn toggle_player_riding_mount(&mut self, session_id: SessionId) -> Option<bool> {
+        let p = self.players.get_mut(&session_id)?;
+        p.riding_mount = !p.riding_mount;
+        Some(p.riding_mount)
+    }
+
+    pub fn set_player_riding_mount(&mut self, session_id: SessionId, riding_mount: bool) -> Option<()> {
+        let p = self.players.get_mut(&session_id)?;
+        p.riding_mount = riding_mount;
+        Some(())
+    }
+
     pub fn player_in_safe_zone(&self, session_id: SessionId) -> bool {
         if let Some(player) = self.players.get(&session_id) {
             if let Some(info) = self.provider.get_map_info(player.map_index) {

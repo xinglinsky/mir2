@@ -7,6 +7,7 @@ use crystal_shared_proto::scene::SHeroBaseStatsInfo;
 use crystal_shared_proto::user::SHeroHealthChanged;
 use crystal_shared_proto::user::SAllowObserve;
 use crystal_shared_proto::user::SObjectChat;
+use crystal_shared_proto::user::SMountUpdate;
 use crystal_shared_proto::io::{
     write_bool,
     write_i32_le,
@@ -152,6 +153,76 @@ impl LoginConnection {
 
         if trimmed.eq_ignore_ascii_case("@CREATEHERO") {
             self.send_hero_create_request(out);
+            return;
+        }
+
+        if trimmed.eq_ignore_ascii_case("@RIDE") {
+            let (riding_mount_opt, mount_type, viewers) = {
+                let mut world = self.world.lock().unwrap();
+                let riding_mount_opt = world.toggle_player_riding_mount(self.session_id);
+
+                let level_opt = world.player_level(self.session_id);
+                let job_opt = world.player_job(self.session_id).map(|j| j as u8);
+
+                let mount_type: i16 = world
+                    .player_items(self.session_id)
+                    .and_then(|(_inv, eq)| {
+                        let level = level_opt?;
+                        let job = job_opt?;
+                        for slot in eq.slots.iter().flatten() {
+                            let origin = self
+                                .world_db
+                                .item_infos
+                                .iter()
+                                .find(|i| i.index == slot.item_index)?;
+                            if origin.item_type != 19 {
+                                continue;
+                            }
+                            if slot.current_dura == 0 && origin.durability > 0 {
+                                continue;
+                            }
+                            let info = super::LoginConnection::get_real_item(
+                                origin,
+                                level,
+                                job,
+                                &self.world_db.item_infos,
+                            );
+                            return Some(info.shape);
+                        }
+                        None
+                    })
+                    .unwrap_or(-1);
+
+                let viewers = world.sessions_in_range_for_map(
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                    Self::DATA_RANGE,
+                );
+
+                (riding_mount_opt, mount_type, viewers)
+            };
+
+            let Some(riding_mount) = riding_mount_opt else {
+                return;
+            };
+
+            let pkt = SMountUpdate {
+                object_id: self.session_id,
+                mount_type,
+                riding_mount,
+            };
+            if let Ok(raw) = pkt.encode() {
+                let encoded = Self::encode_raw(raw);
+                out.push(encoded.clone());
+                let mut outboxes = self.outboxes.lock().unwrap();
+                for sid in viewers {
+                    if sid == self.session_id {
+                        continue;
+                    }
+                    outboxes.entry(sid).or_default().push(encoded.clone());
+                }
+            }
             return;
         }
 
