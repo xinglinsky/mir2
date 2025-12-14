@@ -22,3 +22,12 @@ pub use crate::npc::{
     CRetrieveTradeItem,
 };
 pub use crate::guild::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
+pub use crate::hero::{
+    CChangeHero,
+    CNewHero,
+    CSetAutoPotItem,
+    CSetAutoPotValue,
+    CSetHeroBehaviour,
+    CTakeBackHeroItem,
+    CTransferHeroItem,
+};

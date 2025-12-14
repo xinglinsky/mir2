@@ -14,7 +14,15 @@ use crate::login::ServerPacketId;
 use crate::packet::RawPacket;
 
 mod client;
-pub use client::{CTakeBackHeroItem, CTransferHeroItem};
+pub use client::{
+    CChangeHero,
+    CNewHero,
+    CSetAutoPotItem,
+    CSetAutoPotValue,
+    CSetHeroBehaviour,
+    CTakeBackHeroItem,
+    CTransferHeroItem,
+};
 
 #[derive(Clone, Debug)]
 pub struct SHeroCreateRequest {

@@ -2,7 +2,7 @@
 
 > 本计划遵循 `RUST_SERVER_RULES`（行为与 C# 保持一致、仅修改 RustServer 目录、错误处理避免 panic、单文件不超过 800 行并按职责拆分模块等）。
 
-## 〇、进度口径与现状核验（2025-12-13）
+## 〇、进度口径与现状核验（2025-12-14）
 
 为避免“看起来实现了，但实际客户端走不到”的情况，本计划后续统一按以下口径描述进度：
 
@@ -14,9 +14,10 @@
 
 - **连接层唯一分发入口**：当前 Rust 服网络入口使用 `LoginConnection`，其包分发由 `crystal-server-bin/src/connection/handler.rs` 的 `match ClientPacketId` 决定。
 - **已确认 Stub（Wired 但未实现业务）**：`Harvest`、全套 `Market*`/`ConsignItem`、`GuildWarReturn` 等目前只返回“未实现”的系统消息。
-- **已确认缺失（未接入 / Unhandled）**：大量 C# `MirConnection.ProcessPacket` 中存在的包在 Rust `handler.rs` 中没有分支（例如 `MergeItem/SplitItem/Refine*`、`DropGold`、`Inspect/Observe`、`RangeAttack`、`SpellToggle`、`RequestUserName/RequestChatItem`、`NewHero/Fishing*/Awakening*`、`Marriage/Mentor`、`IntelligentCreature*`、`Rental*`、`Opendoor` 等）。这些功能即使在 core/world 中已有部分代码，也需要先完成 **Wired** 才能进入“可玩/可测”。
+- **已确认缺失（未接入 / Unhandled）**：大量 C# `MirConnection.ProcessPacket` 中存在的包在 Rust `handler.rs` 中没有分支（例如 `MergeItem/SplitItem/Refine*`、`DropGold`、`RangeAttack`、`SpellToggle`、`Fishing*/Awakening*`、`Marriage/Mentor`、`IntelligentCreature*`、`Rental*`、`Opendoor` 等）。这些功能即使在 core/world 中已有部分代码，也需要先完成 **Wired** 才能进入“可玩/可测”。
 
 ---
+
 
 ## 一、总体依赖关系
 
@@ -46,7 +47,7 @@
  - 对齐网络协议：`RawPacket`、Client/Server 包 ID 与字段布局完全等价 C#。
  - 在 Rust 侧建立稳定的“连接 → 世界逻辑”桥接层，供后续子计划共用。
 
-**当前进度概览（2025-12-13 更新，口径：Implemented/Wired/Verified）**
+**当前进度概览（2025-12-14 更新，口径：Implemented/Wired/Verified）**
 
 ### 2.1 已接入（Wired）的协议（客户端可触发）
 
@@ -70,6 +71,9 @@
   - `AcceptQuest` / `FinishQuest` / `AbandonQuest` / `ShareQuest`（当前奖励发放与队伍共享行为为最小实现，需补齐 Verified）。
   - `AcceptReincarnation` / `CancelReincarnation`。
   - `GetRanking` / `GameshopBuy`。
+  - `Inspect` / `Observe` / `RequestUserName` / `RequestChatItem`（Wired；功能为最小实现，需按 UI 路径回归 Verified）。
+  - Hero UI：`NewHero` / `SetHeroBehaviour` / `ChangeHero` / `TakeBackHeroItem` / `TransferHeroItem`（Wired；Manage/Create/召唤/背包拖拽等需系统回归 Verified）。
+  - 普通聊天（Normal Chat）已改为以 `SObjectChat` 回显并向附近玩家广播（Wired；需回归 Verified）。
 
 ### 2.2 已接入但仍为 Stub（Wired 但未实现业务）
 
@@ -82,11 +86,12 @@
 以下在 C# `MirConnection.ProcessPacket` 中存在，但在 Rust `handler.rs` 中暂未分发：
 
 - **物品/锻造/精炼链路**：`MergeItem` / `SplitItem` / `RemoveSlotItem` / `DropGold` / `DepositRefineItem` / `RetrieveRefineItem` / `RefineCancel` / `RefineItem` / `CheckRefine` / `ReplaceWedRing` / `BuyItemBack` / `RepairItem` / `SRepairItem` / `EquipSlotItem` / `CombineItem`。
-- **观察/查看/聊天物品/用户名**：`Inspect` / `Observe` / `RequestUserName` / `RequestChatItem`。
 - **战斗补全**：`RangeAttack` / `ChangeTrade` / `SpellToggle`。
-- **英雄/钓鱼/觉醒/宠物智能体**：`NewHero` / `SetAutoPotValue` / `SetAutoPotItem` / `SetHeroBehaviour` / `ChangeHero` / `FishingCast` / `FishingChangeAutocast` / `AwakeningNeedMaterials` / `AwakeningLockedItem` / `Awakening` / `DisassembleItem` / `DowngradeAwakening` / `ResetAddedItem` / `UpdateIntelligentCreature` / `IntelligentCreaturePickup` / `RequestIntelligentCreatureUpdates`。
+- **英雄/钓鱼/觉醒/宠物智能体**：`FishingCast` / `FishingChangeAutocast` / `AwakeningNeedMaterials` / `AwakeningLockedItem` / `Awakening` / `DisassembleItem` / `DowngradeAwakening` / `ResetAddedItem` / `UpdateIntelligentCreature` / `IntelligentCreaturePickup` / `RequestIntelligentCreatureUpdates`。
 - **社交扩展**：`MarriageRequest` / `MarriageReply` / `ChangeMarriage` / `DivorceRequest` / `DivorceReply` / `AddMentor` / `MentorReply` / `AllowMentor` / `CancelMentor`。
 - **运维与杂项**：`GuildBuffUpdate` / `NPCConfirmInput` / `ReportIssue` / `Opendoor` / `GetRentedItems` / 全套 `ItemRental*` / `GuildTerritoryPage` / `PurchaseGuildTerritory`。
+
+> 说明：`Inspect/Observe/RequestUserName/RequestChatItem` 与 Hero UI (`NewHero/SetHeroBehaviour/ChangeHero/TransferHeroItem/TakeBackHeroItem`) 已完成 Wired，因此从“缺失清单”中移除；但仍需要以客户端 UI 路径进行 Verified 回归。
 
 > 说明：上述缺失项会直接影响“严格对齐 C#”这一目标，因为客户端路径与服务器状态机不完整。子计划 1 的下一阶段应首先把这些包处理补齐到 **至少 Wired**。
 
@@ -117,10 +122,9 @@
      - 金币上限/溢出处理；
      - NPC 交互距离与 NPCPage 校验；
      - 各类失败原因的返回包/提示（**中文本土化**，但语义必须等价）。
-   - 1.2：补齐并接入“观察/查看/聊天物品/用户名”链路（`Inspect/Observe/RequestUserName/RequestChatItem`），这是大量客户端 UI 的基础能力。
-   - 1.3：补齐战斗相关未覆盖包（`RangeAttack/SpellToggle/ChangeTrade`）并对齐 C# 触发条件。
-   - 1.4：补齐“英雄/钓鱼/觉醒/智能宠物”等系统的协议接入与最小可用闭环（先 Wired，再完善业务）。
-   - 1.5：补齐“运维与杂项”协议（`Opendoor`、`Rental*`、`GuildTerritory*`、`ReportIssue` 等）。
+   - 1.2：补齐战斗相关未覆盖包（`RangeAttack/SpellToggle/ChangeTrade`）并对齐 C# 触发条件。
+   - 1.3：补齐“钓鱼/觉醒/智能宠物”等系统的协议接入与最小可用闭环（先 Wired，再完善业务）。
+   - 1.4：补齐“运维与杂项”协议（`Opendoor`、`Rental*`、`GuildTerritory*`、`ReportIssue` 等）。
 
 2. **一致性验证体系（目标：让“严格一致”可量化）**
    - 2.1：建立 **Packet 覆盖矩阵**（C# packet → Rust handler → world command/event），每个条目必须标注 Implemented/Wired/Verified。
@@ -303,3 +307,65 @@
  - 建议为每个子计划维护独立分支或 PR，按模块划分评审范围，便于多人/多 AI 并行推进。
 
 ---
+
+## 七、下一步详细计划（建议按 1-2 周冲刺执行）
+
+> 目标：优先把“已 Wired 的 UI 路径”做成 Verified，避免后续在物品/战斗等大改动中引入回归；同时推进下一批高频基础包到 Wired。
+
+### Sprint A：UI 回归与稳定性（优先级 P0）
+
+- **A1：普通聊天可用性回归（Verified）**
+  - 验收：
+    - 自己发送普通聊天，聊天窗口可见（回显）。
+    - 同地图同视野范围内其他玩家可见（广播）。
+  - 覆盖：Normal、私聊、GM 指令不影响普通聊天。
+
+- **A2：聊天物品链接（Verified）**
+  - 验收：
+    - 发送带链接物品的消息后，点击链接客户端能请求 `RequestChatItem` 并收到 `SChatItemStats`。
+    - 物品展示信息完整且不会崩溃。
+  - 风险点：缓存命中/失效、唯一 ID 对齐。
+
+- **A3：Inspect/Observe（Verified）**
+  - 验收：
+    - Inspect 面板能正常打开并显示基本信息。
+    - Observe：目标允许观察时可传送；关闭观察时有明确系统提示。
+  - 覆盖：
+    - `allow_observe` 开关（`@ALLOWOBSERVE`）与服务端配置 `observe.allow_observe`。
+
+- **A4：Hero 管理与创建全链路（Verified）**
+  - 验收：
+    - `[@MANAGEHERO]` 能打开 HeroManageDialog。
+    - `[@CREATEHERO]` 能打开创建界面；创建成功后列表刷新；切换英雄不会崩。
+    - 召唤/收回英雄、英雄背包与玩家背包拖拽维持可用。
+  - 风险点：ClientHeroInformation 字段序列化、列表 index/off-by-one。
+
+### Sprint B：物品/金币/修理/回购（Wired + 最小业务，优先级 P0）
+
+- **B1：金币相关**
+  - `DropGold`（Wired + 最小实现）：金币扣除、地面掉落可拾取、上限检查。
+
+- **B2：栈合并/拆分**
+  - `MergeItem` / `SplitItem`：背包容量/空格、最大堆叠、绑定/特殊物品限制对齐 C#。
+
+- **B3：修理/回购链路**
+  - `RepairItem` / `BuyItemBack`：NPC 距离与页面校验、费用计算、失败提示一致。
+
+### Sprint C：战斗补全（Wired + 对齐触发条件，优先级 P1）
+
+- **C1：RangeAttack**
+  - 对齐弓/远程相关触发与弹道/命中反馈包。
+
+- **C2：SpellToggle / ChangeTrade**
+  - 补齐客户端技能开关与交易状态变更相关逻辑，避免 UI 卡死。
+
+### Sprint D：任务系统深化（P1，依赖 Sprint A 稳定后推进）
+
+- **D1：Quest 业务补齐**
+  - `AcceptQuest/FinishQuest/AbandonQuest/ShareQuest`：补齐奖励发放、组队共享距离判定、选奖励物品索引处理。
+  - 验收：典型新手任务可完整接取→完成→领取奖励，UI 任务列表状态更新正确。
+
+### Sprint E：拍卖行/市场（P2，先从 Stub → 最小可用）
+
+- **E1：Market 系列包**
+  - 先完成协议 Wired（避免 UI 点按钮无响应），再逐步补齐寄售/购买/下架/找回。

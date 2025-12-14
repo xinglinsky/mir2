@@ -42,6 +42,7 @@ use crystal_shared_proto::login::{
     CMagic,
     CMagicKey,
     CMoveItem,
+    CNewHero,
     CNewAccount,
     CNewCharacter,
     CPickUp,
@@ -64,6 +65,12 @@ use crystal_shared_proto::login::{
     CTradeGold,
     CTradeReply,
     CTradeRequest,
+    CSetAutoPotItem,
+    CSetAutoPotValue,
+    CSetHeroBehaviour,
+    CChangeHero,
+    CTakeBackHeroItem,
+    CTransferHeroItem,
     CTurn,
     CUseItem,
     CWalk,
@@ -216,6 +223,16 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::DropItem => {
                 if let Ok(msg) = CDropItem::decode(&packet.payload) {
                     self.handle_drop_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::TakeBackHeroItem => {
+                if let Ok(msg) = CTakeBackHeroItem::decode(&packet.payload) {
+                    self.handle_take_back_hero_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::TransferHeroItem => {
+                if let Ok(msg) = CTransferHeroItem::decode(&packet.payload) {
+                    self.handle_transfer_hero_item(msg, &mut out);
                 }
             }
             ClientPacketId::BuyItem => {
@@ -654,6 +671,31 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::GroupInvite => {
                 if let Ok(msg) = CGroupInvite::decode(&packet.payload) {
                     self.handle_group_invite(msg, &mut out);
+                }
+            }
+            ClientPacketId::NewHero => {
+                if let Ok(msg) = CNewHero::decode(&packet.payload) {
+                    self.handle_new_hero(msg, &mut out);
+                }
+            }
+            ClientPacketId::SetAutoPotValue => {
+                if let Ok(msg) = CSetAutoPotValue::decode(&packet.payload) {
+                    self.handle_set_auto_pot_value(msg, &mut out);
+                }
+            }
+            ClientPacketId::SetAutoPotItem => {
+                if let Ok(msg) = CSetAutoPotItem::decode(&packet.payload) {
+                    self.handle_set_auto_pot_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::SetHeroBehaviour => {
+                if let Ok(msg) = CSetHeroBehaviour::decode(&packet.payload) {
+                    self.handle_set_hero_behaviour(msg, &mut out);
+                }
+            }
+            ClientPacketId::ChangeHero => {
+                if let Ok(msg) = CChangeHero::decode(&packet.payload) {
+                    self.handle_change_hero(msg, &mut out);
                 }
             }
             ClientPacketId::SendMail => {

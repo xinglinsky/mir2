@@ -1850,6 +1850,16 @@ impl LoginConnection {
                 let key = Self::normalize_npc_key(&msg.key);
                 let key_upper = key.as_str();
 
+                if key_upper == "@MANAGEHERO" {
+                    self.send_manage_heroes(out);
+                    return;
+                }
+
+                if key_upper == "@CREATEHERO" {
+                    self.send_hero_create_request(out);
+                    return;
+                }
+
                 let is_buy_panel = matches!(
                     key_upper,
                     "@BUY" | "@BUYNEW" | "@BUYSELL" | "@BUYSELLNEW"
@@ -2030,6 +2040,7 @@ impl LoginConnection {
                                                 if map_changed {
                                                     self.known_monsters.clear();
                                                     self.known_npcs.clear();
+                                                    self.known_players.clear();
                                                     self.known_heroes.clear();
                                                     self.update_visibility(out);
                                                 }
@@ -2053,11 +2064,12 @@ impl LoginConnection {
 
                                         let map_changed = self.handle_world_events(events, out);
                                         if map_changed {
-                                            self.known_monsters.clear();
-                                            self.known_npcs.clear();
-                                            self.known_heroes.clear();
-                                            self.update_visibility(out);
-                                        }
+                                                    self.known_monsters.clear();
+                                                    self.known_npcs.clear();
+                                                    self.known_players.clear();
+                                                    self.known_heroes.clear();
+                                                    self.update_visibility(out);
+                                                }
 
                                         return;
                                     }
@@ -2323,6 +2335,16 @@ impl LoginConnection {
     fn handle_default_npc_call(&mut self, raw_key: String, out: &mut Vec<Vec<u8>>) {
         let key = Self::normalize_npc_key(&raw_key);
 
+        if key.eq_ignore_ascii_case("@MANAGEHERO") {
+            self.send_manage_heroes(out);
+            return;
+        }
+
+        if key.eq_ignore_ascii_case("@CREATEHERO") {
+            self.send_hero_create_request(out);
+            return;
+        }
+
         let root_deploy = Path::new("./deploy/Envir/SystemScripts/00Default");
         let root_plain = Path::new("./Envir/SystemScripts/00Default");
         let root = if root_deploy.exists() { root_deploy } else { root_plain };
@@ -2386,6 +2408,7 @@ impl LoginConnection {
                     if map_changed {
                         self.known_monsters.clear();
                         self.known_npcs.clear();
+                        self.known_players.clear();
                         self.known_heroes.clear();
                         self.update_visibility(out);
                     }

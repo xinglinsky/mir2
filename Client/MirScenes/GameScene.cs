@@ -2161,6 +2161,16 @@ namespace Client.MirScenes
 
         private void ObjectHero(S.ObjectHero p)
         {
+            if (MapControl.Objects.TryGetValue(p.ObjectID, out MapObject ob) && ob is HeroObject existing)
+            {
+                existing.Load(p);
+
+                if (p.ObjectID == Hero?.ObjectID)
+                    HeroObject = existing;
+
+                return;
+            }
+
             HeroObject hero = new HeroObject(p.ObjectID);
             hero.Load(p);
 

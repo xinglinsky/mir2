@@ -22,6 +22,62 @@ pub struct SNewItemInfo {
     pub info_bytes: Vec<u8>,
 }
 
+#[derive(Clone, Debug)]
+pub struct STakeBackHeroItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl STakeBackHeroItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::TakeBackHeroItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(STakeBackHeroItem { from, to, success })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct STransferHeroItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl STransferHeroItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::TransferHeroItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(STransferHeroItem { from, to, success })
+    }
+}
+
 impl SNewItemInfo {
     pub fn encode(&self) -> io::Result<RawPacket> {
         Ok(RawPacket {

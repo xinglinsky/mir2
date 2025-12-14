@@ -65,7 +65,7 @@ use crystal_shared_proto::user::group::{
 };
 use tracing::debug;
 
-use super::{LoginConnection, Stage};
+use super::{hero_object_id, LoginConnection, Stage};
 
 impl LoginConnection {
     pub(crate) fn enqueue_for_viewers(&self, map_index: i32, x: i32, y: i32, raw: Vec<u8>) {
@@ -155,6 +155,24 @@ impl LoginConnection {
                 Self::encode_raw(raw),
             );
         }
+
+        if self.hero_spawn_state >= 2 {
+            let hero_base = SObjectTurnWalkRun {
+                object_id: hero_object_id(self.session_id),
+                location_x: self.current_x,
+                location_y: self.current_y,
+                direction: self.direction,
+            };
+            let hero_pkt = SObjectTurn(hero_base);
+            if let Ok(raw) = hero_pkt.encode() {
+                self.enqueue_for_viewers(
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                    Self::encode_raw(raw),
+                );
+            }
+        }
     }
 
     pub(crate) fn handle_walk(&mut self, msg: CWalk, out: &mut Vec<Vec<u8>>) {
@@ -187,6 +205,24 @@ impl LoginConnection {
                 Self::encode_raw(raw),
             );
         }
+
+        if self.hero_spawn_state >= 2 {
+            let hero_base = SObjectTurnWalkRun {
+                object_id: hero_object_id(self.session_id),
+                location_x: self.current_x,
+                location_y: self.current_y,
+                direction: self.direction,
+            };
+            let hero_pkt = SObjectWalk(hero_base);
+            if let Ok(raw) = hero_pkt.encode() {
+                self.enqueue_for_viewers(
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                    Self::encode_raw(raw),
+                );
+            }
+        }
     }
 
     pub(crate) fn handle_run(&mut self, msg: CRun, out: &mut Vec<Vec<u8>>) {
@@ -218,6 +254,24 @@ impl LoginConnection {
                 self.current_y,
                 Self::encode_raw(raw),
             );
+        }
+
+        if self.hero_spawn_state >= 2 {
+            let hero_base = SObjectTurnWalkRun {
+                object_id: hero_object_id(self.session_id),
+                location_x: self.current_x,
+                location_y: self.current_y,
+                direction: self.direction,
+            };
+            let hero_pkt = SObjectRun(hero_base);
+            if let Ok(raw) = hero_pkt.encode() {
+                self.enqueue_for_viewers(
+                    self.current_map_index,
+                    self.current_x,
+                    self.current_y,
+                    Self::encode_raw(raw),
+                );
+            }
         }
     }
 
@@ -426,6 +480,7 @@ impl LoginConnection {
                         if map_changed2 {
                             self.known_monsters.clear();
                             self.known_npcs.clear();
+                            self.known_players.clear();
                             self.known_heroes.clear();
                             self.update_visibility(out);
                         }
@@ -1629,6 +1684,7 @@ impl LoginConnection {
         if map_changed {
             self.known_monsters.clear();
             self.known_npcs.clear();
+            self.known_players.clear();
             self.known_heroes.clear();
             self.update_visibility(out);
         }

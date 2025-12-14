@@ -9,12 +9,102 @@ use crystal_shared_proto::scene::{
     SObjectNpc,
     SObjectRemove,
 };
+use crystal_shared_proto::item_types::ItemInfoData;
 use tracing::debug;
 use crystal_shared_proto::user::{SObjectHero, SObjectPlayer};
 
 use super::{hero_object_id, LoginConnection};
 
 impl LoginConnection {
+    fn get_real_item<'a>(
+        origin: &'a ItemInfoData,
+        level: u16,
+        job: u8,
+        items: &'a [ItemInfoData],
+    ) -> &'a ItemInfoData {
+        if origin.class_based && origin.level_based {
+            let mut output = origin;
+            let required_class = (1u16 << job) as u8;
+            for info in items {
+                if !info.name.starts_with(&origin.name) {
+                    continue;
+                }
+                if info.required_class != required_class {
+                    continue;
+                }
+                if info.required_type != 0 {
+                    continue;
+                }
+                if info.required_amount as u16 > level {
+                    continue;
+                }
+                if output.required_amount > info.required_amount {
+                    continue;
+                }
+                if origin.required_gender != info.required_gender {
+                    continue;
+                }
+                output = info;
+            }
+            return output;
+        }
+
+        if origin.class_based {
+            let required_class = (1u16 << job) as u8;
+            for info in items {
+                if !info.name.starts_with(&origin.name) {
+                    continue;
+                }
+                if info.required_class != required_class {
+                    continue;
+                }
+                if origin.required_gender != info.required_gender {
+                    continue;
+                }
+                return info;
+            }
+            return origin;
+        }
+
+        if origin.level_based {
+            let mut output = origin;
+            for info in items {
+                if !info.name.starts_with(&origin.name) {
+                    continue;
+                }
+                if info.required_type != 0 {
+                    continue;
+                }
+                if info.required_amount as u16 > level {
+                    continue;
+                }
+                if output.required_amount >= info.required_amount {
+                    continue;
+                }
+                if origin.required_gender != info.required_gender {
+                    continue;
+                }
+                output = info;
+            }
+            return output;
+        }
+
+        origin
+    }
+
+    fn player_hp_percent_for_session(&self, sid: world::SessionId) -> u8 {
+        let world = self.world.lock().unwrap();
+        if let (Some((max_hp, _)), Some((cur_hp, _))) =
+            (world.player_max_hp_mp(sid), world.player_current_hp_mp(sid))
+        {
+            if max_hp > 0 {
+                let clamped = cur_hp.max(0).min(max_hp);
+                return ((clamped as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8;
+            }
+        }
+        100
+    }
+
     #[allow(dead_code)]
     pub(crate) fn send_monsters_for_map(&self, map_index: i32, out: &mut Vec<Vec<u8>>) {
         let monsters = {
@@ -400,9 +490,15 @@ impl LoginConnection {
         };
 
         let mut visible_player_ids: HashSet<world::SessionId> = HashSet::new();
+        let mut next_known_players: HashSet<world::SessionId> = HashSet::new();
 
-        for (sid, x, y, direction) in players_in_view {
+        for (sid, x, y, direction) in players_in_view.iter().cloned() {
             visible_player_ids.insert(sid);
+
+            if self.known_players.contains(&sid) {
+                next_known_players.insert(sid);
+                continue;
+            }
 
             if !self.known_players.contains(&sid) {
                 let snapshot = {
@@ -411,6 +507,58 @@ impl LoginConnection {
                 };
 
                 if let Some(snap) = snapshot {
+                    let (weapon, weapon_effect, armour, wing_effect, light, mount_type) = {
+                        let items_opt = {
+                            let world = self.world.lock().unwrap();
+                            world.player_items(sid)
+                        };
+
+                        let mut weapon: i16 = -1;
+                        let mut weapon_effect: i16 = 0;
+                        let mut armour: i16 = 0;
+                        let mut wing_effect: u8 = 0;
+                        let mut light: u8 = 0;
+                        let mut mount_type: i16 = -1;
+
+                        if let Some((_inv, eq)) = items_opt {
+                            for slot in eq.slots.iter().flatten() {
+                                if let Some(origin_info) = self
+                                    .world_db
+                                    .item_infos
+                                    .iter()
+                                    .find(|i| i.index == slot.item_index)
+                                {
+                                    if slot.current_dura == 0 && origin_info.durability > 0 {
+                                        continue;
+                                    }
+
+                                    let info = Self::get_real_item(
+                                        origin_info,
+                                        snap.level,
+                                        snap.class,
+                                        &self.world_db.item_infos,
+                                    );
+
+                                    light = light.max(info.light);
+
+                                    // ItemType mapping mirrors C#:
+                                    // Weapon=1, Armour=2, Mount=19.
+                                    if info.item_type == 1 {
+                                        weapon = info.shape;
+                                        weapon_effect = info.effect as i16;
+                                    } else if info.item_type == 2 {
+                                        armour = info.shape;
+                                        wing_effect = info.effect;
+                                    } else if info.item_type == 19 {
+                                        mount_type = info.shape;
+                                    }
+                                }
+                            }
+                        }
+
+                        (weapon, weapon_effect, armour, wing_effect, light, mount_type)
+                    };
+
                     let is_hidden = {
                         let world = self.world.lock().unwrap();
                         world.player_hidden(sid)
@@ -429,17 +577,17 @@ impl LoginConnection {
                         location_y: y,
                         direction,
                         hair: snap.hair,
-                        light: 0,
-                        weapon: 0,
-                        weapon_effect: 0,
-                        armour: 0,
+                        light,
+                        weapon,
+                        weapon_effect,
+                        armour,
                         poison: 0,
                         dead: false,
                         hidden: is_hidden,
                         effect: 0,
-                        wing_effect: 0,
+                        wing_effect,
                         extra: false,
-                        mount_type: 0,
+                        mount_type,
                         riding_mount: false,
                         fishing: false,
                         transform_type: 0,
@@ -451,15 +599,25 @@ impl LoginConnection {
                     };
                     if let Ok(raw) = pkt.encode() {
                         debug!(
-                            "vis: send SObjectPlayer -> session_id={} target_sid={} map={} pos=({}, {}) hidden={}",
+                            "vis: send SObjectPlayer -> session_id={} target_sid={} map={} pos=({}, {}) hidden={} gender={} class={} level={} weapon={} weapon_effect={} armour={} wing_effect={} light={} mount_type={}",
                             self.session_id,
                             sid,
                             map_index,
                             x,
                             y,
                             is_hidden,
+                            snap.gender,
+                            snap.class,
+                            snap.level,
+                            weapon,
+                            weapon_effect,
+                            armour,
+                            wing_effect,
+                            light,
+                            mount_type,
                         );
                         out.push(Self::encode_raw(raw));
+                        next_known_players.insert(sid);
                     }
 
                     // Also send an initial ObjectHealth packet for this
@@ -467,45 +625,40 @@ impl LoginConnection {
                     // head HP bar. This mirrors the C#
                     // MapObject.BroadcastHealthChange behaviour, which sends
                     // S.ObjectHealth on spawn/teleport and HP changes.
-                    let percent_opt = {
-                        let world = self.world.lock().unwrap();
-                        if let (Some((max_hp, _)), Some((cur_hp, _))) = (
-                            world.player_max_hp_mp(sid),
-                            world.player_current_hp_mp(sid),
-                        ) {
-                            if max_hp > 0 {
-                                let clamped = cur_hp.max(0).min(max_hp);
-                                let pct =
-                                    ((clamped as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8;
-                                Some(pct)
-                            } else {
-                                Some(0)
-                            }
-                        } else {
-                            None
-                        }
+                    let percent = self.player_hp_percent_for_session(sid);
+                    let hp_pkt = SObjectHealth {
+                        object_id: sid,
+                        percent,
+                        expire: 30,
                     };
-
-                    if let Some(percent) = percent_opt {
-                        let hp_pkt = SObjectHealth {
-                            object_id: sid,
+                    if let Ok(raw) = hp_pkt.encode() {
+                        debug!(
+                            "vis: send SObjectHealth -> session_id={} object_id={} percent={} expire={} (reason=new player in view)",
+                            self.session_id,
+                            sid,
                             percent,
-                            // Use a small expire window; the client will
-                            // refresh this whenever damage or healing occurs.
-                            expire: 5,
-                        };
-                        if let Ok(raw) = hp_pkt.encode() {
-                            debug!(
-                                "vis: send SObjectHealth -> session_id={} object_id={} percent={} expire={} (reason=new player in view)",
-                                self.session_id,
-                                sid,
-                                percent,
-                                5,
-                            );
-                            out.push(Self::encode_raw(raw));
-                        }
+                            30,
+                        );
+                        out.push(Self::encode_raw(raw));
                     }
                 }
+            }
+        }
+
+        // Refresh ObjectHealth for all visible players so that head HP bars are
+        // visible even if the initial spawn-time packet was missed.
+        for sid in &visible_player_ids {
+            if *sid == self.session_id {
+                continue;
+            }
+            let percent = self.player_hp_percent_for_session(*sid);
+            let hp_pkt = SObjectHealth {
+                object_id: *sid,
+                percent,
+                expire: 30,
+            };
+            if let Ok(raw) = hp_pkt.encode() {
+                out.push(Self::encode_raw(raw));
             }
         }
 
@@ -524,96 +677,169 @@ impl LoginConnection {
             }
         }
 
-        self.known_players = visible_player_ids;
+        self.known_players = next_known_players;
 
         // Heroes in view.
-        let heroes_in_view: Vec<(world::SessionId, i32, i32, u8)> = {
-            let world = self.world.lock().unwrap();
-            world.players_in_view_for_map(map_index, self.current_x, self.current_y, range, None)
-        };
+        let mut heroes_in_view: Vec<(world::SessionId, i32, i32, u8)> = players_in_view.clone();
+        heroes_in_view.push((
+            self.session_id,
+            self.current_x,
+            self.current_y,
+            self.direction,
+        ));
 
         let mut visible_hero_owner_ids: HashSet<world::SessionId> = HashSet::new();
+        let mut next_known_heroes: HashSet<world::SessionId> = HashSet::new();
 
         for (sid, x, y, direction) in heroes_in_view {
-            if sid != self.session_id {
+            visible_hero_owner_ids.insert(sid);
+
+            if self.known_heroes.contains(&sid) {
+                next_known_heroes.insert(sid);
                 continue;
             }
 
-            visible_hero_owner_ids.insert(sid);
+            let is_new = !self.known_heroes.contains(&sid);
 
-            if !self.known_heroes.contains(&sid) {
-                let snapshot = {
-                    let map = self.player_summaries.lock().unwrap();
-                    map.get(&sid).cloned()
+            let snapshot = {
+                let map = self.player_summaries.lock().unwrap();
+                map.get(&sid).cloned()
+            };
+
+            if let Some(snap) = snapshot {
+                let (weapon, weapon_effect, armour, wing_effect, light, mount_type) = {
+                    let items_opt = {
+                        let world = self.world.lock().unwrap();
+                        world.player_items(sid)
+                    };
+
+                    let mut weapon: i16 = -1;
+                    let mut weapon_effect: i16 = 0;
+                    let mut armour: i16 = 0;
+                    let mut wing_effect: u8 = 0;
+                    let mut light: u8 = 0;
+                    let mut mount_type: i16 = -1;
+
+                    if let Some((_inv, eq)) = items_opt {
+                        for slot in eq.slots.iter().flatten() {
+                            if let Some(origin_info) = self
+                                .world_db
+                                .item_infos
+                                .iter()
+                                .find(|i| i.index == slot.item_index)
+                            {
+                                if slot.current_dura == 0 && origin_info.durability > 0 {
+                                    continue;
+                                }
+
+                                let info = Self::get_real_item(
+                                    origin_info,
+                                    snap.level,
+                                    snap.class,
+                                    &self.world_db.item_infos,
+                                );
+
+                                light = light.max(info.light);
+
+                                // ItemType mapping mirrors C#:
+                                // Weapon=1, Armour=2.
+                                if info.item_type == 1 {
+                                    weapon = info.shape;
+                                    weapon_effect = info.effect as i16;
+                                } else if info.item_type == 2 {
+                                    armour = info.shape;
+                                    wing_effect = info.effect;
+                                } else if info.item_type == 19 {
+                                    mount_type = info.shape;
+                                }
+                            }
+                        }
+                    }
+
+                    (weapon, weapon_effect, armour, wing_effect, light, mount_type)
                 };
 
-                if let Some(snap) = snapshot {
-                    let is_hidden = {
-                        let world = self.world.lock().unwrap();
-                        world.player_hidden(sid)
-                    };
+                let is_hidden = {
+                    let world = self.world.lock().unwrap();
+                    world.player_hidden(sid)
+                };
 
-                    let base = SObjectPlayer {
-                        object_id: hero_object_id(sid),
-                        name: "Hero".to_string(),
-                        guild_name: snap.guild_name,
-                        guild_rank_name: snap.guild_rank_name,
-                        // Use C# HeroObject default name colour: MediumOrchid.
-                        name_colour_argb: 0xFFBA55D3u32 as i32,
-                        class: snap.class,
-                        gender: snap.gender,
-                        level: snap.level,
-                        location_x: x,
-                        location_y: y,
-                        direction,
-                        hair: snap.hair,
-                        light: 0,
-                        weapon: 0,
-                        weapon_effect: 0,
-                        armour: 0,
-                        poison: 0,
-                        dead: false,
-                        hidden: is_hidden,
-                        effect: 0,
-                        wing_effect: 0,
-                        extra: false,
-                        mount_type: 0,
-                        riding_mount: false,
-                        fishing: false,
-                        transform_type: 0,
-                        element_orb_effect: 0,
-                        element_orb_lvl: 0,
-                        element_orb_max: 0,
-                        buffs: Vec::new(),
-                        level_effects: 0,
-                    };
-                    let pkt = SObjectHero {
-                        base,
-                        owner_name: snap.name,
-                    };
+                let base = SObjectPlayer {
+                    object_id: hero_object_id(sid),
+                    name: "Hero".to_string(),
+                    guild_name: snap.guild_name,
+                    guild_rank_name: snap.guild_rank_name,
+                    // Use C# HeroObject default name colour: MediumOrchid.
+                    name_colour_argb: 0xFFBA55D3u32 as i32,
+                    class: snap.class,
+                    gender: snap.gender,
+                    level: snap.level,
+                    location_x: x,
+                    location_y: y,
+                    direction,
+                    hair: snap.hair,
+                    light,
+                    weapon,
+                    weapon_effect,
+                    armour,
+                    poison: 0,
+                    dead: false,
+                    hidden: is_hidden,
+                    effect: 0,
+                    wing_effect,
+                    extra: false,
+                    mount_type,
+                    riding_mount: false,
+                    fishing: false,
+                    transform_type: 0,
+                    element_orb_effect: 0,
+                    element_orb_lvl: 0,
+                    element_orb_max: 0,
+                    buffs: Vec::new(),
+                    level_effects: 0,
+                };
+                let pkt = SObjectHero {
+                    base,
+                    owner_name: snap.name,
+                };
+                if is_new {
                     if let Ok(raw) = pkt.encode() {
                         debug!(
-                            "vis: send SObjectHero -> session_id={} owner_sid={} map={} pos=({}, {}) hidden={} hero_object_id={}",
+                            "vis: send SObjectHero -> session_id={} owner_sid={} map={} pos=({}, {}) hidden={} hero_object_id={} gender={} class={} level={} weapon={} weapon_effect={} armour={} wing_effect={} light={} mount_type={}",
                             self.session_id,
                             sid,
                             map_index,
                             x,
                             y,
                             is_hidden,
-                            hero_object_id(sid)
+                            hero_object_id(sid),
+                            snap.gender,
+                            snap.class,
+                            snap.level,
+                            weapon,
+                            weapon_effect,
+                            armour,
+                            wing_effect,
+                            light,
+                            mount_type,
                         );
                         out.push(Self::encode_raw(raw));
-                    }
-
-                    let hp_pkt = SObjectHealth {
-                        object_id: hero_object_id(sid),
-                        percent: 100,
-                        expire: 5,
-                    };
-                    if let Ok(raw) = hp_pkt.encode() {
-                        out.push(Self::encode_raw(raw));
+                        next_known_heroes.insert(sid);
                     }
                 }
+            }
+        }
+
+        // Refresh ObjectHealth for all visible heroes so their head HP bars
+        // remain visible without recreating the hero object (SObjectHero).
+        for sid in &visible_hero_owner_ids {
+            let hp_pkt = SObjectHealth {
+                object_id: hero_object_id(*sid),
+                percent: 100,
+                expire: 30,
+            };
+            if let Ok(raw) = hp_pkt.encode() {
+                out.push(Self::encode_raw(raw));
             }
         }
 
@@ -629,10 +855,16 @@ impl LoginConnection {
                 object_id: hero_object_id(sid),
             };
             if let Ok(raw) = pkt.encode() {
+                debug!(
+                    "vis: send SObjectRemove(hero) -> session_id={} owner_sid={} hero_object_id={}",
+                    self.session_id,
+                    sid,
+                    hero_object_id(sid)
+                );
                 out.push(Self::encode_raw(raw));
             }
         }
 
-        self.known_heroes = visible_hero_owner_ids;
+        self.known_heroes = next_known_heroes;
     }
 }

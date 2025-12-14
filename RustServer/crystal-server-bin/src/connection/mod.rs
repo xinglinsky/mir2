@@ -21,6 +21,7 @@ pub mod market;
 pub mod gameshop;
 pub mod mail;
 pub mod chat;
+pub mod hero;
 pub mod group;
 pub mod guild;
 pub mod item;
@@ -35,6 +36,15 @@ pub(crate) const HERO_OBJECT_ID_BASE: u32 = 0x4000_0000;
 
 pub(crate) fn npc_object_id(npc_index: i32) -> u32 {
     NPC_OBJECT_ID_BASE | (npc_index as u32)
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct HeroSummary {
+    pub(crate) index: i32,
+    pub(crate) name: String,
+    pub(crate) level: u16,
+    pub(crate) class: u8,
+    pub(crate) gender: u8,
 }
 
 pub(crate) fn npc_index_from_object_id(object_id: u32) -> Option<i32> {
@@ -92,6 +102,11 @@ pub(crate) struct LoginConnection {
     pub(crate) direction: u8,
     pub(crate) current_char_index: Option<i32>,
     pub(crate) current_stats: Option<CharacterStats>,
+    pub(crate) hero_spawn_state: u8,
+    pub(crate) hero_maximum_count: i32,
+    pub(crate) hero_next_index: i32,
+    pub(crate) hero_current: Option<HeroSummary>,
+    pub(crate) hero_storage: Vec<Option<HeroSummary>>,
     pub(crate) known_monsters: HashSet<u64>,
     pub(crate) known_npcs: HashSet<i32>,
     pub(crate) known_players: HashSet<world::SessionId>,

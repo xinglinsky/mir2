@@ -57,6 +57,11 @@ impl LoginConnection {
             direction: 0,
             current_char_index: None,
             current_stats: None,
+            hero_spawn_state: 2,
+            hero_maximum_count: 8,
+            hero_next_index: 1,
+            hero_current: None,
+            hero_storage: vec![None; 8],
             known_monsters: HashSet::new(),
             known_npcs: HashSet::new(),
             known_players: HashSet::new(),
@@ -330,6 +335,11 @@ impl LoginConnection {
                     }
                 }
             }
+
+            // Periodically refresh visibility so stationary clients still
+            // receive spawn packets (player/hero/object health), avoiding
+            // cases where objects are missed due to packet ordering.
+            self.update_visibility(out);
         }
     }
 
