@@ -2,11 +2,13 @@ use std::io::{self, Cursor, Read};
 
 use crate::io::{
     read_bool,
+    read_i8,
     read_i32_le,
     read_string,
     read_u32_le,
     read_u64_le,
     write_bool,
+    write_i8,
     write_i32_le,
     write_string,
     write_u32_le,
@@ -45,6 +47,105 @@ impl CChatItem {
             unique_id,
             title,
             grid: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CChangeTrade {
+    pub allow_trade: bool,
+}
+
+impl CChangeTrade {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.allow_trade)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ChangeTrade as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let allow_trade = read_bool(&mut c)?;
+        Ok(CChangeTrade { allow_trade })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRangeAttack {
+    pub direction: u8,
+    pub x: i32,
+    pub y: i32,
+    pub target_id: u32,
+    pub target_x: i32,
+    pub target_y: i32,
+}
+
+impl CRangeAttack {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.direction);
+        write_i32_le(&mut buf, self.x)?;
+        write_i32_le(&mut buf, self.y)?;
+        write_u32_le(&mut buf, self.target_id)?;
+        write_i32_le(&mut buf, self.target_x)?;
+        write_i32_le(&mut buf, self.target_y)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RangeAttack as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let direction = one[0];
+        let x = read_i32_le(&mut c)?;
+        let y = read_i32_le(&mut c)?;
+        let target_id = read_u32_le(&mut c)?;
+        let target_x = read_i32_le(&mut c)?;
+        let target_y = read_i32_le(&mut c)?;
+        Ok(CRangeAttack {
+            direction,
+            x,
+            y,
+            target_id,
+            target_x,
+            target_y,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSpellToggle {
+    pub spell: u8,
+    /// Mirrors C# SpellToggleState (sbyte): None=-1, False=0, True=1.
+    pub can_use_state: i8,
+}
+
+impl CSpellToggle {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.spell);
+        write_i8(&mut buf, self.can_use_state)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SpellToggle as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let spell = one[0];
+        let can_use_state = read_i8(&mut c)?;
+        Ok(CSpellToggle {
+            spell,
+            can_use_state,
         })
     }
 }

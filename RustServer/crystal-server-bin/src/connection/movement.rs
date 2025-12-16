@@ -4,7 +4,9 @@ use crystal_server_core::world::configs::setup_config::setup_config;
 use rand::{thread_rng, Rng};
 use crystal_shared_proto::login::{
     CAttack,
+    CChangeTrade,
     CPickUp,
+    CRangeAttack,
     CTownRevive,
     CTurn,
     CWalk,
@@ -13,6 +15,7 @@ use crystal_shared_proto::login::{
     CMagic,
     CChangeAMode,
     CChangePMode,
+    CSpellToggle,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::magic::{
@@ -1303,14 +1306,20 @@ impl LoginConnection {
                     spell_id,
                     enabled,
                 } => {
-                    if session_id == self.session_id {
-                        let pkt = SSpellToggle {
-                            object_id: self.session_id,
-                            spell: spell_id,
-                            can_use: enabled,
-                        };
-                        if let Ok(raw) = pkt.encode() {
-                            out.push(Self::encode_raw(raw));
+                    let pkt = SSpellToggle {
+                        object_id: session_id,
+                        spell: spell_id,
+                        can_use: enabled,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        out.push(bytes.clone());
+
+                        if let Some((map_index, x, y, _dir)) = {
+                            let world = self.world.lock().unwrap();
+                            world.player_position(session_id)
+                        } {
+                            self.enqueue_for_viewers(map_index, x, y, bytes);
                         }
                     }
                 }
@@ -1561,6 +1570,91 @@ impl LoginConnection {
             out.push(Self::encode_raw(raw));
         }
         self.update_visibility(out);
+    }
+
+    pub(crate) fn handle_range_attack(&mut self, msg: CRangeAttack, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Minimal behaviour: emit a ranged-attack visual for nearby clients so
+        // the client UI doesn't appear stuck. Damage/validation will be added
+        // once the full combat pipeline is wired.
+        let events = vec![world::WorldEvent::ObjectRangeAttack {
+            object_id: self.session_id as u64,
+            map_index: self.current_map_index,
+            x: self.current_x,
+            y: self.current_y,
+            direction: msg.direction,
+            target_id: msg.target_id as u64,
+            target_x: msg.target_x,
+            target_y: msg.target_y,
+            spell: 0,
+            level: 0,
+            attack_type: 0,
+        }];
+
+        let _ = self.handle_world_events(events, out);
+        self.update_visibility(out);
+    }
+
+    pub(crate) fn handle_spell_toggle(&mut self, msg: CSpellToggle, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // C# semantics:
+        // - canUse > None (-1): apply to player
+        // - else (== None): apply to hero if spawned
+        // Player toggles are now persisted in world state so the setting
+        // affects subsequent logic and survives beyond a single packet.
+        if msg.can_use_state > -1 {
+            let events = {
+                let mut world = self.world.lock().unwrap();
+                world.handle_command(world::WorldCommand::SpellToggle {
+                    session_id: self.session_id,
+                    spell_id: msg.spell,
+                    can_use_state: msg.can_use_state,
+                })
+            };
+            let _ = self.handle_world_events(events, out);
+            return;
+        }
+
+        // Hero toggles are not yet represented in world state; keep a local
+        // echo so the UI remains responsive.
+        let enabled = msg.can_use_state > 0;
+        let target_object_id: u32 = if self.hero_spawn_state >= 2 {
+            hero_object_id(self.session_id)
+        } else {
+            self.session_id
+        };
+
+        let pkt = SSpellToggle {
+            object_id: target_object_id,
+            spell: msg.spell,
+            can_use: enabled,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_change_trade(&mut self, msg: CChangeTrade, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_allow_trade(self.session_id, msg.allow_trade);
+        }
+
+        debug!(
+            "ChangeTrade received: session_id={} allow_trade={}",
+            self.session_id,
+            msg.allow_trade
+        );
     }
 
     pub(crate) fn handle_pick_up(&mut self, _msg: CPickUp, out: &mut Vec<Vec<u8>>) {

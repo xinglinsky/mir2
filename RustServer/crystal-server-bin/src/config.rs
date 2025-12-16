@@ -10,6 +10,8 @@ pub struct ServerConfig {
     pub listen_addr: SocketAddr,
     pub accounts_db_path: PathBuf,
     pub server_mirdb_path: PathBuf,
+    #[serde(default)]
+    pub content_pack_path: Option<PathBuf>,
     pub maps_path: PathBuf,
     #[serde(default = "default_routes_path")]
     pub routes_path: PathBuf,

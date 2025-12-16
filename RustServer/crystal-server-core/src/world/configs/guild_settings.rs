@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 /// Simple representation of a required item volume for guild creation,
 /// mirroring C# GuildItemVolume (ItemName + Amount).
@@ -74,7 +75,7 @@ pub fn guild_member_cap_for_level(level: u8) -> i32 {
 fn load_guild_settings(path: &Path) -> GuildSettings {
     let mut cfg = GuildSettings::default();
 
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => {
             // Mirror C# behaviour when GuildSettings.ini is missing: provide

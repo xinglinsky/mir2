@@ -1,7 +1,8 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 const MAX_LEVEL: u16 = 500;
 
@@ -29,7 +30,7 @@ fn load_exp_table(path: &Path) -> Vec<i64> {
     // level's required experience.
     let mut level_values: HashMap<u16, i64> = HashMap::new();
 
-    if let Ok(text) = fs::read_to_string(path) {
+    if let Ok(text) = content::read_to_string(path) {
         let mut current_section: Option<String> = None;
         for raw_line in text.lines() {
             let line = raw_line.trim();

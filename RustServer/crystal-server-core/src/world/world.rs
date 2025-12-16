@@ -210,6 +210,12 @@ pub enum WorldCommand {
         session_id: SessionId,
         accept: bool,
     },
+    SpellToggle {
+        session_id: SessionId,
+        spell_id: u8,
+        /// Mirrors C# SpellToggleState (sbyte): None=-1, False=0, True=1.
+        can_use_state: i8,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -2092,6 +2098,23 @@ impl<P: WorldProvider> World<P> {
     /// Look up the canonical player name for a given session.
     pub fn player_name(&self, session_id: SessionId) -> Option<String> {
         self.players.get(&session_id).map(|p| p.name.clone())
+    }
+
+    pub fn player_allow_trade(&self, session_id: SessionId) -> Option<bool> {
+        self.players.get(&session_id).map(|p| p.allow_trade)
+    }
+
+    pub fn player_spell_toggles(&self, session_id: SessionId) -> Vec<u8> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.spell_toggles.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn set_player_allow_trade(&mut self, session_id: SessionId, allow: bool) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            p.allow_trade = allow;
+        }
     }
 
     pub fn player_location(&self, session_id: SessionId) -> Option<(i32, i32, i32, u8)> {
@@ -4418,6 +4441,31 @@ impl<P: WorldProvider> World<P> {
                     self.leave_party(session_id);
                 }
             }
+            WorldCommand::SpellToggle {
+                session_id,
+                spell_id,
+                can_use_state,
+            } => {
+                if let Some(p) = self.players.get_mut(&session_id) {
+                    let enabled = if can_use_state == -1 {
+                        !p.spell_toggles.contains(&spell_id)
+                    } else {
+                        can_use_state > 0
+                    };
+
+                    if enabled {
+                        p.spell_toggles.insert(spell_id);
+                    } else {
+                        p.spell_toggles.remove(&spell_id);
+                    }
+
+                    events.push(WorldEvent::SpellToggle {
+                        session_id,
+                        spell_id,
+                        enabled,
+                    });
+                }
+            }
             WorldCommand::InviteToParty {
                 session_id,
                 target_name,
@@ -4760,32 +4808,35 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 // 通过所有检查后，按原有逻辑创建或加入队伍。
-                let party_id = {
-                    if let Some(pid) = inviter_party_id {
-                        if let Some(party) = self.parties.parties.get_mut(&pid) {
-                            if !party.members.contains(&session_id) {
-                                party.members.push(session_id);
-                            }
+                let party_id = if let Some(pid) = inviter_party_id {
+                    if let Some(party) = self.parties.parties.get_mut(&pid) {
+                        if !party.members.contains(&session_id) {
+                            party.members.push(session_id);
                         }
-                        pid
-                    } else {
-                        let pid = self.parties.next_id;
-                        let next = self.parties.next_id.wrapping_add(1);
-                        self.parties.next_id = if next == 0 { 1 } else { next };
-
-                        let party = Party {
+                    }
+                    pid
+                } else {
+                    let pid = self.parties.next_id;
+                    self.parties.next_id = self.parties.next_id.saturating_add(1);
+                    self.parties.parties.insert(
+                        pid,
+                        Party {
                             id: pid,
                             leader: inviter_session_id,
                             members: vec![inviter_session_id, session_id],
-                        };
-                        self.parties.parties.insert(pid, party);
-                        pid
+                        },
+                    );
+                    if let Some(inviter) = self.players.get_mut(&inviter_session_id) {
+                        inviter.party_id = Some(pid);
                     }
+                    pid
                 };
 
                 if let Some(invitee) = self.players.get_mut(&session_id) {
+                    if invitee.pending_group_invite_from == Some(inviter_session_id) {
+                        invitee.pending_group_invite_from = None;
+                    }
                     invitee.party_id = Some(party_id);
-                    invitee.pending_group_invite_from = None;
                 }
 
                 if let Some(inviter) = self.players.get_mut(&inviter_session_id) {

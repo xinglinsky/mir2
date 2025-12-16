@@ -76,19 +76,7 @@ async fn main() -> io::Result<()> {
     let cfg = config::load_server_config("server.toml")
         .expect("failed to load server configuration");
 
-    let admin_cfg = match admin_config::load_admin_config("admin.toml") {
-        Ok(c) => Some(c),
-        Err(e) => {
-            tracing::warn!("failed to load admin.toml, admin console integration disabled: {}", e);
-            None
-        }
-    };
-
-    let filter = EnvFilter::new(
-        cfg.log_filter
-            .as_deref()
-            .unwrap_or("info"),
-    );
+    let filter = EnvFilter::new(cfg.log_filter.as_deref().unwrap_or("info"));
 
     let shared_logs = logging::SharedLogs::new();
     let log_layer = logging::LogBufferLayer::new(shared_logs.clone());
@@ -99,6 +87,29 @@ async fn main() -> io::Result<()> {
         .with(fmt_layer)
         .with(log_layer)
         .init();
+
+    if let Some(pack_path) = &cfg.content_pack_path {
+        match world::content::load_content_pack(pack_path) {
+            Ok(()) => {
+                tracing::info!("[core] Loaded content pack from {}", pack_path.display());
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[core] Failed to load content pack from {}: {} (continuing with filesystem)",
+                    pack_path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    let admin_cfg = match admin_config::load_admin_config("admin.toml") {
+        Ok(c) => Some(c),
+        Err(e) => {
+            tracing::warn!("failed to load admin.toml, admin console integration disabled: {}", e);
+            None
+        }
+    };
 
     let addr: SocketAddr = cfg.listen_addr;
     let timeout_ms = cfg.timeout_ms;

@@ -7,6 +7,8 @@ pub mod drop;
 
 pub mod map_item;
 
+pub mod content;
+
 pub mod provider;
 
 pub mod config;

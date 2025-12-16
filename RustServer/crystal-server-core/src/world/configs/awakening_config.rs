@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 const AWAKE_TYPE_COUNT: usize = 6; // DC, MC, SC, AC, MAC, HPMP
 const GRADE_COUNT: usize = 4; // Common, Rare, Legendary, Mythical
@@ -63,7 +64,7 @@ pub fn awakening_config() -> &'static AwakeningConfig {
 fn load_awakening_config(path: &Path) -> AwakeningConfig {
     let mut cfg = AwakeningConfig::default();
 
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => {
             // If the file is missing or unreadable, fall back to defaults.

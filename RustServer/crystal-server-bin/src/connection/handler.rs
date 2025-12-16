@@ -25,6 +25,7 @@ use crystal_shared_proto::login::{
     CCallNPC,
     CChangeAMode,
     CChangePMode,
+    CChangeTrade,
     CChangePassword,
     CClientVersion,
     CCollectParcel,
@@ -46,6 +47,7 @@ use crystal_shared_proto::login::{
     CNewAccount,
     CNewCharacter,
     CPickUp,
+    CRangeAttack,
     CReadMail,
     CRefreshFriends,
     CRemoveFriend,
@@ -55,6 +57,7 @@ use crystal_shared_proto::login::{
     CRun,
     CSendMail,
     CShareQuest,
+    CSpellToggle,
     CStartGame,
     CSwitchGroup,
     CGroupInvite,
@@ -314,6 +317,11 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_change_pet_mode(msg, &mut out);
                 }
             }
+            ClientPacketId::ChangeTrade => {
+                if let Ok(msg) = CChangeTrade::decode(&packet.payload) {
+                    self.handle_change_trade(msg, &mut out);
+                }
+            }
             ClientPacketId::Magic => {
                 if let Ok(msg) = CMagic::decode(&packet.payload) {
                     self.handle_magic(msg, &mut out);
@@ -322,6 +330,16 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Attack => {
                 if let Ok(msg) = CAttack::decode(&packet.payload) {
                     self.handle_attack(msg, &mut out);
+                }
+            }
+            ClientPacketId::RangeAttack => {
+                if let Ok(msg) = CRangeAttack::decode(&packet.payload) {
+                    self.handle_range_attack(msg, &mut out);
+                }
+            }
+            ClientPacketId::SpellToggle => {
+                if let Ok(msg) = CSpellToggle::decode(&packet.payload) {
+                    self.handle_spell_toggle(msg, &mut out);
                 }
             }
             ClientPacketId::PickUp => {

@@ -83,6 +83,16 @@ pub fn write_bool<W: Write>(w: &mut W, value: bool) -> io::Result<()> {
     w.write_all(&[value as u8])
 }
 
+pub fn read_i8<R: Read>(r: &mut R) -> io::Result<i8> {
+    let mut b = [0u8; 1];
+    r.read_exact(&mut b)?;
+    Ok(b[0] as i8)
+}
+
+pub fn write_i8<W: Write>(w: &mut W, value: i8) -> io::Result<()> {
+    w.write_all(&[value as u8])
+}
+
 fn read_7bit_encoded_int<R: Read>(r: &mut R) -> io::Result<i32> {
     // Mirrors .NET BinaryReader.Read7BitEncodedInt implementation.
     let mut count: i32 = 0;

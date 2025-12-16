@@ -87,9 +87,12 @@ impl LoginConnection {
             }
 
             if let Some(t_sid) = target_sid {
-                // If the target already has a pending trade invitation
-                // recorded in the world, mirror the C# behaviour and reject.
-                if world.pending_trade_invite_from(t_sid).is_some() {
+                // Respect the target player's AllowTrade setting.
+                if world.player_allow_trade(t_sid) == Some(false) {
+                    target_sid = None;
+                } else if world.pending_trade_invite_from(t_sid).is_some() {
+                    // If the target already has a pending trade invitation
+                    // recorded in the world, mirror the C# behaviour and reject.
                     // Leave inviter_name_opt as None to signal this case.
                 } else {
                     world.set_pending_trade_invite(t_sid, self.session_id);
@@ -101,8 +104,8 @@ impl LoginConnection {
         let target_sid = match target_sid {
             Some(sid) => sid,
             None => {
-                // No player in front.
-                self.send_system_chat("请面向你要交易的玩家。", out);
+                // No player in front or the target is not accepting trades.
+                self.send_system_chat("对方当前不接受交易。", out);
                 return;
             }
         };

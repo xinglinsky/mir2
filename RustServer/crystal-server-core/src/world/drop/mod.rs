@@ -1,6 +1,8 @@
-use std::{fs, io, path::Path};
+use std::{io, path::Path};
 
 use rand::Rng;
+
+use crate::world::content;
 
 #[derive(Clone, Debug)]
 pub struct DropInfo {
@@ -287,7 +289,7 @@ where
                 if e > s + 1 {
                     let sub = &trimmed[s + 1..e];
                     let include_path = root_path.join(sub);
-                    if let Ok(text) = fs::read_to_string(&include_path) {
+                    if let Ok(text) = content::read_to_string(&include_path) {
                         out.extend(text.lines().map(|l| l.to_string()));
                     }
                 }
@@ -311,11 +313,16 @@ where
     F: Fn(&str) -> Option<i32>,
 {
     let path_ref = path.as_ref();
-    if !path_ref.exists() {
-        return Ok(Vec::new());
-    }
 
-    let text = fs::read_to_string(path_ref)?;
+    let text = match content::read_to_string(path_ref) {
+        Ok(t) => t,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::NotFound {
+                return Ok(Vec::new());
+            }
+            return Err(e);
+        }
+    };
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
 
     let root = path_ref.parent().unwrap_or_else(|| Path::new("."));

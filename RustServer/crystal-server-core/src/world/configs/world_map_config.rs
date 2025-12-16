@@ -1,8 +1,9 @@
 use once_cell::sync::Lazy;
 use crystal_shared_proto::map_types::{WorldMapIconData, WorldMapSetupData};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 pub static WORLD_MAP_SETUP: Lazy<WorldMapSetupData> =
     Lazy::new(|| load_world_map_setup(Path::new("./Configs/WorldMap.ini")));
@@ -12,7 +13,7 @@ pub fn world_map_setup() -> &'static WorldMapSetupData {
 }
 
 fn load_world_map_setup(path: &Path) -> WorldMapSetupData {
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(

@@ -1,7 +1,8 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 #[derive(Clone, Debug)]
 pub struct MineDropConfig {
@@ -194,7 +195,7 @@ fn default_mines() -> MinesConfig {
 }
 
 fn load_mines_config(path: &Path) -> MinesConfig {
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return default_mines(),
     };

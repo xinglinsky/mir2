@@ -8,6 +8,7 @@ use crystal_shared_proto::scene::{
     SObjectMonster,
     SObjectNpc,
     SObjectRemove,
+    SSpellToggle,
 };
 use crystal_shared_proto::item_types::ItemInfoData;
 use tracing::debug;
@@ -618,6 +619,21 @@ impl LoginConnection {
                         );
                         out.push(Self::encode_raw(raw));
                         next_known_players.insert(sid);
+                    }
+
+                    let toggles = {
+                        let world = self.world.lock().unwrap();
+                        world.player_spell_toggles(sid)
+                    };
+                    for spell_id in toggles {
+                        let pkt = SSpellToggle {
+                            object_id: sid,
+                            spell: spell_id,
+                            can_use: true,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
                     }
 
                     // Also send an initial ObjectHealth packet for this

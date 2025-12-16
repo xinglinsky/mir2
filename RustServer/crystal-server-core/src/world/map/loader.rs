@@ -1,6 +1,8 @@
-use std::{fs, io, path::Path};
+use std::{io, path::Path};
 
 use super::data::{CellAttribute, Map, MapCell, MapInfo};
+
+use crate::world::content;
 
 #[derive(Copy, Clone, Debug)]
 pub enum MapFormat {
@@ -17,7 +19,7 @@ pub enum MapFormat {
 
 pub fn load_map_from_file(info: MapInfo, map_dir: &Path) -> io::Result<Map> {
     let path = map_dir.join(format!("{}.map", info.file_name));
-    let bytes = fs::read(path)?;
+    let bytes = content::read_bytes(&path)?;
     load_map_from_bytes(info, &bytes)
 }
 

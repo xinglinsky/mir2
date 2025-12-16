@@ -124,7 +124,18 @@ pub async fn run_server(
     let limiter = Arc::new(IpLimiter::new(max_ip, Duration::from_secs(block_secs)));
 
     loop {
-        let (stream, peer_addr) = listener.accept().await?;
+        let (stream, peer_addr) = match listener.accept().await {
+            Ok(v) => v,
+            Err(e) => {
+                // On Windows, an inbound connection that is aborted/reset
+                // during the accept handshake can surface as an accept error
+                // (e.g. WSAECONNRESET / os error 10054). Treat this as
+                // transient so the server keeps running.
+                eprintln!("[net] accept error: {}", e);
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+        };
         let factory = factory.clone();
         let limiter = limiter.clone();
 

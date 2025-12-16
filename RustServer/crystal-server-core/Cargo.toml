@@ -11,4 +11,5 @@ hex = "0.4"
 tracing = "0.1"
 once_cell = "1"
 crystal-shared-proto = { path = "../crystal-shared-proto" }
+crystal-content-pack = { path = "../crystal-content-pack" }
 rand = "0.8"

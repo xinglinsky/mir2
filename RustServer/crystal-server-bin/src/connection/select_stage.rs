@@ -35,6 +35,7 @@ use crystal_shared_proto::scene::{
     SDefaultNpc,
     SObjectHidden,
     SObjectHealth,
+    SSpellToggle,
 };
 use crystal_shared_proto::select::{SelectInfo, SNewCharacterSuccess};
 use crystal_shared_proto::notice::{NoticeData, SUpdateNotice};
@@ -997,6 +998,21 @@ impl LoginConnection {
             self.known_players.clear();
             self.known_heroes.clear();
             self.update_visibility(out);
+
+            let toggles = {
+                let world = self.world.lock().unwrap();
+                world.player_spell_toggles(self.session_id)
+            };
+            for spell_id in toggles {
+                let pkt = SSpellToggle {
+                    object_id: self.session_id,
+                    spell: spell_id,
+                    can_use: true,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
 
             // Send the GameShop list to the client, mirroring the C#
             // PlayerObject.GetGameShop behaviour that enqueues a

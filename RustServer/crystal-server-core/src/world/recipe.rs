@@ -2,6 +2,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use crate::world::content;
+
 use crystal_shared_proto::io::{write_i32_le, write_u32_le};
 use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 use crate::item::create_fresh_user_item;
@@ -104,23 +106,53 @@ pub fn load_recipes_from_dir<P: AsRef<Path>>(
     let root = root.as_ref();
     let mut result = Vec::new();
 
-    let entries = fs::read_dir(root)?;
+    let mut recipe_paths: Vec<std::path::PathBuf> = Vec::new();
 
-    for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
+    match fs::read_dir(root) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                match path.extension().and_then(|s| s.to_str()) {
+                    Some(ext) if ext.eq_ignore_ascii_case("txt") => {
+                        recipe_paths.push(path);
+                    }
+                    _ => continue,
+                }
+            }
         }
-        let ext = match path.extension().and_then(|s| s.to_str()) {
-            Some(ext) if ext.eq_ignore_ascii_case("txt") => ext,
-            _ => continue,
-        };
-        let _ = ext;
+        Err(e) => {
+            // If the directory doesn't exist (common when we delete Envir/ after enabling
+            // content.pack), try enumerating the recipe files from the pack manifest.
+            if e.kind() != io::ErrorKind::NotFound || !content::has_content_pack() {
+                return Err(e);
+            }
 
+            tracing::debug!(
+                "[recipe] Directory {} not found; enumerating recipes from content pack",
+                root.display()
+            );
+
+            let prefix = root.to_string_lossy().replace('\\', "/");
+            let paths = content::list_pack_paths_with_prefix(&prefix);
+            for p in paths {
+                if !p.to_ascii_lowercase().ends_with(".txt") {
+                    continue;
+                }
+                recipe_paths.push(std::path::PathBuf::from(p));
+            }
+        }
+    }
+
+    recipe_paths.sort_by(|a, b| a.to_string_lossy().to_ascii_lowercase().cmp(&b.to_string_lossy().to_ascii_lowercase()));
+
+    for path in recipe_paths {
         let name = match path.file_stem().and_then(|s| s.to_str()) {
             Some(n) if !n.is_empty() => n,
             _ => continue,
@@ -138,7 +170,7 @@ pub fn load_recipes_from_dir<P: AsRef<Path>>(
             }
         };
 
-        let text = match fs::read_to_string(&path) {
+        let text = match content::read_to_string(&path) {
             Ok(t) => t,
             Err(e) => {
                 eprintln!(

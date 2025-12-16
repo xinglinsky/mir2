@@ -1,7 +1,7 @@
 use rand::Rng;
 use rand::thread_rng;
 use tracing::{trace, debug};
-use std::fs;
+use crate::world::content;
 use crate::combat::compute_physical_melee_with_crit;
 use crate::stats::{Stat, Stats};
 use crate::world::map::{self, RespawnInfo};
@@ -116,7 +116,7 @@ impl<P: WorldProvider> World<P> {
         let file_name = format!("{route_path}.txt");
         let full_path = self.config.routes_path.join(file_name);
 
-        let contents = fs::read_to_string(&full_path).ok()?;
+        let contents = content::read_to_string(&full_path).ok()?;
         let mut points = Vec::new();
 
         for line in contents.lines() {

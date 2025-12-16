@@ -7,7 +7,7 @@ use crate::world::buff::PlayerBuff;
 use crate::world::party::PartyId;
 use crate::world::provider::WorldProvider;
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_string};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::{Job, PlayerStats, SessionId, World};
 use crate::quest::{QuestId, QuestProgress};
@@ -40,6 +40,8 @@ pub struct PlayerState {
     pub pet_focus_target_monster_id: Option<u64>,
     pub allow_observe: bool,
     pub allow_group: bool,
+    pub allow_trade: bool,
+    pub spell_toggles: HashSet<u8>,
     pub party_id: Option<PartyId>,
     pub pending_group_invite_from: Option<SessionId>,
     pub pending_guild_invite_from: Option<String>,
@@ -159,6 +161,8 @@ impl<P: WorldProvider> World<P> {
                     pet_focus_target_monster_id: None,
                     allow_observe: false,
                     allow_group: true,
+                    allow_trade: true,
+                    spell_toggles: HashSet::new(),
                     party_id: None,
                     pending_group_invite_from: None,
                     pending_guild_invite_from: None,

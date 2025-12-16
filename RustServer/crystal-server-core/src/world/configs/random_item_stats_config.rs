@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 #[derive(Clone, Debug, Default)]
 pub struct RandomItemStat {
@@ -96,7 +97,7 @@ pub fn random_item_stat_for_id(id: u8) -> Option<&'static RandomItemStat> {
 }
 
 fn load_random_item_stats_config(path: &Path) -> RandomItemStatsConfig {
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => {
             // If the file is missing or unreadable, return an empty config.

@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 #[allow(dead_code)]
 fn parse_bool(val: &str, default: bool) -> bool {
@@ -59,7 +60,7 @@ pub fn fishing_config() -> &'static FishingConfig {
 fn load_fishing_config(path: &Path) -> FishingConfig {
     let mut cfg = FishingConfig::default();
 
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return cfg,
     };

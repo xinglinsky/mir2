@@ -2,8 +2,9 @@ use crate::world::Job;
 use crate::stats::{Stat, Stats};
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 #[derive(Copy, Clone, Debug)]
 enum StatFormula {
@@ -696,7 +697,7 @@ pub fn encode_base_stats_for_job(job: Job) -> Vec<u8> {
 /// by the legacy C# server. We only support the sections and keys that
 /// appear in those files.
 fn parse_base_stats_ini(path: &Path) -> Result<LoadedBaseStats, ()> {
-    let text = fs::read_to_string(path).map_err(|_| ())?;
+    let text = content::read_to_string(path).map_err(|_| ())?;
 
     let mut stats: BTreeMap<String, BaseStatConfig> = BTreeMap::new();
     let mut caps: BTreeMap<Stat, i32> = BTreeMap::new();

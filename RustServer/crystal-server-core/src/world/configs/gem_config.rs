@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 fn parse_bool(val: &str, default: bool) -> bool {
     match val {
@@ -33,7 +34,7 @@ pub fn gem_config() -> &'static GemConfig {
 fn load_gem_config(path: &Path) -> GemConfig {
     let mut cfg = GemConfig::default();
 
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return cfg,
     };

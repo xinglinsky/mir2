@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
-use std::fs;
 use std::path::Path;
+
+use crate::world::content;
 
 fn parse_bool(val: &str, default: bool) -> bool {
     match val {
@@ -45,7 +46,7 @@ pub fn marriage_config() -> &'static MarriageConfig {
 fn load_marriage_config(path: &Path) -> MarriageConfig {
     let mut cfg = MarriageConfig::default();
 
-    let text = match fs::read_to_string(path) {
+    let text = match content::read_to_string(path) {
         Ok(t) => t,
         Err(_) => return cfg,
     };
