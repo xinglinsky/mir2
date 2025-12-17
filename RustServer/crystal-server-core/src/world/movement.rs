@@ -168,10 +168,8 @@ impl<P: WorldProvider> World<P> {
             _ => (0, 0),
         };
 
-        // Always update facing direction, even if movement is blocked.
-        player.direction = direction;
-
         if distance <= 0 {
+            player.direction = direction;
             return;
         }
 
@@ -233,7 +231,11 @@ impl<P: WorldProvider> World<P> {
         //     cur_y,
         // );
 
+        let moved = cur_x != player.x || cur_y != player.y;
         player.x = cur_x;
         player.y = cur_y;
+        if moved {
+            player.direction = direction;
+        }
     }
 }

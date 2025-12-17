@@ -172,6 +172,13 @@ pub enum WorldCommand {
         direction: u8,
         spell: u8,
     },
+    RangeAttack {
+        session_id: SessionId,
+        direction: u8,
+        target_id: u32,
+        target_x: i32,
+        target_y: i32,
+    },
     Magic {
         session_id: SessionId,
         spell: u8,
@@ -226,6 +233,38 @@ pub enum WorldEvent {
         x: i32,
         y: i32,
         direction: u8,
+    },
+    UserDash {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    UserDashFail {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    PlayerPushed {
+        session_id: SessionId,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    ObjectPushed {
+        object_id: u64,
+        map_index: i32,
+        x: i32,
+        y: i32,
+        direction: u8,
+    },
+    InTrapRock {
+        session_id: SessionId,
+        trapped: bool,
     },
     MapChanged {
         session_id: SessionId,
@@ -1634,9 +1673,15 @@ impl<P: WorldProvider> World<P> {
     }
 
     /// Check whether the given magic is off cooldown for this player and, if
-    /// so, update its UserMagic.cast_time using the MagicInfo delay
-    /// parameters. Returns true if the cast should proceed, or false if the
-    /// spell is still on cooldown and the command should be ignored.
+    /// so, allow the cast attempt to proceed. This mirrors the C# gate:
+    ///   Envir.Time < (magic.CastTime + magic.GetDelay())
+    ///
+    /// Note: this function does **not** update UserMagic.cast_time. The cast
+    /// timestamp should be recorded only when a spell actually consumes MP / is
+    /// considered cast (or attempted), using record_magic_cast_time.
+    ///
+    /// Returns true if the cast should proceed, or false if the spell is still
+    /// on cooldown and the command should be ignored.
     pub(crate) fn check_and_update_magic_cooldown(
         &mut self,
         session_id: SessionId,
@@ -1654,50 +1699,50 @@ impl<P: WorldProvider> World<P> {
             None => return false,
         };
 
-        // If we have a non-zero cast_time and the current world time is still
-        // before it, treat this command as a no-op; the client may have sent
-        // extra CMagic packets while the key is held down.
-        if now > 0 && magic.cast_time > 0 && now < magic.cast_time {
+        // C# semantics: UserMagic.CastTime stores the timestamp of the last
+        // successful cast. Cooldown gating is:
+        //   Envir.Time < (magic.CastTime + magic.GetDelay())
+        // not "now < CastTime".
+        let (delay_ms, delay_source) = if let Some(info) = self.provider.get_magic_info(spell) {
+            let delay: i64 = info.delay_base as i64
+                - (magic.level as i64 * info.delay_reduction as i64);
+            (delay.max(0), "magic_info")
+        } else {
+            // Default to a 1500ms cooldown window when no static MagicInfo is
+            // available for this spell.
+            (1_500, "fallback")
+        };
+
+        if now > 0 && magic.cast_time > 0 && now < magic.cast_time.saturating_add(delay_ms) {
             tracing::debug!(
-                "magic: spell={} session_id={} on cooldown now={} cast_time={}",
+                "magic: spell={} session_id={} on cooldown now={} cast_time={} delay_ms={} source={}",
                 spell,
                 session_id,
                 now,
                 magic.cast_time,
+                delay_ms,
+                delay_source,
             );
             return false;
         }
 
-        // Compute the per-cast delay from MagicInfo if available, mirroring
-        // the Delay field used by the original C# server. When MagicInfo is
-        // missing (for example, if MagicInfoList failed to load from MirDB),
-        // fall back to a conservative default delay so that repeated CMagic
-        // packets from a single key press do not result in uncontrolled rapid
-        // casting.
-        if let Some(info) = self.provider.get_magic_info(spell) {
-            let delay: i64 = info.delay_base as i64
-                - (magic.level as i64 * info.delay_reduction as i64);
-            let delay = delay.max(0);
-
-            if now > 0 {
-                magic.cast_time = now.saturating_add(delay);
-            } else {
-                magic.cast_time = delay;
-            }
-        } else {
-            // Default to a 1500ms cooldown window when no static MagicInfo is
-            // available for this spell. This is in the same ballpark as many
-            // core wizard attack spells (e.g. FireBall) and is only used as a
-            // safety net when MirDB does not provide data.
-            let fallback_delay_ms: i64 = 1_500;
-            if now > 0 {
-                magic.cast_time = now.saturating_add(fallback_delay_ms);
-            } else {
-                magic.cast_time = fallback_delay_ms;
-            }
-        }
-
         true
+    }
+
+    pub(crate) fn record_magic_cast_time(&mut self, session_id: SessionId, spell: u8) {
+        let now = self.time_ms;
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let magic = match player.magics.iter_mut().find(|m| m.spell == spell) {
+            Some(m) => m,
+            None => return,
+        };
+
+        magic.cast_time = now;
     }
 
     /// Increment a player's experience and apply any resulting level-ups using
@@ -3359,10 +3404,22 @@ impl<P: WorldProvider> World<P> {
     }
 
     pub(crate) fn is_cell_blocked(&self, map_index: i32, x: i32, y: i32) -> bool {
-        self.occupancy
+        let blocked_by_occupancy = self
+            .occupancy
             .get(&map_index)
             .and_then(|m| m.get(&(x, y)))
-            .map_or(false, |cell| !cell.players.is_empty() || !cell.monsters.is_empty())
+            .map_or(false, |cell| !cell.players.is_empty() || !cell.monsters.is_empty());
+
+        if blocked_by_occupancy {
+            return true;
+        }
+
+        // Treat NPC tiles as blocking, matching the legacy C# behaviour where
+        // Cell.Objects contains NPC objects with Blocking=true.
+        self.provider
+            .npc_infos()
+            .iter()
+            .any(|n| n.map_index == map_index && n.location_x == x && n.location_y == y)
     }
 
     pub(crate) fn add_player_to_occupancy(
@@ -3927,6 +3984,20 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    pub fn set_player_in_trap_rock(
+        &mut self,
+        session_id: SessionId,
+        trapped: bool,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        if let Some(p) = self.players.get_mut(&session_id) {
+            if p.in_trap_rock != trapped {
+                p.in_trap_rock = trapped;
+                events.push(WorldEvent::InTrapRock { session_id, trapped });
+            }
+        }
+    }
+
     pub fn handle_command(&mut self, cmd: WorldCommand) -> Vec<WorldEvent> {
         let mut events: Vec<WorldEvent> = Vec::new();
 
@@ -4010,12 +4081,52 @@ impl<P: WorldProvider> World<P> {
                 // those buffs immediately and breaks Hidden state.
                 self.remove_invisibility_buffs_on_move(session_id, &mut events);
 
+                let now_ms = self.time_ms;
+                let (map_index, x, y, dir, blocked) = match self.players.get(&session_id) {
+                    Some(p) => {
+                        let poisoned = p.current_poison_mask;
+                        let blocked = p.dead
+                            || (p.next_action_time_ms != 0 && now_ms < p.next_action_time_ms)
+                            || p.in_trap_rock
+                            || (poisoned & (crate::world::types::PoisonType::Paralysis as u16) != 0)
+                            || (poisoned & (crate::world::types::PoisonType::LRParalysis as u16) != 0)
+                            || (poisoned & (crate::world::types::PoisonType::Frozen as u16) != 0);
+                        (p.map_index, p.x, p.y, p.direction, blocked)
+                    }
+                    None => return events,
+                };
+
+                if blocked {
+                    events.push(WorldEvent::UserLocation {
+                        session_id,
+                        map_index,
+                        x,
+                        y,
+                        direction: dir,
+                    });
+                    return events;
+                }
+
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
                     if let Some(mut p) = self.players.remove(&session_id) {
+                        let old_x = p.x;
+                        let old_y = p.y;
                         self.apply_step(&mut p, map, direction, 1);
                         self.check_map_movement(&mut p, &mut events);
+
+                        if p.x != old_x || p.y != old_y {
+                            let mut delay_ms: i64 = 600;
+                            if (p.current_poison_mask
+                                & (crate::world::types::PoisonType::Slow as u16))
+                                != 0
+                            {
+                                delay_ms = delay_ms.saturating_mul(2);
+                            }
+                            p.next_action_time_ms = now_ms.saturating_add(delay_ms);
+                        }
+
                         events.push(WorldEvent::UserLocation {
                             session_id: p.session_id,
                             map_index: p.map_index,
@@ -4036,12 +4147,52 @@ impl<P: WorldProvider> World<P> {
                 // they move.
                 self.remove_invisibility_buffs_on_move(session_id, &mut events);
 
+                let now_ms = self.time_ms;
+                let (map_index, x, y, dir, blocked) = match self.players.get(&session_id) {
+                    Some(p) => {
+                        let poisoned = p.current_poison_mask;
+                        let blocked = p.dead
+                            || (p.next_action_time_ms != 0 && now_ms < p.next_action_time_ms)
+                            || p.in_trap_rock
+                            || (poisoned & (crate::world::types::PoisonType::Paralysis as u16) != 0)
+                            || (poisoned & (crate::world::types::PoisonType::LRParalysis as u16) != 0)
+                            || (poisoned & (crate::world::types::PoisonType::Frozen as u16) != 0);
+                        (p.map_index, p.x, p.y, p.direction, blocked)
+                    }
+                    None => return events,
+                };
+
+                if blocked {
+                    events.push(WorldEvent::UserLocation {
+                        session_id,
+                        map_index,
+                        x,
+                        y,
+                        direction: dir,
+                    });
+                    return events;
+                }
+
                 let map_index = self.players.get(&session_id).map(|p| p.map_index);
                 if let Some(map_index) = map_index {
                     let map = self.get_or_load_map(map_index);
                     if let Some(mut p) = self.players.remove(&session_id) {
+                        let old_x = p.x;
+                        let old_y = p.y;
                         self.apply_step(&mut p, map, direction, 2);
                         self.check_map_movement(&mut p, &mut events);
+
+                        if p.x != old_x || p.y != old_y {
+                            let mut delay_ms: i64 = 600;
+                            if (p.current_poison_mask
+                                & (crate::world::types::PoisonType::Slow as u16))
+                                != 0
+                            {
+                                delay_ms = delay_ms.saturating_mul(2);
+                            }
+                            p.next_action_time_ms = now_ms.saturating_add(delay_ms);
+                        }
+
                         events.push(WorldEvent::UserLocation {
                             session_id: p.session_id,
                             map_index: p.map_index,
@@ -4068,6 +4219,22 @@ impl<P: WorldProvider> World<P> {
                     0,
                     0,
                     0,
+                    &mut events,
+                );
+            }
+            WorldCommand::RangeAttack {
+                session_id,
+                direction,
+                target_id,
+                target_x,
+                target_y,
+            } => {
+                self.handle_range_attack_command(
+                    session_id,
+                    direction,
+                    target_id,
+                    target_x,
+                    target_y,
                     &mut events,
                 );
             }
@@ -4406,12 +4573,24 @@ impl<P: WorldProvider> World<P> {
                         None => return events,
                     };
 
+                    let was_trapped = p.in_trap_rock;
+                    if was_trapped {
+                        p.in_trap_rock = false;
+                    }
+
                     let old_map = p.map_index;
                     let old_x = p.x;
                     let old_y = p.y;
                     p.map_index = map_index;
                     p.x = x;
                     p.y = y;
+
+                    if was_trapped {
+                        events.push(WorldEvent::InTrapRock {
+                            session_id,
+                            trapped: false,
+                        });
+                    }
 
                     (old_map, old_x, old_y, p.map_index, p.x, p.y, p.direction)
                 };

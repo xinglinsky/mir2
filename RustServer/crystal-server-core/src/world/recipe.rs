@@ -8,7 +8,7 @@ use crystal_shared_proto::io::{write_i32_le, write_u32_le};
 use crystal_shared_proto::item_types::{ItemInfoData, UserItemData};
 use crate::item::create_fresh_user_item;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecipeItemRequirement {
     pub item_index: i32,
     pub count: u16,

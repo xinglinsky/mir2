@@ -1,0 +1,12 @@
+[package]
+name = "crystal-client-bin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.14"
+clap = { version = "4", features = ["derive"] }
+crystal-client-config = { path = "../crystal-client-config" }
+crystal-client-net = { path = "../crystal-client-net" }
+crystal-lib = { path = "../crystal-lib" }
+crystal-shared-proto = { path = "../crystal-shared-proto" }

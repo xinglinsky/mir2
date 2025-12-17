@@ -62,6 +62,7 @@ impl LoginConnection {
             hero_next_index: 1,
             hero_current: None,
             hero_storage: vec![None; 8],
+            hero_spell_toggles: HashSet::new(),
             known_monsters: HashSet::new(),
             known_npcs: HashSet::new(),
             known_players: HashSet::new(),

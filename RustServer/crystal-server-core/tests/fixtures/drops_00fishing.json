@@ -1,0 +1,286 @@
+{
+  "drop_path": "00Fishing.txt",
+  "drop_type": 0,
+  "drops": [
+    {
+      "chance": 4500,
+      "gold": 0,
+      "item_index": 822,
+      "item_name": "MossyBox",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 821,
+      "item_name": "ArmourCastTool",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 819,
+      "item_name": "BookofMana",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 818,
+      "item_name": "HavocCrystal",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 817,
+      "item_name": "Translucent",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 816,
+      "item_name": "RustyArmour",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 815,
+      "item_name": "ArmourBook(ACC)",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 820,
+      "item_name": "BookofSpirit",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 813,
+      "item_name": "ArmourBook(MC)",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 812,
+      "item_name": "ArmourBook(DC)",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 200,
+      "gold": 0,
+      "item_index": 814,
+      "item_name": "ArmourBook(SC)",
+      "item_type": 16,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 744,
+      "item_name": "FreezingGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 743,
+      "item_name": "PoisonGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 742,
+      "item_name": "AccuracyGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 741,
+      "item_name": "AgilityGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 740,
+      "item_name": "StormGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 739,
+      "item_name": "DurabilityGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 738,
+      "item_name": "EvilSlayerGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 736,
+      "item_name": "SoulGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 735,
+      "item_name": "MagicGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 734,
+      "item_name": "BraveryGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 745,
+      "item_name": "DisillusionGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 737,
+      "item_name": "ProtectionGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 10000,
+      "gold": 0,
+      "item_index": 746,
+      "item_name": "EnduranceGem",
+      "item_type": 18,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 500,
+      "gold": 0,
+      "item_index": 807,
+      "item_name": "Trout",
+      "item_type": 33,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 500,
+      "gold": 0,
+      "item_index": 804,
+      "item_name": "Walleye",
+      "item_type": 33,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 500,
+      "gold": 0,
+      "item_index": 805,
+      "item_name": "SwordFish",
+      "item_type": 33,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    },
+    {
+      "chance": 500,
+      "gold": 0,
+      "item_index": 806,
+      "item_name": "RockBass",
+      "item_type": 33,
+      "quest_required": false,
+      "drop_type": 0,
+      "group": null
+    }
+  ]
+}

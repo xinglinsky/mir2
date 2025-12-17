@@ -9,6 +9,8 @@ pub mod map_item;
 
 pub mod content;
 
+pub mod npc_script;
+
 pub mod provider;
 
 pub mod config;

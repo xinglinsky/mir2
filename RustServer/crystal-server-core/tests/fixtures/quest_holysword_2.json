@@ -1,0 +1,27 @@
+{
+  "quest_index": 144,
+  "quest_file": "HolySword/2.txt",
+  "description": [
+    "\u524D\u5F80 {TreePath/Yellow} \u6D88\u706D {RootSpider/Crimson}\uFF0C",
+    "\u7136\u540E\u56DE\u5230 {TaoVillage/Yellow} \u627E {Perry/LimeGreen}\u3002"
+  ],
+  "task_description": [],
+  "return_description": [],
+  "completion_description": [],
+  "carry_items": [],
+  "kill_tasks": [
+    {
+      "monster_index": 302,
+      "monster_name": "RootSpider",
+      "count": 1,
+      "message": "Kill a RootSpider in TreePath"
+    }
+  ],
+  "item_tasks": [],
+  "flag_tasks": [],
+  "fixed_rewards": [],
+  "select_rewards": [],
+  "gold_reward": 0,
+  "exp_reward": 0,
+  "credit_reward": 0
+}

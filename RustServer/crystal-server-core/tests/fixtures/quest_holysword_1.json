@@ -1,0 +1,34 @@
+{
+  "quest_index": 143,
+  "quest_file": "HolySword/1.txt",
+  "description": [
+    "\u5F88\u4E45\u4EE5\u524D\uFF0C\u6709\u4E2A\u6076\u4EBA\u5077\u8D70\u4E86\u6211\u4EEC\u7684",
+    "HolySword\uFF0C\u90A3\u662F\u6211\u4EEC\u95E8\u6D3E\u6700\u5F3A\u7684\u5723\u5251\u3002",
+    "\u5173\u4E8E\u8FD9\u628A\u5251\u6709\u4E00\u4E2A\u4F20\u8BF4\uFF0C",
+    "\u8BF4\u5B83\u4E00\u6325\u51FA\u5C31\u4F1A\u98CE\u66B4\u547C\u5578\u3001\u795E\u9F99\u73B0\u4E16\uFF0C",
+    "\u5F53\u7136\u2026\u2026\u662F\u771F\u662F\u5047\u6CA1\u4EBA\u77E5\u9053\u3002",
+    "\u4F46\u5982\u679C\u8FD9\u628A\u5251\u4ECD\u7136\u5B58\u5728\uFF0C\u5B83\u7684\u529B\u91CF\u5F3A\u5927\u5230",
+    "\u6211\u4EEC\u6839\u672C\u65E0\u6CD5\u4F30\u91CF\u3002"
+  ],
+  "task_description": [],
+  "return_description": [],
+  "completion_description": [],
+  "carry_items": [],
+  "kill_tasks": [],
+  "item_tasks": [],
+  "flag_tasks": [
+    {
+      "number": 527,
+      "message": "Speak with the TrainerTaoist"
+    },
+    {
+      "number": 528,
+      "message": "Speak with the School\u0027s Owner"
+    }
+  ],
+  "fixed_rewards": [],
+  "select_rewards": [],
+  "gold_reward": 0,
+  "exp_reward": 0,
+  "credit_reward": 0
+}

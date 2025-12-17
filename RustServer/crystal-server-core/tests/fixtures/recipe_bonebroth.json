@@ -1,0 +1,41 @@
+{
+  "recipe_file": "BoneBroth.txt",
+  "product": {
+    "item_index": 704,
+    "item_name": "BoneBroth",
+    "count": 1,
+    "current_dura": 0,
+    "max_dura": 0
+  },
+  "chance": 100,
+  "gold": 1000,
+  "tools": [],
+  "ingredients": [
+    {
+      "item_index": 874,
+      "item_name": "Bone",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 673,
+      "item_name": "OldGinseng",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 675,
+      "item_name": "ImpactDrug(S)",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    }
+  ],
+  "required_flag": [],
+  "required_level": null,
+  "required_quest": [],
+  "required_class": [],
+  "required_gender": null
+}

@@ -69,6 +69,9 @@ pub struct PlayerState {
     pub last_revival_time_ms: i64,
     pub attack_mode: u8,
     pub pet_mode: u8,
+    pub next_action_time_ms: i64,
+    pub next_spell_time_ms: i64,
+    pub in_trap_rock: bool,
     /// Active poisons applied to this player. This mirrors the legacy C#
     /// MapObject.PoisonList and is processed by player_runtime.
     pub poisons: Vec<crate::world::PoisonInstance>,
@@ -190,6 +193,9 @@ impl<P: WorldProvider> World<P> {
                     last_revival_time_ms: 0,
                     attack_mode: 0,
                     pet_mode: 0,
+                    next_action_time_ms: 0,
+                    next_spell_time_ms: 0,
+                    in_trap_rock: false,
                     poisons: Vec::new(),
                     current_poison_mask: 0,
                     gs_purchases: HashMap::new(),

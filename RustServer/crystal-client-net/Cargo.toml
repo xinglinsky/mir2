@@ -1,0 +1,9 @@
+[package]
+name = "crystal-client-net"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+crystal-shared-proto = { path = "../crystal-shared-proto" }
+tracing = "0.1"

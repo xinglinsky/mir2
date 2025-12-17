@@ -6,6 +6,7 @@ use crate::world::buff::BuffInfo;
 use crate::world::recipe::RecipeInfo;
 use crate::world::types::BuffType;
 use crate::quest::QuestInfo;
+use crate::conquest::ConquestInfo;
 use crystal_shared_proto::item_types::ItemInfoData;
 
 static EMPTY_BUFF_INFOS: &[BuffInfo] = &[];
@@ -22,6 +23,7 @@ pub struct WorldDatabase {
     pub recipe_infos: Vec<RecipeInfo>,
     pub game_shop_items: Vec<GameShopItemRecord>,
     pub quest_infos: Vec<QuestInfo>,
+    pub conquest_infos: Vec<ConquestInfo>,
 }
 
 pub trait WorldProvider {

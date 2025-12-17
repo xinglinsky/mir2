@@ -1,0 +1,36 @@
+{
+  "quest_index": 22,
+  "quest_file": "BichonProvince/BichonWall/1.txt",
+  "description": [
+    "\u6700\u8FD1\u4E00\u76F4\u6709\u62A5\u544A\u79F0 {ForestYeti\u0027s/Crimson}",
+    "\u4E13\u95E8\u88AD\u51FB\u65B0\u6765\u7684\u6218\u58EB\u3002",
+    "\u4F60\u89C9\u5F97\u80FD\u5E2E\u5FD9\u89E3\u51B3\u4E00\u4E0B\u5417\uFF1F"
+  ],
+  "task_description": [
+    "\u6D88\u706D 5 \u53EA {ForestYeti\u0027s/Crimson}\u3002"
+  ],
+  "return_description": [],
+  "completion_description": [],
+  "carry_items": [],
+  "kill_tasks": [
+    {
+      "monster_index": 55,
+      "monster_name": "ForestYeti",
+      "count": 5,
+      "message": ""
+    }
+  ],
+  "item_tasks": [],
+  "flag_tasks": [],
+  "fixed_rewards": [
+    {
+      "item_index": 1181,
+      "item_name": "PrecisionPendant",
+      "count": 1
+    }
+  ],
+  "select_rewards": [],
+  "gold_reward": 50,
+  "exp_reward": 200,
+  "credit_reward": 0
+}

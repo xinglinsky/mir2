@@ -1,0 +1,29 @@
+{
+  "quest_index": 142,
+  "quest_file": "MongchonProvince/MudWall/Board/1.txt",
+  "description": [
+    "\u6CE5\u5899\u57CE\u60AC\u8D4F\u4EFB\u52A1\uFF1A\u91CE\u732A\u7360\u7259\u3002"
+  ],
+  "task_description": [
+    "\u8BF7\u524D\u5F80 {StoneTemple/Yellow}\uFF0C\u6D88\u706D {Boar\u0027s/Crimson}",
+    "\u5E76\u6536\u96C6 {Boar Tooth\u0027s/LightSteelBlue}\u3002"
+  ],
+  "return_description": [],
+  "completion_description": [],
+  "carry_items": [],
+  "kill_tasks": [],
+  "item_tasks": [
+    {
+      "item_index": 1170,
+      "item_name": "BoarTooth",
+      "count": 75,
+      "message": "Collect the Boar\u0027s Tooth"
+    }
+  ],
+  "flag_tasks": [],
+  "fixed_rewards": [],
+  "select_rewards": [],
+  "gold_reward": 25000,
+  "exp_reward": 10000,
+  "credit_reward": 0
+}

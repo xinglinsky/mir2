@@ -1,0 +1,49 @@
+{
+  "recipe_file": "BraveryOrb.txt",
+  "product": {
+    "item_index": 747,
+    "item_name": "BraveryOrb",
+    "count": 1,
+    "current_dura": 0,
+    "max_dura": 0
+  },
+  "chance": 20,
+  "gold": 10000,
+  "tools": [
+    {
+      "item_index": 1348,
+      "item_name": "CraftingBook",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    }
+  ],
+  "ingredients": [
+    {
+      "item_index": 646,
+      "item_name": "DCStone",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 677,
+      "item_name": "ImpactDrug(L)",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 664,
+      "item_name": "(HP)DrugXL",
+      "count": 2,
+      "current_dura": 0,
+      "max_dura": 0
+    }
+  ],
+  "required_flag": [],
+  "required_level": null,
+  "required_quest": [],
+  "required_class": [],
+  "required_gender": null
+}

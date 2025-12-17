@@ -1,6 +1,7 @@
 // Packet framing and basic structures will go here.
 // C# layout: [length: u16 LE][id: i16 LE][payload...]
 
+#[derive(Clone, Debug)]
 pub struct RawPacket {
     pub id: i16,
     pub payload: Vec<u8>,

@@ -8,4 +8,6 @@ pub mod item;
 pub mod guild;
 pub mod conquest;
 pub mod quest;
+pub mod quest_text;
+pub mod routes_text;
 pub mod ranking;

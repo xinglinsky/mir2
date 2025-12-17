@@ -28,6 +28,7 @@ use crate::world::skills::warrior::{
     cast_immortal_skin,
     cast_rage,
     cast_fury,
+    cast_shoulder_dash,
     is_thrusting_spell,
     resolve_slaying_for_attack,
     thrusting_max_range,
@@ -66,6 +67,100 @@ use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell, PoisonI
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
         true
+    }
+
+    pub(super) fn handle_range_attack_command(
+        &mut self,
+        session_id: SessionId,
+        direction: u8,
+        target_id: u32,
+        target_x: i32,
+        target_y: i32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let (map_index, x, y, attacker_stats) = match self.players.get_mut(&session_id) {
+            Some(p) => {
+                if !Self::can_attack(p) {
+                    return;
+                }
+                p.direction = direction;
+                (p.map_index, p.x, p.y, p.stats.total.clone())
+            }
+            None => return,
+        };
+
+        // Always emit the ranged-attack visual so the client feels responsive.
+        events.push(WorldEvent::ObjectRangeAttack {
+            object_id: session_id as u64,
+            map_index,
+            x,
+            y,
+            direction,
+            target_id: target_id as u64,
+            target_x,
+            target_y,
+            spell: 0,
+            level: 0,
+            attack_type: 0,
+        });
+
+        // Minimal playable damage: if the packet provides a target monster id
+        // within a reasonable range, schedule an immediate PendingMagicHit so
+        // that HP, drops and experience reuse the existing monster-runtime
+        // pipeline.
+        if target_id == 0 {
+            return;
+        }
+
+        let target_monster_id = target_id as u64;
+        if !self.can_attack_monster(session_id, map_index, target_monster_id) {
+            return;
+        }
+
+        // Locate the monster and build defender stats.
+        let (monster_index, mx, my, defender_stats) = match self.monsters.get(&map_index) {
+            Some(monsters) => {
+                if let Some(m) = monsters.iter().find(|m| m.id == target_monster_id && m.hp > 0) {
+                    let monster_index = m.monster_index;
+                    let mut stats = self
+                        .provider
+                        .get_monster_info(monster_index)
+                        .map(|info| info.stats.clone())
+                        .unwrap_or_default();
+                    stats.add(&m.buff_stats);
+                    (monster_index, m.x, m.y, stats)
+                } else {
+                    return;
+                }
+            }
+            None => return,
+        };
+
+        let dx = mx - x;
+        let dy = my - y;
+        let dist = dx.abs().max(dy.abs());
+        let max_range: i32 = 8;
+        if dist <= 0 || dist > max_range {
+            return;
+        }
+
+        let (hit, raw_damage, damage_type) =
+            compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+        if !hit || raw_damage <= 0 {
+            return;
+        }
+
+        let base_time = self.time_ms.max(0);
+        self.pending_magic_hits.push(PendingMagicHit {
+            due_time_ms: base_time,
+            attacker_session_id: session_id,
+            map_index,
+            target_monster_id,
+            monster_index,
+            spell_id: 0,
+            damage: raw_damage,
+            damage_type,
+        });
     }
 
     /// Helper that mirrors C# MonsterObject.PoisonTarget for player targets
@@ -1205,6 +1300,7 @@ impl<P: WorldProvider> World<P> {
         y: i32,
         events: &mut Vec<WorldEvent>,
     ) {
+        let now_ms = self.time_ms;
         let (player_map, player_x, player_y, has_magic) = match self.players.get(&session_id) {
             Some(p) => {
                 let has_magic = p.magics.iter().any(|m| m.spell == spell);
@@ -1213,14 +1309,68 @@ impl<P: WorldProvider> World<P> {
             None => return,
         };
 
+        // Mirror C# CanCast gating which includes SpellTime (global magic delay)
+        // plus ActionTime and Stun/Dazed/Paralysis/Frozen restrictions.
+        if let Some(p) = self.players.get(&session_id) {
+            if p.dead {
+                return;
+            }
+            if p.next_action_time_ms != 0 && now_ms < p.next_action_time_ms {
+                return;
+            }
+            if p.next_spell_time_ms != 0 && now_ms < p.next_spell_time_ms {
+                tracing::debug!(
+                    "handle_magic_command: session_id={} spell_id={} ignored (spell_time) now={} next_spell_time_ms={}",
+                    session_id,
+                    spell,
+                    now_ms,
+                    p.next_spell_time_ms
+                );
+                return;
+            }
+            let poisoned = p.current_poison_mask;
+            if (poisoned & (crate::world::types::PoisonType::Stun as u16) != 0)
+                || (poisoned & (crate::world::types::PoisonType::Dazed as u16) != 0)
+                || (poisoned & (crate::world::types::PoisonType::Paralysis as u16) != 0)
+                || (poisoned & (crate::world::types::PoisonType::Frozen as u16) != 0)
+            {
+                return;
+            }
+        }
+
         // If the player knows this magic, enforce a simple cooldown based on
         // the MagicInfo delay parameters and the per-magic UserMagic.cast_time
         // field. This mirrors the C# behaviour where repeated CMagic packets
         // while a spell is still on cooldown are ignored server-side.
         //
-        // Only after passing the cooldown check do we emit MagicCast so the
-        // client can update its per-spell CastTime and log the accepted cast.
+        // Note: we do NOT emit MagicCast here. In the original C# server,
+        // S.MagicCast is only used for certain skills (e.g. ShoulderDash,
+        // FlashDash, BackStep) that return early from Magic() and therefore do
+        // not send S.Magic. For normal spells, the client receives S.Magic.
         if has_magic {
+            // Mirror C# Magic(): after CanCast passes, arm SpellTime immediately
+            // (and ActionTime for most spells) even if the cast later aborts
+            // due to per-spell cooldown or insufficient MP.
+            let mut spell_delay_ms: i64 = 1_800;
+            if Spell::from_u8(spell) == Some(Spell::FlameField) {
+                spell_delay_ms = 2_500;
+            }
+
+            if let Some(p) = self.players.get_mut(&session_id) {
+                p.next_spell_time_ms = now_ms.saturating_add(spell_delay_ms);
+
+                if Spell::from_u8(spell) != Some(Spell::ShoulderDash) {
+                    let mut action_delay_ms: i64 = 600;
+                    if (p.current_poison_mask
+                        & (crate::world::types::PoisonType::Slow as u16))
+                        != 0
+                    {
+                        action_delay_ms = action_delay_ms.saturating_mul(2);
+                    }
+                    p.next_action_time_ms = now_ms.saturating_add(action_delay_ms);
+                }
+            }
+
             if !self.check_and_update_magic_cooldown(session_id, spell) {
                 tracing::debug!(
                     "handle_magic_command: session_id={} spell_id={} ignored (on cooldown)",
@@ -1238,11 +1388,6 @@ impl<P: WorldProvider> World<P> {
                     spell,
                 );
             }
-
-            events.push(WorldEvent::MagicCast {
-                session_id,
-                spell_id: spell,
-            });
         }
 
         if spell == Spell::FlamingSword as u8 {
@@ -1272,6 +1417,11 @@ impl<P: WorldProvider> World<P> {
 
         if spell == Spell::ImmortalSkin as u8 {
             cast_immortal_skin(self, session_id, events);
+            return;
+        }
+
+        if spell == Spell::ShoulderDash as u8 {
+            cast_shoulder_dash(self, session_id, direction, events);
             return;
         }
 

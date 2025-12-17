@@ -35,6 +35,12 @@ use crystal_shared_proto::scene::{
     SObjectTurn,
     SObjectTurnWalkRun,
     SObjectWalk,
+    SPushed,
+    SObjectPushed,
+    SUserDash,
+    SObjectDash,
+    SUserDashFail,
+    SObjectDashFail,
     SDamageIndicator,
     SObjectHealth,
     SGainExperience,
@@ -54,6 +60,7 @@ use crystal_shared_proto::scene::{
     SObjectHide,
     SLevelChanged,
     SObjectLeveled,
+    SInTrapRock,
 };
 use crystal_shared_proto::user::{
     SChangeAMode,
@@ -183,6 +190,9 @@ impl LoginConnection {
             return;
         }
 
+        let old_x = self.current_x;
+        let old_y = self.current_y;
+
         let events = {
             let mut world = self.world.lock().unwrap();
             world.handle_command(world::WorldCommand::Walk {
@@ -192,6 +202,10 @@ impl LoginConnection {
         };
 
         let _ = self.handle_world_events(events, out);
+
+        if self.current_x == old_x && self.current_y == old_y {
+            return;
+        }
 
         let base = SObjectTurnWalkRun {
             object_id: self.session_id,
@@ -233,6 +247,9 @@ impl LoginConnection {
             return;
         }
 
+        let old_x = self.current_x;
+        let old_y = self.current_y;
+
         let events = {
             let mut world = self.world.lock().unwrap();
             world.handle_command(world::WorldCommand::Run {
@@ -242,6 +259,10 @@ impl LoginConnection {
         };
 
         let _ = self.handle_world_events(events, out);
+
+        if self.current_x == old_x && self.current_y == old_y {
+            return;
+        }
 
         let base = SObjectTurnWalkRun {
             object_id: self.session_id,
@@ -324,6 +345,175 @@ impl LoginConnection {
                         self.broadcast_group_locations_for_self(out);
                     }
                 }
+                world::WorldEvent::UserDash {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                } => {
+                    debug!(
+                        "world_event: UserDash -> local_sid={} event_sid={} map={} pos=({}, {}) dir={}",
+                        self.session_id,
+                        session_id,
+                        map_index,
+                        x,
+                        y,
+                        direction
+                    );
+                    if session_id == self.session_id {
+                        self.current_map_index = map_index;
+                        self.current_x = x;
+                        self.current_y = y;
+                        self.direction = direction;
+
+                        let pkt = SUserDash {
+                            location_x: x,
+                            location_y: y,
+                            direction,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+
+                    let base = SObjectTurnWalkRun {
+                        object_id: session_id,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                    };
+                    let pkt = SObjectDash(base);
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::UserDashFail {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                } => {
+                    debug!(
+                        "world_event: UserDashFail -> local_sid={} event_sid={} map={} pos=({}, {}) dir={}",
+                        self.session_id,
+                        session_id,
+                        map_index,
+                        x,
+                        y,
+                        direction
+                    );
+                    if session_id == self.session_id {
+                        self.current_map_index = map_index;
+                        self.current_x = x;
+                        self.current_y = y;
+                        self.direction = direction;
+
+                        let pkt = SUserDashFail {
+                            location_x: x,
+                            location_y: y,
+                            direction,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+
+                    let base = SObjectTurnWalkRun {
+                        object_id: session_id,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                    };
+                    let pkt = SObjectDashFail(base);
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::PlayerPushed {
+                    session_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                } => {
+                    debug!(
+                        "world_event: PlayerPushed -> local_sid={} pushed_sid={} map={} pos=({}, {}) dir={}",
+                        self.session_id,
+                        session_id,
+                        map_index,
+                        x,
+                        y,
+                        direction
+                    );
+                    if session_id == self.session_id {
+                        self.current_map_index = map_index;
+                        self.current_x = x;
+                        self.current_y = y;
+                        self.direction = direction;
+
+                        let pkt = SPushed {
+                            location_x: x,
+                            location_y: y,
+                            direction,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+
+                    let base = SObjectTurnWalkRun {
+                        object_id: session_id,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                    };
+                    let pkt = SObjectPushed(base);
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::ObjectPushed {
+                    object_id,
+                    map_index,
+                    x,
+                    y,
+                    direction,
+                } => {
+                    debug!(
+                        "world_event: ObjectPushed -> local_sid={} object_id={} map={} pos=({}, {}) dir={}",
+                        self.session_id,
+                        object_id,
+                        map_index,
+                        x,
+                        y,
+                        direction
+                    );
+                    let base = SObjectTurnWalkRun {
+                        object_id: object_id as u32,
+                        location_x: x,
+                        location_y: y,
+                        direction,
+                    };
+                    let pkt = SObjectPushed(base);
+                    if let Ok(raw) = pkt.encode() {
+                        let bytes = Self::encode_raw(raw);
+                        self.enqueue_for_viewers(map_index, x, y, bytes);
+                    }
+                }
+                world::WorldEvent::InTrapRock { session_id, trapped } => {
+                    if session_id != self.session_id {
+                        continue;
+                    }
+                    let pkt = SInTrapRock { trapped };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                }
                 world::WorldEvent::MapChanged {
                     session_id,
                     map_index,
@@ -331,6 +521,7 @@ impl LoginConnection {
                     y,
                     direction,
                 } => {
+                    let old_map_index = self.current_map_index;
                     if session_id == self.session_id {
                         self.current_map_index = map_index;
                         self.current_x = x;
@@ -363,12 +554,16 @@ impl LoginConnection {
                         // GroupMemberMapNameChanged + GetPlayerLocation.
                         self.broadcast_group_maps_for_self(out);
                         self.broadcast_group_locations_for_self(out);
-                    }
 
-                    // Emit decorative SafeZone border spells (TrapHexagon) for
-                    // this map, mirroring C# Map.CreateSafeZone when
-                    // Settings.SafeZoneBorder is enabled.
-                    self.send_safezone_border_spells(map_index, out);
+                        // Emit decorative SafeZone border spells (TrapHexagon)
+                        // only when changing to a different map. This avoids
+                        // duplicate ObjectSpell bursts when a MapChanged event
+                        // is triggered for a reposition within the same map
+                        // (e.g. login/start-game positioning).
+                        if old_map_index != map_index {
+                            self.send_safezone_border_spells(map_index, out);
+                        }
+                    }
                 }
                 world::WorldEvent::TeleportToBindRequested {
                     session_id,
@@ -774,7 +969,6 @@ impl LoginConnection {
                     y,
                     direction,
                 } => {
-                    self.known_monsters.remove(&object_id);
                     let pkt = SObjectDied {
                         object_id: object_id as u32,
                         location_x: x,
@@ -1577,22 +1771,18 @@ impl LoginConnection {
             return;
         }
 
-        // Minimal behaviour: emit a ranged-attack visual for nearby clients so
-        // the client UI doesn't appear stuck. Damage/validation will be added
-        // once the full combat pipeline is wired.
-        let events = vec![world::WorldEvent::ObjectRangeAttack {
-            object_id: self.session_id as u64,
-            map_index: self.current_map_index,
-            x: self.current_x,
-            y: self.current_y,
-            direction: msg.direction,
-            target_id: msg.target_id as u64,
-            target_x: msg.target_x,
-            target_y: msg.target_y,
-            spell: 0,
-            level: 0,
-            attack_type: 0,
-        }];
+        // Route through world so ranged attacks share validation and future
+        // damage logic with other combat commands.
+        let events = {
+            let mut world = self.world.lock().unwrap();
+            world.handle_command(world::WorldCommand::RangeAttack {
+                session_id: self.session_id,
+                direction: msg.direction,
+                target_id: msg.target_id,
+                target_x: msg.target_x,
+                target_y: msg.target_y,
+            })
+        };
 
         let _ = self.handle_world_events(events, out);
         self.update_visibility(out);
@@ -1623,7 +1813,13 @@ impl LoginConnection {
 
         // Hero toggles are not yet represented in world state; keep a local
         // echo so the UI remains responsive.
-        let enabled = msg.can_use_state > 0;
+        let enabled = if self.hero_spell_toggles.contains(&msg.spell) {
+            self.hero_spell_toggles.remove(&msg.spell);
+            false
+        } else {
+            self.hero_spell_toggles.insert(msg.spell);
+            true
+        };
         let target_object_id: u32 = if self.hero_spawn_state >= 2 {
             hero_object_id(self.session_id)
         } else {

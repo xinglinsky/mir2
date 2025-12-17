@@ -1,0 +1,48 @@
+{
+  "recipe_file": "BoneRobe(M).txt",
+  "product": {
+    "item_index": 84,
+    "item_name": "BoneRobe(M)",
+    "count": 1,
+    "current_dura": 0,
+    "max_dura": 0
+  },
+  "chance": 100,
+  "gold": 1000,
+  "tools": [],
+  "ingredients": [
+    {
+      "item_index": 874,
+      "item_name": "Bone",
+      "count": 30,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 319,
+      "item_name": "LightArmour(M)",
+      "count": 1,
+      "current_dura": 0,
+      "max_dura": 0
+    },
+    {
+      "item_index": 824,
+      "item_name": "CopperOre",
+      "count": 1,
+      "current_dura": 12000,
+      "max_dura": 0
+    },
+    {
+      "item_index": 869,
+      "item_name": "SpiderWeb",
+      "count": 20,
+      "current_dura": 0,
+      "max_dura": 0
+    }
+  ],
+  "required_flag": [],
+  "required_level": null,
+  "required_quest": [],
+  "required_class": [],
+  "required_gender": null
+}

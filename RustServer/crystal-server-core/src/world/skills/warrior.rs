@@ -4,7 +4,7 @@ use crate::world::player::PlayerState;
 use crate::world::provider::WorldProvider;
 use crate::world::skills::compute_magic_mana_cost;
 use crate::world::types::{BuffType, PoisonType};
-use crate::world::{SessionId, Spell, World, WorldEvent};
+use crate::world::{PendingMagicHit, SessionId, Spell, World, WorldEvent};
 use crate::combat::compute_physical_melee_with_crit;
 use rand::{thread_rng, Rng};
 
@@ -860,7 +860,7 @@ pub fn cast_flaming_sword<P: WorldProvider>(
     events: &mut Vec<WorldEvent>,
 ) {
     let spell_id = Spell::FlamingSword as u8;
-    let duration_ms = {
+    let (duration_ms, map_index, x, y, direction, level) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
@@ -894,10 +894,38 @@ pub fn cast_flaming_sword<P: WorldProvider>(
 
         player.mp -= cost;
 
+        if let Some(m) = player.magics.iter_mut().find(|m| m.spell == spell_id) {
+            m.cast_time = world.time_ms;
+        }
+
         // 保持原有 10 秒持续时间的近似实现；具体的“一次性触发并
         // 消耗”仍由 combat.rs 中的攻击逻辑驱动。
-        10_000_i64
+        (10_000_i64, player.map_index, player.x, player.y, player.direction, level)
     };
+
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x,
+        y,
+        direction,
+        spell: spell_id,
+        level,
+        target_id: 0,
+        target_x: x,
+        target_y: y,
+    });
+
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id,
+        target_id: 0,
+        x,
+        y,
+        cast: true,
+        level,
+        secondary_target_ids: Vec::new(),
+    });
 
     // 通过统一的 World::add_player_buff 接口挂载 FlamingSword Buff，
     // 这样其生命周期、死亡/下线清理等均由世界 Buff 系统管理。
@@ -964,6 +992,8 @@ pub fn cast_rage<P: WorldProvider>(
         (duration_ms, stats)
     };
 
+    world.record_magic_cast_time(session_id, spell_id);
+
     world.add_player_buff(
         session_id,
         BuffType::Rage,
@@ -1015,6 +1045,8 @@ pub fn cast_fury<P: WorldProvider>(
 
         (duration_ms, stats)
     };
+
+    world.record_magic_cast_time(session_id, spell_id);
 
     world.add_player_buff(
         session_id,
@@ -1075,6 +1107,8 @@ pub fn cast_immortal_skin<P: WorldProvider>(
         (duration_ms, stats)
     };
 
+    world.record_magic_cast_time(session_id, spell_id);
+
     world.add_player_buff(
         session_id,
         BuffType::ImmortalSkin,
@@ -1129,6 +1163,8 @@ pub fn cast_counter_attack<P: WorldProvider>(
         (duration_ms, stats)
     };
 
+    world.record_magic_cast_time(session_id, spell_id);
+
     world.add_player_buff(
         session_id,
         BuffType::CounterAttack,
@@ -1137,4 +1173,496 @@ pub fn cast_counter_attack<P: WorldProvider>(
         Vec::new(),
         events,
     );
+}
+
+pub fn cast_shoulder_dash<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    direction: u8,
+    events: &mut Vec<WorldEvent>,
+) {
+    enum DashTarget {
+        Player(SessionId),
+        Monster(u64, i32),
+    }
+
+    let spell_id = Spell::ShoulderDash as u8;
+
+    let (map_index, mut px, mut py, level, dist, attacker_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || player.in_trap_rock
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let poisoned = player.current_poison_mask;
+        if (poisoned & (PoisonType::Paralysis as u16) != 0)
+            || (poisoned & (PoisonType::LRParalysis as u16) != 0)
+            || (poisoned & (PoisonType::Frozen as u16) != 0)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(600);
+
+        let mut rng = thread_rng();
+        let roll: i32 = rng.gen_range(0..2);
+        let dist = roll.saturating_add(level as i32).saturating_add(2);
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            level,
+            dist,
+            player.level,
+        )
+    };
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => return,
+    };
+
+    let (dx, dy) = match direction {
+        0 => (0, -1),
+        1 => (1, -1),
+        2 => (1, 0),
+        3 => (1, 1),
+        4 => (0, 1),
+        5 => (-1, 1),
+        6 => (-1, 0),
+        7 => (-1, -1),
+        _ => (0, 0),
+    };
+
+    let mut target: Option<DashTarget> = None;
+    let mut cells_travelled: i32 = 0;
+
+    for i in 0..dist {
+        let nx = px + dx;
+        let ny = py + dy;
+
+        if nx < 0 || ny < 0 || nx > u16::MAX as i32 || ny > u16::MAX as i32 {
+            break;
+        }
+
+        let ux = nx as u16;
+        let uy = ny as u16;
+        if ux >= map.width || uy >= map.height {
+            break;
+        }
+
+        if let Some(info) = world.provider.get_map_info(map_index) {
+            if World::<P>::point_in_safe_zone(info, nx, ny) {
+                break;
+            }
+        }
+
+        if !map.is_walkable(ux, uy) {
+            break;
+        }
+
+        if i == 0 {
+            let player_target = world.players.iter().find_map(|(&sid, p)| {
+                if sid == session_id {
+                    return None;
+                }
+                if p.map_index != map_index || p.x != nx || p.y != ny {
+                    return None;
+                }
+                if !world.can_attack_player(session_id, sid) {
+                    return None;
+                }
+                if p.level >= attacker_level {
+                    return None;
+                }
+                Some(sid)
+            });
+
+            if let Some(sid) = player_target {
+                target = Some(DashTarget::Player(sid));
+            } else {
+                let monster_target = world
+                    .monsters
+                    .get(&map_index)
+                    .and_then(|ms| {
+                        ms.iter()
+                            .find(|m| m.hp > 0 && m.x == nx && m.y == ny)
+                            .map(|m| (m.id, m.monster_index))
+                    })
+                    .and_then(|(mid, monster_index)| {
+                        if !world.can_attack_monster(session_id, map_index, mid) {
+                            return None;
+                        }
+                        let m_level = world
+                            .provider
+                            .get_monster_info(monster_index)
+                            .map(|mi| mi.level)
+                            .unwrap_or(u16::MAX);
+                        if m_level >= attacker_level {
+                            return None;
+                        }
+                        Some((mid, monster_index))
+                    });
+
+                if let Some((mid, monster_index)) = monster_target {
+                    target = Some(DashTarget::Monster(mid, monster_index));
+                }
+            }
+        }
+
+        match target {
+            None => {
+                if world.is_cell_blocked(map_index, nx, ny) {
+                    break;
+                }
+            }
+            Some(DashTarget::Player(t_sid)) => {
+                let (tx, ty) = match world.players.get(&t_sid) {
+                    Some(p) => (p.x, p.y),
+                    None => break,
+                };
+
+                let push_x = tx + dx;
+                let push_y = ty + dy;
+
+                let mut ok = true;
+                if push_x < 0
+                    || push_y < 0
+                    || push_x > u16::MAX as i32
+                    || push_y > u16::MAX as i32
+                {
+                    ok = false;
+                }
+                if ok {
+                    let pux = push_x as u16;
+                    let puy = push_y as u16;
+                    if pux >= map.width || puy >= map.height {
+                        ok = false;
+                    } else if !map.is_walkable(pux, puy) {
+                        ok = false;
+                    }
+                }
+                if ok {
+                    if let Some(info) = world.provider.get_map_info(map_index) {
+                        if World::<P>::point_in_safe_zone(info, push_x, push_y) {
+                            ok = false;
+                        }
+                    }
+                }
+                if ok && world.is_cell_blocked(map_index, push_x, push_y) {
+                    ok = false;
+                }
+
+                if !ok {
+                    break;
+                }
+
+                let (old_x, old_y) = match world.players.get(&t_sid) {
+                    Some(p) => (p.x, p.y),
+                    None => break,
+                };
+
+                {
+                    let t = match world.players.get_mut(&t_sid) {
+                        Some(p) => p,
+                        None => break,
+                    };
+                    t.x = push_x;
+                    t.y = push_y;
+                    t.direction = direction;
+                }
+
+                world.remove_player_from_occupancy(t_sid, map_index, old_x, old_y);
+                world.add_player_to_occupancy(t_sid, map_index, push_x, push_y);
+                events.push(WorldEvent::PlayerPushed {
+                    session_id: t_sid,
+                    map_index,
+                    x: push_x,
+                    y: push_y,
+                    direction,
+                });
+            }
+            Some(DashTarget::Monster(mid, _monster_index)) => {
+                let (tx, ty) = match world
+                    .monsters
+                    .get(&map_index)
+                    .and_then(|ms| ms.iter().find(|m| m.id == mid && m.hp > 0))
+                {
+                    Some(m) => (m.x, m.y),
+                    None => break,
+                };
+
+                let push_x = tx + dx;
+                let push_y = ty + dy;
+
+                let mut ok = true;
+                if push_x < 0
+                    || push_y < 0
+                    || push_x > u16::MAX as i32
+                    || push_y > u16::MAX as i32
+                {
+                    ok = false;
+                }
+                if ok {
+                    let pux = push_x as u16;
+                    let puy = push_y as u16;
+                    if pux >= map.width || puy >= map.height {
+                        ok = false;
+                    } else if !map.is_walkable(pux, puy) {
+                        ok = false;
+                    }
+                }
+                if ok {
+                    if let Some(info) = world.provider.get_map_info(map_index) {
+                        if World::<P>::point_in_safe_zone(info, push_x, push_y) {
+                            ok = false;
+                        }
+                    }
+                }
+                if ok && world.is_cell_blocked(map_index, push_x, push_y) {
+                    ok = false;
+                }
+
+                if !ok {
+                    break;
+                }
+
+                let (old_x, old_y) = match world
+                    .monsters
+                    .get(&map_index)
+                    .and_then(|ms| ms.iter().find(|m| m.id == mid && m.hp > 0))
+                {
+                    Some(m) => (m.x, m.y),
+                    None => break,
+                };
+
+                {
+                    let monsters = match world.monsters.get_mut(&map_index) {
+                        Some(ms) => ms,
+                        None => break,
+                    };
+                    let m = match monsters.iter_mut().find(|m| m.id == mid && m.hp > 0) {
+                        Some(m) => m,
+                        None => break,
+                    };
+                    m.x = push_x;
+                    m.y = push_y;
+                    m.direction = direction;
+                }
+
+                world.remove_monster_from_occupancy(mid, map_index, old_x, old_y);
+                world.add_monster_to_occupancy(mid, map_index, push_x, push_y);
+                events.push(WorldEvent::ObjectPushed {
+                    object_id: mid,
+                    map_index,
+                    x: push_x,
+                    y: push_y,
+                    direction,
+                });
+            }
+        }
+
+        let (old_x, old_y) = match world.players.get(&session_id) {
+            Some(p) => (p.x, p.y),
+            None => return,
+        };
+
+        {
+            let player = match world.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+            player.x = nx;
+            player.y = ny;
+            player.direction = direction;
+        }
+
+        world.remove_player_from_occupancy(session_id, map_index, old_x, old_y);
+        world.add_player_to_occupancy(session_id, map_index, nx, ny);
+
+        px = nx;
+        py = ny;
+        cells_travelled += 1;
+        events.push(WorldEvent::UserDash {
+            session_id,
+            map_index,
+            x: px,
+            y: py,
+            direction,
+        });
+
+        let mut fw_caster: Option<SessionId> = None;
+        let mut fw_value: i32 = 0;
+        for fw in &world.fire_walls {
+            if fw.map_index != map_index {
+                continue;
+            }
+            if fw.spell_id != Spell::FireWall as u8 {
+                continue;
+            }
+            if !fw.cells.contains(&(px, py)) {
+                continue;
+            }
+            fw_caster = Some(fw.caster_session_id);
+            fw_value = fw.value;
+            break;
+        }
+
+        if let Some(caster_session_id) = fw_caster {
+            if fw_value > 0 && world.can_attack_player(caster_session_id, session_id) {
+                let dmg = match world.players.get(&session_id) {
+                    Some(p) => {
+                        let stats = &p.stats.total;
+
+                        let min_mac = stats.get(Stat::MinMAC).max(0);
+                        let max_mac = stats.get(Stat::MaxMAC).max(min_mac);
+                        let mut dmg = fw_value;
+
+                        if max_mac > 0 {
+                            let mut rng = thread_rng();
+                            let armour = rng.gen_range(min_mac..=max_mac);
+                            dmg = dmg.saturating_sub(armour);
+                        }
+
+                        if dmg <= 0 {
+                            0
+                        } else {
+                            let dr_percent = stats.get(Stat::DamageReductionPercent);
+                            if dr_percent > 0 {
+                                let clamped = dr_percent.clamp(0, 95);
+                                dmg = dmg.saturating_mul(100 - clamped) / 100;
+                            }
+                            dmg
+                        }
+                    }
+                    None => 0,
+                };
+
+                if dmg > 0 {
+                    world.apply_player_hit_from_player(
+                        caster_session_id,
+                        session_id,
+                        map_index,
+                        dmg,
+                        0,
+                        None,
+                        None,
+                        None,
+                        true,
+                        events,
+                    );
+                    break;
+                }
+            }
+        }
+    }
+
+    if cells_travelled == 0 {
+        events.push(WorldEvent::UserDashFail {
+            session_id,
+            map_index,
+            x: px,
+            y: py,
+            direction,
+        });
+
+        let in_safe = world
+            .provider
+            .get_map_info(map_index)
+            .map(|info| World::<P>::point_in_safe_zone(info, px, py))
+            .unwrap_or(false);
+        let msg = if in_safe {
+            "No pushing in the safezone. tut tut.".to_string()
+        } else {
+            "Not enough pushing Power.".to_string()
+        };
+        events.push(WorldEvent::PartySystemMessage {
+            session_id,
+            message: msg,
+        });
+    }
+
+    if cells_travelled > 0 {
+        if let Some(t) = target {
+            let dmg = if let Some(info) = world.provider.get_magic_info(spell_id) {
+                let mut rng = thread_rng();
+                crate::world::magic::magic_damage(info, level, 0, &mut rng).max(0)
+            } else {
+                0
+            };
+
+            match t {
+                DashTarget::Player(t_sid) => {
+                    if dmg > 0 {
+                        if let Some((tx, ty)) = world.players.get(&t_sid).map(|p| (p.x, p.y)) {
+                            world.apply_player_hit_from_player(
+                                session_id,
+                                t_sid,
+                                map_index,
+                                dmg,
+                                0,
+                                Some(tx),
+                                Some(ty),
+                                Some(direction),
+                                true,
+                                events,
+                            );
+                        }
+                    }
+                }
+                DashTarget::Monster(mid, monster_index) => {
+                    if dmg > 0 {
+                        let due_time_ms = world.time_ms.max(0);
+                        world.pending_magic_hits.push(PendingMagicHit {
+                            due_time_ms,
+                            attacker_session_id: session_id,
+                            map_index,
+                            target_monster_id: mid,
+                            monster_index,
+                            spell_id,
+                            damage: dmg,
+                            damage_type: 0,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+
+    if cells_travelled > 0 {
+        world.level_up_magic_for_player(session_id, spell_id, events);
+    }
 }

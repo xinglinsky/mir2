@@ -26,6 +26,7 @@ use crystal_shared_proto::scene::{
     SObjectShow,
     SObjectHide,
     SObjectHidden,
+    SInTrapRock,
     SStruck,
 };
 use crystal_shared_proto::magic::{SObjectEffect, SObjectRangeAttack, SRemoveBuff};
@@ -127,169 +128,365 @@ async fn main() -> io::Result<()> {
     // real map metadata to drive map loading and packets. This keeps
     // compatibility with the existing C# server's database format.
     let mut world_db = WorldDatabase::new();
-    match world::map::load_map_infos_from_mirdb(&cfg.server_mirdb_path) {
+
+    fn find_exports_path(rel: &std::path::Path) -> Option<std::path::PathBuf> {
+        // Candidate 1: current working directory.
+        let cwd_candidate = std::path::PathBuf::from("./").join(rel);
+        if std::fs::metadata(&cwd_candidate).is_ok() {
+            return Some(cwd_candidate);
+        }
+
+        // Candidate 2+: relative to executable directory (handles running from target/debug).
+        let exe = std::env::current_exe().ok()?;
+        let mut dir = exe.parent()?.to_path_buf();
+        for _ in 0..6 {
+            let candidate = dir.join(rel);
+            if std::fs::metadata(&candidate).is_ok() {
+                return Some(candidate);
+            }
+            if !dir.pop() {
+                break;
+            }
+        }
+
+        None
+    }
+    // MapInfoList – prefer exports over MirDB.
+    let exports_map_rel = std::path::Path::new("Exports").join("MapInfos.bin");
+    let exports_map_path = find_exports_path(&exports_map_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/MapInfos.bin"));
+    match world::map::load_map_infos_from_exports(&exports_map_path) {
         Ok(maps) => {
             tracing::debug!(
-                "[core] Loaded {} MapInfo entries from Server.MirDB",
-                maps.len()
+                "[core] Loaded {} MapInfo entries from exports {}",
+                maps.len(),
+                exports_map_path.display()
             );
             world_db.map_infos = maps;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (MapInfoList): {} (continuing with empty DB)",
-                e
+                "[core] Failed to load exports (MapInfoList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+            match world::map::load_map_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(maps) => {
+                    tracing::debug!(
+                        "[core] Loaded {} MapInfo entries from Server.MirDB",
+                        maps.len()
+                    );
+                    world_db.map_infos = maps;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (MapInfoList): {} (continuing with empty DB)",
+                        e
+                    );
+                }
+            }
         }
     }
 
     // Load GameShopList so that the game shop can use the same data as the
     // original C# server's Envir.GameShopList, keeping the mir.db format as
     // the single source of truth for shop entries.
-    match world::map::load_game_shop_items_from_mirdb(&cfg.server_mirdb_path) {
+    let exports_shop_rel = std::path::Path::new("Exports").join("GameShopItems.bin");
+    let exports_shop_path = find_exports_path(&exports_shop_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/GameShopItems.bin"));
+    match world::map::load_game_shop_items_from_exports(&exports_shop_path) {
         Ok(shop_items) => {
             tracing::debug!(
-                "[core] Loaded {} GameShopItem entries from Server.MirDB",
-                shop_items.len()
+                "[core] Loaded {} GameShopItem entries from exports {}",
+                shop_items.len(),
+                exports_shop_path.display()
             );
             world_db.game_shop_items = shop_items;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (GameShopList): {} (continuing without GameShop DB)",
-                e
+                "[core] Failed to load exports (GameShopList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+            match world::map::load_game_shop_items_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(shop_items) => {
+                    tracing::debug!(
+                        "[core] Loaded {} GameShopItem entries from Server.MirDB",
+                        shop_items.len()
+                    );
+                    world_db.game_shop_items = shop_items;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (GameShopList): {} (continuing without GameShop DB)",
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    // ConquestInfoList – prefer exports over MirDB.
+    let exports_conquest_rel = std::path::Path::new("Exports").join("ConquestInfos.bin");
+    let exports_conquest_path = find_exports_path(&exports_conquest_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/ConquestInfos.bin"));
+    match world::map::load_conquest_infos_from_exports(&exports_conquest_path) {
+        Ok(conquests) => {
+            tracing::debug!(
+                "[core] Loaded {} ConquestInfo entries from exports {}",
+                conquests.len(),
+                exports_conquest_path.display()
+            );
+            world_db.conquest_infos = conquests;
+        }
+        Err(e_exports) => {
+            tracing::debug!(
+                "[core] Failed to load exports (ConquestInfoList): {} (falling back to Server.MirDB)",
+                e_exports
+            );
+            match world::map::load_conquest_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(conquests) => {
+                    tracing::debug!(
+                        "[core] Loaded {} ConquestInfo entries from Server.MirDB",
+                        conquests.len()
+                    );
+                    world_db.conquest_infos = conquests;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (ConquestInfoList): {} (continuing without Conquest DB)",
+                        e
+                    );
+                }
+            }
         }
     }
 
     // Load ItemInfoList so that systems like NPC shops can construct
     // concrete UserItemData payloads for goods, mirroring C# Envir.ItemInfoList.
-    match world::map::load_item_infos_from_mirdb(&cfg.server_mirdb_path) {
+    // Prefer content-pack-friendly exports over Server.MirDB.
+    // When present, Exports/ItemInfos.bin contains: i32 count + count ItemInfoData records.
+    let exports_item_rel = std::path::Path::new("Exports").join("ItemInfos.bin");
+    let exports_item_path = find_exports_path(&exports_item_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/ItemInfos.bin"));
+
+    match world::map::load_item_infos_from_exports(&exports_item_path) {
         Ok(items) => {
             tracing::debug!(
-                "[core] Loaded {} ItemInfo entries from Server.MirDB",
-                items.len()
+                "[core] Loaded {} ItemInfo entries from exports {}",
+                items.len(),
+                exports_item_path.display()
             );
             world_db.item_infos = items;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (ItemInfoList): {} (continuing without Item DB)",
-                e
+                "[core] Failed to load exports (ItemInfoList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+
+            match world::map::load_item_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(items) => {
+                    tracing::debug!(
+                        "[core] Loaded {} ItemInfo entries from Server.MirDB",
+                        items.len()
+                    );
+                    world_db.item_infos = items;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (ItemInfoList): {} (continuing without Item DB)",
+                        e
+                    );
+                }
+            }
         }
     }
 
-    // Load MonsterInfoList from the same Server.MirDB so combat logic can
-    // access real monster definitions. For now this is only stored in
-    // WorldDatabase and not yet wired into spawn logic.
-    match world::map::load_monster_infos_from_mirdb(&cfg.server_mirdb_path) {
+    // Load MonsterInfoList so combat logic can access real monster definitions.
+    // Prefer exports over Server.MirDB.
+    let exports_monster_rel = std::path::Path::new("Exports").join("MonsterInfos.bin");
+    let exports_monster_path = find_exports_path(&exports_monster_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/MonsterInfos.bin"));
+    match world::map::load_monster_infos_from_exports(&exports_monster_path) {
         Ok(monsters) => {
             tracing::debug!(
-                "[core] Loaded {} MonsterInfo entries from Server.MirDB",
-                monsters.len()
+                "[core] Loaded {} MonsterInfo entries from exports {}",
+                monsters.len(),
+                exports_monster_path.display()
             );
             world_db.monster_infos = monsters;
-
-            // Load monster drop tables from text files, mirroring the C#
-            // behaviour where MonsterInfo.DropPath points to Envir/Drops
-            // entries and falls back to the monster Name when DropPath is
-            // empty.
-            let drops_root = &cfg.drops_path;
-            let item_infos = world_db.item_infos.clone();
-            let item_lookup = move |name: &str| {
-                item_infos
-                    .iter()
-                    .find(|i| i.name.eq_ignore_ascii_case(name))
-                    .map(|item| item.index)
-            };
-
-            for m in &mut world_db.monster_infos {
-                let file_name = if m.drop_path.is_empty() {
-                    if m.name.is_empty() {
-                        continue;
-                    }
-                    format!("{}.txt", m.name)
-                } else {
-                    format!("{}.txt", m.drop_path)
-                };
-
-                let full_path = drops_root.join(&file_name);
-
-                let drops = match world::drop::load_drop_file(&full_path, 0, &item_lookup) {
-                    Ok(list) => list,
-                    Err(e) => {
-                        tracing::debug!(
-                            "[core] Failed to load drops for monster {} from {}: {}",
-                            m.name,
-                            full_path.display(),
-                            e
-                        );
-                        Vec::new()
-                    }
-                };
-
-                m.drops = drops;
+        }
+        Err(e_exports) => {
+            tracing::debug!(
+                "[core] Failed to load exports (MonsterInfoList): {} (falling back to Server.MirDB)",
+                e_exports
+            );
+            match world::map::load_monster_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(monsters) => {
+                    tracing::debug!(
+                        "[core] Loaded {} MonsterInfo entries from Server.MirDB",
+                        monsters.len()
+                    );
+                    world_db.monster_infos = monsters;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (MonsterInfoList): {} (continuing with empty monster list)",
+                        e
+                    );
+                }
             }
         }
-        Err(e) => {
-            tracing::debug!(
-                "[core] Failed to load Server.MirDB (MonsterInfoList): {} (continuing without Monster DB)",
-                e
-            );
+    }
+
+    // Load monster drop tables from text files, mirroring the C# behaviour where
+    // MonsterInfo.DropPath points to Envir/Drops entries and falls back to the
+    // monster Name when DropPath is empty.
+    {
+        let drops_root = &cfg.drops_path;
+        let item_infos = world_db.item_infos.clone();
+        let item_lookup = move |name: &str| {
+            item_infos
+                .iter()
+                .find(|i| i.name.eq_ignore_ascii_case(name))
+                .map(|item| item.index)
+        };
+
+        for m in &mut world_db.monster_infos {
+            let file_name = if m.drop_path.is_empty() {
+                if m.name.is_empty() {
+                    continue;
+                }
+                format!("{}.txt", m.name)
+            } else {
+                format!("{}.txt", m.drop_path)
+            };
+
+            let full_path = drops_root.join(&file_name);
+
+            let drops = match world::drop::load_drop_file(&full_path, 0, &item_lookup) {
+                Ok(list) => list,
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load drop file {}: {}",
+                        full_path.display(),
+                        e
+                    );
+                    continue;
+                }
+            };
+
+            m.drops = drops;
         }
     }
 
     // Load NPCInfoList from the same Server.MirDB so world logic can access
     // real NPC definitions. For now this is only stored in WorldDatabase and
     // not yet wired into scene packets.
-    match world::map::load_npc_infos_from_mirdb(&cfg.server_mirdb_path) {
+    let exports_npc_rel = std::path::Path::new("Exports").join("NpcInfos.bin");
+    let exports_npc_path = find_exports_path(&exports_npc_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/NpcInfos.bin"));
+    match world::map::load_npc_infos_from_exports(&exports_npc_path) {
         Ok(npcs) => {
             tracing::debug!(
-                "[core] Loaded {} NPCInfo entries from Server.MirDB",
-                npcs.len()
+                "[core] Loaded {} NPCInfo entries from exports {}",
+                npcs.len(),
+                exports_npc_path.display()
             );
             world_db.npc_infos = npcs;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (NPCInfoList): {} (continuing without NPC DB)",
-                e
+                "[core] Failed to load exports (NPCInfoList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+            match world::map::load_npc_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(npcs) => {
+                    tracing::debug!(
+                        "[core] Loaded {} NPCInfo entries from Server.MirDB",
+                        npcs.len()
+                    );
+                    world_db.npc_infos = npcs;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (NPCInfoList): {} (continuing with empty NPC list)",
+                        e
+                    );
+                }
+            }
         }
     }
 
-    match world::map::load_quest_infos_from_mirdb(&cfg.server_mirdb_path) {
+    let exports_quest_rel = std::path::Path::new("Exports").join("QuestInfos.bin");
+    let exports_quest_path = find_exports_path(&exports_quest_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/QuestInfos.bin"));
+    match world::map::load_quest_infos_from_exports(&exports_quest_path) {
         Ok(quests) => {
             tracing::debug!(
-                "[core] Loaded {} QuestInfo entries from Server.MirDB",
-                quests.len()
+                "[core] Loaded {} QuestInfo entries from exports {}",
+                quests.len(),
+                exports_quest_path.display()
             );
             world_db.quest_infos = quests;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (QuestInfoList): {} (continuing without Quest DB)",
-                e
+                "[core] Failed to load exports (QuestInfoList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+            match world::map::load_quest_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(quests) => {
+                    tracing::debug!(
+                        "[core] Loaded {} QuestInfo entries from Server.MirDB",
+                        quests.len()
+                    );
+                    world_db.quest_infos = quests;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (QuestInfoList): {} (continuing without Quest DB)",
+                        e
+                    );
+                }
+            }
         }
     }
 
     // Load MagicInfoList so that the combat/skill system can access real spell
-    // definitions (costs, ranges, power, etc.) from the MirDB.
-    match world::map::load_magic_infos_from_mirdb(&cfg.server_mirdb_path) {
+    // definitions (costs, ranges, power, etc.). Prefer exports over Server.MirDB.
+    let exports_magic_rel = std::path::Path::new("Exports").join("MagicInfos.bin");
+    let exports_magic_path = find_exports_path(&exports_magic_rel)
+        .unwrap_or_else(|| std::path::PathBuf::from("./Exports/MagicInfos.bin"));
+    match world::map::load_magic_infos_from_exports(&exports_magic_path) {
         Ok(magics) => {
             tracing::debug!(
-                "[core] Loaded {} MagicInfo entries from Server.MirDB",
-                magics.len()
+                "[core] Loaded {} MagicInfo entries from exports {}",
+                magics.len(),
+                exports_magic_path.display()
             );
             world_db.magic_infos = magics;
         }
-        Err(e) => {
+        Err(e_exports) => {
             tracing::debug!(
-                "[core] Failed to load Server.MirDB (MagicInfoList): {} (continuing without Magic DB)",
-                e
+                "[core] Failed to load exports (MagicInfoList): {} (falling back to Server.MirDB)",
+                e_exports
             );
+            match world::map::load_magic_infos_from_mirdb(&cfg.server_mirdb_path) {
+                Ok(magics) => {
+                    tracing::debug!(
+                        "[core] Loaded {} MagicInfo entries from Server.MirDB",
+                        magics.len()
+                    );
+                    world_db.magic_infos = magics;
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "[core] Failed to load Server.MirDB (MagicInfoList): {} (continuing without Magic DB)",
+                        e
+                    );
+                }
+            }
         }
     }
 
@@ -781,6 +978,15 @@ async fn main() -> io::Result<()> {
                                         .or_default()
                                         .push(encoded.clone());
                                 }
+                            }
+                        }
+                        world::WorldEvent::InTrapRock { session_id, trapped } => {
+                            let pkt = SInTrapRock { trapped };
+                            if let Ok(raw) = pkt.encode() {
+                                let encoded = raw.encode();
+                                let mut outboxes =
+                                    outboxes_for_world_events.lock().unwrap();
+                                outboxes.entry(session_id).or_default().push(encoded);
                             }
                         }
                         world::WorldEvent::TeleportToBindRequested { .. } => {}

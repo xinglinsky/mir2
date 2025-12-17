@@ -31,6 +31,8 @@ use crystal_shared_proto::scene::{
     SHeroBaseStatsInfo,
     SObjectTeleportIn,
     SObjectTeleportOut,
+    SObjectTurn,
+    SObjectTurnWalkRun,
     STeleportIn,
     SDefaultNpc,
     SObjectHidden,
@@ -772,6 +774,38 @@ impl LoginConnection {
                 }
             }
 
+            if !map_info_core.no_teleport {
+                let tele_out = SObjectTeleportOut {
+                    object_id: self.session_id,
+                    teleport_type: 0,
+                };
+                if let Ok(raw) = tele_out.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+
+                let tele_in = STeleportIn;
+                out.push(Self::encode_raw(tele_in.encode()));
+
+                let obj_tele_in = SObjectTeleportIn {
+                    object_id: self.session_id,
+                    teleport_type: 0,
+                };
+                if let Ok(raw) = obj_tele_in.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
+
+            let base = SObjectTurnWalkRun {
+                object_id: self.session_id,
+                location_x: self.current_x,
+                location_y: self.current_y,
+                direction: self.direction,
+            };
+            let pkt = SObjectTurn(base);
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
             let hc_pkt = SHealthChanged {
                 hp: stats.hp,
                 mp: stats.mp,
@@ -791,6 +825,13 @@ impl LoginConnection {
                 stats_bytes: base_stats_bytes,
             };
             out.push(Self::encode_raw(base_stats_pkt.encode()));
+
+            self.send_safezone_border_spells(map_info_core.index, out);
+            self.known_monsters.clear();
+            self.known_npcs.clear();
+            self.known_players.clear();
+            self.known_heroes.clear();
+            self.update_visibility(out);
 
             let initial_hp_percent: u8 = if max_hp > 0 {
                 ((stats.hp as i64 * 100 / max_hp as i64).clamp(0, 100)) as u8
@@ -864,6 +905,13 @@ impl LoginConnection {
             // player toggles the option.
             let switch_group_pkt = SSwitchGroup { allow_group: true };
             if let Ok(raw) = switch_group_pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+
+            let default_npc = SDefaultNpc {
+                object_id: super::LoginConnection::DEFAULT_NPC_ID,
+            };
+            if let Ok(raw) = default_npc.encode() {
                 out.push(Self::encode_raw(raw));
             }
 
@@ -962,42 +1010,6 @@ impl LoginConnection {
             if let Ok(raw) = resize_pkt.encode() {
                 out.push(Self::encode_raw(raw));
             }
-
-            self.send_safezone_border_spells(map_info_core.index, out);
-
-            let default_npc = SDefaultNpc {
-                object_id: super::LoginConnection::DEFAULT_NPC_ID,
-            };
-            if let Ok(raw) = default_npc.encode() {
-                out.push(Self::encode_raw(raw));
-            }
-
-            if !map_info_core.no_teleport {
-                let tele_out = SObjectTeleportOut {
-                    object_id: self.session_id,
-                    teleport_type: 0,
-                };
-                if let Ok(raw) = tele_out.encode() {
-                    out.push(Self::encode_raw(raw));
-                }
-
-                let tele_in = STeleportIn;
-                out.push(Self::encode_raw(tele_in.encode()));
-
-                let obj_tele_in = SObjectTeleportIn {
-                    object_id: self.session_id,
-                    teleport_type: 0,
-                };
-                if let Ok(raw) = obj_tele_in.encode() {
-                    out.push(Self::encode_raw(raw));
-                }
-            }
-            self.current_map_index = map_info_core.index;
-            self.known_monsters.clear();
-            self.known_npcs.clear();
-            self.known_players.clear();
-            self.known_heroes.clear();
-            self.update_visibility(out);
 
             let toggles = {
                 let world = self.world.lock().unwrap();

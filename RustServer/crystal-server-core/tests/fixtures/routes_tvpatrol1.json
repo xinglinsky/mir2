@@ -1,0 +1,15 @@
+{
+  "route_file": "TaoVillage/TVPatrol1.txt",
+  "points": [
+    {
+      "x": 180,
+      "y": 305,
+      "delay": 0
+    },
+    {
+      "x": 152,
+      "y": 333,
+      "delay": 0
+    }
+  ]
+}

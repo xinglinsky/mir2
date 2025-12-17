@@ -336,7 +336,7 @@ impl LoginConnection {
                         effect: info.effect,
                         ai: info.ai,
                         light: info.light,
-                        dead: false,
+                        dead: monster.dead,
                         skeleton: false,
                         poison: 0,
                         hidden: false,

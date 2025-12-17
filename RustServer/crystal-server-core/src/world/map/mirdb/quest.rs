@@ -2,6 +2,10 @@ use std::io::{self, Read};
 
 use crate::quest::{QuestId, QuestInfo as CoreQuestInfo, QuestType, RequiredClass};
 use crate::world::magic::MagicInfo;
+use crate::conquest::{
+    ConquestArcherInfo, ConquestFlagInfo, ConquestGateInfo, ConquestId, ConquestInfo,
+    ConquestSiegeInfo, ConquestWallInfo,
+};
 
 use super::header::*;
 
@@ -86,6 +90,253 @@ pub(super) fn read_quest_info<R: Read>(
         gold_reward: 0,
         exp_reward: 0,
         credit_reward: 0,
+    })
+}
+
+pub(super) fn read_conquest_info<R: Read>(
+    r: &mut R,
+    _version: i32,
+    _custom_version: i32,
+) -> io::Result<ConquestInfo> {
+    // ConquestInfo.Save layout from Server/MirDatabase/ConquestInfo.cs
+    let id = ConquestId(read_i32(r)?);
+    let full_map = read_bool(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let size = read_u16(r)?;
+    let name = read_string(r)?;
+    let map_index = read_i32(r)?;
+    let palace_index = read_i32(r)?;
+    let guard_index = read_i32(r)?;
+    let gate_index = read_i32(r)?;
+    let wall_index = read_i32(r)?;
+    let siege_index = read_i32(r)?;
+    let flag_index = read_i32(r)?;
+
+    let guard_count = read_i32(r)?;
+    if guard_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ConquestGuard count {} in ConquestInfo", guard_count),
+        ));
+    }
+    let mut guards = Vec::with_capacity(guard_count as usize);
+    for _ in 0..guard_count {
+        guards.push(read_conquest_archer_info(r)?);
+    }
+
+    let extra_map_count = read_i32(r)?;
+    if extra_map_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ExtraMaps count {} in ConquestInfo", extra_map_count),
+        ));
+    }
+    let mut extra_maps = Vec::with_capacity(extra_map_count as usize);
+    for _ in 0..extra_map_count {
+        extra_maps.push(read_i32(r)?);
+    }
+
+    let gate_count = read_i32(r)?;
+    if gate_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ConquestGate count {} in ConquestInfo", gate_count),
+        ));
+    }
+    let mut gates = Vec::with_capacity(gate_count as usize);
+    for _ in 0..gate_count {
+        gates.push(read_conquest_gate_info(r)?);
+    }
+
+    let wall_count = read_i32(r)?;
+    if wall_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ConquestWall count {} in ConquestInfo", wall_count),
+        ));
+    }
+    let mut walls = Vec::with_capacity(wall_count as usize);
+    for _ in 0..wall_count {
+        walls.push(read_conquest_wall_info(r)?);
+    }
+
+    let siege_count = read_i32(r)?;
+    if siege_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ConquestSiege count {} in ConquestInfo", siege_count),
+        ));
+    }
+    let mut sieges = Vec::with_capacity(siege_count as usize);
+    for _ in 0..siege_count {
+        sieges.push(read_conquest_siege_info(r)?);
+    }
+
+    let flag_count = read_i32(r)?;
+    if flag_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("negative ConquestFlag count {} in ConquestInfo", flag_count),
+        ));
+    }
+    let mut flags = Vec::with_capacity(flag_count as usize);
+    for _ in 0..flag_count {
+        flags.push(read_conquest_flag_info(r)?);
+    }
+
+    let start_hour = read_u8(r)?;
+    let war_length = read_i32(r)?;
+    let conquest_type = read_u8(r)?;
+    let game = read_u8(r)?;
+
+    let monday = read_bool(r)?;
+    let tuesday = read_bool(r)?;
+    let wednesday = read_bool(r)?;
+    let thursday = read_bool(r)?;
+    let friday = read_bool(r)?;
+    let saturday = read_bool(r)?;
+    let sunday = read_bool(r)?;
+
+    let king_location_x = read_i32(r)?;
+    let king_location_y = read_i32(r)?;
+    let king_size = read_u16(r)?;
+
+    let control_point_index = read_i32(r)?;
+    let control_point_count = read_i32(r)?;
+    if control_point_count < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "negative Conquest control point count {} in ConquestInfo",
+                control_point_count
+            ),
+        ));
+    }
+    let mut control_points = Vec::with_capacity(control_point_count as usize);
+    for _ in 0..control_point_count {
+        control_points.push(read_conquest_flag_info(r)?);
+    }
+
+    Ok(ConquestInfo {
+        id,
+        full_map,
+        location_x,
+        location_y,
+        size,
+        name,
+        map_index,
+        palace_index,
+        extra_maps,
+        guards,
+        gates,
+        walls,
+        sieges,
+        flags,
+        guard_index,
+        gate_index,
+        wall_index,
+        siege_index,
+        flag_index,
+        start_hour,
+        war_length,
+        conquest_type,
+        game,
+        monday,
+        tuesday,
+        wednesday,
+        thursday,
+        friday,
+        saturday,
+        sunday,
+        king_location_x,
+        king_location_y,
+        king_size,
+        control_points,
+        control_point_index,
+    })
+}
+
+fn read_conquest_archer_info<R: Read>(r: &mut R) -> io::Result<ConquestArcherInfo> {
+    let index = read_i32(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let mob_index = read_i32(r)?;
+    let name = read_string(r)?;
+    let repair_cost = read_u32(r)?;
+    Ok(ConquestArcherInfo {
+        index,
+        location_x,
+        location_y,
+        mob_index,
+        name,
+        repair_cost,
+    })
+}
+
+fn read_conquest_gate_info<R: Read>(r: &mut R) -> io::Result<ConquestGateInfo> {
+    let index = read_i32(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let mob_index = read_i32(r)?;
+    let name = read_string(r)?;
+    let repair_cost = read_i32(r)?;
+    Ok(ConquestGateInfo {
+        index,
+        location_x,
+        location_y,
+        mob_index,
+        name,
+        repair_cost,
+    })
+}
+
+fn read_conquest_wall_info<R: Read>(r: &mut R) -> io::Result<ConquestWallInfo> {
+    let index = read_i32(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let mob_index = read_i32(r)?;
+    let name = read_string(r)?;
+    let repair_cost = read_i32(r)?;
+    Ok(ConquestWallInfo {
+        index,
+        location_x,
+        location_y,
+        mob_index,
+        name,
+        repair_cost,
+    })
+}
+
+fn read_conquest_siege_info<R: Read>(r: &mut R) -> io::Result<ConquestSiegeInfo> {
+    let index = read_i32(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let mob_index = read_i32(r)?;
+    let name = read_string(r)?;
+    let repair_cost = read_i32(r)?;
+    Ok(ConquestSiegeInfo {
+        index,
+        location_x,
+        location_y,
+        mob_index,
+        name,
+        repair_cost,
+    })
+}
+
+fn read_conquest_flag_info<R: Read>(r: &mut R) -> io::Result<ConquestFlagInfo> {
+    let index = read_i32(r)?;
+    let location_x = read_i32(r)?;
+    let location_y = read_i32(r)?;
+    let name = read_string(r)?;
+    let file_name = read_string(r)?;
+    Ok(ConquestFlagInfo {
+        index,
+        location_x,
+        location_y,
+        name,
+        file_name,
     })
 }
 
