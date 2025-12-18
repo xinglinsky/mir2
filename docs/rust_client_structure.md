@@ -77,12 +77,38 @@ RustServer/
 crystal-client-bin/
   Cargo.toml
   src/
-    main.rs               # 只负责 CLI/日志/调用 app::run
+    main.rs               # 薄入口：声明模块 + 委托到 main_old（过渡期）
+    main_old.rs           # 过渡期：mode dispatcher（解析 CLI + 构造 config + 路由到 modes::*）
     cli.rs                # clap 定义（login-ui、lib-test、server/account/password 等）
+    app_config.rs         # RuntimeConfig/LibTestConfig/LoginUiConfig
+    shared/
+      mod.rs
+      lib_image.rs        # .Lib -> Bevy Image helpers
     modes/
       mod.rs
-      login_ui.rs         # 仅保留“独立演示模式”，后续可删或变为 scene
       lib_test.rs
+      login_ui/
+        mod.rs
+        state.rs
+        ui.rs
+        net.rs
+      runtime_chat/
+        mod.rs
+        state.rs
+        ui.rs
+        net.rs
+        router.rs
+```
+
+Planned（下一步拆分目标，仅文件名与职责边界；未落地前不保证 API 稳定）：
+
+```text
+crystal-client-bin/
+  src/
+    shared/
+      net_router.rs       # 统一 pump net events + packet dispatch（login_ui/runtime_chat 共享）
+      logging.rs          # key log/unhandled log（文件落盘 + UI 抑制策略）
+    # （后续）login_ui/runtime_chat 将逐步复用 shared/net_router + shared/logging
 ```
 
 文件规模：
