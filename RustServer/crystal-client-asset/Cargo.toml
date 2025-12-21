@@ -1,0 +1,11 @@
+[package]
+name = "crystal-client-asset"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.14"
+crystal-lib = { path = "../crystal-lib" }
+crystal-client-config = { path = "../crystal-client-config" }
+thiserror = "1.0"
+

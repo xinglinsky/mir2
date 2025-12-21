@@ -3,12 +3,14 @@ use std::io::{self, Cursor, Read};
 use crate::io::{
     read_bool,
     read_i8,
+    read_i16_le,
     read_i32_le,
     read_string,
     read_u32_le,
     read_u64_le,
     write_bool,
     write_i8,
+    write_i16_le,
     write_i32_le,
     write_string,
     write_u32_le,
@@ -147,6 +149,1129 @@ impl CSpellToggle {
             spell,
             can_use_state,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CHarvest {
+    pub direction: u8,
+}
+
+impl CHarvest {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.direction);
+        Ok(RawPacket {
+            id: ClientPacketId::Harvest as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        Ok(CHarvest {
+            direction: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CFishingCast {
+    pub cast_out: bool,
+}
+
+impl CFishingCast {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.cast_out)?;
+        Ok(RawPacket {
+            id: ClientPacketId::FishingCast as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let cast_out = read_bool(&mut c)?;
+        Ok(CFishingCast { cast_out })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CFishingChangeAutocast {
+    pub auto_cast: bool,
+}
+
+impl CFishingChangeAutocast {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.auto_cast)?;
+        Ok(RawPacket {
+            id: ClientPacketId::FishingChangeAutocast as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let auto_cast = read_bool(&mut c)?;
+        Ok(CFishingChangeAutocast { auto_cast })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAwakeningNeedMaterials {
+    pub unique_id: u64,
+    pub awakening_type: u8,
+}
+
+impl CAwakeningNeedMaterials {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        buf.push(self.awakening_type);
+        Ok(RawPacket {
+            id: ClientPacketId::AwakeningNeedMaterials as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        Ok(CAwakeningNeedMaterials {
+            unique_id,
+            awakening_type: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAwakeningLockedItem {
+    pub unique_id: u64,
+    pub locked: bool,
+}
+
+impl CAwakeningLockedItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_bool(&mut buf, self.locked)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AwakeningLockedItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let locked = read_bool(&mut c)?;
+        Ok(CAwakeningLockedItem { unique_id, locked })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAwakening {
+    pub unique_id: u64,
+    pub awakening_type: u8,
+    pub position_idx: u32,
+}
+
+impl CAwakening {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        buf.push(self.awakening_type);
+        write_u32_le(&mut buf, self.position_idx)?;
+        Ok(RawPacket {
+            id: ClientPacketId::Awakening as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let awakening_type = one[0];
+        let position_idx = read_u32_le(&mut c)?;
+        Ok(CAwakening {
+            unique_id,
+            awakening_type,
+            position_idx,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDisassembleItem {
+    pub unique_id: u64,
+}
+
+impl CDisassembleItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DisassembleItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(CDisassembleItem { unique_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDowngradeAwakening {
+    pub unique_id: u64,
+}
+
+impl CDowngradeAwakening {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DowngradeAwakening as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(CDowngradeAwakening { unique_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CResetAddedItem {
+    pub unique_id: u64,
+}
+
+impl CResetAddedItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ResetAddedItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(CResetAddedItem { unique_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRequestIntelligentCreatureUpdates {
+    pub update: bool,
+}
+
+impl CRequestIntelligentCreatureUpdates {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.update)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RequestIntelligentCreatureUpdates as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let update = read_bool(&mut c)?;
+        Ok(CRequestIntelligentCreatureUpdates { update })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CUpdateIntelligentCreature {
+    pub creature_bytes: Vec<u8>,
+    pub summon_me: bool,
+    pub unsummon_me: bool,
+    pub release_me: bool,
+}
+
+impl CUpdateIntelligentCreature {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&self.creature_bytes);
+        write_bool(&mut buf, self.summon_me)?;
+        write_bool(&mut buf, self.unsummon_me)?;
+        write_bool(&mut buf, self.release_me)?;
+        Ok(RawPacket {
+            id: ClientPacketId::UpdateIntelligentCreature as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        // ClientIntelligentCreature is a complex structure, we'll need to parse it
+        // For now, we'll read it as bytes and parse later
+        // The structure is: Creature (variable length), SummonMe (bool), UnSummonMe (bool), ReleaseMe (bool)
+        let mut c = Cursor::new(payload);
+        
+        // Read until we have 3 bytes left (for the 3 booleans)
+        // This is a simplified approach - in reality we'd need to parse ClientIntelligentCreature properly
+        let remaining = payload.len();
+        if remaining < 3 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CUpdateIntelligentCreature payload too short",
+            ));
+        }
+        
+        let creature_bytes_len = remaining - 3;
+        let mut creature_bytes = vec![0u8; creature_bytes_len];
+        c.read_exact(&mut creature_bytes)?;
+        
+        let summon_me = read_bool(&mut c)?;
+        let unsummon_me = read_bool(&mut c)?;
+        let release_me = read_bool(&mut c)?;
+        
+        Ok(CUpdateIntelligentCreature {
+            creature_bytes,
+            summon_me,
+            unsummon_me,
+            release_me,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CIntelligentCreaturePickup {
+    pub mouse_mode: bool,
+    pub location_x: i32,
+    pub location_y: i32,
+}
+
+impl CIntelligentCreaturePickup {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.mouse_mode)?;
+        write_i32_le(&mut buf, self.location_x)?;
+        write_i32_le(&mut buf, self.location_y)?;
+        Ok(RawPacket {
+            id: ClientPacketId::IntelligentCreaturePickup as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mouse_mode = read_bool(&mut c)?;
+        let location_x = read_i32_le(&mut c)?;
+        let location_y = read_i32_le(&mut c)?;
+        Ok(CIntelligentCreaturePickup {
+            mouse_mode,
+            location_x,
+            location_y,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarriageRequest;
+
+impl CMarriageRequest {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::MarriageRequest as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CMarriageRequest payload must be empty",
+            ));
+        }
+        Ok(CMarriageRequest)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarriageReply {
+    pub accept_invite: bool,
+}
+
+impl CMarriageReply {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.accept_invite)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MarriageReply as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let accept_invite = read_bool(&mut c)?;
+        Ok(CMarriageReply { accept_invite })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CChangeMarriage;
+
+impl CChangeMarriage {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::ChangeMarriage as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CChangeMarriage payload must be empty",
+            ));
+        }
+        Ok(CChangeMarriage)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDivorceRequest;
+
+impl CDivorceRequest {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::DivorceRequest as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CDivorceRequest payload must be empty",
+            ));
+        }
+        Ok(CDivorceRequest)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDivorceReply {
+    pub accept_invite: bool,
+}
+
+impl CDivorceReply {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.accept_invite)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DivorceReply as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let accept_invite = read_bool(&mut c)?;
+        Ok(CDivorceReply { accept_invite })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAddMentor {
+    pub name: String,
+}
+
+impl CAddMentor {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.name)?;
+        Ok(RawPacket {
+            id: ClientPacketId::AddMentor as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let name = read_string(&mut c)?;
+        Ok(CAddMentor { name })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMentorReply {
+    pub accept_invite: bool,
+}
+
+impl CMentorReply {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_bool(&mut buf, self.accept_invite)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MentorReply as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let accept_invite = read_bool(&mut c)?;
+        Ok(CMentorReply { accept_invite })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CAllowMentor;
+
+impl CAllowMentor {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::AllowMentor as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CAllowMentor payload must be empty",
+            ));
+        }
+        Ok(CAllowMentor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCancelMentor;
+
+impl CCancelMentor {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::CancelMentor as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CCancelMentor payload must be empty",
+            ));
+        }
+        Ok(CCancelMentor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CGuildBuffUpdate {
+    pub action: u8,
+    pub id: i32,
+}
+
+impl CGuildBuffUpdate {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.action);
+        write_i32_le(&mut buf, self.id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::GuildBuffUpdate as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let action = one[0];
+        let id = read_i32_le(&mut c)?;
+        Ok(CGuildBuffUpdate { action, id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CNPCConfirmInput {
+    pub npc_id: u32,
+    pub page_name: String,
+    pub value: String,
+}
+
+impl CNPCConfirmInput {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.npc_id)?;
+        write_string(&mut buf, &self.page_name)?;
+        write_string(&mut buf, &self.value)?;
+        Ok(RawPacket {
+            id: ClientPacketId::NPCConfirmInput as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let npc_id = read_u32_le(&mut c)?;
+        let page_name = read_string(&mut c)?;
+        let value = read_string(&mut c)?;
+        Ok(CNPCConfirmInput {
+            npc_id,
+            page_name,
+            value,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CReportIssue {
+    pub image: Vec<u8>,
+    pub image_size: i32,
+    pub image_chunk: i32,
+    pub message: String,
+}
+
+impl CReportIssue {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.image.len() as i32)?;
+        buf.extend_from_slice(&self.image);
+        write_i32_le(&mut buf, self.image_size)?;
+        write_i32_le(&mut buf, self.image_chunk)?;
+        write_string(&mut buf, &self.message)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ReportIssue as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let image_len = read_i32_le(&mut c)?;
+        let mut image = vec![0u8; image_len as usize];
+        c.read_exact(&mut image)?;
+        let image_size = read_i32_le(&mut c)?;
+        let image_chunk = read_i32_le(&mut c)?;
+        let message = read_string(&mut c)?;
+        Ok(CReportIssue {
+            image,
+            image_size,
+            image_chunk,
+            message,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct COpendoor {
+    pub door_index: u8,
+}
+
+impl COpendoor {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.door_index);
+        Ok(RawPacket {
+            id: ClientPacketId::Opendoor as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        Ok(COpendoor {
+            door_index: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CGetRentedItems;
+
+impl CGetRentedItems {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::GetRentedItems as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CGetRentedItems payload must be empty",
+            ));
+        }
+        Ok(CGetRentedItems)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CItemRentalRequest;
+
+impl CItemRentalRequest {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::ItemRentalRequest as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CItemRentalRequest payload must be empty",
+            ));
+        }
+        Ok(CItemRentalRequest)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CItemRentalFee {
+    pub amount: u32,
+}
+
+impl CItemRentalFee {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.amount)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ItemRentalFee as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let amount = read_u32_le(&mut c)?;
+        Ok(CItemRentalFee { amount })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CItemRentalPeriod {
+    pub days: u32,
+}
+
+impl CItemRentalPeriod {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u32_le(&mut buf, self.days)?;
+        Ok(RawPacket {
+            id: ClientPacketId::ItemRentalPeriod as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let days = read_u32_le(&mut c)?;
+        Ok(CItemRentalPeriod { days })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CDepositRentalItem {
+    pub from: i32,
+    pub to: i32,
+}
+
+impl CDepositRentalItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        Ok(RawPacket {
+            id: ClientPacketId::DepositRentalItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        Ok(CDepositRentalItem { from, to })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CRetrieveRentalItem {
+    pub from: i32,
+    pub to: i32,
+}
+
+impl CRetrieveRentalItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RetrieveRentalItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        Ok(CRetrieveRentalItem { from, to })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCancelItemRental;
+
+impl CCancelItemRental {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::CancelItemRental as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CCancelItemRental payload must be empty",
+            ));
+        }
+        Ok(CCancelItemRental)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CItemRentalLockFee;
+
+impl CItemRentalLockFee {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::ItemRentalLockFee as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CItemRentalLockFee payload must be empty",
+            ));
+        }
+        Ok(CItemRentalLockFee)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CItemRentalLockItem;
+
+impl CItemRentalLockItem {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::ItemRentalLockItem as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CItemRentalLockItem payload must be empty",
+            ));
+        }
+        Ok(CItemRentalLockItem)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CConfirmItemRental;
+
+impl CConfirmItemRental {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::ConfirmItemRental as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CConfirmItemRental payload must be empty",
+            ));
+        }
+        Ok(CConfirmItemRental)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CGuildTerritoryPage {
+    pub page: i32,
+}
+
+impl CGuildTerritoryPage {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.page)?;
+        Ok(RawPacket {
+            id: ClientPacketId::GuildTerritoryPage as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let page = read_i32_le(&mut c)?;
+        Ok(CGuildTerritoryPage { page })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CPurchaseGuildTerritory {
+    pub owner: String,
+}
+
+impl CPurchaseGuildTerritory {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.owner)?;
+        Ok(RawPacket {
+            id: ClientPacketId::PurchaseGuildTerritory as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let owner = read_string(&mut c)?;
+        Ok(CPurchaseGuildTerritory { owner })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CConsignItem {
+    pub unique_id: u64,
+    pub price: u32,
+    pub market_type: u8,
+}
+
+impl CConsignItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u32_le(&mut buf, self.price)?;
+        buf.push(self.market_type);
+        Ok(RawPacket {
+            id: ClientPacketId::ConsignItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let price = read_u32_le(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        Ok(CConsignItem {
+            unique_id,
+            price,
+            market_type: one[0],
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketSearch {
+    pub match_str: String,
+    pub item_type: u8,
+    pub usermode: bool,
+    pub min_shape: i16,
+    pub max_shape: i16,
+    pub market_type: u8,
+}
+
+impl CMarketSearch {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_string(&mut buf, &self.match_str)?;
+        buf.push(self.item_type);
+        write_bool(&mut buf, self.usermode)?;
+        write_i16_le(&mut buf, self.min_shape)?;
+        write_i16_le(&mut buf, self.max_shape)?;
+        buf.push(self.market_type);
+        Ok(RawPacket {
+            id: ClientPacketId::MarketSearch as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let match_str = read_string(&mut c)?;
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let item_type = one[0];
+        let usermode = read_bool(&mut c)?;
+        let min_shape = read_i16_le(&mut c)?;
+        let max_shape = read_i16_le(&mut c)?;
+        c.read_exact(&mut one)?;
+        let market_type = one[0];
+        Ok(CMarketSearch {
+            match_str,
+            item_type,
+            usermode,
+            min_shape,
+            max_shape,
+            market_type,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketRefresh;
+
+impl CMarketRefresh {
+    pub fn encode(&self) -> RawPacket {
+        RawPacket {
+            id: ClientPacketId::MarketRefresh as i16,
+            payload: Vec::new(),
+        }
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if !payload.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "CMarketRefresh payload must be empty",
+            ));
+        }
+        Ok(CMarketRefresh)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketPage {
+    pub page: i32,
+}
+
+impl CMarketPage {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.page)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MarketPage as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let page = read_i32_le(&mut c)?;
+        Ok(CMarketPage { page })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketBuy {
+    pub auction_id: u64,
+    pub bid_price: u32,
+}
+
+impl CMarketBuy {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.auction_id)?;
+        write_u32_le(&mut buf, self.bid_price)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MarketBuy as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let auction_id = read_u64_le(&mut c)?;
+        let bid_price = read_u32_le(&mut c)?;
+        Ok(CMarketBuy {
+            auction_id,
+            bid_price,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketSellNow {
+    pub auction_id: u64,
+}
+
+impl CMarketSellNow {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.auction_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MarketSellNow as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let auction_id = read_u64_le(&mut c)?;
+        Ok(CMarketSellNow { auction_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CMarketGetBack {
+    pub mode: u8,
+    pub auction_id: u64,
+}
+
+impl CMarketGetBack {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.mode);
+        write_u64_le(&mut buf, self.auction_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MarketGetBack as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let mode = one[0];
+        let auction_id = read_u64_le(&mut c)?;
+        Ok(CMarketGetBack { mode, auction_id })
     }
 }
 

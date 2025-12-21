@@ -157,9 +157,15 @@ impl LoginConnection {
                             crystal_server_core::item::Equipment::new_default(),
                         ))
                 };
+                let refine_slots = {
+                    let world = self.world.lock().unwrap();
+                    world
+                        .player_refine_slots(self.session_id)
+                        .unwrap_or_else(|| vec![None; 16])
+                };
                 let _ = self
                     .store
-                    .save_character_items(account_id, char_idx, &inventory, &equipment);
+                    .save_character_items(account_id, char_idx, &inventory, &equipment, &refine_slots);
 
                 let pos = CharacterPosition {
                     map_index: self.current_map_index,

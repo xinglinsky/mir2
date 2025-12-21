@@ -1733,11 +1733,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "crystal-client-app"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crystal-client-config",
+ "crystal-client-net",
+ "crystal-client-scene",
+ "crystal-client-ui",
+ "crystal-lib",
+]
+
+[[package]]
+name = "crystal-client-asset"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crystal-client-config",
+ "crystal-lib",
+ "thiserror",
+]
+
+[[package]]
 name = "crystal-client-bin"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "clap",
+ "crystal-client-app",
  "crystal-client-config",
  "crystal-client-net",
  "crystal-lib",
@@ -1759,6 +1782,26 @@ dependencies = [
  "crystal-shared-proto",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "crystal-client-scene"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crystal-client-asset",
+ "crystal-client-config",
+ "crystal-client-net",
+ "crystal-client-ui",
+ "crystal-shared-proto",
+]
+
+[[package]]
+name = "crystal-client-ui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crystal-client-asset",
 ]
 
 [[package]]
@@ -1857,6 +1900,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crystal-server-core",
+ "crystal-shared-proto",
  "rusqlite",
  "serde",
  "serde_json",

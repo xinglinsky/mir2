@@ -29,6 +29,63 @@ impl Job {
 }
 
 #[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DamageType {
+    Physical = 0,
+    Magical = 1,
+    Poison = 2,
+    Fire = 3,
+    Ice = 4,
+    Lightning = 5,
+    Wind = 6,
+    Earth = 7,
+    Holy = 8,
+    Dark = 9,
+}
+
+impl DamageType {
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(DamageType::Physical),
+            1 => Some(DamageType::Magical),
+            2 => Some(DamageType::Poison),
+            3 => Some(DamageType::Fire),
+            4 => Some(DamageType::Ice),
+            5 => Some(DamageType::Lightning),
+            6 => Some(DamageType::Wind),
+            7 => Some(DamageType::Earth),
+            8 => Some(DamageType::Holy),
+            9 => Some(DamageType::Dark),
+            _ => None,
+        }
+    }
+
+    pub fn is_elemental(self) -> bool {
+        matches!(self, 
+            DamageType::Fire | DamageType::Ice | DamageType::Lightning |
+            DamageType::Wind | DamageType::Earth | DamageType::Holy | DamageType::Dark
+        )
+    }
+
+    pub fn get_resistance_stat(self) -> crate::stats::Stat {
+        match self {
+            DamageType::Fire => crate::stats::Stat::FireResist,
+            DamageType::Ice => crate::stats::Stat::IceResist,
+            DamageType::Lightning => crate::stats::Stat::LightningResist,
+            DamageType::Wind => crate::stats::Stat::WindResist,
+            DamageType::Earth => crate::stats::Stat::EarthResist,
+            DamageType::Holy => crate::stats::Stat::HolyResist,
+            DamageType::Dark => crate::stats::Stat::DarkResist,
+            _ => crate::stats::Stat::MagicResist,
+        }
+    }
+}
+
+#[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PetMode {
     Both = 0,
@@ -630,6 +687,10 @@ pub enum BuffType {
     ImmortalSkin = 23,
     MagicShield = 24,
     ElementalBarrier = 25,
+    
+    // Combat Effects
+    ThornReflect = 26,
+    LifeSteal = 27,
 
     // Monster
     HornedArcherBuff = 50,

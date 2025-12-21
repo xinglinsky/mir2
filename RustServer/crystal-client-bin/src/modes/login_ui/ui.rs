@@ -3,7 +3,7 @@ use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
 use crystal_lib::LibFile;
 
-use crate::app_config::LoginUiConfig;
+use crystal_client_app::LoginUiConfig;
 use crate::shared::lib_image::{lib_to_image_handle, lib_to_sprite, lib_to_sprite_with_offset};
 
 use super::state::*;
@@ -12,8 +12,20 @@ pub(crate) fn login_ui_setup(
     mut commands: Commands,
     cfg: Res<LoginUiConfig>,
     mut images: ResMut<Assets<Image>>,
+    existing_cams: Query<Entity, With<Camera>>,
 ) {
-    commands.spawn(Camera2dBundle::default());
+    let mut cams = existing_cams.iter();
+    if let Some(first) = cams.next() {
+        for extra in cams {
+            commands.entity(extra).despawn_recursive();
+        }
+        commands.entity(first).insert(Camera {
+            order: 0,
+            ..default()
+        });
+    } else {
+        commands.spawn(Camera2dBundle::default());
+    }
 
     let chrsel_path = cfg.data_dir.join("ChrSel.Lib");
     let prguse_path = cfg.data_dir.join("Prguse.Lib");

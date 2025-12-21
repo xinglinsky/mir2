@@ -61,8 +61,23 @@ use crate::world::skills::taoist::{
     cast_summon_skeleton,
     cast_ultimate_enhancer,
 };
-use crate::world::types::{AttackMode, BuffType, PetMode, PoisonType};
+use crate::world::types::{AttackMode, BuffType, PetMode, PoisonType, DamageType};
 use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell, PoisonInstance};
+
+/// Helper struct for player damage calculation data
+struct PlayerDamageData {
+    hp: i32,
+    stats: Stats,
+    current_poison_mask: u16,
+    dead: bool,
+}
+
+/// Helper struct for player position data
+struct PlayerPosition {
+    x: i32,
+    y: i32,
+    direction: u8,
+}
 
 impl<P: WorldProvider> World<P> {
     fn can_attack(_player: &PlayerState) -> bool {
@@ -515,6 +530,436 @@ impl<P: WorldProvider> World<P> {
         }
 
         true
+    }
+
+    /// Check if a player has a specific buff type
+    fn player_has_buff(&self, session_id: SessionId, buff_type: BuffType) -> bool {
+        if let Some(player) = self.players.get(&session_id) {
+            player.active_buffs.iter().any(|buff| buff.buff_type == buff_type)
+        } else {
+            false
+        }
+    }
+
+    /// Perform a counter attack from defender to attacker
+    fn perform_counter_attack(
+        &mut self,
+        defender_sid: SessionId,
+        attacker_sid: SessionId,
+        map_index: i32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let (defender_stats, attacker_x, attacker_y) = match (
+            self.players.get(&defender_sid),
+            self.players.get(&attacker_sid),
+        ) {
+            (Some(defender), Some(attacker)) => {
+                (defender.stats.total.clone(), attacker.x, attacker.y)
+            }
+            _ => return,
+        };
+
+        // Calculate counter attack damage based on defender's DC
+        let min_dc = defender_stats.get(Stat::MinDC).max(0);
+        let max_dc = defender_stats.get(Stat::MaxDC).max(min_dc);
+        let base_damage = if max_dc == min_dc {
+            min_dc
+        } else {
+            let mut rng = thread_rng();
+            rng.gen_range(min_dc..=max_dc)
+        };
+
+        // Apply counter attack damage
+        let _ = self.apply_damage_to_player(
+            Some(defender_sid),
+            attacker_sid,
+            base_damage,
+            DamageType::Physical,
+            map_index,
+            events,
+        );
+
+        // Send counter attack animation
+        events.push(WorldEvent::ObjectMagic {
+            session_id: defender_sid,
+            map_index,
+            direction: 0, // Will be set based on attacker position
+            x: 0,
+            y: 0,
+            spell: crate::world::Spell::CounterAttack as u8,
+            level: 0,
+            target_id: attacker_sid as u32,
+            target_x: attacker_x,
+            target_y: attacker_y,
+        });
+    }
+
+    /// Remove a specific buff from a player
+    fn remove_player_buff(&mut self, session_id: SessionId, buff_type: BuffType) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.active_buffs.retain(|buff| buff.buff_type != buff_type);
+        }
+    }
+
+    /// Apply equipment durability loss when taking damage
+    fn apply_equipment_durability_loss(
+        &mut self,
+        session_id: SessionId,
+        damage_taken: i32,
+        _events: &mut Vec<WorldEvent>,
+    ) {
+        // Durability loss is typically based on damage taken
+        // Higher damage = more durability loss
+        // Common formula: damage / 100 (minimum 1)
+        let durability_loss = (damage_taken / 100).max(1) as u16;
+        
+        if let Some(player) = self.players.get_mut(&session_id) {
+            let mut equipment_changed = false;
+            
+            // Apply durability loss to all equipped items
+            for slot_opt in player.equipment.slots.iter_mut() {
+                if let Some(item) = slot_opt {
+                    if item.current_dura > 0 {
+                        let old_dura = item.current_dura;
+                        item.current_dura = item.current_dura.saturating_sub(durability_loss);
+                        
+                        if item.current_dura != old_dura {
+                            equipment_changed = true;
+                            
+                            // If item reached 0 durability, it might break
+                            if item.current_dura == 0 {
+                                // Item broke - could add special handling here
+                                // For now, just leave it at 0
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Recalculate equipment stats if durability changed
+            if equipment_changed {
+                self.recalc_player_equipment_stats(session_id);
+            }
+        }
+    }
+
+    /// Heal a player by a certain amount
+    fn heal_player(&mut self, session_id: SessionId, heal_amount: i32, events: &mut Vec<WorldEvent>) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            if player.dead || heal_amount <= 0 {
+                return;
+            }
+
+            let max_hp = player.stats.total.get(Stat::HP).max(1);
+            let old_hp = player.hp;
+            let new_hp = (old_hp + heal_amount).min(max_hp);
+            
+            if new_hp > old_hp {
+                player.hp = new_hp;
+                let amount = new_hp - old_hp;
+                
+                events.push(WorldEvent::PlayerHealed {
+                    session_id,
+                    map_index: player.map_index,
+                    x: player.x,
+                    y: player.y,
+                    amount,
+                    new_hp,
+                    show_healing_effect: true,
+                });
+            }
+        }
+    }
+
+    /// Apply damage to a player, mirroring C# PlayerObject.Struck behavior.
+    /// Returns (actual_damage, is_dead) tuple.
+    pub(crate) fn apply_damage_to_player(
+        &mut self,
+        attacker_session_id: Option<SessionId>,
+        target_session_id: SessionId,
+        damage: i32,
+        damage_type: DamageType,
+        map_index: i32,
+        events: &mut Vec<WorldEvent>,
+    ) -> (i32, bool) {
+        self.apply_damage_to_player_internal(
+            attacker_session_id,
+            target_session_id,
+            damage,
+            damage_type,
+            map_index,
+            events,
+            false, // is_reflected flag to prevent infinite loops
+        )
+    }
+
+    /// Internal damage application with reflection guard
+    fn apply_damage_to_player_internal(
+        &mut self,
+        attacker_session_id: Option<SessionId>,
+        target_session_id: SessionId,
+        damage: i32,
+        damage_type: DamageType,
+        map_index: i32,
+        events: &mut Vec<WorldEvent>,
+        is_reflected: bool,
+    ) -> (i32, bool) {
+        // Extract player data first to avoid borrow checker issues
+        let (player_data, player_pos) = match self.players.get(&target_session_id) {
+            Some(p) => {
+                if p.dead || p.hp <= 0 {
+                    return (0, false);
+                }
+                (
+                    PlayerDamageData {
+                        hp: p.hp,
+                        stats: p.stats.total.clone(),
+                        current_poison_mask: p.current_poison_mask,
+                        dead: p.dead,
+                    },
+                    PlayerPosition {
+                        x: p.x,
+                        y: p.y,
+                        direction: p.direction,
+                    }
+                )
+            }
+            None => return (0, false),
+        };
+
+        // Calculate damage with all reductions
+        let (final_damage, is_dead) = self.calculate_damage_result(
+            damage,
+            damage_type,
+            &player_data,
+        );
+
+        // Apply the damage result to the player
+        self.apply_damage_result_to_player(
+            target_session_id,
+            final_damage,
+            is_dead,
+            attacker_session_id,
+            damage_type,
+            map_index,
+            player_pos,
+            events,
+            is_reflected,
+        );
+
+        (final_damage, is_dead)
+    }
+
+    /// Calculate damage result without modifying player state
+    fn calculate_damage_result(
+        &self,
+        mut damage: i32,
+        damage_type: DamageType,
+        player_data: &PlayerDamageData,
+    ) -> (i32, bool) {
+        // Apply AC/MAC damage reduction based on damage type
+        let defence = match damage_type {
+            DamageType::Physical => {
+                let min_ac = player_data.stats.get(Stat::MinAC).max(0);
+                let max_ac = player_data.stats.get(Stat::MaxAC).max(min_ac);
+                if max_ac <= min_ac {
+                    min_ac
+                } else {
+                    let mut rng = thread_rng();
+                    rng.gen_range(min_ac..=max_ac)
+                }
+            }
+            DamageType::Magical | DamageType::Poison => {
+                let min_mac = player_data.stats.get(Stat::MinMAC).max(0);
+                let max_mac = player_data.stats.get(Stat::MaxMAC).max(min_mac);
+                if max_mac <= min_mac {
+                    min_mac
+                } else {
+                    let mut rng = thread_rng();
+                    rng.gen_range(min_mac..=max_mac)
+                }
+            }
+            // Elemental damage uses MAC reduction
+            _ if damage_type.is_elemental() => {
+                let min_mac = player_data.stats.get(Stat::MinMAC).max(0);
+                let max_mac = player_data.stats.get(Stat::MaxMAC).max(min_mac);
+                if max_mac <= min_mac {
+                    min_mac
+                } else {
+                    let mut rng = thread_rng();
+                    rng.gen_range(min_mac..=max_mac)
+                }
+            }
+            _ => 0,
+        };
+
+        damage = damage.saturating_sub(defence);
+
+        // Apply elemental resistance after MAC reduction
+        if damage_type.is_elemental() {
+            let resistance_stat = damage_type.get_resistance_stat();
+            let resistance = player_data.stats.get(resistance_stat).max(0);
+            
+            if resistance > 0 {
+                // Resistance reduces damage by percentage
+                // Formula: damage * (1 - resistance / weight)
+                // Default weight is 10, so 10 resistance = 100% immunity
+                const RESISTANCE_WEIGHT: i32 = 10;
+                let reduction_percent = (resistance * 100) / RESISTANCE_WEIGHT;
+                let reduction_percent = reduction_percent.min(100); // Cap at 100%
+                
+                let reduction_amount = (damage * reduction_percent) / 100;
+                damage = damage.saturating_sub(reduction_amount);
+            }
+        }
+
+        // Enforce minimum damage (at least 1)
+        damage = damage.max(1);
+
+        // Check if player would die
+        let is_dead = player_data.hp.saturating_sub(damage) <= 0;
+
+        (damage, is_dead)
+    }
+
+    /// Apply calculated damage to player and handle all side effects
+    fn apply_damage_result_to_player(
+        &mut self,
+        target_session_id: SessionId,
+        damage: i32,
+        is_dead: bool,
+        attacker_session_id: Option<SessionId>,
+        damage_type: DamageType,
+        map_index: i32,
+        player_pos: PlayerPosition,
+        events: &mut Vec<WorldEvent>,
+        is_reflected: bool,
+    ) {
+        // Apply damage to player HP
+        let (hp, dead) = if let Some(player) = self.players.get_mut(&target_session_id) {
+            player.hp = player.hp.saturating_sub(damage);
+            let dead = is_dead || player.hp <= 0;
+            
+            if dead {
+                player.dead = true;
+                // Note: death_time_ms field doesn't exist - would need to be added to PlayerState
+            }
+            
+            (player.hp, dead)
+        } else {
+            return;
+        };
+
+        // Send damage packet to nearby players
+        events.push(WorldEvent::ObjectStruck {
+            attacker_id: attacker_session_id.unwrap_or(target_session_id),
+            target_id: target_session_id as u64,
+            map_index,
+            x: player_pos.x,
+            y: player_pos.y,
+            direction: player_pos.direction,
+            damage,
+            damage_type: damage_type.as_u8(),
+            health_percent: if let Some(player) = self.players.get(&target_session_id) {
+                ((player.hp as i64 * 100) / player.stats.total.get(Stat::HP).max(1) as i64).clamp(0, 100) as u8
+            } else {
+                0
+            },
+        });
+
+        // Apply equipment durability loss
+        self.apply_equipment_durability_loss(target_session_id, damage, events);
+
+        // Apply death drops if player died
+        if dead {
+            self.apply_player_death_drops(target_session_id, map_index, events);
+        }
+
+        // Handle buffs and counter-attacks
+        self.handle_combat_buffs_and_counters(
+            attacker_session_id,
+            target_session_id,
+            damage,
+            map_index,
+            events,
+            is_reflected,
+        );
+    }
+
+    /// Handle combat buffs and counter-attacks after damage
+    fn handle_combat_buffs_and_counters(
+        &mut self,
+        attacker_session_id: Option<SessionId>,
+        target_session_id: SessionId,
+        damage: i32,
+        map_index: i32,
+        events: &mut Vec<WorldEvent>,
+        is_reflected: bool,
+    ) {
+        // Apply LifeSteal吸血 if the attacker has the buff
+        if let Some(attacker_sid) = attacker_session_id {
+            if self.player_has_buff(attacker_sid, BuffType::LifeSteal) {
+                // LifeSteal typically heals a percentage of damage dealt
+                // Common values are 10-30% depending on the spell level
+                let lifesteal_percent = 15; // 15% lifesteal as default
+                let heal_amount = (damage * lifesteal_percent) / 100;
+                
+                if heal_amount > 0 {
+                    self.heal_player(attacker_sid, heal_amount, events);
+                }
+            }
+
+            // Apply ThornReflect反伤 if the defender has the buff
+            if !is_reflected && self.player_has_buff(target_session_id, BuffType::ThornReflect) {
+                // ThornReflect typically returns a percentage of damage taken
+                // Common values are 10-30% depending on the spell level
+                let reflect_percent = 20; // 20% reflection as default
+                let reflect_damage = (damage * reflect_percent) / 100;
+                
+                if reflect_damage > 0 {
+                    // Apply reflected damage back to attacker with reflection guard
+                    let _ = self.apply_damage_to_player_internal(
+                        Some(target_session_id), // Defender is now the attacker
+                        attacker_sid,
+                        reflect_damage,
+                        DamageType::Physical,
+                        map_index,
+                        events,
+                        true, // Mark as reflected to prevent infinite loops
+                    );
+                }
+            }
+            
+            // Apply CounterAttack if the defender has the buff
+            if self.player_has_buff(target_session_id, BuffType::CounterAttack) {
+                // Get the CounterAttack buff to check its level
+                if let Some(player) = self.players.get(&target_session_id) {
+                    if let Some(counter_buff) = player.active_buffs.iter()
+                        .find(|b| b.buff_type == BuffType::CounterAttack) {
+                        // Counter attack chance: 10 - (spell_level + 6)
+                        // So level 0 = 40% chance, level 3 = 10% chance
+                        let spell_level = counter_buff.values.get(0).copied().unwrap_or(0);
+                        let chance_to_counter = 10 - (spell_level + 6);
+                        
+                        if chance_to_counter > 0 {
+                            let mut rng = thread_rng();
+                            if rng.gen_range(0..10) < chance_to_counter {
+                                // Perform counter attack
+                                self.perform_counter_attack(
+                                    target_session_id,
+                                    attacker_sid,
+                                    map_index,
+                                    events,
+                                );
+                                
+                                // Remove the CounterAttack buff after use
+                                self.remove_player_buff(target_session_id, BuffType::CounterAttack);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Determine whether `attacker_sid` is allowed to attack `target_sid`

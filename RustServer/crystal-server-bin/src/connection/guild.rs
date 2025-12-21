@@ -11,6 +11,7 @@ use crystal_shared_proto::guild::{
     CEditGuildNotice,
     CGuildStorageGoldChange,
     CGuildStorageItemChange,
+    CGuildWarReturn,
 };
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_i64_le, write_string};
 use crystal_shared_proto::login::{CGuildInvite, CGuildNameReturn, CEditGuildMember};
@@ -2068,5 +2069,20 @@ impl LoginConnection {
 
         let mut world = self.world.lock().unwrap();
         world.clear_pending_guild_invite(self.session_id);
+    }
+
+    pub(crate) fn handle_guild_war_return(&mut self, _msg: CGuildWarReturn, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement guild war return logic
+        // This should:
+        // 1. Check if player is in a guild
+        // 2. Check if guild is in a war
+        // 3. Return to guild war location
+        // 4. Send appropriate response packets
+        
+        tracing::debug!("GuildWarReturn");
     }
 }

@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$JevRoot = $env:JEV_ROOT,
     [Parameter(Mandatory = $false)]
-    [string]$MirDbPath = $env:MIRDB_PATH
+    [string]$MirDbPath = $env:MIRDB_PATH,
+    [Parameter(Mandatory = $false)]
+    [string]$OutputDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +13,15 @@ if ([string]::IsNullOrWhiteSpace($JevRoot)) {
     throw "JEV_ROOT is not set. Usage: export_all.ps1 -JevRoot <path-to-Jev> (or set env:JEV_ROOT)."
 }
 
-$exportsDir = $PSScriptRoot
+$rustServerRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    $exportsDir = $PSScriptRoot
+} else {
+    $exportsDir = $OutputDir
+    if (-not (Test-Path $exportsDir)) {
+        New-Item -ItemType Directory -Path $exportsDir -Force | Out-Null
+    }
+}
 $rustServerRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $mir2Root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 

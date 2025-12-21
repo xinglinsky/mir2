@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bevy = "0.14"
 clap = { version = "4", features = ["derive"] }
+crystal-client-app = { path = "../crystal-client-app" }
 crystal-client-config = { path = "../crystal-client-config" }
 crystal-client-net = { path = "../crystal-client-net" }
 crystal-lib = { path = "../crystal-lib" }

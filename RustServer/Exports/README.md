@@ -44,3 +44,15 @@ To override which `Server.MirDB` is used for `GameShopItems.bin`:
 ```powershell
 .\export_all.ps1 -MirDbPath "F:\github\mir2\RustServer\target\debug\Server.MirDB"
 ```
+
+To specify a custom output directory (defaults to `Exports` directory):
+
+```powershell
+.\export_all.ps1 -OutputDir "F:\github\mir2\RustServer\target\debug\Exports"
+```
+
+You can combine all parameters:
+
+```powershell
+.\export_all.ps1 -JevRoot "F:\github\Crystal.Database\Jev" -MirDbPath "F:\github\mir2\RustServer\target\debug\Server.MirDB" -OutputDir "F:\github\mir2\RustServer\target\debug"
+```

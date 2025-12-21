@@ -10,8 +10,24 @@ pub struct QuestId(pub i32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct QuestType(pub u8);
 
+impl QuestType {
+    pub const STORY: QuestType = QuestType(0);
+    pub const DAILY: QuestType = QuestType(1);
+    pub const WEEKLY: QuestType = QuestType(2);
+    pub const HIDDEN: QuestType = QuestType(3);
+    pub const ACCOUNT: QuestType = QuestType(4);
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RequiredClass(pub u8);
+
+impl RequiredClass {
+    pub const NONE: RequiredClass = RequiredClass(0);
+    pub const WARRIOR: RequiredClass = RequiredClass(4);
+    pub const WIZARD: RequiredClass = RequiredClass(1);
+    pub const TAOIST: RequiredClass = RequiredClass(2);
+    pub const ASSASSIN: RequiredClass = RequiredClass(3);
+}
 
 #[derive(Clone, Debug)]
 pub struct QuestKillTask {

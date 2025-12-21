@@ -597,11 +597,12 @@ impl LoginConnection {
             self.handle_world_events(events, out);
 
             if let Some(ref account_id) = self.account_id {
-                if let Ok(Some((inv, eq))) =
+                if let Ok(Some((inv, eq, refine_slots))) =
                     self.store.load_character_items(account_id, ch.index)
                 {
                     let mut world = self.world.lock().unwrap();
                     world.set_player_items(self.session_id, inv, eq);
+                    world.set_player_refine_slots(self.session_id, refine_slots);
                 }
             }
 

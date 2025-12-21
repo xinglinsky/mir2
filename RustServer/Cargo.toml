@@ -11,8 +11,12 @@ members = [
     "crystal-content-cli",
     "crystal-content-pack",
     "crystal-client-bin",
+    "crystal-client-app",
     "crystal-client-net",
     "crystal-client-config",
+    "crystal-client-asset",
     "crystal-launcher-bin",
     "crystal-lib",
+    "crystal-client-ui",
+    "crystal-client-scene",
 ]

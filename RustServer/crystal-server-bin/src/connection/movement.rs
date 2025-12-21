@@ -16,6 +16,9 @@ use crystal_shared_proto::login::{
     CChangeAMode,
     CChangePMode,
     CSpellToggle,
+    CHarvest,
+    CFishingCast,
+    CFishingChangeAutocast,
 };
 use crystal_shared_proto::map::SMapChanged;
 use crystal_shared_proto::magic::{
@@ -1684,6 +1687,10 @@ impl LoginConnection {
                         out.push(Self::encode_raw(raw));
                     }
                 }
+                world::WorldEvent::QuestShared { .. } => {
+                    // TODO: Handle quest sharing UI updates
+                    // This might involve showing a notification or updating quest list
+                }
             }
         }
 
@@ -1836,6 +1843,26 @@ impl LoginConnection {
         }
     }
 
+    pub(crate) fn handle_harvest(&mut self, msg: CHarvest, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement harvest logic
+        // This should:
+        // 1. Check if player can move (not dead, not in action delay)
+        // 2. Set action time delay
+        // 3. Update player direction
+        // 4. Send UserLocation update
+        // 5. Broadcast ObjectHarvest to nearby players
+        // 6. Search for dead monsters in front of player
+        // 7. If found, harvest the monster and send ObjectHarvested
+        // 8. Handle harvest rewards (items, experience, etc.)
+        
+        // For now, send a placeholder response
+        tracing::debug!("Harvest packet received: direction={}", msg.direction);
+    }
+
     pub(crate) fn handle_change_trade(&mut self, msg: CChangeTrade, _out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
             return;
@@ -1851,6 +1878,44 @@ impl LoginConnection {
             self.session_id,
             msg.allow_trade
         );
+    }
+
+    pub(crate) fn handle_fishing_cast(&mut self, msg: CFishingCast, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement fishing cast logic
+        // This should:
+        // 1. Check if player has a fishing rod equipped
+        // 2. Check if fishing rod has durability
+        // 3. Validate fishing location (must be water)
+        // 4. If cast_out is true:
+        //    - Check if player has bait
+        //    - Consume bait
+        //    - Start fishing process
+        // 5. If cast_out is false:
+        //    - Stop fishing if in progress
+        //    - Check if fish was found and attempt to catch
+        //    - Handle fishing rewards
+        // 6. Send appropriate response packets
+        
+        tracing::debug!("FishingCast packet received: cast_out={}", msg.cast_out);
+    }
+
+    pub(crate) fn handle_fishing_change_autocast(&mut self, msg: CFishingChangeAutocast, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement fishing autocast change logic
+        // This should:
+        // 1. Check if player has a fishing rod equipped
+        // 2. Check if fishing rod has a reel in the reel slot
+        // 3. Set fishing autocast flag
+        // 4. Update player state
+        
+        tracing::debug!("FishingChangeAutocast packet received: auto_cast={}", msg.auto_cast);
     }
 
     pub(crate) fn handle_pick_up(&mut self, _msg: CPickUp, out: &mut Vec<Vec<u8>>) {

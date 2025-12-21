@@ -23,6 +23,7 @@ use crystal_server_core::account::{
 };
 use crystal_server_core::guild::GuildInfo;
 use crystal_server_core::item::{decode_item_slots, encode_item_slots, Inventory, Equipment};
+use crystal_shared_proto::item_types::UserItemData;
 use crystal_server_core::world::magic::UserMagic;
 use rusqlite::{self, Connection};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ pub struct SqliteAccountStore {
 struct StoredItems {
     inventory: Vec<Option<Vec<u8>>>,
     equipment: Vec<Option<Vec<u8>>>,
+    #[serde(default)]
+    refine_slots: Vec<Option<Vec<u8>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -825,7 +828,7 @@ impl AccountStore for SqliteAccountStore {
         &self,
         account_id: &str,
         index: i32,
-    ) -> Result<Option<(Inventory, Equipment)>, StoreError> {
+    ) -> Result<Option<(Inventory, Equipment, Vec<Option<UserItemData>>)>, StoreError> {
         self.with_conn(|conn| {
             let mut stmt = Self::map_sql_err(conn.prepare(
                 "SELECT items_json FROM character_items WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
@@ -840,10 +843,19 @@ impl AccountStore for SqliteAccountStore {
                     .map_err(StoreError::Io)?;
                 let eq_slots = decode_item_slots(stored.equipment)
                     .map_err(StoreError::Io)?;
+                
+                // Decode refine slots (default to empty if not present for backward compatibility)
+                let refine_slots = if stored.refine_slots.is_empty() {
+                    vec![None; 16] // Default to 16 empty slots
+                } else {
+                    decode_item_slots(stored.refine_slots)
+                        .map_err(StoreError::Io)?
+                };
 
                 Ok(Some((
                     Inventory { slots: inv_slots },
                     Equipment { slots: eq_slots },
+                    refine_slots,
                 )))
             } else {
                 Ok(None)
@@ -857,11 +869,14 @@ impl AccountStore for SqliteAccountStore {
         index: i32,
         inventory: &Inventory,
         equipment: &Equipment,
+        refine_slots: &[Option<UserItemData>],
     ) -> Result<(), StoreError> {
         let stored = StoredItems {
             inventory: encode_item_slots(&inventory.slots)
                 .map_err(StoreError::Io)?,
             equipment: encode_item_slots(&equipment.slots)
+                .map_err(StoreError::Io)?,
+            refine_slots: encode_item_slots(refine_slots)
                 .map_err(StoreError::Io)?,
         };
 
@@ -1192,6 +1207,7 @@ enum SaveTask {
         idx: i32,
         inventory: Inventory,
         equipment: Equipment,
+        refine_slots: Vec<Option<UserItemData>>,
     },
     CharacterPosition {
         account_id: String,
@@ -1236,7 +1252,7 @@ enum SaveTask {
 struct PendingCharacter {
     stats: Option<CharacterStats>,
     level: Option<u16>,
-    items: Option<(Inventory, Equipment)>,
+    items: Option<(Inventory, Equipment, Vec<Option<UserItemData>>)>,
     position: Option<CharacterPosition>,
     bind: Option<CharacterPosition>,
     magics: Option<Vec<UserMagic>>,
@@ -1267,9 +1283,9 @@ fn apply_save_task(
             let entry = chars.entry((account_id, idx)).or_default();
             entry.level = Some(level);
         }
-        SaveTask::CharacterItems { account_id, idx, inventory, equipment } => {
+        SaveTask::CharacterItems { account_id, idx, inventory, equipment, refine_slots } => {
             let entry = chars.entry((account_id, idx)).or_default();
-            entry.items = Some((inventory, equipment));
+            entry.items = Some((inventory, equipment, refine_slots));
         }
         SaveTask::CharacterPosition { account_id, idx, pos } => {
             let entry = chars.entry((account_id, idx)).or_default();
@@ -1339,8 +1355,8 @@ fn flush_pending(
             let _ = AccountStore::update_character_level(&store, &account_id, idx, level);
         }
 
-        if let Some((inventory, equipment)) = pending.items {
-            let _ = AccountStore::save_character_items(&store, &account_id, idx, &inventory, &equipment);
+        if let Some((inventory, equipment, refine_slots)) = pending.items {
+            let _ = AccountStore::save_character_items(&store, &account_id, idx, &inventory, &equipment, &refine_slots);
         }
 
         if let Some(pos) = pending.position {
@@ -1619,7 +1635,7 @@ impl AccountStore for AsyncAccountStore {
         &self,
         account_id: &str,
         index: i32,
-    ) -> Result<Option<(Inventory, Equipment)>, StoreError> {
+    ) -> Result<Option<(Inventory, Equipment, Vec<Option<UserItemData>>)>, StoreError> {
         let inner = self.sync_store();
         AccountStore::load_character_items(&inner, account_id, index)
     }
@@ -1630,12 +1646,14 @@ impl AccountStore for AsyncAccountStore {
         index: i32,
         inventory: &Inventory,
         equipment: &Equipment,
+        refine_slots: &[Option<UserItemData>],
     ) -> Result<(), StoreError> {
         let task = SaveTask::CharacterItems {
             account_id: account_id.to_string(),
             idx: index,
             inventory: inventory.clone(),
             equipment: equipment.clone(),
+            refine_slots: refine_slots.to_vec(),
         };
         self.tx
             .send(task)

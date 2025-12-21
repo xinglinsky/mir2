@@ -268,9 +268,9 @@ pub trait AccountStore: Send + Sync {
         &self,
         account_id: &str,
         index: i32,
-    ) -> Result<Option<(Inventory, Equipment)>, StoreError>;
+    ) -> Result<Option<(Inventory, Equipment, Vec<Option<UserItemData>>)>, StoreError>;
 
-    /// Persist the full item state (inventory + equipment) for a given
+    /// Persist the full item state (inventory + equipment + refine_slots) for a given
     /// character.
     fn save_character_items(
         &self,
@@ -278,6 +278,7 @@ pub trait AccountStore: Send + Sync {
         index: i32,
         inventory: &Inventory,
         equipment: &Equipment,
+        refine_slots: &[Option<UserItemData>],
     ) -> Result<(), StoreError>;
 
     fn load_character_guild(

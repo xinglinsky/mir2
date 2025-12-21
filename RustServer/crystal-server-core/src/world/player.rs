@@ -57,6 +57,12 @@ pub struct PlayerState {
     pub hidden: bool,
     pub inventory: Inventory,
     pub equipment: Equipment,
+    /// Refine slots for item refinement system (16 slots, matching C# CharacterInfo.Refine)
+    pub refine_slots: Vec<Option<UserItemData>>,
+    /// Current item being refined (matching C# CharacterInfo.CurrentRefine)
+    pub current_refine: Option<UserItemData>,
+    /// Time remaining for refine completion in milliseconds (matching C# CharacterInfo.RefineTimeRemaining)
+    pub refine_time_remaining_ms: i64,
     pub riding_mount: bool,
     pub slaying_charged: bool,
     pub trade_partner: Option<SessionId>,
@@ -181,6 +187,9 @@ impl<P: WorldProvider> World<P> {
                     hidden: false,
                     inventory,
                     equipment,
+                    refine_slots: vec![None; 16], // 16 refine slots, matching C# CharacterInfo.Refine
+                    current_refine: None, // No item being refined initially
+                    refine_time_remaining_ms: 0, // No refine time remaining initially
                     riding_mount: false,
                     slaying_charged: false,
                     trade_partner: None,
@@ -789,6 +798,60 @@ impl<P: WorldProvider> World<P> {
         }
     }
 
+    /// Get player's refine slots
+    pub fn player_refine_slots(&self, session_id: SessionId) -> Option<Vec<Option<UserItemData>>> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.refine_slots.clone())
+    }
+
+    /// Set player's refine slots
+    pub fn set_player_refine_slots(
+        &mut self,
+        session_id: SessionId,
+        refine_slots: Vec<Option<UserItemData>>,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.refine_slots = refine_slots;
+        }
+    }
+
+    /// Get player's current refine item
+    pub fn player_current_refine(&self, session_id: SessionId) -> Option<UserItemData> {
+        self.players
+            .get(&session_id)
+            .and_then(|p| p.current_refine.clone())
+    }
+
+    /// Set player's current refine item
+    pub fn set_player_current_refine(
+        &mut self,
+        session_id: SessionId,
+        current_refine: Option<UserItemData>,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.current_refine = current_refine;
+        }
+    }
+
+    /// Get player's refine time remaining
+    pub fn player_refine_time_remaining(&self, session_id: SessionId) -> Option<i64> {
+        self.players
+            .get(&session_id)
+            .map(|p| p.refine_time_remaining_ms)
+    }
+
+    /// Set player's refine time remaining
+    pub fn set_player_refine_time_remaining(
+        &mut self,
+        session_id: SessionId,
+        refine_time_remaining_ms: i64,
+    ) {
+        if let Some(player) = self.players.get_mut(&session_id) {
+            player.refine_time_remaining_ms = refine_time_remaining_ms;
+        }
+    }
+
     pub fn deposit_trade_item_for_player(
         &mut self,
         session_id: SessionId,
@@ -1029,6 +1092,965 @@ impl<P: WorldProvider> World<P> {
         true
     }
 
+    pub fn merge_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid_from: u8,
+        grid_to: u8,
+        id_from: u64,
+        id_to: u64,
+    ) -> bool {
+        // For now, only support Inventory -> Inventory merge
+        // Note: Storage is handled in connection layer, so we only handle Inventory here
+        if grid_from != 1 || grid_to != 1 {
+            return false;
+        }
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Find the source item
+        let from_index = match player
+            .inventory
+            .slots
+            .iter()
+            .position(|s| s.as_ref().map(|i| i.unique_id) == Some(id_from))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let from_item = match player.inventory.slots[from_index].as_ref() {
+            Some(it) => it.clone(),
+            None => return false,
+        };
+
+        // Find the target item
+        let to_index = match player
+            .inventory
+            .slots
+            .iter()
+            .position(|s| s.as_ref().map(|i| i.unique_id) == Some(id_to))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let to_item = match player.inventory.slots[to_index].as_ref() {
+            Some(it) => it.clone(),
+            None => return false,
+        };
+
+        // Check if items can be merged (same item type, stackable)
+        if from_item.item_index != to_item.item_index {
+            return false;
+        }
+
+        let info = match self.provider.get_item_info(from_item.item_index) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        // Check stack size
+        if info.stack_size <= 1 {
+            return false;
+        }
+
+        // Check if target is already at max stack
+        if to_item.count >= info.stack_size as u16 {
+            return false;
+        }
+
+        // Calculate how much can be merged
+        let available_space = (info.stack_size as u16) - to_item.count;
+        let merge_amount = from_item.count.min(available_space);
+
+        // Update target item count
+        if let Some(ref mut target) = player.inventory.slots[to_index] {
+            target.count += merge_amount;
+        }
+
+        // Update or remove source item
+        if from_item.count <= merge_amount {
+            // Source item is completely merged
+            player.inventory.slots[from_index] = None;
+        } else {
+            // Source item still has remaining count
+            if let Some(ref mut source) = player.inventory.slots[from_index] {
+                source.count -= merge_amount;
+            }
+        }
+
+        true
+    }
+
+    pub fn split_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        unique_id: u64,
+        count: u16,
+    ) -> bool {
+        // For now, only support Inventory split
+        // Note: Storage is handled in connection layer, so we only handle Inventory here
+        if grid != 1 {
+            return false;
+        }
+
+        if count == 0 {
+            return false;
+        }
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Find the item to split
+        let from_index = match player
+            .inventory
+            .slots
+            .iter()
+            .position(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let from_item = match player.inventory.slots[from_index].as_ref() {
+            Some(it) => it.clone(),
+            None => return false,
+        };
+
+        // Check if split count is valid
+        if count >= from_item.count {
+            return false;
+        }
+
+        // Find an empty slot for the split item
+        let to_index = match player
+            .inventory
+            .slots
+            .iter()
+            .position(|s| s.is_none())
+        {
+            Some(idx) => idx,
+            None => return false, // No free space
+        };
+
+        // Create the split item with a new unique ID
+        // Generate unique ID similar to other item creation: use session_id and timestamp/counter
+        let mut split_item = from_item.clone();
+        split_item.count = count;
+        // Generate a new unique ID by combining session_id with a counter
+        // Use a simple approach: session_id in upper bits, timestamp-based counter in lower bits
+        let time_based = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64;
+        split_item.unique_id = ((session_id as u64) << 32) | (time_based & 0xFFFF_FFFF);
+
+        // Update source item count
+        if let Some(ref mut source) = player.inventory.slots[from_index] {
+            source.count -= count;
+        }
+
+        // Place split item in empty slot
+        player.inventory.slots[to_index] = Some(split_item);
+
+        true
+    }
+
+    pub fn remove_slot_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        grid_to: u8,
+        unique_id: u64,
+        to: i32,
+        from_unique_id: u64,
+    ) -> bool {
+        // Support Inventory (1) and Storage (2) grid_to
+        // Storage is handled in connection layer, so we only handle Inventory here
+        if grid_to != 1 {
+            return false;
+        }
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        if to < 0 {
+            return false;
+        }
+        let to_index = to as usize;
+        if to_index >= player.inventory.len() {
+            return false;
+        }
+
+        if player.inventory.slots[to_index].is_some() {
+            return false; // Target slot must be empty
+        }
+
+        // Find the parent item that contains the slot item
+        // Grid types: Mount=13, Fishing=7, Socket=8
+        let parent_item: Option<&mut UserItemData> = match grid {
+            13 => {
+                // Mount: get from equipment slot 13
+                player.equipment.slots.get_mut(13).and_then(|s| s.as_mut())
+            }
+            7 => {
+                // Fishing: get from equipment slot 7 (Weapon)
+                player.equipment.slots.get_mut(7).and_then(|s| s.as_mut())
+            }
+            8 => {
+                // Socket: find by from_unique_id in equipment or inventory
+                player
+                    .equipment
+                    .slots
+                    .iter_mut()
+                    .find(|s| s.as_ref().map(|i| i.unique_id) == Some(from_unique_id))
+                    .and_then(|s| s.as_mut())
+                    .or_else(|| {
+                        player
+                            .inventory
+                            .slots
+                            .iter_mut()
+                            .find(|s| s.as_ref().map(|i| i.unique_id) == Some(from_unique_id))
+                            .and_then(|s| s.as_mut())
+                    })
+            }
+            _ => return false,
+        };
+
+        let parent_item = match parent_item {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Validate parent item has slots
+        if parent_item.slots.is_empty() {
+            return false;
+        }
+
+        // Find the slot item to remove
+        let slot_index = match parent_item
+            .slots
+            .iter()
+            .position(|s| s.as_ref().and_then(|b| Some(b.unique_id)) == Some(unique_id))
+        {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        let slot_item = match parent_item.slots[slot_index].take() {
+            Some(boxed_item) => *boxed_item,
+            None => return false,
+        };
+
+        // Check if slot item is cursed (cannot remove)
+        if slot_item.cursed {
+            // Put it back
+            parent_item.slots[slot_index] = Some(Box::new(slot_item));
+            return false;
+        }
+
+        // Check if slot item has wedding ring (cannot remove)
+        if slot_item.wedding_ring != -1 {
+            // Put it back
+            parent_item.slots[slot_index] = Some(Box::new(slot_item));
+            return false;
+        }
+
+        // Move slot item to inventory
+        player.inventory.slots[to_index] = Some(slot_item);
+
+        // Recalculate stats if equipment changed
+        if grid == 13 || grid == 7 {
+            self.recalc_player_equipment_stats(session_id);
+        }
+
+        true
+    }
+
+    pub fn equip_slot_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        grid_to: u8,
+        unique_id: u64,
+        to: i32,
+        to_unique_id: u64,
+    ) -> bool {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Find source item index first (before any mutable borrows)
+        let source_item_index = match grid {
+            1 => {
+                // Inventory
+                player
+                    .inventory
+                    .slots
+                    .iter()
+                    .position(|s| s.as_ref().map(|i| i.unique_id) == Some(unique_id))
+            }
+            2 => {
+                // Storage - handled in connection layer (requires store access)
+                return false;
+            }
+            _ => return false,
+        };
+
+        let source_item_index = match source_item_index {
+            Some(idx) => idx,
+            None => return false,
+        };
+
+        // Get source item for validation (immutable borrow)
+        let (source_item_index_to_use, source_item_idx, source_soul_bound, source_cursed, source_wedding_ring) = {
+            let source_item = match player.inventory.slots[source_item_index].as_ref() {
+                Some(item) => item,
+                None => return false,
+            };
+            (source_item_index, source_item.item_index, source_item.soul_bound_id, source_item.cursed, source_item.wedding_ring)
+        };
+
+        // Get source item info
+        let source_info = match self.provider.get_item_info(source_item_idx) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Find target item based on grid_to
+        // Grid types: Mount=13, Fishing=7, Socket=8
+        let (target_item_idx, target_item_slot_idx, target_equipment_slot) = match grid_to {
+            13 => {
+                // Mount: get from equipment slot 13
+                match player.equipment.slots.get(13).and_then(|s| s.as_ref()) {
+                    Some(item) => (item.item_index, 13, true),
+                    None => return false,
+                }
+            }
+            7 => {
+                // Fishing: get from equipment slot 7 (Weapon)
+                match player.equipment.slots.get(7).and_then(|s| s.as_ref()) {
+                    Some(item) => (item.item_index, 7, true),
+                    None => return false,
+                }
+            }
+            8 => {
+                // Socket: find by to_unique_id in equipment or inventory
+                let mut found_idx = None;
+                let mut found_slot = None;
+                let mut found_in_equipment = false;
+
+                // Search in equipment first
+                for (idx, slot) in player.equipment.slots.iter().enumerate() {
+                    if let Some(item) = slot.as_ref() {
+                        if item.unique_id == to_unique_id {
+                            found_idx = Some(item.item_index);
+                            found_slot = Some(idx);
+                            found_in_equipment = true;
+                            break;
+                        }
+                    }
+                }
+
+                // If not found in equipment, search in inventory
+                if found_idx.is_none() {
+                    for (idx, slot) in player.inventory.slots.iter().enumerate() {
+                        if let Some(item) = slot.as_ref() {
+                            if item.unique_id == to_unique_id {
+                                found_idx = Some(item.item_index);
+                                found_slot = Some(idx);
+                                found_in_equipment = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                match (found_idx, found_slot) {
+                    (Some(idx), Some(slot)) => (idx, slot, found_in_equipment),
+                    _ => return false,
+                }
+            }
+            _ => return false,
+        };
+
+        // Get target item info
+        let target_info = match self.provider.get_item_info(target_item_idx) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Validate based on grid_to type
+        match grid_to {
+            7 => {
+                // Fishing: target must be a fishing rod
+                // Note: ItemInfoData doesn't have IsFishingRod field yet, so we check it's a weapon
+                // In C#, this checks: item.Info.Type == ItemType.Weapon && item.Info.IsFishingRod
+                if target_info.item_type != 0 {
+                    // ItemType.Weapon = 0
+                    return false;
+                }
+                // TODO: Add IsFishingRod field to ItemInfoData and check it here
+            }
+            8 => {
+                // Socket: source must be ItemType.Socket
+                if source_info.item_type != 12 {
+                    // ItemType.Socket = 12
+                    return false;
+                }
+            }
+            _ => {}
+        }
+
+        // Check soul bound
+        if source_soul_bound != -1 && source_soul_bound != player.character_index {
+            return false;
+        }
+
+        // Check if source item is cursed (cannot equip to slot if cursed, unless UnlockCurse is active)
+        // Note: UnlockCurse is not yet implemented in PlayerState, so we just check cursed flag
+        if source_cursed {
+            // TODO: Check UnlockCurse flag when implemented
+            return false;
+        }
+
+        // Check if source item is a wedding ring (cannot equip to slot)
+        if source_wedding_ring != -1 {
+            return false;
+        }
+
+        // Validate source item shape for socket type
+        if grid_to == 8 {
+            // Socket: validate shape restrictions
+            match source_info.shape {
+                1 => {
+                    // Only for weapons
+                    if target_info.item_type != 0 {
+                        return false;
+                    }
+                }
+                2 => {
+                    // Only for armour
+                    if target_info.item_type != 1 {
+                        return false;
+                    }
+                }
+                3 => {
+                    // Only for rings/bracelets/necklaces
+                    if target_info.item_type != 2
+                        && target_info.item_type != 3
+                        && target_info.item_type != 4
+                    {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Validate slot index before mutable borrows
+        let slot_index = if to < 0 {
+            return false;
+        } else {
+            to as usize
+        };
+
+        // Validate target item has slots and slot is empty
+        // We need to check this before mutable borrows
+        let target_has_slots_and_empty = match grid_to {
+            13 => {
+                player.equipment.slots.get(13)
+                    .and_then(|s| s.as_ref())
+                    .map(|item| !item.slots.is_empty() && slot_index < item.slots.len() && item.slots[slot_index].is_none())
+                    .unwrap_or(false)
+            }
+            7 => {
+                player.equipment.slots.get(7)
+                    .and_then(|s| s.as_ref())
+                    .map(|item| !item.slots.is_empty() && slot_index < item.slots.len() && item.slots[slot_index].is_none())
+                    .unwrap_or(false)
+            }
+            8 => {
+                if target_equipment_slot {
+                    player.equipment.slots.get(target_item_slot_idx)
+                        .and_then(|s| s.as_ref())
+                        .map(|item| !item.slots.is_empty() && slot_index < item.slots.len() && item.slots[slot_index].is_none())
+                        .unwrap_or(false)
+                } else {
+                    player.inventory.slots.get(target_item_slot_idx)
+                        .and_then(|s| s.as_ref())
+                        .map(|item| !item.slots.is_empty() && slot_index < item.slots.len() && item.slots[slot_index].is_none())
+                        .unwrap_or(false)
+                }
+            }
+            _ => false,
+        };
+
+        if !target_has_slots_and_empty {
+            return false;
+        }
+
+        // Now perform the move - handle different cases to avoid borrow conflicts
+        let source_item = player.inventory.slots[source_item_index_to_use].take();
+        if let Some(item) = source_item {
+            // Place item in target slot based on grid_to
+            match grid_to {
+                13 => {
+                    if let Some(target_item) = player.equipment.slots.get_mut(13).and_then(|s| s.as_mut()) {
+                        target_item.slots[slot_index] = Some(Box::new(item));
+                    } else {
+                        // Put source item back if target is invalid
+                        player.inventory.slots[source_item_index_to_use] = Some(item);
+                        return false;
+                    }
+                }
+                7 => {
+                    if let Some(target_item) = player.equipment.slots.get_mut(7).and_then(|s| s.as_mut()) {
+                        target_item.slots[slot_index] = Some(Box::new(item));
+                    } else {
+                        // Put source item back if target is invalid
+                        player.inventory.slots[source_item_index_to_use] = Some(item);
+                        return false;
+                    }
+                }
+                8 => {
+                    if target_equipment_slot {
+                        if let Some(target_item) = player.equipment.slots.get_mut(target_item_slot_idx).and_then(|s| s.as_mut()) {
+                            target_item.slots[slot_index] = Some(Box::new(item));
+                        } else {
+                            // Put source item back if target is invalid
+                            player.inventory.slots[source_item_index_to_use] = Some(item);
+                            return false;
+                        }
+                    } else {
+                        // Target is in inventory - need to handle carefully to avoid borrow conflicts
+                        // Since we already took source_item, we can safely borrow target
+                        if let Some(target_item) = player.inventory.slots.get_mut(target_item_slot_idx).and_then(|s| s.as_mut()) {
+                            target_item.slots[slot_index] = Some(Box::new(item));
+                        } else {
+                            // Put source item back if target is invalid
+                            player.inventory.slots[source_item_index_to_use] = Some(item);
+                            return false;
+                        }
+                    }
+                }
+                _ => {
+                    // Put source item back
+                    player.inventory.slots[source_item_index_to_use] = Some(item);
+                    return false;
+                }
+            }
+            self.recalc_player_equipment_stats(session_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn combine_item_for_player(
+        &mut self,
+        session_id: SessionId,
+        grid: u8,
+        id_from: u64,
+        id_to: u64,
+    ) -> (bool, bool) {
+        // Returns (success, destroy)
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return (false, false),
+        };
+
+        // Check if player is dead
+        if player.dead {
+            return (false, false);
+        }
+
+        // Find items in inventory (for now, only support Inventory grid)
+        let (from_index, to_index) = match grid {
+            1 => {
+                // Inventory
+                let from_idx = player
+                    .inventory
+                    .slots
+                    .iter()
+                    .position(|s| s.as_ref().map(|i| i.unique_id) == Some(id_from));
+                let to_idx = player
+                    .inventory
+                    .slots
+                    .iter()
+                    .position(|s| s.as_ref().map(|i| i.unique_id) == Some(id_to));
+
+                match (from_idx, to_idx) {
+                    (Some(f), Some(t)) => (f, t),
+                    _ => return (false, false),
+                }
+            }
+            _ => return (false, false), // TODO: Support HeroInventory
+        };
+
+        // Get items
+        let from_item = match player.inventory.slots[from_index].as_ref() {
+            Some(item) => item.clone(),
+            None => return (false, false),
+        };
+
+        let to_item = match player.inventory.slots[to_index].as_ref() {
+            Some(item) => item.clone(),
+            None => return (false, false),
+        };
+
+        // Get item infos
+        let from_info = match self.provider.get_item_info(from_item.item_index) {
+            Some(info) => info,
+            None => return (false, false),
+        };
+
+        let to_info = match self.provider.get_item_info(to_item.item_index) {
+            Some(info) => info,
+            None => return (false, false),
+        };
+
+        // Check if source item is cursed (cannot combine if cursed, unless UnlockCurse is active)
+        // Note: UnlockCurse is not yet implemented in PlayerState
+        if from_item.cursed {
+            // TODO: Check UnlockCurse flag when implemented
+            return (false, false);
+        }
+
+        // Check if source item is a wedding ring (cannot combine)
+        if from_item.wedding_ring != -1 {
+            return (false, false);
+        }
+
+        // Source must be a gem (ItemType.Gem = 12)
+        if from_info.item_type != 12 {
+            return (false, false);
+        }
+
+        // Target must be a valid equipment type (1-11)
+        if to_info.item_type < 1 || to_info.item_type > 11 {
+            return (false, false);
+        }
+
+        // Check if target item is cursed (cannot combine if cursed, unless UnlockCurse is active)
+        // Note: UnlockCurse is not yet implemented in PlayerState
+        if to_item.cursed {
+            // TODO: Check UnlockCurse flag when implemented
+            return (false, false);
+        }
+
+        // Check if target item is a wedding ring (cannot combine)
+        if to_item.wedding_ring != -1 {
+            return (false, false);
+        }
+
+        // Handle different gem shapes
+        match from_info.shape {
+            1 | 2 | 5 | 6 => {
+                // Repair tools (BoneHammer, SewingSupplies, SpecialHammer, SpecialSewingSupplies)
+                // Check if target can be repaired
+                const BIND_DONT_REPAIR: i16 = 0x0010;
+                if (to_info.bind & BIND_DONT_REPAIR) != 0 {
+                    return (false, false);
+                }
+
+                // Check if repair tool matches item type
+                // ItemType: Weapon=0, Armour=1, Helmet=5, Boots=6, Belt=7, Necklace=2, Ring=3, Bracelet=4
+                let can_repair = match to_info.item_type {
+                    0 | 2 | 3 | 4 => {
+                        // Weapon, Necklace, Ring, Bracelet - use hammer (shape 1 or 5)
+                        from_info.shape == 1 || from_info.shape == 5
+                    }
+                    1 | 5 | 6 | 7 => {
+                        // Armour, Helmet, Boots, Belt - use sewing supplies (shape 2 or 6)
+                        from_info.shape == 2 || from_info.shape == 6
+                    }
+                    _ => false,
+                };
+
+                if !can_repair {
+                    return (false, false);
+                }
+
+                // Check if item needs repair
+                if to_item.current_dura >= to_item.max_dura {
+                    return (false, false);
+                }
+
+                // Perform repair - restore durability
+                // For now, restore to full durability (can be made more complex later)
+                if let Some(target_item) = player.inventory.slots[to_index].as_mut() {
+                    target_item.current_dura = target_item.max_dura;
+                    
+                    // Remove source item
+                    player.inventory.slots[from_index] = None;
+                    
+                    return (true, false);
+                }
+            }
+            3 | 4 => {
+                // Gems/Orbs - upgrade stats
+                // Check if target can be upgraded
+                const BIND_DONT_UPGRADE: i16 = 0x0020;
+                if (to_info.bind & BIND_DONT_UPGRADE) != 0 {
+                    return (false, false);
+                }
+
+                // Check gem count limits
+                // from_info.stats[Stat.CriticalDamage] is max gem count
+                // from_info.stats[Stat.HPDrainRatePercent] is max stat count
+                let max_gem_count = from_info
+                    .stats
+                    .entries
+                    .iter()
+                    .find(|(stat_id, _)| *stat_id == 20) // Stat.CriticalDamage = 20
+                    .map(|(_, val)| *val as u16)
+                    .unwrap_or(255);
+
+                if to_item.gem_count >= max_gem_count {
+                    return (false, false);
+                }
+
+                // Calculate success chance
+                // Base success chance is from_info.stats[Stat.Reflect]
+                let base_success = from_info
+                    .stats
+                    .entries
+                    .iter()
+                    .find(|(stat_id, _)| *stat_id == 19) // Stat.Reflect = 19
+                    .map(|(_, val)| *val)
+                    .unwrap_or(100);
+
+                // Adjust success chance based on gem count (simplified version)
+                // In C#, this is more complex with GemStatIndependent setting
+                let mut success_chance = base_success;
+                success_chance = success_chance.saturating_sub((to_item.gem_count as i32) * 10);
+                success_chance = success_chance.max(0).min(100);
+
+                // Roll for success
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                let roll = rng.gen_range(0..100);
+                let succeeded = roll < success_chance;
+
+                // Apply stat upgrades if succeeded
+                let should_recalc = if succeeded {
+                    if let Some(target_item) = player.inventory.slots[to_index].as_mut() {
+                        // Increment gem count
+                        target_item.gem_count += 1;
+
+                        // Apply stat upgrades from gem
+                        // Find the first non-zero stat in the gem and apply it
+                        for (stat_id, stat_value) in &from_info.stats.entries {
+                            if *stat_value > 0 {
+                                // Find or add this stat to target item's added_stats
+                                let existing_idx = target_item
+                                    .added_stats
+                                    .entries
+                                    .iter()
+                                    .position(|(id, _)| id == stat_id);
+
+                                if let Some(idx) = existing_idx {
+                                    target_item.added_stats.entries[idx].1 += stat_value;
+                                } else {
+                                    target_item.added_stats.entries.push((*stat_id, *stat_value));
+                                }
+                                break; // Only apply first stat (matching C# logic)
+                            }
+                        }
+                        true // Need to recalc stats
+                    } else {
+                        false
+                    }
+                } else {
+                    // Failure handling
+                    if from_info.shape == 3 {
+                        // Gem (shape 3) has 20% chance to destroy item on failure
+                        let destroy_roll = rng.gen_range(0..15);
+                        if destroy_roll < 3 {
+                            // Destroy target item
+                            player.inventory.slots[to_index] = None;
+                            // Remove source item
+                            player.inventory.slots[from_index] = None;
+                            return (false, true);
+                        }
+                    }
+                    false // No need to recalc on failure
+                };
+
+                // Remove source item
+                player.inventory.slots[from_index] = None;
+
+                // Recalculate player stats if needed (after releasing player borrow)
+                if should_recalc {
+                    drop(player); // Explicitly drop the borrow
+                    self.recalc_player_equipment_stats(session_id);
+                }
+                
+                return (succeeded, false);
+            }
+            7 => {
+                // Slot upgrade - add socket
+                const BIND_DONT_UPGRADE: i16 = 0x0020;
+                if (to_info.bind & BIND_DONT_UPGRADE) != 0 {
+                    return (false, false);
+                }
+
+                // Check rental information
+                if let Some(ref rental) = to_item.rental_information {
+                    if (rental.binding_flags & BIND_DONT_UPGRADE) != 0 {
+                        return (false, false);
+                    }
+                }
+
+                // Validate gem type matches item type (ValidGemForItem)
+                // Check if gem's unique flag matches item type
+                // Note: C# uses 1-based item types in ValidGemForItem, but Rust uses 0-based
+                // C#: 1=Weapon, 2=Armour, 4=Helmet, 5=Necklace, 6=Bracelet, 7=Ring, 8=Amulet, 9=Belt, 10=Boots, 11=Stone, 12=Torch
+                // Rust: 0=Weapon, 1=Armour, 2=Necklace, 3=Ring, 4=Bracelet, 5=Helmet, 6=Boots, 7=Belt, etc.
+                let gem_valid = match to_info.item_type {
+                    0 => {
+                        // Weapon - gem must have Paralize flag (C# case 1)
+                        (from_info.unique & 0x0001) != 0 // SpecialItemMode.Paralize = 0x0001
+                    }
+                    1 => {
+                        // Armour - gem must have Teleport flag (C# case 2)
+                        (from_info.unique & 0x0002) != 0 // SpecialItemMode.Teleport = 0x0002
+                    }
+                    2 => {
+                        // Necklace - gem must have Protection flag (C# case 5)
+                        (from_info.unique & 0x0008) != 0 // SpecialItemMode.Protection = 0x0008
+                    }
+                    3 => {
+                        // Ring - gem must have Muscle flag (C# case 7)
+                        (from_info.unique & 0x0020) != 0 // SpecialItemMode.Muscle = 0x0020
+                    }
+                    4 => {
+                        // Bracelet - gem must have Revival flag (C# case 6)
+                        (from_info.unique & 0x0010) != 0 // SpecialItemMode.Revival = 0x0010
+                    }
+                    5 => {
+                        // Helmet - gem must have ClearRing flag (C# case 4)
+                        (from_info.unique & 0x0004) != 0 // SpecialItemMode.ClearRing = 0x0004
+                    }
+                    6 => {
+                        // Boots - gem must have Probe flag (C# case 10)
+                        (from_info.unique & 0x0100) != 0 // SpecialItemMode.Probe = 0x0100
+                    }
+                    7 => {
+                        // Belt - gem must have Healing flag (C# case 9)
+                        (from_info.unique & 0x0080) != 0 // SpecialItemMode.Healing = 0x0080
+                    }
+                    8 => {
+                        // Amulet - gem must have Flame flag (C# case 8)
+                        (from_info.unique & 0x0040) != 0 // SpecialItemMode.Flame = 0x0040
+                    }
+                    9 => {
+                        // Stone - gem must have Skill flag (C# case 11)
+                        (from_info.unique & 0x0200) != 0 // SpecialItemMode.Skill = 0x0200
+                    }
+                    10 => {
+                        // Torch - gem must have NoDuraLoss flag (C# case 12)
+                        (from_info.unique & 0x0400) != 0 // SpecialItemMode.NoDuraLoss = 0x0400
+                    }
+                    _ => false,
+                };
+
+                if !gem_valid {
+                    return (false, false);
+                }
+
+                // Check if item can have more slots
+                // If random_stats_id is 0, item cannot have slots
+                if to_info.random_stats_id == 0 {
+                    return (false, false);
+                }
+
+                // Get SlotMaxStat from RandomItemStats config
+                use crate::world::configs::random_item_stat_for_id;
+                let slot_max = match random_item_stat_for_id(to_info.random_stats_id) {
+                    Some(stat) => stat.slot_max_stat,
+                    None => return (false, false),
+                };
+
+                // Check if item already has max slots
+                if to_item.slots.len() >= slot_max as usize {
+                    return (false, false);
+                }
+
+                // Add slot to item
+                if let Some(target_item) = player.inventory.slots[to_index].as_mut() {
+                    target_item.slots.push(None);
+                }
+
+                // Remove source item
+                player.inventory.slots[from_index] = None;
+                
+                return (true, false);
+            }
+            8 => {
+                // Seal item
+                const BIND_DONT_UPGRADE: i16 = 0x0020;
+                if (to_info.bind & BIND_DONT_UPGRADE) != 0 {
+                    return (false, false);
+                }
+
+                // Check if item is already sealed and not expired
+                if let Some(ref sealed) = to_item.sealed_info {
+                    // Check if seal is still active (ExpiryDate > now)
+                    if sealed.expiry_binary > self.time_ms {
+                        return (false, false);
+                    }
+                    // If expired, allow re-sealing (but check NextSealDate)
+                    if sealed.next_seal_binary > self.time_ms {
+                        // Cannot seal yet - must wait until NextSealDate
+                        return (false, false);
+                    }
+                }
+
+                // Get seal duration from gem's current_dura (in minutes)
+                let seal_minutes = from_item.current_dura as i64;
+                
+                // Calculate expiry date (current time + seal_minutes)
+                let now_ms = self.time_ms;
+                let expiry_ms = now_ms + (seal_minutes * 60 * 1000);
+                
+                // NextSealDate = expiry + ItemSealDelay (default 24 hours = 86400000 ms)
+                let seal_delay_ms: i64 = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+                let next_seal_ms = expiry_ms + seal_delay_ms;
+
+                // Apply seal
+                if let Some(target_item) = player.inventory.slots[to_index].as_mut() {
+                    use crystal_shared_proto::item_types::SealedInfoData;
+                    target_item.sealed_info = Some(SealedInfoData {
+                        expiry_binary: expiry_ms,
+                        next_seal_binary: next_seal_ms,
+                    });
+                }
+
+                // Remove source item
+                player.inventory.slots[from_index] = None;
+                
+                return (true, false);
+            }
+            _ => {
+                return (false, false);
+            }
+        }
+
+        (false, false)
+    }
+
     fn can_equip_item_for_player_by_uid(
         &self,
         session_id: SessionId,
@@ -1072,6 +2094,14 @@ impl<P: WorldProvider> World<P> {
 
         if player.dead {
             return false;
+        }
+
+        // Check if item is sealed and not expired
+        if let Some(ref sealed) = item.sealed_info {
+            if sealed.expiry_binary > self.time_ms {
+                // Item is sealed and not expired - cannot use
+                return false;
+            }
         }
 
         let info = match self.provider.get_item_info(item.item_index) {
@@ -1205,6 +2235,14 @@ impl<P: WorldProvider> World<P> {
         item: &UserItemData,
         slot: usize,
     ) -> bool {
+        // Check if item is sealed and not expired
+        if let Some(ref sealed) = item.sealed_info {
+            if sealed.expiry_binary > self.time_ms {
+                // Item is sealed and not expired - cannot equip
+                return false;
+            }
+        }
+
         let info = match self.provider.get_item_info(item.item_index) {
             Some(i) => i,
             None => return false,

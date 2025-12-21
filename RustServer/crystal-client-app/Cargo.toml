@@ -1,0 +1,13 @@
+[package]
+name = "crystal-client-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.14"
+crystal-client-config = { path = "../crystal-client-config" }
+crystal-client-net = { path = "../crystal-client-net" }
+crystal-client-ui = { path = "../crystal-client-ui" }
+crystal-client-scene = { path = "../crystal-client-scene" }
+crystal-lib = { path = "../crystal-lib" }
+

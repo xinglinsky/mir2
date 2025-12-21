@@ -1563,21 +1563,24 @@ impl<P: WorldProvider> World<P> {
         // Resolve pending monster attacks against players after we finish
         // iterating over the monsters map to avoid borrow conflicts.
         for (monster_id, map_index, target_sid, monster_index) in pending_attacks {
-            let Some(player) = self.players.get_mut(&target_sid) else {
-                continue;
-            };
-
-            if player.dead || player.hp <= 0 {
-                continue;
-            }
-
-            let mut defender_stats: Stats = player.stats.total.clone();
+            // Extract all needed player data before any borrows
+            let (player_x, player_y, player_dir, player_hp, player_dead, player_stats, player_poison_mask) = 
+                if let Some(p) = self.players.get(&target_sid) {
+                    if p.dead || p.hp <= 0 {
+                        continue;
+                    }
+                    (p.x, p.y, p.direction, p.hp, p.dead, p.stats.total.clone(), p.current_poison_mask)
+                } else {
+                    continue;
+                };
+            
+            let mut defender_stats: Stats = player_stats;
 
             // Apply red-poison armour reduction for players by scaling
             // MinAC/MaxAC when the defender currently has Red poison active,
             // approximating C# HumanObject.ArmourRate.
             let red_mask = PoisonType::Red.as_u16();
-            if (player.current_poison_mask & red_mask) != 0 {
+            if (player_poison_mask & red_mask) != 0 {
                 let percent: i32 = 90;
                 let min_ac = defender_stats.get(Stat::MinAC);
                 let max_ac = defender_stats.get(Stat::MaxAC);
@@ -1618,7 +1621,7 @@ impl<P: WorldProvider> World<P> {
             //   we treat it as a fully absorbed hit and skip emitting any
             //   event.
             let (damage, damage_type, new_hp, dead) = if !hit {
-                let old_hp = player.hp.max(0);
+                let old_hp = player_hp.max(0);
                 (0, 1_u8, old_hp, false)
             } else {
                 if raw_damage <= 0 {
@@ -1626,20 +1629,29 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 let damage = raw_damage;
-                let old_hp = player.hp.max(0);
-                let new_hp = old_hp.saturating_sub(damage).max(0);
-                if new_hp == old_hp {
-                    continue;
-                }
-
-                player.hp = new_hp;
-                let mut dead = false;
-                if new_hp <= 0 {
-                    player.dead = true;
-                    dead = true;
-                }
-
-                (damage, raw_damage_type, new_hp, dead)
+                
+                // Apply damage using the centralized damage system
+                let damage_type_enum = match raw_damage_type {
+                    0 => crate::world::types::DamageType::Physical,
+                    1 => crate::world::types::DamageType::Magical,
+                    _ => crate::world::types::DamageType::Physical,
+                };
+                
+                let (actual_damage, is_dead) = self.apply_damage_to_player(
+                    None, // Monster attacker, no session_id
+                    target_sid,
+                    damage,
+                    damage_type_enum,
+                    map_index,
+                    events,
+                );
+                
+                // Get player HP after damage is applied
+                let new_hp = self.players.get(&target_sid)
+                    .map(|p| p.hp.max(0))
+                    .unwrap_or(0);
+                let dead = is_dead;
+                (actual_damage, raw_damage_type, new_hp, dead)
             };
 
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
@@ -1649,9 +1661,9 @@ impl<P: WorldProvider> World<P> {
                 attacker_monster_id: monster_id,
                 session_id: target_sid,
                 map_index,
-                x: player.x,
-                y: player.y,
-                direction: player.direction,
+                x: player_x,
+                y: player_y,
+                direction: player_dir,
                 damage,
                 damage_type,
                 health_percent,
@@ -2504,21 +2516,24 @@ impl<P: WorldProvider> World<P> {
         // Resolve pending guard hits against players using the same
         // MonsterHitPlayer model as generic monster AI.
         for (monster_id, map_index, target_sid, monster_index) in pending_guard_hits {
-            let Some(player) = self.players.get_mut(&target_sid) else {
-                continue;
-            };
-
-            if player.dead || player.hp <= 0 {
-                continue;
-            }
-
-            let mut defender_stats: Stats = player.stats.total.clone();
+            // Extract all needed player data before any borrows
+            let (player_x, player_y, player_dir, player_hp, player_dead, player_stats, player_poison_mask) = 
+                if let Some(p) = self.players.get(&target_sid) {
+                    if p.dead || p.hp <= 0 {
+                        continue;
+                    }
+                    (p.x, p.y, p.direction, p.hp, p.dead, p.stats.total.clone(), p.current_poison_mask)
+                } else {
+                    continue;
+                };
+            
+            let mut defender_stats: Stats = player_stats;
 
             // Apply red-poison armour reduction for players by scaling
             // MinAC/MaxAC when the defender currently has Red poison active,
             // approximating C# HumanObject.ArmourRate.
             let red_mask = PoisonType::Red.as_u16();
-            if (player.current_poison_mask & red_mask) != 0 {
+            if (player_poison_mask & red_mask) != 0 {
                 let percent: i32 = 90;
                 let min_ac = defender_stats.get(Stat::MinAC);
                 let max_ac = defender_stats.get(Stat::MaxAC);
@@ -2548,7 +2563,7 @@ impl<P: WorldProvider> World<P> {
                 compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
 
             let (damage, damage_type, new_hp, dead) = if !hit {
-                let old_hp = player.hp.max(0);
+                let old_hp = player_hp.max(0);
                 (0, 1_u8, old_hp, false)
             } else {
                 if raw_damage <= 0 {
@@ -2556,20 +2571,29 @@ impl<P: WorldProvider> World<P> {
                 }
 
                 let damage = raw_damage;
-                let old_hp = player.hp.max(0);
-                let new_hp = old_hp.saturating_sub(damage).max(0);
-                if new_hp == old_hp {
-                    continue;
-                }
-
-                player.hp = new_hp;
-                let mut dead = false;
-                if new_hp <= 0 {
-                    player.dead = true;
-                    dead = true;
-                }
-
-                (damage, raw_damage_type, new_hp, dead)
+                
+                // Apply damage using the centralized damage system
+                let damage_type_enum = match raw_damage_type {
+                    0 => crate::world::types::DamageType::Physical,
+                    1 => crate::world::types::DamageType::Magical,
+                    _ => crate::world::types::DamageType::Physical,
+                };
+                
+                let (actual_damage, is_dead) = self.apply_damage_to_player(
+                    None, // Monster attacker, no session_id
+                    target_sid,
+                    damage,
+                    damage_type_enum,
+                    map_index,
+                    events,
+                );
+                
+                // Get player HP after damage is applied
+                let new_hp = self.players.get(&target_sid)
+                    .map(|p| p.hp.max(0))
+                    .unwrap_or(0);
+                let dead = is_dead;
+                (actual_damage, raw_damage_type, new_hp, dead)
             };
 
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
@@ -2579,9 +2603,9 @@ impl<P: WorldProvider> World<P> {
                 attacker_monster_id: monster_id,
                 session_id: target_sid,
                 map_index,
-                x: player.x,
-                y: player.y,
-                direction: player.direction,
+                x: player_x,
+                y: player_y,
+                direction: player_dir,
                 damage,
                 damage_type,
                 health_percent,

@@ -101,6 +101,12 @@ impl LoginConnection {
             let mut world = self.world.lock().unwrap();
             let now_ms = world.current_time_ms();
             let progress = world.complete_quest_for_player(self.session_id, msg.quest_index, now_ms);
+            
+            // Give quest rewards with selected item
+            if progress.is_some() {
+                world.give_quest_rewards(self.session_id, msg.quest_index, Some(msg.selected_item_index), &mut Vec::new());
+            }
+            
             let completed = world.completed_quests_for_player(self.session_id);
             (progress, completed, now_ms)
         };

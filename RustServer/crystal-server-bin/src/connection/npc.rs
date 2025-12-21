@@ -5,12 +5,14 @@ use std::path::{Path, PathBuf};
 
 use crystal_server_core::account::AccountStorage;
 use crystal_server_core::world;
+use crystal_server_core::world::WorldProvider;
 use crystal_shared_proto::io::{write_bool, write_f32_le, write_i32_le};
 use crystal_shared_proto::item::{SNewItemInfo, SUserStorage, SCraftItem};
 
 use crystal_shared_proto::item_types::{AwakeData, ItemInfoData, StatsMap, UserItemData};
 use crystal_shared_proto::login::{CCallNPC, SDisconnect};
-use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll, CCraftItem};
+use crystal_shared_proto::npc::{SNpcGoods, SNpcSell, SNpcStorage, SNpcRepair, SNpcsRepair, SRoll, CCraftItem, CRepairItem, CSRepairItem, CDepositRefineItem, CRetrieveRefineItem, CRefineCancel, CRefineItem, CCheckRefine, CReplaceWedRing};
+use crystal_shared_proto::item::CBuyItemBack;
 
 use crystal_shared_proto::scene::SNpcResponse;
 use crystal_shared_proto::notice::{SOpenBrowser, SPlaySound, SSetTimer, SExpireTimer};
@@ -1947,8 +1949,15 @@ impl LoginConnection {
                 }
 
                 if key_upper == "@BUYBACK" {
-                    // TODO: populate from NPC buy-back history once that state exists.
-                    let goods_items: Vec<UserItemData> = Vec::new();
+                    // Populate from NPC buy-back history
+                    let goods_items = {
+                        let world = self.world.lock().unwrap();
+                        world.buyback_items_for(
+                            self.session_id,
+                            self.current_map_index,
+                            npc.index,
+                        )
+                    };
                     // PanelType.Buy
                     shop_goods = Some((goods_items, 0));
                 }
@@ -2435,6 +2444,1638 @@ impl LoginConnection {
                     out.push(Self::encode_raw(raw));
                 }
                 return;
+            }
+        }
+    }
+
+    pub(crate) fn handle_repair_item(&mut self, msg: CRepairItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Send SRepairItem response immediately (mirroring C# behavior)
+        use crystal_shared_proto::item::SRepairItem;
+        let pkt = SRepairItem {
+            unique_id: msg.unique_id,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Check if player is dead - use player_current_hp_mp to check if player exists
+        // If player doesn't exist or HP is 0, consider them dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // Find the item in inventory
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        let item_index = match inv.slots.iter().position(|s| {
+            s.as_ref().map(|i| i.unique_id) == Some(msg.unique_id)
+        }) {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        let (_item_index_val, max_dura, current_dura, cost) = {
+            let item = match inv.slots[item_index].as_ref() {
+                Some(it) => it,
+                None => return,
+            };
+
+            // Get item info to check bind flags
+            let info = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                Some(i) => i,
+                None => return,
+            };
+
+            // Check bind flags: DontRepair (0x0010)
+            const BIND_DONT_REPAIR: i16 = 0x0010;
+            if (info.bind & BIND_DONT_REPAIR) != 0 {
+                self.send_system_chat("无法修理此物品。", out);
+                return;
+            }
+
+            // Calculate repair cost
+            // RepairPrice formula: Based on item price and durability loss
+            // The cost is proportional to the percentage of durability lost
+            let durability_lost = item.max_dura.saturating_sub(item.current_dura);
+            if durability_lost == 0 {
+                // Item is already at full durability
+                return;
+            }
+
+            // Calculate repair cost
+            // Formula: (durability_lost / max_dura) * (item_price / repair_factor)
+            // This matches common MMO repair cost calculations
+            let max_dura_f32 = item.max_dura as f32;
+            let durability_lost_f32 = durability_lost as f32;
+            let item_price_f32 = info.price as f32;
+            
+            // Repair factor: typically items cost 1-5% of their price per full repair
+            // We use a factor of 50, meaning full repair costs 2% of item price
+            let repair_factor: f32 = 50.0;
+            
+            // Calculate cost based on percentage of durability lost
+            let durability_percent = durability_lost_f32 / max_dura_f32.max(1.0);
+            let cost = (durability_percent * item_price_f32 / repair_factor) as u32;
+            
+            // Ensure minimum cost of 1 gold
+            let cost = cost.max(1);
+
+            // Check if player has enough gold
+            let stats = match self.current_stats.clone() {
+                Some(s) => s,
+                None => return,
+            };
+
+            if stats.gold < cost as i64 {
+                self.send_system_chat("金币不足，无法修理。", out);
+                return;
+            }
+
+            // Deduct gold
+            let mut new_stats = stats.clone();
+            new_stats.gold = new_stats.gold.saturating_sub(cost as i64);
+
+            if let (Some(ref account_id), Some(char_idx)) =
+                (self.account_id.as_ref(), self.current_char_index)
+            {
+                let _ = self
+                    .store
+                    .save_character_stats(account_id, char_idx, &new_stats);
+            }
+
+            self.current_stats = Some(new_stats);
+
+            // Repair item: restore current durability to max
+            // For normal repair, reduce max durability slightly (C# behavior)
+            let new_max_dura = item.max_dura.saturating_sub((durability_lost / 30).max(1));
+            let new_current_dura = new_max_dura;
+
+            (item.item_index, new_max_dura, new_current_dura, cost)
+        };
+
+        // Update item in inventory
+        if let Some(item) = inv.slots[item_index].as_mut() {
+            item.max_dura = max_dura;
+            item.current_dura = current_dura;
+        }
+
+        // Update inventory in world
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+        }
+
+        // Send ItemRepaired packet
+        use crystal_shared_proto::item::SItemRepaired;
+        let repaired = SItemRepaired {
+            unique_id: msg.unique_id,
+            max_dura,
+            current_dura,
+        };
+        if let Ok(raw) = repaired.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send SLoseGold
+        use crystal_shared_proto::user::status::SLoseGold;
+        let lose_gold = SLoseGold { gold: cost };
+        if let Ok(raw) = lose_gold.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Refresh inventory
+        let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: eq.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_srepair_item(&mut self, msg: CSRepairItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Send SRepairItem response immediately (mirroring C# behavior)
+        use crystal_shared_proto::item::SRepairItem;
+        let pkt = SRepairItem {
+            unique_id: msg.unique_id,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Check if player is dead - use player_current_hp_mp to check if player exists
+        // If player doesn't exist or HP is 0, consider them dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // Find the item in inventory
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        let item_index = match inv.slots.iter().position(|s| {
+            s.as_ref().map(|i| i.unique_id) == Some(msg.unique_id)
+        }) {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        let (max_dura, current_dura, cost) = {
+            let item = match inv.slots[item_index].as_ref() {
+                Some(it) => it,
+                None => return,
+            };
+
+            // Get item info to check bind flags
+            let info = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                Some(i) => i,
+                None => return,
+            };
+
+            // Check bind flags: NoSRepair (0x0040) for special repair
+            const BIND_NO_SREPAIR: i16 = 0x0040;
+            if (info.bind & BIND_NO_SREPAIR) != 0 {
+                self.send_system_chat("无法进行特殊修理此物品。", out);
+                return;
+            }
+
+            // Calculate special repair cost (3x normal repair cost)
+            let durability_lost = item.max_dura.saturating_sub(item.current_dura);
+            if durability_lost == 0 {
+                // Item is already at full durability
+                return;
+            }
+
+            // Calculate repair cost using same formula as RepairItem, but 3x for special repair
+            // Formula: (durability_lost / max_dura) * (item_price / repair_factor) * 3
+            let max_dura_f32 = item.max_dura as f32;
+            let durability_lost_f32 = durability_lost as f32;
+            let item_price_f32 = info.price as f32;
+            
+            // Repair factor: typically items cost 1-5% of their price per full repair
+            // We use a factor of 50, meaning full repair costs 2% of item price
+            let repair_factor: f32 = 50.0;
+            
+            // Calculate cost based on percentage of durability lost
+            let durability_percent = durability_lost_f32 / max_dura_f32.max(1.0);
+            let base_cost = (durability_percent * item_price_f32 / repair_factor) as u32;
+            
+            // Special repair is 3x normal repair cost
+            let cost = base_cost * 3;
+            
+            // Ensure minimum cost of 1 gold
+            let cost = cost.max(1);
+
+            // Check if player has enough gold
+            let stats = match self.current_stats.clone() {
+                Some(s) => s,
+                None => return,
+            };
+
+            if stats.gold < cost as i64 {
+                self.send_system_chat("金币不足，无法进行特殊修理。", out);
+                return;
+            }
+
+            // Deduct gold
+            let mut new_stats = stats.clone();
+            new_stats.gold = new_stats.gold.saturating_sub(cost as i64);
+
+            if let (Some(ref account_id), Some(char_idx)) =
+                (self.account_id.as_ref(), self.current_char_index)
+            {
+                let _ = self
+                    .store
+                    .save_character_stats(account_id, char_idx, &new_stats);
+            }
+
+            self.current_stats = Some(new_stats);
+
+            // Special repair: restore current durability to max WITHOUT reducing max durability
+            (item.max_dura, item.max_dura, cost)
+        };
+
+        // Update item in inventory
+        if let Some(item) = inv.slots[item_index].as_mut() {
+            item.current_dura = current_dura;
+        }
+
+        // Update inventory in world
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+        }
+
+        // Send ItemRepaired packet
+        use crystal_shared_proto::item::SItemRepaired;
+        let repaired = SItemRepaired {
+            unique_id: msg.unique_id,
+            max_dura,
+            current_dura,
+        };
+        if let Ok(raw) = repaired.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send SLoseGold
+        use crystal_shared_proto::user::status::SLoseGold;
+        let lose_gold = SLoseGold { gold: cost };
+        if let Ok(raw) = lose_gold.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Refresh inventory
+        let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: eq.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_buy_item_back(&mut self, msg: CBuyItemBack, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        if msg.count == 0 {
+            return;
+        }
+
+        // Check if player is dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // Find nearby NPC
+        let npc = match self
+            .world_db
+            .npc_infos
+            .iter()
+            .find(|n| {
+                n.map_index == self.current_map_index
+                    && (n.location_x - self.current_x).abs() <= Self::DATA_RANGE
+                    && (n.location_y - self.current_y).abs() <= Self::DATA_RANGE
+            }) {
+            Some(n) => n,
+            None => return,
+        };
+
+        // Get buyback items for this player and NPC
+        let buyback_item = {
+            let world = self.world.lock().unwrap();
+            world
+                .buyback_items_for(self.session_id, self.current_map_index, npc.index)
+                .into_iter()
+                .find(|item| item.unique_id == msg.unique_id)
+        };
+
+        let buyback_item = match buyback_item {
+            Some(item) => item,
+            None => {
+                self.send_system_chat("回购列表中未找到该物品。", out);
+                return;
+            }
+        };
+
+        // Validate count
+        if msg.count as u32 > buyback_item.count as u32 {
+            self.send_system_chat("回购数量不能超过物品数量。", out);
+            return;
+        }
+
+        // Get item info for price calculation
+        let info = match self
+            .world_db
+            .item_infos
+            .iter()
+            .find(|i| i.index == buyback_item.item_index)
+        {
+            Some(i) => i,
+            None => return,
+        };
+
+        // Calculate price: use the item's price, apply NPC rate
+        let base_price = match info.price.checked_mul(msg.count as u32) {
+            Some(v) => v,
+            None => return,
+        };
+
+        let rate = (npc.rate as f32) / 100.0;
+        let mut cost = ((base_price as f32) * rate).floor() as u32;
+        if cost == 0 && base_price > 0 {
+            cost = 1;
+        }
+
+        // Check if player has enough gold
+        let stats = match self.current_stats.clone() {
+            Some(s) => s,
+            None => return,
+        };
+
+        if stats.gold < cost as i64 {
+            self.send_system_chat("金币不足，无法回购。", out);
+            return;
+        }
+
+        // Create item to add to inventory
+        let mut item_to_add = buyback_item.clone();
+        item_to_add.count = msg.count;
+
+        // Check if player can gain item
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        // Try to add item to inventory (simplified - should use proper CanGainItem logic)
+        let mut added = false;
+        for slot in inv.slots.iter_mut() {
+            if slot.is_none() {
+                *slot = Some(item_to_add.clone());
+                added = true;
+                break;
+            }
+        }
+
+        if !added {
+            self.send_system_chat("背包已满，无法回购。", out);
+            return;
+        }
+
+        // Deduct gold
+        let mut new_stats = stats.clone();
+        new_stats.gold = new_stats.gold.saturating_sub(cost as i64);
+
+        if let (Some(ref account_id), Some(char_idx)) =
+            (self.account_id.as_ref(), self.current_char_index)
+        {
+            let _ = self
+                .store
+                .save_character_stats(account_id, char_idx, &new_stats);
+        }
+
+        self.current_stats = Some(new_stats);
+
+        // Remove item from buyback list (entire stack, not just the purchased count)
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.remove_buyback_item(
+                self.session_id,
+                self.current_map_index,
+                npc.index,
+                msg.unique_id,
+            );
+        }
+
+        // Send SLoseGold
+        use crystal_shared_proto::user::status::SLoseGold;
+        let lose_gold = SLoseGold { gold: cost };
+        if let Ok(raw) = lose_gold.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Refresh inventory
+        let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: eq.slots,
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Update BuyBack panel with remaining items
+        let remaining_items = {
+            let world = self.world.lock().unwrap();
+            world.buyback_items_for(self.session_id, self.current_map_index, npc.index)
+        };
+
+        // Build goods_bytes for SNpcGoods packet
+        if let Ok(bytes) = Self::build_npc_goods_bytes(&remaining_items, (npc.rate as f32) / 100.0, 0, false) {
+            // PanelType.Buy = 0
+            use crystal_shared_proto::npc::SNpcGoods;
+            let goods_pkt = SNpcGoods { goods_bytes: bytes };
+            let raw = goods_pkt.encode();
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_deposit_refine_item(&mut self, msg: CDepositRefineItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Check if NPC page is @REFINE (need to track current NPC page)
+        // For now, we'll skip this check and allow the operation if other conditions are met
+
+        // Find nearby NPC
+        let npc = match self
+            .world_db
+            .npc_infos
+            .iter()
+            .find(|n| {
+                n.map_index == self.current_map_index
+                    && (n.location_x - self.current_x).abs() <= Self::DATA_RANGE
+                    && (n.location_y - self.current_y).abs() <= Self::DATA_RANGE
+            }) {
+            Some(n) => n,
+            None => {
+                use crystal_shared_proto::item::SDepositRefineItem;
+                let pkt = SDepositRefineItem {
+                    from: msg.from,
+                    to: msg.to,
+                    success: false,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        // Validate indices
+        if msg.from < 0 || msg.to < 0 {
+            use crystal_shared_proto::item::SDepositRefineItem;
+            let pkt = SDepositRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let from_index = msg.from as usize;
+        let to_index = msg.to as usize;
+
+        // Get player inventory, equipment, and refine slots
+        let (mut inv, eq, mut refine_slots) = {
+            let world = self.world.lock().unwrap();
+            let (inv, eq) = world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ));
+            let refine = world
+                .player_refine_slots(self.session_id)
+                .unwrap_or_else(|| vec![None; 16]);
+            (inv, eq, refine)
+        };
+
+        // Validate indices
+        if from_index >= inv.slots.len() || to_index >= refine_slots.len() {
+            use crystal_shared_proto::item::SDepositRefineItem;
+            let pkt = SDepositRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Get item from inventory
+        let item = match inv.slots[from_index].take() {
+            Some(item) => item,
+            None => {
+                use crystal_shared_proto::item::SDepositRefineItem;
+                let pkt = SDepositRefineItem {
+                    from: msg.from,
+                    to: msg.to,
+                    success: false,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        // Check if target refine slot is empty
+        if refine_slots[to_index].is_some() {
+            // Put item back
+            inv.slots[from_index] = Some(item);
+            use crystal_shared_proto::item::SDepositRefineItem;
+            let pkt = SDepositRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Move item to refine slot
+        refine_slots[to_index] = Some(item);
+
+        // Update world
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.set_player_refine_slots(self.session_id, refine_slots);
+        }
+
+        // Send success response
+        use crystal_shared_proto::item::SDepositRefineItem;
+        let pkt = SDepositRefineItem {
+            from: msg.from,
+            to: msg.to,
+            success: true,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send inventory refresh
+        let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: vec![], // Equipment unchanged
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_retrieve_refine_item(&mut self, msg: CRetrieveRefineItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Validate indices
+        if msg.from < 0 || msg.to < 0 {
+            use crystal_shared_proto::item::SRetrieveRefineItem;
+            let pkt = SRetrieveRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        let from_index = msg.from as usize;
+        let to_index = msg.to as usize;
+
+        // Get player inventory, equipment, and refine slots
+        let (mut inv, eq, mut refine_slots) = {
+            let world = self.world.lock().unwrap();
+            let (inv, eq) = world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ));
+            let refine = world
+                .player_refine_slots(self.session_id)
+                .unwrap_or_else(|| vec![None; 16]);
+            (inv, eq, refine)
+        };
+
+        // Validate indices
+        if from_index >= refine_slots.len() || to_index >= inv.slots.len() {
+            use crystal_shared_proto::item::SRetrieveRefineItem;
+            let pkt = SRetrieveRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Get item from refine slot
+        let item = match refine_slots[from_index].take() {
+            Some(item) => item,
+            None => {
+                use crystal_shared_proto::item::SRetrieveRefineItem;
+                let pkt = SRetrieveRefineItem {
+                    from: msg.from,
+                    to: msg.to,
+                    success: false,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+                return;
+            }
+        };
+
+        // Check if target inventory slot is empty
+        if inv.slots[to_index].is_some() {
+            // Put item back
+            refine_slots[from_index] = Some(item);
+            use crystal_shared_proto::item::SRetrieveRefineItem;
+            let pkt = SRetrieveRefineItem {
+                from: msg.from,
+                to: msg.to,
+                success: false,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            return;
+        }
+
+        // Move item to inventory
+        inv.slots[to_index] = Some(item);
+
+        // Update world
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.set_player_refine_slots(self.session_id, refine_slots);
+        }
+
+        // Send success response
+        use crystal_shared_proto::item::SRetrieveRefineItem;
+        let pkt = SRetrieveRefineItem {
+            from: msg.from,
+            to: msg.to,
+            success: true,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send inventory refresh
+        let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+            inventory: inv.slots,
+            equipment: vec![], // Equipment unchanged
+        };
+        if let Ok(raw) = refresh.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+    }
+
+    pub(crate) fn handle_refine_cancel(&mut self, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Get player refine slots and inventory
+        let (mut inv, eq, mut refine_slots) = {
+            let world = self.world.lock().unwrap();
+            let (inv, eq) = world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ));
+            let refine = world
+                .player_refine_slots(self.session_id)
+                .unwrap_or_else(|| vec![None; 16]);
+            (inv, eq, refine)
+        };
+
+        // Move all items from refine slots back to inventory
+        let mut items_moved = false;
+        for refine_index in 0..refine_slots.len() {
+            if let Some(item) = refine_slots[refine_index].take() {
+                // Find empty slot in inventory
+                if let Some(inv_index) = inv.slots.iter().position(|s| s.is_none()) {
+                    inv.slots[inv_index] = Some(item);
+                    items_moved = true;
+                } else {
+                    // No space in inventory - put item back
+                    refine_slots[refine_index] = Some(item);
+                }
+            }
+        }
+
+        // Update world if items were moved
+        if items_moved {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.set_player_refine_slots(self.session_id, refine_slots);
+
+            // Send inventory refresh
+            let refresh = crystal_shared_proto::user::SUserSlotsRefresh {
+                inventory: inv.slots,
+                equipment: vec![], // Equipment unchanged
+            };
+            if let Ok(raw) = refresh.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        }
+    }
+
+    pub(crate) fn handle_refine_item(&mut self, msg: CRefineItem, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Send SRefineItem response immediately (mirroring C# behavior)
+        use crystal_shared_proto::item::SRefineItem;
+        let pkt = SRefineItem {
+            unique_id: msg.unique_id,
+        };
+        if let Ok(raw) = pkt.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Check if player is dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // TODO: Check if NPC page is @REFINE (need to track current NPC page)
+        // For now, we'll skip this check
+
+        // Find nearby NPC
+        let npc = match self
+            .world_db
+            .npc_infos
+            .iter()
+            .find(|n| {
+                n.map_index == self.current_map_index
+                    && (n.location_x - self.current_x).abs() <= Self::DATA_RANGE
+                    && (n.location_y - self.current_y).abs() <= Self::DATA_RANGE
+            }) {
+            Some(n) => n,
+            None => {
+                self.send_system_chat("附近没有NPC。", out);
+                return;
+            }
+        };
+
+        // Get player inventory and refine slots
+        let (mut inv, eq, mut refine_slots) = {
+            let world = self.world.lock().unwrap();
+            let (inv, eq) = world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ));
+            let refine = world
+                .player_refine_slots(self.session_id)
+                .unwrap_or_else(|| vec![None; 16]);
+            (inv, eq, refine)
+        };
+
+        // Find item in inventory
+        let item_index = match inv.slots.iter().position(|s| {
+            s.as_ref().map(|i| i.unique_id == msg.unique_id).unwrap_or(false)
+        }) {
+            Some(idx) => idx,
+            None => {
+                self.send_system_chat("背包中未找到该物品。", out);
+                return;
+            }
+        };
+
+        let mut item = match inv.slots[item_index].take() {
+            Some(item) => item,
+            None => return,
+        };
+
+        // Check if item is already being refined (RefineAdded != 0)
+        if item.refine_added != 0 {
+            // Put item back
+            inv.slots[item_index] = Some(item);
+            self.send_system_chat("该物品需要先检查才能再次精炼。", out);
+            return;
+        }
+
+        // Get item info
+        let info = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+            Some(i) => i,
+            None => {
+                inv.slots[item_index] = Some(item);
+                self.send_system_chat("无法获取物品信息。", out);
+                return;
+            }
+        };
+
+        // Check bind flags: DontUpgrade (0x0020)
+        const BIND_DONT_UPGRADE: i16 = 0x0020;
+        if (info.bind & BIND_DONT_UPGRADE) != 0 {
+            inv.slots[item_index] = Some(item);
+            self.send_system_chat("该物品无法精炼。", out);
+            return;
+        }
+
+        // TODO: Check rental information binding flags
+        // TODO: Check OnlyRefineWeapon setting
+
+        // Calculate cost: (RequiredAmount * 10) * RefineCost (default 125)
+        const REFINE_COST: u32 = 125;
+        let required_amount = info.required_amount as u32;
+        let cost = required_amount * 10 * REFINE_COST;
+
+        // Check if player has enough gold
+        let stats = match self.current_stats.clone() {
+            Some(s) => s,
+            None => {
+                inv.slots[item_index] = Some(item);
+                self.send_system_chat("无法获取玩家状态。", out);
+                return;
+            }
+        };
+
+        if stats.gold < cost as i64 {
+            inv.slots[item_index] = Some(item);
+            self.send_system_chat("金币不足，无法精炼。", out);
+            return;
+        }
+
+        // Deduct gold with error handling
+        let mut new_stats = stats.clone();
+        new_stats.gold = new_stats.gold.saturating_sub(cost as i64);
+
+        if let (Some(ref account_id), Some(char_idx)) =
+            (self.account_id.as_ref(), self.current_char_index)
+        {
+            if let Err(e) = self
+                .store
+                .save_character_stats(account_id, char_idx, &new_stats)
+            {
+                // Error saving stats, restore gold and abort
+                inv.slots[item_index] = Some(item);
+                self.send_system_chat(&format!("保存数据失败: {:?}", e), out);
+                return;
+            }
+        } else {
+            inv.slots[item_index] = Some(item);
+            self.send_system_chat("无法获取账户信息。", out);
+            return;
+        }
+
+        self.current_stats = Some(new_stats);
+
+        // Send SLoseGold
+        use crystal_shared_proto::user::status::SLoseGold;
+        let lose_gold = SLoseGold { gold: cost };
+        if let Ok(raw) = lose_gold.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Process refine slots materials with error handling
+        // Calculate total stats from refine slots
+        let mut total_dc: i16 = 0;
+        let mut total_mc: i16 = 0;
+        let mut total_sc: i16 = 0;
+        let mut required_level: i16 = 0;
+        let mut durability_count: u8 = 0;
+        let mut current_dura_count: u8 = 0;
+        let mut item_amount: u8 = 0;
+        let mut ore_purity: i16 = 0;
+        let mut ore_amount: u8 = 0;
+
+        for refine_slot in refine_slots.iter_mut() {
+            if let Some(ref ingredient) = refine_slot {
+                let ingredient_info = match WorldProvider::get_item_info(&*self.world_db, ingredient.item_index) {
+                    Some(i) => i,
+                    None => {
+                        // Skip invalid item and clear slot
+                        *refine_slot = None;
+                        continue;
+                    }
+                };
+
+                // Skip weapons in refine slots
+                if ingredient_info.item_type == 0 {
+                    *refine_slot = None;
+                    continue;
+                }
+
+                // Check if ingredient has DC/MC/SC stats
+                let has_stats = ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8).map(|(_, v)| v) > Some(&0)
+                    || ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8).map(|(_, v)| v) > Some(&0)
+                    || ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8).map(|(_, v)| v) > Some(&0);
+
+                if has_stats {
+                    total_dc += (ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MinDC as u8).map(|(_, v)| v).unwrap_or(&0)
+                        + ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8).map(|(_, v)| v).unwrap_or(&0)) as i16;
+                    total_dc += *ingredient.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8).map(|(_, v)| v).unwrap_or(&0) as i16;
+
+                    total_mc += (ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MinMC as u8).map(|(_, v)| v).unwrap_or(&0)
+                        + ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8).map(|(_, v)| v).unwrap_or(&0)) as i16;
+                    total_mc += *ingredient.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8).map(|(_, v)| v).unwrap_or(&0) as i16;
+
+                    total_sc += (ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MinSC as u8).map(|(_, v)| v).unwrap_or(&0)
+                        + ingredient_info.stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8).map(|(_, v)| v).unwrap_or(&0)) as i16;
+                    total_sc += *ingredient.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8).map(|(_, v)| v).unwrap_or(&0) as i16;
+
+                    required_level += ingredient_info.required_amount as i16;
+
+                    // Check durability (floor(max_dura / 1000) == floor(info.durability / 1000))
+                    let max_dura_floor = (ingredient.max_dura / 1000) as u16;
+                    let info_dura_floor = (ingredient_info.durability / 1000) as u16;
+                    if max_dura_floor == info_dura_floor {
+                        durability_count += 1;
+                    }
+
+                    // Check current durability (floor(current_dura / 1000) == floor(max_dura / 1000))
+                    let current_dura_floor = (ingredient.current_dura / 1000) as u16;
+                    if current_dura_floor == max_dura_floor {
+                        current_dura_count += 1;
+                    }
+
+                    item_amount += 1;
+                }
+
+                // Check if ingredient is RefineOre
+                // For now, we'll use a simple check - items with "Ore" in the name
+                // TODO: Get RefineOreName from settings
+                if ingredient_info.name.contains("Ore") {
+                    ore_purity += (ingredient.current_dura / 1000) as i16;
+                    ore_amount += 1;
+                }
+
+                // Clear refine slot
+                *refine_slot = None;
+            }
+        }
+
+        // Set refine_added to default increase (Settings.RefineIncrease, default 1)
+        const REFINE_INCREASE: u8 = 1;
+        item.refine_added = REFINE_INCREASE;
+
+        // Calculate success chance if we have materials with stats
+        if total_dc == 0 && total_mc == 0 && total_sc == 0 {
+            // No stats from materials - simple refine
+            item.refine_success_chance = 0;
+        } else if ore_amount == 0 {
+            // No ore - simple refine
+            item.refine_success_chance = 0;
+        } else {
+            // Calculate refine stat (DC, MC, or SC based on which is highest)
+            let refine_stat = if total_dc > total_mc && total_dc > total_sc {
+                // RefinedValue.DC
+                item.refined_value = 0; // DC = 0
+                total_dc
+            } else if total_mc > total_dc && total_mc > total_sc {
+                // RefinedValue.MC
+                item.refined_value = 1; // MC = 1
+                total_mc
+            } else if total_sc > total_dc && total_sc > total_mc {
+                // RefinedValue.SC
+                item.refined_value = 2; // SC = 2
+                total_sc
+            } else {
+                // Default to DC
+                item.refined_value = 0;
+                total_dc
+            };
+
+            // Calculate success chance (simplified version)
+            // Item success: (refineStat * 5) - RequiredAmount + 5, capped at 10
+            let mut item_success = (refine_stat * 5) - (info.required_amount as i16) + 5;
+            if item_success > 10 {
+                item_success = 10;
+            }
+            if item_success < 0 {
+                item_success = 0;
+            }
+
+            // Additional bonuses
+            if item_amount > 0 && (required_level / item_amount as i16) > (info.required_amount as i16 - 5) {
+                item_success += 10;
+            }
+            if durability_count == item_amount && item_amount > 0 {
+                item_success += 10;
+            }
+            if current_dura_count == item_amount && item_amount > 0 {
+                item_success += 5;
+            }
+
+            // Ore success (simplified)
+            let mut ore_success = 0;
+            if ore_amount >= item_amount {
+                ore_success += 15;
+            }
+            if item_amount > 0 && (ore_purity / ore_amount as i16) >= (refine_stat / item_amount as i16) {
+                ore_success += 15;
+            }
+            if ore_purity == refine_stat {
+                ore_success += 5;
+            }
+
+            // Luck success: (AddedStats[Luck] + 5), capped at 10
+            let mut luck_success = *item.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::Luck as u8).map(|(_, v)| v).unwrap_or(&0) + 5;
+            if luck_success > 10 {
+                luck_success = 10;
+            }
+            if luck_success < 0 {
+                luck_success = 0;
+            }
+
+            // Base success chance (Settings.RefineBaseChance, default 20)
+            const REFINE_BASE_CHANCE: i32 = 20;
+            let mut success_chance = item_success as i32 + ore_success as i32 + luck_success as i32 + REFINE_BASE_CHANCE;
+
+            // Reduce success chance based on existing added stats
+            let added_stats_total = *item.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8).map(|(_, v)| v).unwrap_or(&0)
+                + *item.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8).map(|(_, v)| v).unwrap_or(&0)
+                + *item.added_stats.entries.iter().find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8).map(|(_, v)| v).unwrap_or(&0);
+
+            // TODO: Apply RefineWepStatReduce or RefineItemStatReduce based on item type
+            let stat_reduce_factor: f32 = if info.item_type == 0 {
+                0.5 // Weapon - TODO: use RefineWepStatReduce
+            } else {
+                1.0 // Other - TODO: use RefineItemStatReduce
+            };
+
+            let adjusted_added_stats = (added_stats_total as f32 * stat_reduce_factor) as i32;
+            let capped_added_stats = adjusted_added_stats.min(50);
+
+            success_chance -= capped_added_stats;
+
+            item.refine_success_chance = success_chance;
+        }
+
+        // Set refine time (Settings.RefineTime * Settings.Minute, default 20 minutes)
+        const REFINE_TIME_MINUTES: i64 = 20;
+        const MINUTE_MS: i64 = 60_000;
+        let refine_time_ms = REFINE_TIME_MINUTES * MINUTE_MS;
+
+        // Update world: set current_refine and clear refine slots
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.set_player_refine_slots(self.session_id, refine_slots);
+            world.set_player_current_refine(self.session_id, Some(item.clone()));
+            world.set_player_refine_time_remaining(self.session_id, refine_time_ms);
+        }
+
+        // Send system message
+        self.send_system_chat(
+            &format!("您的物品正在精炼中，请在 {} 分钟后检查。", REFINE_TIME_MINUTES),
+            out,
+        );
+    }
+
+    pub(crate) fn handle_check_refine(&mut self, msg: CCheckRefine, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Check if player is dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // TODO: Check if NPC page is @REFINECHECK (need to track current NPC page)
+        // For now, we'll skip this check
+
+        // Get player inventory
+        let (mut inv, eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        // Find item in inventory
+        let item_index = match inv.slots.iter().position(|s| {
+            s.as_ref().map(|i| i.unique_id == msg.unique_id).unwrap_or(false)
+        }) {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        let mut item = match inv.slots[item_index].take() {
+            Some(item) => item,
+            None => return,
+        };
+
+        // Check if item has been refined (RefineAdded > 0)
+        if item.refine_added == 0 {
+            // Get item name from info
+            let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                Some(info) => info.name.clone(),
+                None => "Unknown Item".to_string(),
+            };
+            
+            self.send_system_chat(
+                &format!("{} doesn't need to be checked as it hasn't been refined yet.", item_name),
+                out,
+            );
+            inv.slots[item_index] = Some(item);
+            return;
+        }
+
+        // Use random chance to determine success/failure
+        let mut rng = rand::thread_rng();
+        let success_roll = rng.gen_range(1..100);
+        
+        // Check if refinement fails (roll > success chance)
+        if success_roll > item.refine_success_chance as i32 {
+            // Failed - reset refined value to None (255 in our implementation)
+            item.refined_value = 255; // RefinedValue::None
+        }
+
+        // Check for critical success (Settings.RefineCritChance, default 5%)
+        const REFINE_CRIT_CHANCE: i32 = 5;
+        let crit_roll = rng.gen_range(1..100);
+        
+        if crit_roll < REFINE_CRIT_CHANCE {
+            // Critical success - increase refine added
+            // Settings.RefineCritIncrease, default 2
+            const REFINE_CRIT_INCREASE: u8 = 2;
+            item.refine_added = item.refine_added.saturating_mul(REFINE_CRIT_INCREASE);
+        }
+
+        // Apply results based on refined value
+        let mut item_destroyed = false;
+        
+        if item.refined_value == 255 && item.refine_added > 0 {
+            // Failed refinement - destroy the item
+            let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                Some(info) => info.name.clone(),
+                None => "Unknown Item".to_string(),
+            };
+            
+            self.send_system_chat(
+                &format!("Your {} smashed into a thousand pieces upon testing.", item_name),
+                out,
+            );
+            
+            // Send RefineItem packet to notify client of destruction
+            use crystal_shared_proto::item::SRefineItem;
+            let pkt = SRefineItem {
+                unique_id: item.unique_id,
+            };
+            if let Ok(raw) = pkt.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+            
+            item.refine_success_chance = 0;
+            item_destroyed = true;
+        } else if item.refine_added > 0 {
+            // Success - add stats to item
+            let stat_added = item.refine_added as i32;
+            
+            match item.refined_value {
+                0 => {
+                    // DC - RefinedValue::DC = 0
+                    let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                        Some(info) => info.name.clone(),
+                        None => "Unknown Item".to_string(),
+                    };
+                    
+                    self.send_system_chat(
+                        &format!("Congratulations, your {} now has +{} extra DC.", item_name, item.refine_added),
+                        out,
+                    );
+                    // Add to added_stats
+                    let current_dc = *item.added_stats.entries.iter()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8)
+                        .map(|(_, v)| v)
+                        .unwrap_or(&0);
+                    let new_dc = current_dc.saturating_add(stat_added);
+                    
+                    // Update or add the stat entry
+                    if let Some(entry) = item.added_stats.entries.iter_mut()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxDC as u8) {
+                        entry.1 = new_dc;
+                    } else {
+                        item.added_stats.entries.push((crystal_server_core::stats::Stat::MaxDC as u8, new_dc));
+                    }
+                }
+                1 => {
+                    // MC - RefinedValue::MC = 1
+                    let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                        Some(info) => info.name.clone(),
+                        None => "Unknown Item".to_string(),
+                    };
+                    
+                    self.send_system_chat(
+                        &format!("Congratulations, your {} now has +{} extra MC.", item_name, item.refine_added),
+                        out,
+                    );
+                    // Add to added_stats
+                    let current_mc = *item.added_stats.entries.iter()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8)
+                        .map(|(_, v)| v)
+                        .unwrap_or(&0);
+                    let new_mc = current_mc.saturating_add(stat_added);
+                    
+                    // Update or add the stat entry
+                    if let Some(entry) = item.added_stats.entries.iter_mut()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxMC as u8) {
+                        entry.1 = new_mc;
+                    } else {
+                        item.added_stats.entries.push((crystal_server_core::stats::Stat::MaxMC as u8, new_mc));
+                    }
+                }
+                2 => {
+                    // SC - RefinedValue::SC = 2
+                    let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                        Some(info) => info.name.clone(),
+                        None => "Unknown Item".to_string(),
+                    };
+                    
+                    self.send_system_chat(
+                        &format!("Congratulations, your {} now has +{} extra SC.", item_name, item.refine_added),
+                        out,
+                    );
+                    // Add to added_stats
+                    let current_sc = *item.added_stats.entries.iter()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8)
+                        .map(|(_, v)| v)
+                        .unwrap_or(&0);
+                    let new_sc = current_sc.saturating_add(stat_added);
+                    
+                    // Update or add the stat entry
+                    if let Some(entry) = item.added_stats.entries.iter_mut()
+                        .find(|(k, _)| *k == crystal_server_core::stats::Stat::MaxSC as u8) {
+                        entry.1 = new_sc;
+                    } else {
+                        item.added_stats.entries.push((crystal_server_core::stats::Stat::MaxSC as u8, new_sc));
+                    }
+                }
+                _ => {
+                    // Unknown refined value - treat as failure
+                    let item_name = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                        Some(info) => info.name.clone(),
+                        None => "Unknown Item".to_string(),
+                    };
+                    
+                    self.send_system_chat(
+                        &format!("Your {} smashed into a thousand pieces upon testing.", item_name),
+                        out,
+                    );
+                    
+                    use crystal_shared_proto::item::SRefineItem;
+                    let pkt = SRefineItem {
+                        unique_id: item.unique_id,
+                    };
+                    if let Ok(raw) = pkt.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                    
+                    item.refine_success_chance = 0;
+                    item_destroyed = true;
+                }
+            }
+            
+            // Reset refinement state on success
+            item.refine_added = 0;
+            item.refined_value = 0;
+            item.refine_success_chance = 0;
+        }
+
+        // Update world state
+        {
+            let mut world = self.world.lock().unwrap();
+            if item_destroyed {
+                // Item was destroyed, don't put it back
+                world.set_player_items(self.session_id, inv, eq);
+            } else {
+                // Put the updated item back
+                inv.slots[item_index] = Some(item.clone());
+                world.set_player_items(self.session_id, inv, eq);
+                
+                // Send ItemUpgraded packet
+                use crystal_shared_proto::item::SItemUpgraded;
+                // Serialize the item using the same method as SRefreshItem
+                let item_bytes = match crystal_shared_proto::item::SRefreshItem::from_user_item(&item) {
+                    Ok(refresh_item) => {
+                        match refresh_item.encode() {
+                            Ok(raw_packet) => raw_packet.payload,
+                            Err(_) => {
+                                // Fallback: empty bytes
+                                Vec::new()
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback: empty bytes
+                        Vec::new()
+                    }
+                };
+                
+                let pkt = SItemUpgraded {
+                    item_bytes,
+                };
+                if let Ok(raw) = pkt.encode() {
+                    out.push(Self::encode_raw(raw));
+                }
+            }
+        }
+    }
+
+    pub(crate) fn handle_replace_wed_ring(&mut self, msg: CReplaceWedRing, out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // Check if player is dead
+        let is_dead = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_current_hp_mp(self.session_id)
+                .map(|(hp, _)| hp <= 0)
+                .unwrap_or(true)
+        };
+
+        if is_dead {
+            return;
+        }
+
+        // TODO: Check if NPC page is @REPLACEWEDRING (need to track current NPC page)
+        // For now, we'll skip this check and allow the operation if other conditions are met
+
+        // Get player equipment and inventory
+        let (mut inv, mut eq) = {
+            let world = self.world.lock().unwrap();
+            world
+                .player_items(self.session_id)
+                .unwrap_or((
+                    crystal_server_core::item::Inventory::new_default(),
+                    crystal_server_core::item::Equipment::new_default(),
+                ))
+        };
+
+        // Check if player is wearing a ring in RingL slot (index 7)
+        const RING_L_SLOT: usize = 7;
+        let current_ring = match eq.slots.get(RING_L_SLOT).and_then(|s| s.as_ref()) {
+            Some(ring) => ring.clone(),
+            None => {
+                self.send_system_chat("您没有佩戴戒指。", out);
+                return;
+            }
+        };
+
+        // Check if current ring is a wedding ring
+        if current_ring.wedding_ring == -1 {
+            self.send_system_chat("您没有佩戴婚戒。", out);
+            return;
+        }
+
+        // Find new ring in inventory
+        let new_ring_index = match inv.slots.iter().position(|s| {
+            s.as_ref().map(|i| i.unique_id == msg.unique_id).unwrap_or(false)
+        }) {
+            Some(idx) => idx,
+            None => {
+                self.send_system_chat("背包中未找到该物品。", out);
+                return;
+            }
+        };
+
+        let new_ring = match inv.slots[new_ring_index].as_ref() {
+            Some(ring) => ring.clone(),
+            None => return,
+        };
+
+        // Get item info for validation
+        let new_ring_info = match WorldProvider::get_item_info(&*self.world_db, new_ring.item_index) {
+            Some(info) => info,
+            None => return,
+        };
+
+        // Validate new ring is a Ring type (ItemType.Ring = 3)
+        if new_ring_info.item_type != 3 {
+            self.send_system_chat("您不能使用此物品替换婚戒。", out);
+            return;
+        }
+
+        // Check if new ring can be equipped (use equip_item_for_player to validate, but don't actually equip yet)
+        // We'll validate by trying to get item info and check requirements
+        let can_equip = {
+            let world = self.world.lock().unwrap();
+            // Get item from inventory to validate
+            let item = match inv.slots[new_ring_index].as_ref() {
+                Some(i) => i,
+                None => return,
+            };
+            
+            // Basic validation: check if it's a ring and can be equipped
+            // The actual equip validation will be done by can_equip_item_for_player
+            // For now, we'll do a simplified check
+            let info = match WorldProvider::get_item_info(&*self.world_db, item.item_index) {
+                Some(i) => i,
+                None => return,
+            };
+            
+            // Check item type is Ring (3)
+            info.item_type == 3
+        };
+        
+        if !can_equip {
+            self.send_system_chat("您无法装备此物品。", out);
+            return;
+        }
+
+        // Check bind flag: NoWeddingRing (need to check ItemInfoData.bind flags)
+        // In C#, this is BindMode.NoWeddingRing, which is typically 0x0080
+        const BIND_NO_WEDDING_RING: i16 = 0x0080;
+        if (new_ring_info.bind & BIND_NO_WEDDING_RING) != 0 {
+            self.send_system_chat("您不能使用此类型的戒指。", out);
+            return;
+        }
+
+        // Calculate cost: (RequiredAmount * 10) * ReplaceWedRingCost (default 125)
+        const REPLACE_WED_RING_COST: u32 = 125;
+        let required_amount = new_ring_info.required_amount as u32;
+        let cost = required_amount * 10 * REPLACE_WED_RING_COST;
+
+        // Check if player has enough gold
+        let stats = match self.current_stats.clone() {
+            Some(s) => s,
+            None => return,
+        };
+
+        if stats.gold < cost as i64 {
+            self.send_system_chat("金币不足，无法替换婚戒。", out);
+            return;
+        }
+
+        // Get player's married status (character index of spouse)
+        // For now, we'll use the current ring's wedding_ring value as the married status
+        // In a full implementation, this should come from player's marriage data
+        let married = current_ring.wedding_ring;
+
+        // Deduct gold
+        let mut new_stats = stats.clone();
+        new_stats.gold = new_stats.gold.saturating_sub(cost as i64);
+
+        if let (Some(ref account_id), Some(char_idx)) =
+            (self.account_id.as_ref(), self.current_char_index)
+        {
+            let _ = self
+                .store
+                .save_character_stats(account_id, char_idx, &new_stats);
+        }
+
+        self.current_stats = Some(new_stats);
+
+        // Prepare new ring with wedding ring property
+        let mut new_ring_with_wedding = new_ring.clone();
+        new_ring_with_wedding.wedding_ring = married;
+
+        // Prepare old ring without wedding ring property
+        let mut old_ring_without_wedding = current_ring.clone();
+        old_ring_without_wedding.wedding_ring = -1;
+
+        // Swap rings: new ring to equipment, old ring to inventory
+        eq.slots[RING_L_SLOT] = Some(new_ring_with_wedding.clone());
+        inv.slots[new_ring_index] = Some(old_ring_without_wedding.clone());
+
+        // Update world
+        {
+            let mut world = self.world.lock().unwrap();
+            world.set_player_items(self.session_id, inv.clone(), eq.clone());
+            world.recalc_player_equipment_stats(self.session_id);
+        }
+
+        // Send SLoseGold
+        use crystal_shared_proto::user::status::SLoseGold;
+        let lose_gold = SLoseGold { gold: cost };
+        if let Ok(raw) = lose_gold.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send SEquipItem
+        use crystal_shared_proto::item::SEquipItem;
+        let equip_item = SEquipItem {
+            grid: 1, // Inventory
+            unique_id: new_ring_with_wedding.unique_id,
+            to: RING_L_SLOT as i32,
+            success: true,
+        };
+        if let Ok(raw) = equip_item.encode() {
+            out.push(Self::encode_raw(raw));
+        }
+
+        // Send SRefreshItem for both rings
+        use crystal_shared_proto::item::SRefreshItem;
+        if let Ok(refresh_old) = SRefreshItem::from_user_item(&old_ring_without_wedding) {
+            if let Ok(raw) = refresh_old.encode() {
+                out.push(Self::encode_raw(raw));
+            }
+        }
+
+        if let Ok(refresh_new) = SRefreshItem::from_user_item(&new_ring_with_wedding) {
+            if let Ok(raw) = refresh_new.encode() {
+                out.push(Self::encode_raw(raw));
             }
         }
     }

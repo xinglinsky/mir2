@@ -12,8 +12,10 @@ use crystal_shared_proto::guild::{
     CGuildStorageGoldChange,
     CGuildStorageItemChange,
 };
-use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem};
-use crystal_shared_proto::npc::{CBuyItem, CCraftItem, CDepositTradeItem, CRetrieveTradeItem};
+use crystal_shared_proto::item::{CDropItem, CStoreItem, CTakeBackItem, CSplitItem, CMergeItem, CDropGold, CRemoveSlotItem, CBuyItemBack, CEquipSlotItem, CCombineItem};
+use crystal_shared_proto::npc::{CBuyItem, CCraftItem, CDepositTradeItem, CRetrieveTradeItem, CRepairItem, CSRepairItem, CDepositRefineItem, CRetrieveRefineItem, CRefineItem, CCheckRefine, CReplaceWedRing};
+use crystal_shared_proto::login::CRefineCancel;
+#[allow(unused_imports)]
 use crystal_shared_proto::login::{
     CAbandonQuest,
     CAcceptQuest,
@@ -26,7 +28,52 @@ use crystal_shared_proto::login::{
     CChangeAMode,
     CChangePMode,
     CChangeTrade,
+    CHarvest,
+    CFishingCast,
+    CFishingChangeAutocast,
+    CAwakeningNeedMaterials,
+    CAwakeningLockedItem,
+    CAwakening,
+    CDisassembleItem,
+    CDowngradeAwakening,
+    CResetAddedItem,
+    CRequestIntelligentCreatureUpdates,
+    CUpdateIntelligentCreature,
+    CIntelligentCreaturePickup,
+    CMarriageRequest,
+    CMarriageReply,
+    CChangeMarriage,
+    CDivorceRequest,
+    CDivorceReply,
+    CAddMentor,
+    CMentorReply,
+    CAllowMentor,
+    CCancelMentor,
+    CGuildBuffUpdate,
+    CNPCConfirmInput,
+    CReportIssue,
+    COpendoor,
+    CGetRentedItems,
+    CItemRentalRequest,
+    CItemRentalFee,
+    CItemRentalPeriod,
+    CDepositRentalItem,
+    CRetrieveRentalItem,
+    CCancelItemRental,
+    CItemRentalLockFee,
+    CItemRentalLockItem,
+    CConfirmItemRental,
+    CGuildTerritoryPage,
+    CPurchaseGuildTerritory,
+    CConsignItem,
+    CMarketSearch,
+    CMarketRefresh,
+    CMarketPage,
+    CMarketBuy,
+    CMarketSellNow,
+    CMarketGetBack,
     CChangePassword,
+    CGuildWarReturn,
     CClientVersion,
     CCollectParcel,
     CChat,
@@ -150,6 +197,16 @@ impl ConnectionHandler for LoginConnection {
                     }
                 }
             }
+            ClientPacketId::RepairItem => {
+                if let Ok(msg) = CRepairItem::decode(&packet.payload) {
+                    self.handle_repair_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::SRepairItem => {
+                if let Ok(msg) = CSRepairItem::decode(&packet.payload) {
+                    self.handle_srepair_item(msg, &mut out);
+                }
+            }
             ClientPacketId::ClientVersion => {
                 if let Ok(msg) = CClientVersion::decode(&packet.payload) {
                     self.handle_client_version(msg, &mut out);
@@ -226,6 +283,71 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::DropItem => {
                 if let Ok(msg) = CDropItem::decode(&packet.payload) {
                     self.handle_drop_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::MergeItem => {
+                if let Ok(msg) = CMergeItem::decode(&packet.payload) {
+                    self.handle_merge_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::SplitItem => {
+                if let Ok(msg) = CSplitItem::decode(&packet.payload) {
+                    self.handle_split_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::DropGold => {
+                if let Ok(msg) = CDropGold::decode(&packet.payload) {
+                    self.handle_drop_gold(msg, &mut out);
+                }
+            }
+            ClientPacketId::RemoveSlotItem => {
+                if let Ok(msg) = CRemoveSlotItem::decode(&packet.payload) {
+                    self.handle_remove_slot_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::BuyItemBack => {
+                if let Ok(msg) = CBuyItemBack::decode(&packet.payload) {
+                    self.handle_buy_item_back(msg, &mut out);
+                }
+            }
+            ClientPacketId::DepositRefineItem => {
+                if let Ok(msg) = CDepositRefineItem::decode(&packet.payload) {
+                    self.handle_deposit_refine_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::RetrieveRefineItem => {
+                if let Ok(msg) = CRetrieveRefineItem::decode(&packet.payload) {
+                    self.handle_retrieve_refine_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::RefineCancel => {
+                if let Ok(_msg) = CRefineCancel::decode(&packet.payload) {
+                    self.handle_refine_cancel(&mut out);
+                }
+            }
+            ClientPacketId::RefineItem => {
+                if let Ok(msg) = CRefineItem::decode(&packet.payload) {
+                    self.handle_refine_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::CheckRefine => {
+                if let Ok(msg) = CCheckRefine::decode(&packet.payload) {
+                    self.handle_check_refine(msg, &mut out);
+                }
+            }
+            ClientPacketId::ReplaceWedRing => {
+                if let Ok(msg) = CReplaceWedRing::decode(&packet.payload) {
+                    self.handle_replace_wed_ring(msg, &mut out);
+                }
+            }
+            ClientPacketId::EquipSlotItem => {
+                if let Ok(msg) = CEquipSlotItem::decode(&packet.payload) {
+                    self.handle_equip_slot_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::CombineItem => {
+                if let Ok(msg) = CCombineItem::decode(&packet.payload) {
+                    self.handle_combine_item(msg, &mut out);
                 }
             }
             ClientPacketId::TakeBackHeroItem => {
@@ -342,6 +464,186 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_spell_toggle(msg, &mut out);
                 }
             }
+            ClientPacketId::FishingCast => {
+                if let Ok(msg) = CFishingCast::decode(&packet.payload) {
+                    self.handle_fishing_cast(msg, &mut out);
+                }
+            }
+            ClientPacketId::FishingChangeAutocast => {
+                if let Ok(msg) = CFishingChangeAutocast::decode(&packet.payload) {
+                    self.handle_fishing_change_autocast(msg, &mut out);
+                }
+            }
+            ClientPacketId::AwakeningNeedMaterials => {
+                if let Ok(msg) = CAwakeningNeedMaterials::decode(&packet.payload) {
+                    self.handle_awakening_need_materials(msg, &mut out);
+                }
+            }
+            ClientPacketId::AwakeningLockedItem => {
+                if let Ok(msg) = CAwakeningLockedItem::decode(&packet.payload) {
+                    self.handle_awakening_locked_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::Awakening => {
+                if let Ok(msg) = CAwakening::decode(&packet.payload) {
+                    self.handle_awakening(msg, &mut out);
+                }
+            }
+            ClientPacketId::DisassembleItem => {
+                if let Ok(msg) = CDisassembleItem::decode(&packet.payload) {
+                    self.handle_disassemble_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::DowngradeAwakening => {
+                if let Ok(msg) = CDowngradeAwakening::decode(&packet.payload) {
+                    self.handle_downgrade_awakening(msg, &mut out);
+                }
+            }
+            ClientPacketId::ResetAddedItem => {
+                if let Ok(msg) = CResetAddedItem::decode(&packet.payload) {
+                    self.handle_reset_added_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::RequestIntelligentCreatureUpdates => {
+                if let Ok(msg) = CRequestIntelligentCreatureUpdates::decode(&packet.payload) {
+                    self.handle_request_intelligent_creature_updates(msg, &mut out);
+                }
+            }
+            ClientPacketId::UpdateIntelligentCreature => {
+                if let Ok(msg) = CUpdateIntelligentCreature::decode(&packet.payload) {
+                    self.handle_update_intelligent_creature(msg, &mut out);
+                }
+            }
+            ClientPacketId::IntelligentCreaturePickup => {
+                if let Ok(msg) = CIntelligentCreaturePickup::decode(&packet.payload) {
+                    self.handle_intelligent_creature_pickup(msg, &mut out);
+                }
+            }
+            ClientPacketId::MarriageRequest => {
+                if let Ok(_msg) = CMarriageRequest::decode(&packet.payload) {
+                    self.handle_marriage_request(&mut out);
+                }
+            }
+            ClientPacketId::MarriageReply => {
+                if let Ok(msg) = CMarriageReply::decode(&packet.payload) {
+                    self.handle_marriage_reply(msg, &mut out);
+                }
+            }
+            ClientPacketId::ChangeMarriage => {
+                if let Ok(_msg) = CChangeMarriage::decode(&packet.payload) {
+                    self.handle_change_marriage(&mut out);
+                }
+            }
+            ClientPacketId::DivorceRequest => {
+                if let Ok(_msg) = CDivorceRequest::decode(&packet.payload) {
+                    self.handle_divorce_request(&mut out);
+                }
+            }
+            ClientPacketId::DivorceReply => {
+                if let Ok(msg) = CDivorceReply::decode(&packet.payload) {
+                    self.handle_divorce_reply(msg, &mut out);
+                }
+            }
+            ClientPacketId::AddMentor => {
+                if let Ok(msg) = CAddMentor::decode(&packet.payload) {
+                    self.handle_add_mentor(msg, &mut out);
+                }
+            }
+            ClientPacketId::MentorReply => {
+                if let Ok(msg) = CMentorReply::decode(&packet.payload) {
+                    self.handle_mentor_reply(msg, &mut out);
+                }
+            }
+            ClientPacketId::AllowMentor => {
+                if let Ok(_msg) = CAllowMentor::decode(&packet.payload) {
+                    self.handle_allow_mentor(&mut out);
+                }
+            }
+            ClientPacketId::CancelMentor => {
+                if let Ok(_msg) = CCancelMentor::decode(&packet.payload) {
+                    self.handle_cancel_mentor(&mut out);
+                }
+            }
+            ClientPacketId::GuildBuffUpdate => {
+                if let Ok(msg) = CGuildBuffUpdate::decode(&packet.payload) {
+                    self.handle_guild_buff_update(msg, &mut out);
+                }
+            }
+            ClientPacketId::NPCConfirmInput => {
+                if let Ok(msg) = CNPCConfirmInput::decode(&packet.payload) {
+                    self.handle_npc_confirm_input(msg, &mut out);
+                }
+            }
+            ClientPacketId::ReportIssue => {
+                if let Ok(msg) = CReportIssue::decode(&packet.payload) {
+                    self.handle_report_issue(msg, &mut out);
+                }
+            }
+            ClientPacketId::Opendoor => {
+                if let Ok(msg) = COpendoor::decode(&packet.payload) {
+                    self.handle_opendoor(msg, &mut out);
+                }
+            }
+            ClientPacketId::GetRentedItems => {
+                if let Ok(_msg) = CGetRentedItems::decode(&packet.payload) {
+                    self.handle_get_rented_items(&mut out);
+                }
+            }
+            ClientPacketId::ItemRentalRequest => {
+                if let Ok(_msg) = CItemRentalRequest::decode(&packet.payload) {
+                    self.handle_item_rental_request(&mut out);
+                }
+            }
+            ClientPacketId::ItemRentalFee => {
+                if let Ok(msg) = CItemRentalFee::decode(&packet.payload) {
+                    self.handle_item_rental_fee(msg, &mut out);
+                }
+            }
+            ClientPacketId::ItemRentalPeriod => {
+                if let Ok(msg) = CItemRentalPeriod::decode(&packet.payload) {
+                    self.handle_item_rental_period(msg, &mut out);
+                }
+            }
+            ClientPacketId::DepositRentalItem => {
+                if let Ok(msg) = CDepositRentalItem::decode(&packet.payload) {
+                    self.handle_deposit_rental_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::RetrieveRentalItem => {
+                if let Ok(msg) = CRetrieveRentalItem::decode(&packet.payload) {
+                    self.handle_retrieve_rental_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::CancelItemRental => {
+                if let Ok(_msg) = CCancelItemRental::decode(&packet.payload) {
+                    self.handle_cancel_item_rental(&mut out);
+                }
+            }
+            ClientPacketId::ItemRentalLockFee => {
+                if let Ok(_msg) = CItemRentalLockFee::decode(&packet.payload) {
+                    self.handle_item_rental_lock_fee(&mut out);
+                }
+            }
+            ClientPacketId::ItemRentalLockItem => {
+                if let Ok(_msg) = CItemRentalLockItem::decode(&packet.payload) {
+                    self.handle_item_rental_lock_item(&mut out);
+                }
+            }
+            ClientPacketId::ConfirmItemRental => {
+                if let Ok(_msg) = CConfirmItemRental::decode(&packet.payload) {
+                    self.handle_confirm_item_rental(&mut out);
+                }
+            }
+            ClientPacketId::GuildTerritoryPage => {
+                if let Ok(msg) = CGuildTerritoryPage::decode(&packet.payload) {
+                    self.handle_guild_territory_page(msg, &mut out);
+                }
+            }
+            ClientPacketId::PurchaseGuildTerritory => {
+                if let Ok(msg) = CPurchaseGuildTerritory::decode(&packet.payload) {
+                    self.handle_purchase_guild_territory(msg, &mut out);
+                }
+            }
             ClientPacketId::PickUp => {
                 if let Ok(msg) = CPickUp::decode(&packet.payload) {
                     self.handle_pick_up(msg, &mut out);
@@ -436,12 +738,8 @@ impl ConnectionHandler for LoginConnection {
                 }
             }
             ClientPacketId::GuildWarReturn => {
-                tracing::debug!("GuildWarReturn packet received but not implemented yet");
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "行会战争相关功能尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CGuildWarReturn::decode(&packet.payload) {
+                    self.handle_guild_war_return(msg, &mut out);
                 }
             }
             ClientPacketId::KeepAlive => {
@@ -452,12 +750,9 @@ impl ConnectionHandler for LoginConnection {
             ClientPacketId::Disconnect => {
                 self.closing = true;
             }
-            // Harvest protocol (stub - not implemented yet)
             ClientPacketId::Harvest => {
-                tracing::debug!("Harvest packet received but not implemented yet");
-                // TODO: Implement harvest logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat("采集系统尚未在 Rust 服务器上实现。", &mut out);
+                if let Ok(msg) = CHarvest::decode(&packet.payload) {
+                    self.handle_harvest(msg, &mut out);
                 }
             }
             // Trade protocols: request and reply are now partially handled.
@@ -531,74 +826,39 @@ impl ConnectionHandler for LoginConnection {
                     }
                 }
             }
-            // Market protocols (stub - not implemented yet)
             ClientPacketId::ConsignItem => {
-                tracing::debug!("ConsignItem packet received but not implemented yet");
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CConsignItem::decode(&packet.payload) {
+                    self.handle_consign_item(msg, &mut out);
                 }
             }
             ClientPacketId::MarketSearch => {
-                tracing::debug!("MarketSearch packet received but not implemented yet");
-                // TODO: Implement market search logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CMarketSearch::decode(&packet.payload) {
+                    self.handle_market_search(msg, &mut out);
                 }
             }
             ClientPacketId::MarketRefresh => {
-                tracing::debug!("MarketRefresh packet received but not implemented yet");
-                // TODO: Implement market refresh logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(_msg) = CMarketRefresh::decode(&packet.payload) {
+                    self.handle_market_refresh(&mut out);
                 }
             }
             ClientPacketId::MarketPage => {
-                tracing::debug!("MarketPage packet received but not implemented yet");
-                // TODO: Implement market page logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CMarketPage::decode(&packet.payload) {
+                    self.handle_market_page(msg, &mut out);
                 }
             }
             ClientPacketId::MarketBuy => {
-                tracing::debug!("MarketBuy packet received but not implemented yet");
-                // TODO: Implement market buy logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CMarketBuy::decode(&packet.payload) {
+                    self.handle_market_buy(msg, &mut out);
                 }
             }
             ClientPacketId::MarketGetBack => {
-                tracing::debug!("MarketGetBack packet received but not implemented yet");
-                // TODO: Implement market get back logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CMarketGetBack::decode(&packet.payload) {
+                    self.handle_market_get_back(msg, &mut out);
                 }
             }
             ClientPacketId::MarketSellNow => {
-                tracing::debug!("MarketSellNow packet received but not implemented yet");
-                // TODO: Implement market sell now logic
-                if self.stage == Stage::InGame {
-                    self.send_system_chat(
-                        "市场/拍卖行系统尚未在 Rust 服务器上实现。",
-                        &mut out,
-                    );
+                if let Ok(msg) = CMarketSellNow::decode(&packet.payload) {
+                    self.handle_market_sell_now(msg, &mut out);
                 }
             }
             ClientPacketId::RequestUserName => {
@@ -845,9 +1105,15 @@ impl ConnectionHandler for LoginConnection {
                         .player_items(self.session_id)
                         .unwrap_or((crystal_server_core::item::Inventory::new_default(), crystal_server_core::item::Equipment::new_default()))
                 };
+                let refine_slots = {
+                    let world = self.world.lock().unwrap();
+                    world
+                        .player_refine_slots(self.session_id)
+                        .unwrap_or_else(|| vec![None; 16])
+                };
                 let _ = self
                     .store
-                    .save_character_items(account_id, char_idx, &inventory, &equipment);
+                    .save_character_items(account_id, char_idx, &inventory, &equipment, &refine_slots);
 
                 let pos = CharacterPosition {
                     map_index: self.current_map_index,

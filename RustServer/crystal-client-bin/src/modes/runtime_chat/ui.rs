@@ -11,8 +11,15 @@ use super::state::{
     log_key_event, ChatInputText, ChatLogText, ChatState, ChatStatusText, FpsText,
 };
 
-pub(super) fn setup(mut commands: Commands, runtime: Res<RuntimeConfig>, mut chat: ResMut<ChatState>) {
-    commands.spawn(Camera2dBundle::default());
+pub(super) fn setup(
+    mut commands: Commands,
+    runtime: Res<RuntimeConfig>,
+    mut chat: ResMut<ChatState>,
+    existing_cams: Query<Entity, With<Camera>>,
+) {
+    if existing_cams.is_empty() {
+        commands.spawn(Camera2dBundle::default());
+    }
 
     let chat = &mut *chat;
 

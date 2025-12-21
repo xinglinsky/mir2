@@ -4,6 +4,7 @@ use crystal_shared_proto::item::SSellItem;
 use crystal_shared_proto::npc::{CBuyItem, CSellItem};
 use crystal_shared_proto::item_types::UserItemData;
 use crystal_shared_proto::user::{SGainedGold, SUserSlotsRefresh, SLoseGold};
+use crystal_shared_proto::login::{CConsignItem, CMarketSearch, CMarketRefresh, CMarketPage, CMarketBuy, CMarketSellNow, CMarketGetBack};
 
 use super::{LoginConnection, Stage};
 
@@ -546,6 +547,135 @@ impl LoginConnection {
             .unwrap_or_default();
         let ts = now.as_nanos() as u64;
         ((self.session_id as u64) << 32) ^ ts
+    }
+
+    pub(crate) fn handle_consign_item(&mut self, msg: CConsignItem, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement consign item logic
+        // This should:
+        // 1. Find item in inventory by unique_id
+        // 2. Validate item can be consigned
+        // 3. Check consignment fee
+        // 4. Create auction listing
+        // 5. Remove item from inventory
+        // 6. Send appropriate response packets
+        
+        tracing::debug!(
+            "ConsignItem: unique_id={}, price={}, market_type={}",
+            msg.unique_id,
+            msg.price,
+            msg.market_type
+        );
+    }
+
+    pub(crate) fn handle_market_search(&mut self, msg: CMarketSearch, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market search logic
+        // This should:
+        // 1. Set player search filters (match_str, item_type, usermode, min_shape, max_shape, market_type)
+        // 2. Search auction listings
+        // 3. Send search results to client
+        
+        tracing::debug!(
+            "MarketSearch: match={}, item_type={}, usermode={}, min_shape={}, max_shape={}, market_type={}",
+            msg.match_str,
+            msg.item_type,
+            msg.usermode,
+            msg.min_shape,
+            msg.max_shape,
+            msg.market_type
+        );
+    }
+
+    pub(crate) fn handle_market_refresh(&mut self, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market refresh logic
+        // This should:
+        // 1. Refresh current search with same filters
+        // 2. Send updated search results to client
+        
+        tracing::debug!("MarketRefresh");
+    }
+
+    pub(crate) fn handle_market_page(&mut self, msg: CMarketPage, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market page logic
+        // This should:
+        // 1. Get market page data for specified page
+        // 2. Send market page to client
+        
+        tracing::debug!("MarketPage: page={}", msg.page);
+    }
+
+    pub(crate) fn handle_market_buy(&mut self, msg: CMarketBuy, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market buy logic
+        // This should:
+        // 1. Find auction by auction_id
+        // 2. Validate bid_price
+        // 3. Check if player has enough gold
+        // 4. Process purchase or bid
+        // 5. Deduct gold
+        // 6. Add item to inventory or update bid
+        // 7. Send appropriate response packets
+        
+        tracing::debug!(
+            "MarketBuy: auction_id={}, bid_price={}",
+            msg.auction_id,
+            msg.bid_price
+        );
+    }
+
+    pub(crate) fn handle_market_sell_now(&mut self, msg: CMarketSellNow, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market sell now logic
+        // This should:
+        // 1. Find auction by auction_id
+        // 2. Check if player is the seller
+        // 3. Accept current highest bid
+        // 4. Complete sale
+        // 5. Send gold to seller
+        // 6. Send item to buyer
+        // 7. Remove auction listing
+        
+        tracing::debug!("MarketSellNow: auction_id={}", msg.auction_id);
+    }
+
+    pub(crate) fn handle_market_get_back(&mut self, msg: CMarketGetBack, _out: &mut Vec<Vec<u8>>) {
+        if self.stage != Stage::InGame {
+            return;
+        }
+
+        // TODO: Implement market get back logic
+        // This should:
+        // 1. Find auction by auction_id
+        // 2. Check if player is the seller
+        // 3. Based on mode:
+        //    - Return item to inventory
+        //    - Return gold from bids
+        //    - Cancel auction
+        // 4. Remove auction listing
+        // 5. Send appropriate response packets
+        
+        tracing::debug!("MarketGetBack: mode={}, auction_id={}", msg.mode, msg.auction_id);
     }
 }
 

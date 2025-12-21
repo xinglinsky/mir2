@@ -37,6 +37,15 @@ pub enum Stat {
     CriticalRate = 35,
     CriticalDamage = 36,
 
+    // Elemental resistances
+    FireResist = 50,
+    IceResist = 51,
+    LightningResist = 52,
+    WindResist = 53,
+    EarthResist = 54,
+    HolyResist = 55,
+    DarkResist = 56,
+
     MaxACRatePercent = 40,
     MaxMACRatePercent = 41,
     MaxDCRatePercent = 42,

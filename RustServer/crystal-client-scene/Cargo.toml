@@ -1,0 +1,13 @@
+[package]
+name = "crystal-client-scene"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.14"
+crystal-client-ui = { path = "../crystal-client-ui" }
+crystal-client-net = { path = "../crystal-client-net" }
+crystal-client-asset = { path = "../crystal-client-asset" }
+crystal-client-config = { path = "../crystal-client-config" }
+crystal-shared-proto = { path = "../crystal-shared-proto" }
+

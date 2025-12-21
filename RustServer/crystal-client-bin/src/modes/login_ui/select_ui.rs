@@ -468,16 +468,20 @@ pub(crate) fn login_ui_select_update_interface(
     stage: Res<LoginUiStage>,
     assets: Option<Res<LoginUiAssets>>,
     net_state: Res<LoginUiNetState>,
-    mut q_slot_img: Query<(&SelectSlotButton, &mut UiImage), With<SelectSlotImage>>,
-    mut q_slot_name: Query<(&SelectSlotButton, &mut Text), With<SelectSlotNameText>>,
-    mut q_slot_level: Query<(&SelectSlotButton, &mut Text), With<SelectSlotLevelText>>,
-    mut q_slot_class: Query<(&SelectSlotButton, &mut Text), With<SelectSlotClassText>>,
-    mut q_last: Query<(&mut Text, &mut Visibility), With<SelectLastAccessText>>,
-    mut q_status: Query<(&mut Text, &mut Visibility), With<SelectStatusText>>,
     mut q_start: Query<&mut ButtonEnabled, With<SelectStartButton>>,
-    mut q_disp: Query<(&mut Visibility, &mut SelectCharacterDisplayAnim), With<SelectCharacterDisplay>>,
-    mut q_base: Query<(&mut UiImage, &mut Style), With<SelectCharacterBaseImage>>,
-    mut q_overlay: Query<(&mut UiImage, &mut Style), With<SelectCharacterOverlayImage>>,
+    mut image_queries: ParamSet<(
+        Query<(&SelectSlotButton, &mut UiImage), With<SelectSlotImage>>,
+        Query<(&mut UiImage, &mut Style), With<SelectCharacterBaseImage>>,
+        Query<(&mut UiImage, &mut Style), With<SelectCharacterOverlayImage>>,
+    )>,
+    mut text_vis_queries: ParamSet<(
+        Query<(&SelectSlotButton, &mut Text), With<SelectSlotNameText>>,
+        Query<(&SelectSlotButton, &mut Text), With<SelectSlotLevelText>>,
+        Query<(&SelectSlotButton, &mut Text), With<SelectSlotClassText>>,
+        Query<(&mut Text, &mut Visibility), With<SelectLastAccessText>>,
+        Query<(&mut Text, &mut Visibility), With<SelectStatusText>>,
+        Query<(&mut Visibility, &mut SelectCharacterDisplayAnim), With<SelectCharacterDisplay>>,
+    )>,
 ) {
     if *stage != LoginUiStage::Select {
         return;
@@ -488,7 +492,8 @@ pub(crate) fn login_ui_select_update_interface(
 
     let selected_idx = net_state.selected_character_index;
 
-    for (btn, mut img) in q_slot_img.iter_mut() {
+    // 使用 ParamSet 来避免查询冲突
+    for (btn, mut img) in image_queries.p0().iter_mut() {
         let slot = btn.0;
         let Some(ch) = net_state.characters.get(slot) else {
             img.texture = assets.select_slot_empty.clone();
@@ -512,7 +517,8 @@ pub(crate) fn login_ui_select_update_interface(
         };
     }
 
-    for (btn, mut text) in q_slot_name.iter_mut() {
+    // 使用 ParamSet 来避免查询冲突
+    for (btn, mut text) in text_vis_queries.p0().iter_mut() {
         let slot = btn.0;
         text.sections[0].value = net_state
             .characters
@@ -520,7 +526,8 @@ pub(crate) fn login_ui_select_update_interface(
             .map(|c| c.name.clone())
             .unwrap_or_default();
     }
-    for (btn, mut text) in q_slot_level.iter_mut() {
+    
+    for (btn, mut text) in text_vis_queries.p1().iter_mut() {
         let slot = btn.0;
         text.sections[0].value = net_state
             .characters
@@ -528,7 +535,8 @@ pub(crate) fn login_ui_select_update_interface(
             .map(|c| c.level.to_string())
             .unwrap_or_default();
     }
-    for (btn, mut text) in q_slot_class.iter_mut() {
+    
+    for (btn, mut text) in text_vis_queries.p2().iter_mut() {
         let slot = btn.0;
         text.sections[0].value = net_state
             .characters
@@ -544,7 +552,7 @@ pub(crate) fn login_ui_select_update_interface(
         enabled.0 = selected.is_some();
     }
 
-    if let Ok((mut last, mut vis)) = q_last.get_single_mut() {
+    if let Ok((mut last, mut vis)) = text_vis_queries.p3().get_single_mut() {
         if let Some(ch) = selected {
             *vis = Visibility::Visible;
             let v = if ch.last_access_binary == 0 {
@@ -559,7 +567,7 @@ pub(crate) fn login_ui_select_update_interface(
         }
     }
 
-    if let Ok((mut status, mut vis)) = q_status.get_single_mut() {
+    if let Ok((mut status, mut vis)) = text_vis_queries.p4().get_single_mut() {
         if let Some(s) = &net_state.last_error {
             *vis = Visibility::Visible;
             status.sections[0].value = s.clone();
@@ -569,7 +577,7 @@ pub(crate) fn login_ui_select_update_interface(
         }
     }
 
-    if let Ok((mut vis, mut anim)) = q_disp.get_single_mut() {
+    if let Ok((mut vis, mut anim)) = text_vis_queries.p5().get_single_mut() {
         let key = selected.map(|c| (c.class, c.gender));
         if anim.key != key {
             anim.key = key;
@@ -591,7 +599,7 @@ pub(crate) fn login_ui_select_update_interface(
                 assets.select_char_offsets.get(idx),
             ) {
                 if let Some(h) = frames.first() {
-                    if let Ok((mut img, mut style)) = q_base.get_single_mut() {
+                    if let Ok((mut img, mut style)) = image_queries.p1().get_single_mut() {
                         img.texture = h.clone();
                         if let Some((x, y)) = offsets.first().copied() {
                             style.left = Val::Px(x as f32);
@@ -606,7 +614,7 @@ pub(crate) fn login_ui_select_update_interface(
                 assets.select_char_overlay_offsets.get(idx),
             ) {
                 if let Some(h) = frames.first() {
-                    if let Ok((mut img, mut style)) = q_overlay.get_single_mut() {
+                    if let Ok((mut img, mut style)) = image_queries.p2().get_single_mut() {
                         img.texture = h.clone();
                         if let Some((x, y)) = offsets.first().copied() {
                             style.left = Val::Px(x as f32);
@@ -624,8 +632,10 @@ pub(crate) fn login_ui_select_animate_character_display(
     time: Res<Time>,
     assets: Option<Res<LoginUiAssets>>,
     mut q_disp: Query<(&mut Visibility, &mut SelectCharacterDisplayAnim), With<SelectCharacterDisplay>>,
-    mut q_base: Query<(&mut UiImage, &mut Style), With<SelectCharacterBaseImage>>,
-    mut q_overlay: Query<(&mut UiImage, &mut Style), With<SelectCharacterOverlayImage>>,
+    mut image_queries: ParamSet<(
+        Query<(&mut UiImage, &mut Style), With<SelectCharacterBaseImage>>,
+        Query<(&mut UiImage, &mut Style), With<SelectCharacterOverlayImage>>,
+    )>,
 ) {
     if *stage != LoginUiStage::Select {
         return;
@@ -655,7 +665,7 @@ pub(crate) fn login_ui_select_animate_character_display(
     ) {
         if !frames.is_empty() {
             anim.frame = (anim.frame + 1) % frames.len();
-            if let Ok((mut img, mut style)) = q_base.get_single_mut() {
+            if let Ok((mut img, mut style)) = image_queries.p0().get_single_mut() {
                 img.texture = frames[anim.frame].clone();
                 if let Some((x, y)) = offsets.get(anim.frame).copied() {
                     style.left = Val::Px(x as f32);
@@ -670,7 +680,7 @@ pub(crate) fn login_ui_select_animate_character_display(
         assets.select_char_overlay_offsets.get(idx),
     ) {
         if !frames.is_empty() {
-            if let Ok((mut img, mut style)) = q_overlay.get_single_mut() {
+            if let Ok((mut img, mut style)) = image_queries.p1().get_single_mut() {
                 img.texture = frames[anim.frame % frames.len()].clone();
                 if let Some((x, y)) = offsets.get(anim.frame % offsets.len()).copied() {
                     style.left = Val::Px(x as f32);

@@ -19,7 +19,7 @@ pub fn main() {
         let server_addr = cli
             .server
             .clone()
-            .unwrap_or_else(|| cfg.server_addr.clone());
+            .unwrap_or_else(|| cfg.network.server_addr.clone());
         let data_dir = cli
             .data_dir
             .as_deref()
@@ -55,7 +55,7 @@ pub fn main() {
     let server_addr = cli
         .server
         .clone()
-        .unwrap_or_else(|| cfg.server_addr.clone());
+        .unwrap_or_else(|| cfg.network.server_addr.clone());
     let account = cli.account.clone().or(cfg.account.clone());
     let start = cli.start.or(cfg.character_index);
 

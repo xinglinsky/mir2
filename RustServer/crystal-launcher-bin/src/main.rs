@@ -16,7 +16,7 @@ impl Default for LauncherState {
     fn default() -> Self {
         let cfg = ClientConfig::load_or_default(ClientConfig::default_path()).unwrap_or_default();
         Self {
-            server_addr: cfg.server_addr,
+            server_addr: cfg.network.server_addr.clone(),
             account: cfg.account.unwrap_or_default(),
             password: String::new(),
             character_index: cfg.character_index.map(|v| v.to_string()).unwrap_or_default(),
@@ -442,15 +442,14 @@ fn handle_buttons(
 
         match btn.0 {
             LauncherButton::Save => {
-                let cfg = ClientConfig {
-                    server_addr: state.server_addr.trim().to_string(),
-                    account: if state.account.trim().is_empty() {
-                        None
-                    } else {
-                        Some(state.account.trim().to_string())
-                    },
-                    character_index: state.character_index.trim().parse::<i32>().ok(),
+                let mut cfg = ClientConfig::default();
+                cfg.network.server_addr = state.server_addr.trim().to_string();
+                cfg.account = if state.account.trim().is_empty() {
+                    None
+                } else {
+                    Some(state.account.trim().to_string())
                 };
+                cfg.character_index = state.character_index.trim().parse::<i32>().ok();
 
                 match cfg.save(ClientConfig::default_path()) {
                     Ok(_) => state.status = "Saved config/client.toml".to_string(),
@@ -458,15 +457,15 @@ fn handle_buttons(
                 }
             }
             LauncherButton::Launch => {
-                let _ = ClientConfig {
-                    server_addr: state.server_addr.trim().to_string(),
-                    account: if state.account.trim().is_empty() {
-                        None
-                    } else {
-                        Some(state.account.trim().to_string())
-                    },
-                    character_index: state.character_index.trim().parse::<i32>().ok(),
-                }
+                let mut cfg = ClientConfig::default();
+                cfg.network.server_addr = state.server_addr.trim().to_string();
+                cfg.account = if state.account.trim().is_empty() {
+                    None
+                } else {
+                    Some(state.account.trim().to_string())
+                };
+                cfg.character_index = state.character_index.trim().parse::<i32>().ok();
+                let _ = cfg
                 .save(ClientConfig::default_path());
 
                 let exe = std::env::current_exe()

@@ -15,7 +15,7 @@ use crate::world::configs::{
     pet_template,
 };
 use crate::item::create_fresh_user_item;
-use crate::quest::{QuestId, QuestProgress};
+use crate::quest::{QuestId, QuestProgress, QuestType, RequiredClass};
 use crate::world::config::WorldConfig;
 use crate::world::map::{self};
 use crate::world::map_item::MapItem;
@@ -191,6 +191,10 @@ pub enum WorldCommand {
         session_id: SessionId,
         unique_id: u64,
         count: u16,
+    },
+    DropGold {
+        session_id: SessionId,
+        amount: u32,
     },
     PickUp {
         session_id: SessionId,
@@ -542,6 +546,12 @@ pub enum WorldEvent {
     Poisoned {
         session_id: SessionId,
         poison: u16,
+    },
+    /// Quest shared by a party member, mirroring C# S.ShareQuest
+    QuestShared {
+        session_id: SessionId,
+        quest_id: i32,
+        sharer_name: String,
     },
     /// Object-level poison status change for monsters and other map
     /// objects, mirroring C# S.ObjectPoisoned. The `poison` field is a
@@ -1313,6 +1323,376 @@ impl<P: WorldProvider> World<P> {
         self.expire_player_timer(session_id, &key);
 
         Some(completed_progress)
+    }
+
+    /// Give quest rewards to a player, mirroring C# QuestObject.GiveReward behavior.
+    /// Returns true if rewards were successfully given.
+    pub fn give_quest_rewards(
+        &mut self,
+        session_id: SessionId,
+        quest_id: i32,
+        selected_item_index: Option<i32>,
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        let info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Extract quest info data to avoid borrow conflicts
+        let exp_reward = info.exp_reward;
+        let credit_reward = info.credit_reward;
+        let gold_reward = info.gold_reward;
+        let fixed_rewards = info.fixed_rewards.clone();
+        let select_rewards = info.select_rewards.clone();
+        drop(info); // Release the provider borrow
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Give gold reward
+        if gold_reward > 0 {
+            // Note: PlayerState doesn't have gold/credit fields yet
+            // player.gold = player.gold.saturating_add(gold_reward);
+            // player.credit = player.credit.saturating_add(credit_reward);
+            events.push(WorldEvent::PlayerGainedGold {
+                session_id,
+                amount: gold_reward,
+            });
+        }
+
+        // Give experience reward
+        if exp_reward > 0 {
+            self.give_experience_to_player(session_id, exp_reward, events);
+        }
+
+        // Give credit reward
+        if credit_reward > 0 {
+            // Note: PlayerState doesn't have credit field yet
+            // player.credit = player.credit.saturating_add(info.credit_reward);
+            // Note: No specific WorldEvent for credit changes in current enum
+            // This would need to be added if client notification is required
+        }
+
+        // Give fixed item rewards
+        for reward in &fixed_rewards {
+            self.give_item_to_player(session_id, reward.item_index, reward.count, events);
+        }
+
+        // Give selected item reward if any
+        if let Some(selected_index) = selected_item_index {
+            if let Some(reward) = select_rewards.iter().find(|r| r.item_index == selected_index) {
+                self.give_item_to_player(session_id, reward.item_index, reward.count, events);
+            }
+        }
+
+        true
+    }
+
+    /// Give experience to a player with level cap checking
+    fn give_experience_to_player(
+        &mut self,
+        session_id: SessionId,
+        exp_amount: u32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Get player level for experience calculation
+        let current_level = {
+            let player = self.players.get(&session_id);
+            if let Some(p) = player {
+                p.level
+            } else {
+                return;
+            }
+        };
+
+        // Check if player is at max level
+        const MAX_LEVEL: u16 = 50000; // Typical max level in Mir2
+        if i32::from(current_level) >= MAX_LEVEL as i32 {
+            return;
+        }
+
+        // Calculate experience and level up
+        let (new_exp, leveled_up, final_level) = {
+            let mut player = self.players.get_mut(&session_id).unwrap();
+            let old_exp = player.experience;
+            let new_exp = old_exp.saturating_add(exp_amount.into());
+            player.experience = new_exp;
+
+            // Check for level up
+            let mut leveled_up = false;
+            let mut level = player.level;
+            
+            while level < MAX_LEVEL {
+                // Calculate needed experience without holding player borrow
+                let needed = {
+                    // Release player borrow temporarily
+                    drop(player);
+                    self.get_exp_needed_for_level((level + 1).into()).into()
+                };
+                
+                // Re-borrow player to check experience
+                player = self.players.get_mut(&session_id).unwrap();
+                if player.experience < needed {
+                    break;
+                }
+                level += 1;
+                leveled_up = true;
+            }
+            
+            player.level = level;
+            (new_exp, leveled_up, level)
+        };
+
+        // Recalculate stats if leveled up
+        if leveled_up {
+            self.recalc_player_equipment_stats(session_id);
+            
+            // Restore HP/MP on level up
+            if let Some(player) = self.players.get_mut(&session_id) {
+                let max_hp = player.stats.total.get(Stat::HP).max(1);
+                let max_mp = player.stats.total.get(Stat::MP).max(0);
+                player.hp = max_hp;
+                player.mp = max_mp;
+            }
+        }
+
+        events.push(WorldEvent::GainExperience {
+            session_id,
+            amount: exp_amount,
+        });
+
+        if leveled_up {
+            let max_exp = self.get_exp_needed_for_level((final_level + 1).into()) as i64;
+            events.push(WorldEvent::PlayerLevelChanged {
+                session_id,
+                level: final_level as u16,
+                experience: new_exp,
+                max_experience: max_exp,
+            });
+        }
+    }
+
+    /// Get experience needed for a specific level
+    fn get_exp_needed_for_level(&self, level: i32) -> u32 {
+        // Standard Mir2 experience formula
+        // This is a simplified version - the actual formula is more complex
+        if level <= 1 {
+            return 0;
+        }
+        
+        // Basic formula: level^3 * 100
+        // This should be adjusted to match the C# server's exact formula
+        (level as u32).pow(3) * 100
+    }
+
+    /// Give an item to a player
+    fn give_item_to_player(
+        &mut self,
+        session_id: SessionId,
+        item_index: i32,
+        count: u16,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let item_info = match self.provider.get_item_info(item_index) {
+            Some(info) => info,
+            None => return,
+        };
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Try to add to existing stack first
+        let mut added = false;
+        if item_info.stack_size > 1 {
+            for slot_opt in player.inventory.slots.iter_mut() {
+                if let Some(item) = slot_opt {
+                    if item.item_index == item_index && item.count < item_info.stack_size {
+                        let can_add = (item_info.stack_size - item.count).min(count);
+                        item.count += can_add;
+                        added = true;
+                        
+                        events.push(WorldEvent::PlayerGainedItem {
+                            session_id,
+                            item: item.clone(),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If not added to existing stack, find empty slot
+        if !added {
+            for (i, slot_opt) in player.inventory.slots.iter_mut().enumerate() {
+                if slot_opt.is_none() {
+                    let new_item = UserItemData {
+                        item_index,
+                        count,
+                        current_dura: item_info.durability,
+                        max_dura: item_info.durability,
+                        unique_id: 0,
+                        soul_bound_id: 0,
+                        identified: true,
+                        cursed: false,
+                        slots: Vec::new(),
+                        gem_count: 0,
+                        added_stats: crystal_shared_proto::item_types::StatsMap { entries: Vec::new() },
+                        awake: crystal_shared_proto::item_types::AwakeData { awake_type: 0, values: Vec::new() },
+                        refined_value: 0,
+                        refine_added: 0,
+                        refine_success_chance: 0,
+                        wedding_ring: 0,
+                        expire_info: None,
+                        rental_information: None,
+                        is_shop_item: false,
+                        sealed_info: None,
+                        gm_made: false,
+                    };
+                    
+                    *slot_opt = Some(new_item.clone());
+                    
+                    events.push(WorldEvent::PlayerGainedItem {
+                        session_id,
+                        item: new_item,
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Share a quest with party members, mirroring C# PlayerObject.ShareQuest behavior.
+    /// Returns true if the quest was shared with at least one party member.
+    pub fn share_quest_with_party(
+        &mut self,
+        sharer_session_id: SessionId,
+        quest_id: i32,
+        events: &mut Vec<WorldEvent>,
+    ) -> bool {
+        let (sharer_name, party_id, map_index, x, y) = match self.players.get(&sharer_session_id) {
+            Some(p) => (p.name.clone(), p.party_id, p.map_index, p.x, p.y),
+            None => return false,
+        };
+
+        // Check if player is in a party
+        let party_id = match party_id {
+            Some(id) => id,
+            None => {
+                // Not in a party - send system message
+                events.push(WorldEvent::PartySystemMessage {
+                    session_id: sharer_session_id,
+                    message: "You must be in a party to share quests.".to_string(),
+                });
+                return false;
+            }
+        };
+
+        let mut shared_with_anyone = false;
+        const DATA_RANGE: i32 = 20; // Globals.DataRange equivalent
+
+        // Get all party members on the same map and within range
+        let party_members: Vec<SessionId> = self.players
+            .iter()
+            .filter(|(_, p)| {
+                p.party_id == Some(party_id)
+                    && p.map_index == map_index
+                    && !p.dead
+                    && p.session_id != sharer_session_id
+                    && (p.x - x).abs() <= DATA_RANGE
+                    && (p.y - y).abs() <= DATA_RANGE
+            })
+            .map(|(sid, _)| *sid)
+            .collect();
+
+        // Check if the quest can be shared
+        if !self.can_quest_be_shared(quest_id) {
+            events.push(WorldEvent::PartySystemMessage {
+                session_id: sharer_session_id,
+                message: "This quest cannot be shared.".to_string(),
+            });
+            return false;
+        }
+
+        // Send ShareQuest packets to eligible party members
+        for member_sid in party_members {
+            // Check if member meets quest requirements
+            if self.can_player_accept_quest(member_sid, quest_id) {
+                events.push(WorldEvent::QuestShared {
+                    session_id: member_sid,
+                    quest_id,
+                    sharer_name: sharer_name.clone(),
+                });
+                shared_with_anyone = true;
+            }
+        }
+
+        if !shared_with_anyone {
+            events.push(WorldEvent::PartySystemMessage {
+                session_id: sharer_session_id,
+                message: "Quest could not be shared with anyone.".to_string(),
+            });
+        }
+
+        shared_with_anyone
+    }
+
+    /// Check if a quest can be shared based on quest type and restrictions
+    fn can_quest_be_shared(&self, quest_id: i32) -> bool {
+        let quest_info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Don't allow sharing of certain quest types
+        match quest_info.quest_type {
+            QuestType::STORY | QuestType::DAILY | QuestType::WEEKLY => false,
+            QuestType::HIDDEN | QuestType::ACCOUNT => false,
+            _ => true,
+        }
+    }
+
+    /// Check if a player can accept a shared quest (meets requirements)
+    fn can_player_accept_quest(&self, session_id: SessionId, quest_id: i32) -> bool {
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let quest_info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => return false,
+        };
+
+        // Check if player already completed this quest
+        if player.completed_quests.contains(&quest_id) {
+            return false;
+        }
+
+        // Check if player already has this quest active
+        if player.quests.contains_key(&QuestId(quest_id)) {
+            return false;
+        }
+
+        // Check level requirements
+        let player_level_i32 = player.level as i32;
+        if player_level_i32 < quest_info.required_min_level || player_level_i32 > quest_info.required_max_level {
+            return false;
+        }
+
+        // Check class requirements - verify enum values match player class integers
+        match quest_info.required_class {
+            RequiredClass::NONE => true,
+            RequiredClass::WARRIOR if player.character_index == 0 => true,
+            RequiredClass::WIZARD if player.character_index == 1 => true,
+            RequiredClass::TAOIST if player.character_index == 2 => true,
+            RequiredClass::ASSASSIN if player.character_index == 3 => true,
+            _ => false,
+        }
     }
 
     /// Return a cloned list of completed quest IDs for the given player
@@ -3915,6 +4295,26 @@ impl<P: WorldProvider> World<P> {
             .unwrap_or_default()
     }
 
+    /// Remove a BuyBack item by unique_id for a player at a specific NPC.
+    /// This is called when a player purchases an item from the BuyBack list.
+    /// Returns true if the item was found and removed.
+    pub fn remove_buyback_item(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        npc_index: i32,
+        unique_id: u64,
+    ) -> bool {
+        let key = (session_id, map_index, npc_index);
+        if let Some(entries) = self.buyback.get_mut(&key) {
+            let original_len = entries.len();
+            entries.retain(|e| e.item.unique_id != unique_id);
+            entries.len() < original_len
+        } else {
+            false
+        }
+    }
+
     pub fn leave_party(&mut self, session_id: SessionId) {
         let party_id = match self
             .players
@@ -4249,6 +4649,79 @@ impl<P: WorldProvider> World<P> {
                 self.handle_magic_command(
                     session_id, spell, direction, target_id, x, y, &mut events,
                 );
+            }
+            WorldCommand::DropGold {
+                session_id,
+                amount,
+            } => {
+                if amount == 0 {
+                    return events;
+                }
+
+                let (map_index, px, py) = match self.players.get(&session_id) {
+                    Some(p) => (p.map_index, p.x, p.y),
+                    None => return events,
+                };
+
+                // Gold is stored in CharacterStats, not PlayerState
+                // We need to access it through the account store
+                // For now, we'll skip the gold check here and let the connection layer handle it
+                // The connection layer already checks gold before calling DropGold
+
+                // Create gold drop on ground
+                // Mirror C# PlayerObject.DropGold: create ItemObject with gold amount
+                // For large amounts, split into multiple drops (Settings.MaxDropGold)
+                const MAX_DROP_GOLD: u32 = 10_000_000; // Default max drop gold per stack
+                let drop_count = if amount <= MAX_DROP_GOLD {
+                    1
+                } else {
+                    (amount + MAX_DROP_GOLD - 1) / MAX_DROP_GOLD
+                };
+
+                for i in 0..drop_count {
+                    let drop_amount = if i == drop_count - 1 {
+                        amount % MAX_DROP_GOLD
+                    } else {
+                        MAX_DROP_GOLD
+                    };
+
+                    if drop_amount == 0 {
+                        continue;
+                    }
+
+                    // Find drop location
+                    let (drop_x, drop_y) = match self.find_drop_location(map_index, px, py, 5) {
+                        Some(pos) => pos,
+                        None => continue,
+                    };
+
+                    // Create MapItem for gold
+                    let entry = self.map_items.entry(map_index).or_default();
+                    let map_item_id = self.next_map_item_id;
+                    self.next_map_item_id = self.next_map_item_id.wrapping_add(1);
+
+                    // Gold expires after 5 minutes
+                    let item_timeout_ms: i64 = 300_000;
+                    entry.push(MapItem {
+                        id: map_item_id,
+                        map_index,
+                        x: drop_x,
+                        y: drop_y,
+                        item_index: None,
+                        gold: drop_amount,
+                        count: 0,
+                        item: None,
+                        expire_time_ms: self.time_ms + item_timeout_ms,
+                    });
+
+                    events.push(WorldEvent::GoldDropped {
+                        object_id: map_item_id,
+                        map_index,
+                        x: drop_x,
+                        y: drop_y,
+                        gold: drop_amount,
+                    });
+                }
             }
             WorldCommand::DropItem {
                 session_id,

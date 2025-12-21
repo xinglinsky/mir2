@@ -3,10 +3,10 @@ mod select_ui;
 mod state;
 mod ui;
 
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
+use crystal_client_app::{LoginUiConfig, startup_systems, shutdown_systems};
 
-use crate::app_config::LoginUiConfig;
+use crate::app_config::LoginUiConfig as BinLoginUiConfig;
 
 use net::{login_ui_begin_login, login_ui_pump_net};
 use state::{CaretBlink, LoginUiNetState, LoginUiStage, LoginUiStartLogin, LoginUiState};
@@ -23,22 +23,38 @@ use ui::{
     login_ui_update_ok_enabled, login_ui_update_text,
 };
 
-pub(crate) fn run_login_ui(cfg: LoginUiConfig) {
+pub(crate) fn run_login_ui(cfg: BinLoginUiConfig) {
     let server_addr = cfg.server_addr.clone();
-    App::new()
-        .add_plugins(
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Crystal M2".to_string(),
-                    resolution: (1024.0, 768.0).into(),
-                    resizable: false,
-                    ..default()
-                }),
+    let app_cfg = LoginUiConfig {
+        data_dir: cfg.data_dir.clone(),
+        server_addr: cfg.server_addr.clone(),
+    };
+    
+    // login_ui 模式需要特定的窗口配置，所以直接构建 App
+    let mut app = App::new();
+    
+    // 添加默认插件，使用 login_ui 特定的窗口配置
+    app.add_plugins(
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Crystal M2".to_string(),
+                resolution: (1024.0, 768.0).into(),
+                resizable: false,
                 ..default()
             }),
-        )
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .insert_resource(cfg)
+            ..default()
+        }),
+    );
+    
+    // 添加客户端插件（性能诊断等）
+    app.add_plugins(crystal_client_app::ClientPlugins::default());
+    
+    // 添加启动和关闭系统（来自 crystal-client-app）
+    app.add_systems(Startup, startup_systems);
+    app.add_systems(Update, shutdown_systems);
+    
+    // 添加模式特定的资源
+    app.insert_resource(app_cfg)
         .insert_resource(LoginUiState {
             account: String::new(),
             password: String::new(),

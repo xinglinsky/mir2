@@ -132,6 +132,117 @@ impl SMoveItem {
 }
 
 #[derive(Clone, Debug)]
+pub struct SMergeItem {
+    pub grid_from: u8,
+    pub grid_to: u8,
+    pub id_from: u64,
+    pub id_to: u64,
+    pub success: bool,
+}
+
+impl SMergeItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid_from);
+        buf.push(self.grid_to);
+        write_u64_le(&mut buf, self.id_from)?;
+        write_u64_le(&mut buf, self.id_to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::MergeItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid_from = one[0];
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let id_from = read_u64_le(&mut c)?;
+        let id_to = read_u64_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SMergeItem {
+            grid_from,
+            grid_to,
+            id_from,
+            id_to,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSplitItem {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub count: u16,
+}
+
+impl SSplitItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SplitItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        Ok(SSplitItem {
+            grid,
+            unique_id,
+            count,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SSplitItem1 {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub count: u16,
+}
+
+impl SSplitItem1 {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        Ok(RawPacket {
+            id: ServerPacketId::SplitItem1 as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        Ok(SSplitItem1 {
+            grid,
+            unique_id,
+            count,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SEquipItem {
     pub grid: u8,
     pub unique_id: u64,
@@ -162,6 +273,49 @@ impl SEquipItem {
         let success = read_bool(&mut c)?;
         Ok(SEquipItem {
             grid,
+            unique_id,
+            to,
+            success,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRemoveSlotItem {
+    pub grid: u8,
+    pub grid_to: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SRemoveSlotItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        buf.push(self.grid_to);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RemoveSlotItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SRemoveSlotItem {
+            grid,
+            grid_to,
             unique_id,
             to,
             success,
@@ -700,6 +854,138 @@ impl SCombineItem {
             success,
             destroy,
         })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRepairItem {
+    pub unique_id: u64,
+}
+
+impl SRepairItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RepairItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(SRepairItem { unique_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SItemRepaired {
+    pub unique_id: u64,
+    pub max_dura: u16,
+    pub current_dura: u16,
+}
+
+impl SItemRepaired {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.max_dura)?;
+        write_u16_le(&mut buf, self.current_dura)?;
+        Ok(RawPacket {
+            id: ServerPacketId::ItemRepaired as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let max_dura = read_u16_le(&mut c)?;
+        let current_dura = read_u16_le(&mut c)?;
+        Ok(SItemRepaired {
+            unique_id,
+            max_dura,
+            current_dura,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SDepositRefineItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SDepositRefineItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::DepositRefineItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SDepositRefineItem { from, to, success })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRetrieveRefineItem {
+    pub from: i32,
+    pub to: i32,
+    pub success: bool,
+}
+
+impl SRetrieveRefineItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_i32_le(&mut buf, self.from)?;
+        write_i32_le(&mut buf, self.to)?;
+        write_bool(&mut buf, self.success)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RetrieveRefineItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let from = read_i32_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        let success = read_bool(&mut c)?;
+        Ok(SRetrieveRefineItem { from, to, success })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SRefineItem {
+    pub unique_id: u64,
+}
+
+impl SRefineItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ServerPacketId::RefineItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = std::io::Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(SRefineItem { unique_id })
     }
 }
 

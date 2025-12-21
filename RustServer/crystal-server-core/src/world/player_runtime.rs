@@ -248,6 +248,88 @@ impl<P: WorldProvider> World<P> {
                                             now_ms.saturating_add(REGEN_DELAY_MS);
                                     }
                                 }
+                                PoisonType::Red => {
+                                    // Red poison reduces both HP and MP
+                                    let dmg = poison.value.max(0);
+                                    if dmg > 0 {
+                                        // HP damage
+                                        let max_hp = player.stats.total.get(Stat::HP).max(1);
+                                        let old_hp = player.hp.max(0).min(max_hp);
+                                        let new_hp = old_hp.saturating_sub(dmg).max(0);
+
+                                        if new_hp != old_hp {
+                                            player.hp = new_hp;
+                                            if new_hp <= 0 {
+                                                player.dead = true;
+                                            }
+                                        }
+
+                                        // MP damage (typically half of HP damage)
+                                        let mp_dmg = (dmg / 2).max(1);
+                                        let max_mp = player.stats.total.get(Stat::MP).max(0);
+                                        let old_mp = player.mp.max(0).min(max_mp);
+                                        let new_mp = old_mp.saturating_sub(mp_dmg).max(0);
+                                        player.mp = new_mp;
+
+                                        const REGEN_DELAY_MS: i64 = 10_000;
+                                        player.next_regen_time_ms =
+                                            now_ms.saturating_add(REGEN_DELAY_MS);
+                                    }
+                                }
+                                PoisonType::Slow => {
+                                    // Slow poison reduces movement speed
+                                    // This would need to be handled by the movement system
+                                    // For now, we just track the poison state
+                                }
+                                PoisonType::Frozen => {
+                                    // Frozen prevents movement completely
+                                    // This would need to be handled by the movement system
+                                    // For now, we just track the poison state
+                                }
+                                PoisonType::Stun => {
+                                    // Stun prevents all actions
+                                    // This would need to be handled by the action system
+                                    // For now, we just track the poison state
+                                }
+                                PoisonType::Paralysis | PoisonType::LRParalysis => {
+                                    // Paralysis prevents movement but allows other actions
+                                    // This would need to be handled by the movement system
+                                    // For now, we just track the poison state
+                                }
+                                PoisonType::DelayedExplosion => {
+                                    // Explosion triggers at the end of duration
+                                    if poison.time >= poison.duration {
+                                        let dmg = poison.value.max(0) * 2; // Double damage for explosion
+                                        if dmg > 0 {
+                                            let max_hp = player.stats.total.get(Stat::HP).max(1);
+                                            let old_hp = player.hp.max(0).min(max_hp);
+                                            let new_hp = old_hp.saturating_sub(dmg).max(0);
+
+                                            if new_hp != old_hp {
+                                                player.hp = new_hp;
+                                                if new_hp <= 0 {
+                                                    player.dead = true;
+                                                }
+                                            }
+
+                                            // Send explosion effect
+                                            events.push(WorldEvent::ObjectEffect {
+                                                session_id: player.session_id,
+                                                effect: 1, // Explosion effect ID
+                                            });
+                                        }
+                                    }
+                                }
+                                PoisonType::Blindness => {
+                                    // Blindness reduces accuracy and visibility
+                                    // This would need to be handled by the combat system
+                                    // For now, we just track the poison state
+                                }
+                                PoisonType::Dazed => {
+                                    // Dazed causes confusion in movement
+                                    // This would need to be handled by the movement system
+                                    // For now, we just track the poison state
+                                }
                                 _ => {}
                             }
                         }

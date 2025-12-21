@@ -299,6 +299,45 @@ impl CSplitItem {
 }
 
 #[derive(Clone, Debug)]
+pub struct CMergeItem {
+    pub grid_from: u8,
+    pub grid_to: u8,
+    pub id_from: u64,
+    pub id_to: u64,
+}
+
+impl CMergeItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid_from);
+        buf.push(self.grid_to);
+        write_u64_le(&mut buf, self.id_from)?;
+        write_u64_le(&mut buf, self.id_to)?;
+        Ok(RawPacket {
+            id: ClientPacketId::MergeItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid_from = one[0];
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let id_from = read_u64_le(&mut c)?;
+        let id_to = read_u64_le(&mut c)?;
+        Ok(CMergeItem {
+            grid_from,
+            grid_to,
+            id_from,
+            id_to,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct CDropGold {
     pub amount: u32,
 }
@@ -317,5 +356,107 @@ impl CDropGold {
         let mut c = Cursor::new(payload);
         let amount = read_u32_le(&mut c)?;
         Ok(CDropGold { amount })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CBuyItemBack {
+    pub unique_id: u64,
+    pub count: u16,
+}
+
+impl CBuyItemBack {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_u16_le(&mut buf, self.count)?;
+        Ok(RawPacket {
+            id: ClientPacketId::BuyItemBack as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        let count = read_u16_le(&mut c)?;
+        Ok(CBuyItemBack { unique_id, count })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CEquipSlotItem {
+    pub grid: u8,
+    pub unique_id: u64,
+    pub to: i32,
+    pub grid_to: u8,
+    pub to_unique_id: u64,
+}
+
+impl CEquipSlotItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.unique_id)?;
+        write_i32_le(&mut buf, self.to)?;
+        buf.push(self.grid_to);
+        write_u64_le(&mut buf, self.to_unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::EquipSlotItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let unique_id = read_u64_le(&mut c)?;
+        let to = read_i32_le(&mut c)?;
+        c.read_exact(&mut one)?;
+        let grid_to = one[0];
+        let to_unique_id = read_u64_le(&mut c)?;
+        Ok(CEquipSlotItem {
+            grid,
+            unique_id,
+            to,
+            grid_to,
+            to_unique_id,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CCombineItem {
+    pub grid: u8,
+    pub id_from: u64,
+    pub id_to: u64,
+}
+
+impl CCombineItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        buf.push(self.grid);
+        write_u64_le(&mut buf, self.id_from)?;
+        write_u64_le(&mut buf, self.id_to)?;
+        Ok(RawPacket {
+            id: ClientPacketId::CombineItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let mut one = [0u8; 1];
+        c.read_exact(&mut one)?;
+        let grid = one[0];
+        let id_from = read_u64_le(&mut c)?;
+        let id_to = read_u64_le(&mut c)?;
+        Ok(CCombineItem {
+            grid,
+            id_from,
+            id_to,
+        })
     }
 }

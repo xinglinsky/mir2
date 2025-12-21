@@ -339,3 +339,47 @@ impl CRetrieveTradeItem {
         Ok(CRetrieveTradeItem { from, to })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct CRepairItem {
+    pub unique_id: u64,
+}
+
+impl CRepairItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::RepairItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(CRepairItem { unique_id })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CSRepairItem {
+    pub unique_id: u64,
+}
+
+impl CSRepairItem {
+    pub fn encode(&self) -> io::Result<RawPacket> {
+        let mut buf = Vec::new();
+        write_u64_le(&mut buf, self.unique_id)?;
+        Ok(RawPacket {
+            id: ClientPacketId::SRepairItem as i16,
+            payload: buf,
+        })
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut c = Cursor::new(payload);
+        let unique_id = read_u64_le(&mut c)?;
+        Ok(CSRepairItem { unique_id })
+    }
+}
