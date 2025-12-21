@@ -335,6 +335,36 @@ impl ConnectionHandler for LoginConnection {
                     self.handle_check_refine(msg, &mut out);
                 }
             }
+            ClientPacketId::AwakeningNeedMaterials => {
+                if let Ok(msg) = CAwakeningNeedMaterials::decode(&packet.payload) {
+                    self.handle_awakening_need_materials(msg, &mut out);
+                }
+            }
+            ClientPacketId::AwakeningLockedItem => {
+                if let Ok(msg) = CAwakeningLockedItem::decode(&packet.payload) {
+                    self.handle_awakening_locked_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::Awakening => {
+                if let Ok(msg) = CAwakening::decode(&packet.payload) {
+                    self.handle_awakening(msg, &mut out);
+                }
+            }
+            ClientPacketId::DisassembleItem => {
+                if let Ok(msg) = CDisassembleItem::decode(&packet.payload) {
+                    self.handle_disassemble_item(msg, &mut out);
+                }
+            }
+            ClientPacketId::DowngradeAwakening => {
+                if let Ok(msg) = CDowngradeAwakening::decode(&packet.payload) {
+                    self.handle_downgrade_awakening(msg, &mut out);
+                }
+            }
+            ClientPacketId::ResetAddedItem => {
+                if let Ok(msg) = CResetAddedItem::decode(&packet.payload) {
+                    self.handle_reset_added_item(msg, &mut out);
+                }
+            }
             ClientPacketId::ReplaceWedRing => {
                 if let Ok(msg) = CReplaceWedRing::decode(&packet.payload) {
                     self.handle_replace_wed_ring(msg, &mut out);

@@ -18,6 +18,14 @@ pub mod select_stage;
 pub mod gm_commands;
 pub mod map;
 pub mod market;
+// pub mod awakening; // Commented out - proto structs not defined
+// pub mod auction; // Commented out - proto structs not defined
+// pub mod marriage; // Commented out - proto structs not defined
+// pub mod mentor; // Commented out - proto structs not defined
+// pub mod item_rental; // Commented out - proto structs not defined
+// pub mod guild_features; // Commented out - proto structs not defined
+// pub mod fishing; // Commented out - proto structs not defined
+// pub mod refining; // Commented out - proto structs not defined
 pub mod gameshop;
 pub mod mail;
 pub mod chat;
