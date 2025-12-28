@@ -1,9 +1,9 @@
 use crate::stats::Stat;
-use crate::world::types::{BuffProperty, BuffType, PoisonType};
+use crate::world::types::{BuffProperty, BuffType, PoisonType, DamageType};
 use crate::world::Spell;
 use crate::world::provider::WorldProvider;
 
-use super::{World, WorldEvent};
+use super::{SessionId, World, WorldEvent};
 
 impl<P: WorldProvider> World<P> {
     pub fn process_player_buffs(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
@@ -194,6 +194,9 @@ impl<P: WorldProvider> World<P> {
     /// bitmask of active poison types and emits Poisoned/ObjectPoisoned
     /// style events for network synchronisation.
     pub fn process_player_poison(&mut self, now_ms: i64, events: &mut Vec<WorldEvent>) {
+        // Collect PvP-attributable poison hits so we can route them through
+        // the unified PK/Brown logic after releasing per-player borrows.
+        let mut pending_poison_hits: Vec<(SessionId, SessionId, i32, i32)> = Vec::new();
         // Duration/tick semantics mirror the C# Poison struct where Time
         // counts ticks and TickTime/TickSpeed control the next tick.
         for player in self.players.values_mut() {
@@ -230,15 +233,31 @@ impl<P: WorldProvider> World<P> {
                                 PoisonType::Green | PoisonType::Bleeding => {
                                     let dmg = poison.value.max(0);
                                     if dmg > 0 {
+                                        if let Some(att_sid) = poison.owner_session_id {
+                                            // Route PvP poison damage through unified PK logic.
+                                            if att_sid != player.session_id {
+                                                pending_poison_hits.push((
+                                                    att_sid,
+                                                    player.session_id,
+                                                    dmg,
+                                                    player.map_index,
+                                                ));
+                                                // Delay regen even when damage is routed through PK path.
+                                                const REGEN_DELAY_MS: i64 = 10_000;
+                                                player.next_regen_time_ms =
+                                                    now_ms.saturating_add(REGEN_DELAY_MS);
+                                                // Skip direct HP change; handled in PK path.
+                                                continue;
+                                            }
+                                        }
+
                                         let max_hp = player.stats.total.get(Stat::HP).max(1);
                                         let old_hp = player.hp.max(0).min(max_hp);
-                                        let new_hp = old_hp.saturating_sub(dmg).max(0);
 
-                                        if new_hp != old_hp {
-                                            player.hp = new_hp;
-                                            if new_hp <= 0 {
-                                                player.dead = true;
-                                            }
+                                        let new_hp = old_hp.saturating_sub(dmg);
+                                        player.hp = new_hp;
+                                        if player.hp <= 0 {
+                                            player.dead = true;
                                         }
 
                                         // Mirror C# RegenTime = Envir.Time + RegenDelay
@@ -252,28 +271,81 @@ impl<P: WorldProvider> World<P> {
                                     // Red poison reduces both HP and MP
                                     let dmg = poison.value.max(0);
                                     if dmg > 0 {
-                                        // HP damage
-                                        let max_hp = player.stats.total.get(Stat::HP).max(1);
-                                        let old_hp = player.hp.max(0).min(max_hp);
-                                        let new_hp = old_hp.saturating_sub(dmg).max(0);
-
-                                        if new_hp != old_hp {
-                                            player.hp = new_hp;
-                                            if new_hp <= 0 {
-                                                player.dead = true;
+                                        if let Some(att_sid) = poison.owner_session_id {
+                                            if att_sid != player.session_id {
+                                                pending_poison_hits.push((
+                                                    att_sid,
+                                                    player.session_id,
+                                                    dmg,
+                                                    player.map_index,
+                                                ));
+                                                // Regen delay still applies.
+                                                const REGEN_DELAY_MS: i64 = 10_000;
+                                                player.next_regen_time_ms =
+                                                    now_ms.saturating_add(REGEN_DELAY_MS);
+                                                // Apply MP reduction locally (PK path only handles HP).
+                                                let max_mp = player.stats.total.get(Stat::MP).max(0);
+                                                let old_mp = player.mp.max(0).min(max_mp);
+                                                let new_mp = old_mp.saturating_sub(dmg);
+                                                player.mp = new_mp;
+                                                continue;
                                             }
                                         }
 
-                                        // MP damage (typically half of HP damage)
-                                        let mp_dmg = (dmg / 2).max(1);
+                                        // HP damage
+                                        let max_hp = player.stats.total.get(Stat::HP).max(1);
+                                        let old_hp = player.hp.max(0).min(max_hp);
+
+                                        let new_hp = old_hp.saturating_sub(dmg);
+                                        player.hp = new_hp;
+                                        if player.hp <= 0 {
+                                            player.dead = true;
+                                        }
+
+                                        // MP damage
                                         let max_mp = player.stats.total.get(Stat::MP).max(0);
                                         let old_mp = player.mp.max(0).min(max_mp);
-                                        let new_mp = old_mp.saturating_sub(mp_dmg).max(0);
+                                        let new_mp = old_mp.saturating_sub(dmg);
                                         player.mp = new_mp;
 
+                                        // Regen delay
                                         const REGEN_DELAY_MS: i64 = 10_000;
                                         player.next_regen_time_ms =
                                             now_ms.saturating_add(REGEN_DELAY_MS);
+                                    }
+                                }
+                                PoisonType::DelayedExplosion => {
+                                    // Explosion triggers at the end of duration
+                                    if poison.time >= poison.duration {
+                                        let dmg = poison.value.max(0) * 2; // Double damage for explosion
+                                        if dmg > 0 {
+                                            if let Some(att_sid) = poison.owner_session_id {
+                                                if att_sid != player.session_id {
+                                                    pending_poison_hits.push((
+                                                        att_sid,
+                                                        player.session_id,
+                                                        dmg,
+                                                        player.map_index,
+                                                    ));
+                                                    const REGEN_DELAY_MS: i64 = 10_000;
+                                                    player.next_regen_time_ms =
+                                                        now_ms.saturating_add(REGEN_DELAY_MS);
+                                                    // Skip direct HP change; handled in PK path.
+                                                    // Clear poison after explosion.
+                                                    remove = true;
+                                                    continue;
+                                                }
+                                            }
+
+                                            let max_hp = player.stats.total.get(Stat::HP).max(1);
+                                            let old_hp = player.hp.max(0).min(max_hp);
+
+                                            let new_hp = old_hp.saturating_sub(dmg);
+                                            player.hp = new_hp;
+                                            if player.hp <= 0 {
+                                                player.dead = true;
+                                            }
+                                        }
                                     }
                                 }
                                 PoisonType::Slow => {
@@ -295,30 +367,6 @@ impl<P: WorldProvider> World<P> {
                                     // Paralysis prevents movement but allows other actions
                                     // This would need to be handled by the movement system
                                     // For now, we just track the poison state
-                                }
-                                PoisonType::DelayedExplosion => {
-                                    // Explosion triggers at the end of duration
-                                    if poison.time >= poison.duration {
-                                        let dmg = poison.value.max(0) * 2; // Double damage for explosion
-                                        if dmg > 0 {
-                                            let max_hp = player.stats.total.get(Stat::HP).max(1);
-                                            let old_hp = player.hp.max(0).min(max_hp);
-                                            let new_hp = old_hp.saturating_sub(dmg).max(0);
-
-                                            if new_hp != old_hp {
-                                                player.hp = new_hp;
-                                                if new_hp <= 0 {
-                                                    player.dead = true;
-                                                }
-                                            }
-
-                                            // Send explosion effect
-                                            events.push(WorldEvent::ObjectEffect {
-                                                session_id: player.session_id,
-                                                effect: 1, // Explosion effect ID
-                                            });
-                                        }
-                                    }
                                 }
                                 PoisonType::Blindness => {
                                     // Blindness reduces accuracy and visibility
@@ -354,6 +402,22 @@ impl<P: WorldProvider> World<P> {
                     poison: mask,
                 });
             }
+        }
+
+        // Apply deferred PvP poison hits so PK/Brown/death logic mirrors C#.
+        for (att_sid, tgt_sid, dmg, map_index) in pending_poison_hits {
+            self.apply_player_hit_from_player(
+                att_sid,
+                tgt_sid,
+                map_index,
+                dmg,
+                DamageType::Physical.as_u8(),
+                None,
+                None,
+                None,
+                true, // allow_pk_points
+                events,
+            );
         }
     }
 

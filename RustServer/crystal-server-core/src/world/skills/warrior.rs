@@ -414,6 +414,7 @@ pub fn cast_half_moon<P: WorldProvider>(
                         damage: damage_done,
                         damage_type,
                         health_percent,
+                        show_struck: true,
                     });
                 }
             } else {
@@ -427,6 +428,7 @@ pub fn cast_half_moon<P: WorldProvider>(
                     damage: 0,
                     damage_type,
                     health_percent,
+                    show_struck: true,
                 });
             }
 
@@ -714,6 +716,7 @@ pub fn cast_cross_half_moon<P: WorldProvider>(
                         damage: damage_done,
                         damage_type,
                         health_percent,
+                        show_struck: true,
                     });
                 }
             } else {
@@ -727,6 +730,7 @@ pub fn cast_cross_half_moon<P: WorldProvider>(
                     damage: 0,
                     damage_type,
                     health_percent,
+                    show_struck: true,
                 });
             }
 
@@ -1120,17 +1124,31 @@ pub fn cast_immortal_skin<P: WorldProvider>(
 }
 
 /// Cast CounterAttack, applying a temporary AC/MAC buff.
+/// Mirrors C# HumanObject.Magic CounterAttack case:
+/// - Checks if CounterAttack is already active or in cooldown
+/// - Applies AC/MAC buff for 7 seconds
+/// - Stores spell level in buff values for trigger chance calculation
 pub fn cast_counter_attack<P: WorldProvider>(
     world: &mut World<P>,
     session_id: SessionId,
     events: &mut Vec<WorldEvent>,
 ) {
     let spell_id = Spell::CounterAttack as u8;
-    let (duration_ms, stats) = {
+    let (duration_ms, stats, values) = {
         let player = match world.players.get_mut(&session_id) {
             Some(p) => p,
             None => return,
         };
+
+        // C#: if (CounterAttack || Envir.Time < CounterAttackTime) return;
+        // Check if CounterAttack buff is already active (buff system handles cooldown via expire_time)
+        let has_counter_attack = player.active_buffs.iter()
+            .any(|b| b.buff_type == crate::world::types::BuffType::CounterAttack);
+        
+        if has_counter_attack {
+            // CounterAttack is already active, cannot cast again
+            return;
+        }
 
         let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
             Some(m) => m,
@@ -1160,7 +1178,10 @@ pub fn cast_counter_attack<P: WorldProvider>(
         stats.set(Stat::MinMAC, bonus);
         stats.set(Stat::MaxMAC, bonus);
 
-        (duration_ms, stats)
+        // Store spell level in buff values for trigger chance calculation
+        let values = vec![level as i32];
+
+        (duration_ms, stats, values)
     };
 
     world.record_magic_cast_time(session_id, spell_id);
@@ -1170,7 +1191,7 @@ pub fn cast_counter_attack<P: WorldProvider>(
         BuffType::CounterAttack,
         duration_ms,
         stats,
-        Vec::new(),
+        values, // Pass spell level in values
         events,
     );
 }

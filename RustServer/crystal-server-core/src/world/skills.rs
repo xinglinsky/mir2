@@ -59,6 +59,26 @@ pub fn fatal_sword_level_for_player(player: &PlayerState) -> Option<u8> {
         .map(|m| m.level)
 }
 
+const SPELL_MP_EATER: u8 = crate::world::Spell::MPEater as u8;
+
+pub fn mp_eater_level_for_player(player: &PlayerState) -> Option<u8> {
+    player
+        .magics
+        .iter()
+        .find(|m| m.spell == SPELL_MP_EATER)
+        .map(|m| m.level)
+}
+
+const SPELL_HEMORRHAGE: u8 = crate::world::Spell::Hemorrhage as u8;
+
+pub fn hemorrhage_level_for_player(player: &PlayerState) -> Option<u8> {
+    player
+        .magics
+        .iter()
+        .find(|m| m.spell == SPELL_HEMORRHAGE)
+        .map(|m| m.level)
+}
+
 /// Return true if the given Job is allowed to learn/use the specified spell
 /// based on the class ranges used by the original C# server.
 pub fn job_owns_spell(job: Job, spell: u8) -> bool {

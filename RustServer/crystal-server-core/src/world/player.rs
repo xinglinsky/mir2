@@ -53,6 +53,8 @@ pub struct PlayerState {
     pub hp: i32,
     pub mp: i32,
     pub next_regen_time_ms: i64,
+    /// Accumulated fractional life-steal (HPDrain) like C# HumanObject.HpDrain.
+    pub hp_drain: f32,
     pub dead: bool,
     pub hidden: bool,
     pub inventory: Inventory,
@@ -65,12 +67,34 @@ pub struct PlayerState {
     pub refine_time_remaining_ms: i64,
     pub riding_mount: bool,
     pub slaying_charged: bool,
+    /// FatalSword active state (mirroring C# HumanObject.FatalSword)
+    /// Activated with 10% chance per attack, consumed on successful hit
+    pub fatal_sword: bool,
+    /// MPEater active state (mirroring C# HumanObject.MPEater)
+    /// Activated when MPEaterCount >= 100, consumed on successful hit
+    pub mp_eater: bool,
+    /// MPEater counter (mirroring C# HumanObject.MPEaterCount)
+    /// Incremented per attack, resets to 0 when MPEater activates
+    pub mp_eater_count: i32,
+    /// Hemorrhage active state (mirroring C# HumanObject.Hemorrhage)
+    /// Activated when HemorrhageAttackCount reaches threshold, consumed on successful hit
+    pub hemorrhage: bool,
+    /// Hemorrhage counter (mirroring C# HumanObject.HemorrhageAttackCount)
+    /// Incremented per attack, resets to 0 when Hemorrhage activates
+    pub hemorrhage_attack_count: i32,
     pub trade_partner: Option<SessionId>,
     pub trade_gold: u32,
     pub trade_locked: bool,
     pub trade: Vec<Option<UserItemData>>,
     pub pk_points: i32,
     pub brown_time_ms: i64,
+    pub last_hit_time_ms: i64,
+    pub last_hitter_session_id: Option<SessionId>,
+    pub next_struck_time_ms: i64,
+    pub log_time_ms: i64,
+    pub operate_time_ms: i64,
+    pub active_blizzard: bool,
+    pub active_reincarnation: bool,
     pub next_pk_decay_ms: i64,
     pub last_revival_time_ms: i64,
     pub attack_mode: u8,
@@ -183,6 +207,7 @@ impl<P: WorldProvider> World<P> {
                     hp: max_hp,
                     mp: max_mp,
                     next_regen_time_ms: 0,
+                    hp_drain: 0.0,
                     dead: false,
                     hidden: false,
                     inventory,
@@ -192,12 +217,24 @@ impl<P: WorldProvider> World<P> {
                     refine_time_remaining_ms: 0, // No refine time remaining initially
                     riding_mount: false,
                     slaying_charged: false,
+                    fatal_sword: false,
+                    mp_eater: false,
+                    mp_eater_count: 0,
+                    hemorrhage: false,
+                    hemorrhage_attack_count: 0,
                     trade_partner: None,
                     trade_gold: 0,
                     trade_locked: false,
-                    trade: vec![None; 10],
+                    trade: Vec::new(),
                     pk_points: 0,
                     brown_time_ms: 0,
+                    last_hit_time_ms: 0,
+                    last_hitter_session_id: None,
+                    next_struck_time_ms: 0,
+                    log_time_ms: 0,
+                    operate_time_ms: 0,
+                    active_blizzard: false,
+                    active_reincarnation: false,
                     next_pk_decay_ms: 0,
                     last_revival_time_ms: 0,
                     attack_mode: 0,

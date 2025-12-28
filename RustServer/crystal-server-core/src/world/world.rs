@@ -348,6 +348,14 @@ pub enum WorldEvent {
         damage: i32,
         damage_type: u8,
         health_percent: u8,
+        show_struck: bool,
+    },
+    /// Struck event sent to attacker, mirroring C# S.Struck
+    /// This is sent only to the attacker to notify them of a successful hit
+    /// C#: Enqueue(new S.Struck { AttackerID = attacker.ObjectID });
+    Struck {
+        attacker_session_id: SessionId,
+        target_id: u64,
     },
     MonsterDied {
         object_id: u64,
@@ -392,6 +400,7 @@ pub enum WorldEvent {
         damage: i32,
         damage_type: u8,
         health_percent: u8,
+        show_struck: bool,
     },
     ItemDropped {
         object_id: u64,
@@ -413,6 +422,10 @@ pub enum WorldEvent {
         item: UserItemData,
     },
     PlayerGainedGold {
+        session_id: SessionId,
+        amount: u32,
+    },
+    PlayerGainedCredit {
         session_id: SessionId,
         amount: u32,
     },
@@ -1325,13 +1338,153 @@ impl<P: WorldProvider> World<P> {
         Some(completed_progress)
     }
 
+    /// Check if a player can gain multiple items, mirroring C# HumanObject.CanGainItems behavior.
+    /// This checks inventory space considering stack sizes and existing stacks.
+    pub(crate) fn can_gain_items(
+        &self,
+        session_id: SessionId,
+        reward_items: &[UserItemData],
+    ) -> bool {
+        if reward_items.is_empty() {
+            return true;
+        }
+
+        let player = match self.players.get(&session_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Count how many new slots we need (excluding items that can stack)
+        let mut needed_slots = 0;
+        let mut stackable_items: std::collections::HashMap<i32, u16> = std::collections::HashMap::new();
+
+        for item in reward_items {
+            let item_info = match self.provider.get_item_info(item.item_index) {
+                Some(info) => info,
+                None => continue,
+            };
+
+            if item_info.stack_size > 1 {
+                // Stackable item: check if we can add to existing stacks
+                let mut remaining_count = item.count;
+                
+                // First, try to add to existing stacks
+                for slot_opt in &player.inventory.slots {
+                    if let Some(existing_item) = slot_opt {
+                        if existing_item.item_index == item.item_index {
+                            let can_add = (item_info.stack_size - existing_item.count).min(remaining_count);
+                            remaining_count = remaining_count.saturating_sub(can_add);
+                            if remaining_count == 0 {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // If there's remaining count, we need new slots
+                if remaining_count > 0 {
+                    let stack_count = stackable_items.entry(item.item_index).or_insert(0);
+                    *stack_count = stack_count.saturating_add(remaining_count);
+                }
+            } else {
+                // Non-stackable item: always needs a new slot
+                needed_slots += 1;
+            }
+        }
+
+        // Calculate slots needed for stackable items
+        for (item_index, total_count) in stackable_items {
+            let item_info = match self.provider.get_item_info(item_index) {
+                Some(info) => info,
+                None => continue,
+            };
+            // Each stack can hold up to stack_size items
+            let stacks_needed = ((total_count as u32 + item_info.stack_size as u32 - 1) / item_info.stack_size as u32) as usize;
+            needed_slots += stacks_needed;
+        }
+
+        // Count available slots
+        let available_slots = player.inventory.slots.iter().filter(|s| s.is_none()).count();
+
+        available_slots >= needed_slots
+    }
+
+    /// Check if a quest can be completed (rewards can be given), mirroring C# FinishQuest behavior.
+    /// This checks inventory space BEFORE completing the quest.
+    /// Returns (can_complete, reward_items) where reward_items is collected for space checking.
+    pub fn check_quest_rewards_space(
+        &self,
+        session_id: SessionId,
+        quest_id: i32,
+        selected_item_index: Option<i32>,
+    ) -> (bool, Vec<UserItemData>) {
+        use crate::item::create_fresh_user_item;
+
+        let info = match self.provider.get_quest_info(quest_id) {
+            Some(info) => info,
+            None => return (false, Vec::new()),
+        };
+
+        // Collect all reward items, handling stack sizes (mirroring C# FinishQuest)
+        let mut reward_items: Vec<UserItemData> = Vec::new();
+
+        // Process fixed rewards
+        for reward in &info.fixed_rewards {
+            let item_info = match self.provider.get_item_info(reward.item_index) {
+                Some(info) => info,
+                None => continue,
+            };
+
+            let mut count = reward.count;
+            while count > 0 {
+                let item_count = if item_info.stack_size >= count {
+                    count
+                } else {
+                    item_info.stack_size
+                };
+
+                let reward_item = create_fresh_user_item(&item_info, 0, item_count);
+                reward_items.push(reward_item);
+
+                count = count.saturating_sub(item_info.stack_size);
+            }
+        }
+
+        // Process selected item reward
+        if let Some(selected_index) = selected_item_index {
+            if let Some(reward) = info.select_rewards.iter().find(|r| r.item_index == selected_index) {
+                if let Some(item_info) = self.provider.get_item_info(reward.item_index) {
+                    let mut count = reward.count;
+                    while count > 0 {
+                        let item_count = if item_info.stack_size >= count {
+                            count
+                        } else {
+                            item_info.stack_size
+                        };
+
+                        let reward_item = create_fresh_user_item(&item_info, 0, item_count);
+                        reward_items.push(reward_item);
+
+                        count = count.saturating_sub(item_info.stack_size);
+                    }
+                }
+            }
+        }
+
+        // Check if player can gain all reward items
+        let can_gain = self.can_gain_items(session_id, &reward_items);
+        (can_gain, reward_items)
+    }
+
     /// Give quest rewards to a player, mirroring C# QuestObject.GiveReward behavior.
-    /// Returns true if rewards were successfully given.
+    /// Returns true if rewards were successfully given, false if inventory is full.
+    /// This function assumes space has already been checked and reward_items are provided.
     pub fn give_quest_rewards(
         &mut self,
         session_id: SessionId,
         quest_id: i32,
         selected_item_index: Option<i32>,
+        reward_items: Vec<UserItemData>,
         events: &mut Vec<WorldEvent>,
     ) -> bool {
         let info = match self.provider.get_quest_info(quest_id) {
@@ -1343,20 +1496,10 @@ impl<P: WorldProvider> World<P> {
         let exp_reward = info.exp_reward;
         let credit_reward = info.credit_reward;
         let gold_reward = info.gold_reward;
-        let fixed_rewards = info.fixed_rewards.clone();
-        let select_rewards = info.select_rewards.clone();
         drop(info); // Release the provider borrow
-
-        let player = match self.players.get_mut(&session_id) {
-            Some(p) => p,
-            None => return false,
-        };
 
         // Give gold reward
         if gold_reward > 0 {
-            // Note: PlayerState doesn't have gold/credit fields yet
-            // player.gold = player.gold.saturating_add(gold_reward);
-            // player.credit = player.credit.saturating_add(credit_reward);
             events.push(WorldEvent::PlayerGainedGold {
                 session_id,
                 amount: gold_reward,
@@ -1370,25 +1513,71 @@ impl<P: WorldProvider> World<P> {
 
         // Give credit reward
         if credit_reward > 0 {
-            // Note: PlayerState doesn't have credit field yet
-            // player.credit = player.credit.saturating_add(info.credit_reward);
-            // Note: No specific WorldEvent for credit changes in current enum
-            // This would need to be added if client notification is required
+            events.push(WorldEvent::PlayerGainedCredit {
+                session_id,
+                amount: credit_reward,
+            });
         }
 
-        // Give fixed item rewards
-        for reward in &fixed_rewards {
-            self.give_item_to_player(session_id, reward.item_index, reward.count, events);
-        }
-
-        // Give selected item reward if any
-        if let Some(selected_index) = selected_item_index {
-            if let Some(reward) = select_rewards.iter().find(|r| r.item_index == selected_index) {
-                self.give_item_to_player(session_id, reward.item_index, reward.count, events);
-            }
+        // Give all item rewards
+        for reward_item in reward_items {
+            self.give_item_to_player_direct(session_id, reward_item, events);
         }
 
         true
+    }
+
+    /// Give an item directly to a player (internal helper for quest rewards)
+    fn give_item_to_player_direct(
+        &mut self,
+        session_id: SessionId,
+        item: UserItemData,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let item_info = match self.provider.get_item_info(item.item_index) {
+            Some(info) => info,
+            None => return,
+        };
+
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Try to add to existing stack first
+        let mut added = false;
+        if item_info.stack_size > 1 {
+            for slot_opt in player.inventory.slots.iter_mut() {
+                if let Some(existing_item) = slot_opt {
+                    if existing_item.item_index == item.item_index && existing_item.count < item_info.stack_size {
+                        let can_add = (item_info.stack_size - existing_item.count).min(item.count);
+                        existing_item.count += can_add;
+                        added = true;
+                        
+                        events.push(WorldEvent::PlayerGainedItem {
+                            session_id,
+                            item: existing_item.clone(),
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If not added to existing stack, find empty slot
+        if !added {
+            for slot_opt in player.inventory.slots.iter_mut() {
+                if slot_opt.is_none() {
+                    *slot_opt = Some(item.clone());
+                    
+                    events.push(WorldEvent::PlayerGainedItem {
+                        session_id,
+                        item,
+                    });
+                    break;
+                }
+            }
+        }
     }
 
     /// Give experience to a player with level cap checking
@@ -1593,9 +1782,11 @@ impl<P: WorldProvider> World<P> {
         };
 
         let mut shared_with_anyone = false;
-        const DATA_RANGE: i32 = 20; // Globals.DataRange equivalent
+        const DATA_RANGE: i32 = 16; // Globals.DataRange = 16 (was 24, now 16)
 
         // Get all party members on the same map and within range
+        // C# Functions.InRange: Math.Abs(a.X - b.X) <= i && Math.Abs(a.Y - b.Y) <= i
+        // This is a rectangular range check, not Chebyshev distance
         let party_members: Vec<SessionId> = self.players
             .iter()
             .filter(|(_, p)| {
@@ -1657,6 +1848,7 @@ impl<P: WorldProvider> World<P> {
     }
 
     /// Check if a player can accept a shared quest (meets requirements)
+    /// Mirrors C# QuestInfo.CanAccept behavior
     fn can_player_accept_quest(&self, session_id: SessionId, quest_id: i32) -> bool {
         let player = match self.players.get(&session_id) {
             Some(p) => p,
@@ -1669,6 +1861,7 @@ impl<P: WorldProvider> World<P> {
         };
 
         // Check if player already completed this quest
+        // C#: if (CompletedQuests.Contains(index)) return false;
         if player.completed_quests.contains(&quest_id) {
             return false;
         }
@@ -1679,20 +1872,38 @@ impl<P: WorldProvider> World<P> {
         }
 
         // Check level requirements
+        // C#: if (RequiredMinLevel > player.Level || RequiredMaxLevel < player.Level) return false;
         let player_level_i32 = player.level as i32;
         if player_level_i32 < quest_info.required_min_level || player_level_i32 > quest_info.required_max_level {
             return false;
         }
 
-        // Check class requirements - verify enum values match player class integers
-        match quest_info.required_class {
-            RequiredClass::NONE => true,
-            RequiredClass::WARRIOR if player.character_index == 0 => true,
-            RequiredClass::WIZARD if player.character_index == 1 => true,
-            RequiredClass::TAOIST if player.character_index == 2 => true,
-            RequiredClass::ASSASSIN if player.character_index == 3 => true,
-            _ => false,
+        // Check required quest chain
+        // C#: while (tempInfo != null && tempInfo.RequiredQuest != 0) {
+        //      if (!CompletedQuests.Contains(tempInfo.RequiredQuest)) return false;
+        //      tempInfo = Envir.QuestInfoList.FirstOrDefault(d => d.Index == tempInfo.RequiredQuest);
+        // }
+        let mut required = quest_info.required_quest;
+        while required != 0 {
+            if !player.completed_quests.contains(&required) {
+                return false;
+            }
+            required = match self.provider.get_quest_info(required) {
+                Some(q) => q.required_quest,
+                None => 0, // End of chain if quest not found
+            };
         }
+
+        // Check class requirements
+        // C#: switch (player.Class) { case MirClass.Warrior: if (!RequiredClass.HasFlag(RequiredClass.Warrior)) return false; ... }
+        let class_bit = match player.job {
+            Job::Warrior => 1,
+            Job::Wizard => 2,
+            Job::Taoist => 4,
+            Job::Assassin => 8,
+            Job::Archer => 16,
+        };
+        (quest_info.required_class.0 & class_bit) != 0
     }
 
     /// Return a cloned list of completed quest IDs for the given player
@@ -1703,6 +1914,30 @@ impl<P: WorldProvider> World<P> {
             .get(&session_id)
             .map(|p| p.completed_quests.clone())
             .unwrap_or_default()
+    }
+
+    /// Check if a quest is completed for a player (without removing it).
+    /// Returns (is_completed, quest_progress) if quest exists and is completed.
+    pub fn check_quest_completion(
+        &self,
+        session_id: SessionId,
+        quest_id: i32,
+        now_ms: i64,
+    ) -> Option<(bool, QuestProgress)> {
+        let quest_info = self.provider.get_quest_info(quest_id)?;
+        let player = self.players.get(&session_id)?;
+        let quest_id_typed = QuestId(quest_id);
+        let progress = player.quests.get(&quest_id_typed)?;
+
+        let item_infos = self.provider.item_infos();
+        let mut progress_clone = progress.clone();
+        let is_completed = progress_clone.check_completed(quest_info, item_infos, now_ms) && progress_clone.completed();
+        
+        if is_completed {
+            Some((true, progress_clone))
+        } else {
+            None
+        }
     }
 
     /// Return a cloned list of active quest progresses for the given player

@@ -85,6 +85,53 @@ impl DamageType {
     }
 }
 
+/// SpellEffect ids must mirror the C# Shared/Enums.cs SpellEffect enum exactly.
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SpellEffect {
+    None = 0,
+    FatalSword = 1,
+    Teleport = 2,
+    Healing = 3,
+    RedMoonEvil = 4,
+    TwinDrakeBlade = 5,
+    MagicShieldUp = 6,
+    MagicShieldDown = 7,
+    GreatFoxSpirit = 8,
+    Entrapment = 9,
+    Reflect = 10,
+    Critical = 11,
+    Mine = 12,
+    ElementalBarrierUp = 13,
+    ElementalBarrierDown = 14,
+    DelayedExplosion = 15,
+    MPEater = 16,
+    Hemorrhage = 17,
+    Bleeding = 18,
+    AwakeningSuccess = 19,
+    AwakeningFail = 20,
+    AwakeningMiss = 21,
+    AwakeningHit = 22,
+    StormEscape = 23,
+    TurtleKing = 24,
+    Behemoth = 25,
+    Stunned = 26,
+    IcePillar = 27,
+    KingGuard = 28,
+    KingGuard2 = 29,
+    DeathCrawlerBreath = 30,
+    FlamingMutantWeb = 31,
+    FurbolgWarriorCritical = 32,
+    Tester = 33,
+    MoonMist = 34,
+}
+
+impl SpellEffect {
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PetMode {

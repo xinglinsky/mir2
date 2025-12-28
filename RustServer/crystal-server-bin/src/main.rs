@@ -1046,6 +1046,7 @@ async fn main() -> io::Result<()> {
                             damage,
                             damage_type,
                             health_percent,
+                            show_struck,
                         } => {
                             // Delayed hits from World::update (pure magic
                             // attacks, pet attacks, etc.) surface here via
@@ -1069,27 +1070,29 @@ async fn main() -> io::Result<()> {
 
                             let object_id = target_id as u32;
 
-                            let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
-                                object_id,
-                                // The client only needs attacker_id as an
-                                // object reference; here attacker_id is a
-                                // SessionId for players, which matches the
-                                // object_id used for player objects on the
-                                // client.
-                                attacker_id,
-                                location_x: x,
-                                location_y: y,
-                                direction,
-                            };
-                            if let Ok(pkt) = struck_pkt.encode() {
-                                let raw = pkt.encode();
-                                let mut outboxes =
-                                    outboxes_for_world_events.lock().unwrap();
-                                for sid in &viewers {
-                                    outboxes
-                                        .entry(*sid)
-                                        .or_default()
-                                        .push(raw.clone());
+                            if show_struck {
+                                let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
+                                    object_id,
+                                    // The client only needs attacker_id as an
+                                    // object reference; here attacker_id is a
+                                    // SessionId for players, which matches the
+                                    // object_id used for player objects on the
+                                    // client.
+                                    attacker_id,
+                                    location_x: x,
+                                    location_y: y,
+                                    direction,
+                                };
+                                if let Ok(pkt) = struck_pkt.encode() {
+                                    let raw = pkt.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    for sid in &viewers {
+                                        outboxes
+                                            .entry(*sid)
+                                            .or_default()
+                                            .push(raw.clone());
+                                    }
                                 }
                             }
 
@@ -1188,6 +1191,7 @@ async fn main() -> io::Result<()> {
                             damage,
                             damage_type,
                             health_percent,
+                            show_struck,
                         } => {
                             let (mut viewers, hp_mp, attacker_pos) = {
                                 let w = world_for_tick.lock().unwrap();
@@ -1236,19 +1240,22 @@ async fn main() -> io::Result<()> {
                                 }
                             }
 
-                            // Ensure the struck player always receives their own
-                            // SStruck packet locally for hit animation.
-                            let struck = SStruck {
-                                attacker_id: attacker_monster_id as u32,
-                            };
-                            if let Ok(pkt) = struck.encode() {
-                                let encoded = pkt.encode();
-                                let mut outboxes =
-                                    outboxes_for_world_events.lock().unwrap();
-                                outboxes
-                                    .entry(session_id)
-                                    .or_default()
-                                    .push(encoded);
+                            // Ensure the struck player receives their own SStruck
+                            // packet for hit animation, but throttle it to match
+                            // C# StruckTime (500ms).
+                            if show_struck {
+                                let struck = SStruck {
+                                    attacker_id: attacker_monster_id as u32,
+                                };
+                                if let Ok(pkt) = struck.encode() {
+                                    let encoded = pkt.encode();
+                                    let mut outboxes =
+                                        outboxes_for_world_events.lock().unwrap();
+                                    outboxes
+                                        .entry(session_id)
+                                        .or_default()
+                                        .push(encoded);
+                                }
                             }
 
                             // Broadcast-oriented viewers should not include the
@@ -1261,19 +1268,21 @@ async fn main() -> io::Result<()> {
                             let object_id = session_id;
 
                             if !viewers.is_empty() {
-                                let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
-                                    object_id,
-                                    attacker_id: attacker_monster_id as u32,
-                                    location_x: x,
-                                    location_y: y,
-                                    direction,
-                                };
-                                if let Ok(pkt) = struck_pkt.encode() {
-                                    let raw = pkt.encode();
-                                    let mut outboxes =
-                                        outboxes_for_world_events.lock().unwrap();
-                                    for sid in &viewers {
-                                        outboxes.entry(*sid).or_default().push(raw.clone());
+                                if show_struck {
+                                    let struck_pkt = crystal_shared_proto::scene::SObjectStruck {
+                                        object_id,
+                                        attacker_id: attacker_monster_id as u32,
+                                        location_x: x,
+                                        location_y: y,
+                                        direction,
+                                    };
+                                    if let Ok(pkt) = struck_pkt.encode() {
+                                        let raw = pkt.encode();
+                                        let mut outboxes =
+                                            outboxes_for_world_events.lock().unwrap();
+                                        for sid in &viewers {
+                                            outboxes.entry(*sid).or_default().push(raw.clone());
+                                        }
                                     }
                                 }
 

@@ -828,6 +828,7 @@ impl<P: WorldProvider> World<P> {
             damage: damage_done,
             damage_type,
             health_percent,
+            show_struck: true,
         });
 
         if !dead {
@@ -1657,6 +1658,20 @@ impl<P: WorldProvider> World<P> {
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
                 .clamp(0, 100) as u8;
 
+            let show_struck = {
+                let now_ms = self.time_ms;
+                if let Some(p) = self.players.get_mut(&target_sid) {
+                    if now_ms >= p.next_struck_time_ms {
+                        p.next_struck_time_ms = now_ms.saturating_add(500);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
+            };
+
             events.push(WorldEvent::MonsterHitPlayer {
                 attacker_monster_id: monster_id,
                 session_id: target_sid,
@@ -1667,6 +1682,7 @@ impl<P: WorldProvider> World<P> {
                 damage,
                 damage_type,
                 health_percent,
+                show_struck,
             });
 
             if dead {
@@ -1831,6 +1847,7 @@ impl<P: WorldProvider> World<P> {
                 damage: damage_done,
                 damage_type,
                 health_percent,
+                show_struck: true,
             });
 
             if dead {
@@ -2599,6 +2616,20 @@ impl<P: WorldProvider> World<P> {
             let health_percent = ((new_hp as i64 * 100) / max_hp as i64)
                 .clamp(0, 100) as u8;
 
+            let show_struck = {
+                let now_ms = self.time_ms;
+                if let Some(p) = self.players.get_mut(&target_sid) {
+                    if now_ms >= p.next_struck_time_ms {
+                        p.next_struck_time_ms = now_ms.saturating_add(500);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
+            };
+
             events.push(WorldEvent::MonsterHitPlayer {
                 attacker_monster_id: monster_id,
                 session_id: target_sid,
@@ -2609,6 +2640,7 @@ impl<P: WorldProvider> World<P> {
                 damage,
                 damage_type,
                 health_percent,
+                show_struck,
             });
 
             if dead {

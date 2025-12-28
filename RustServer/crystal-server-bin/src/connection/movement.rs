@@ -912,6 +912,7 @@ impl LoginConnection {
                     damage,
                     damage_type,
                     health_percent,
+                    show_struck,
                 } => {
                     // If this session caused the hit, broadcast visual effects to
                     // everyone in range except the attacker (who might get separate feedback).
@@ -919,17 +920,19 @@ impl LoginConnection {
                     if attacker_id == self.session_id {
                         let object_id = target_id as u32;
 
-                        let struck = SObjectStruck {
-                            object_id,
-                            attacker_id: attacker_id as u32,
-                            location_x: x,
-                            location_y: y,
-                            direction,
-                        };
-                        if let Ok(pkt) = struck.encode() {
-                            let raw = Self::encode_raw(pkt);
-                            out.push(raw.clone());
-                            self.enqueue_for_viewers(map_index, x, y, raw);
+                        if show_struck {
+                            let struck = SObjectStruck {
+                                object_id,
+                                attacker_id: attacker_id as u32,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                            };
+                            if let Ok(pkt) = struck.encode() {
+                                let raw = Self::encode_raw(pkt);
+                                out.push(raw.clone());
+                                self.enqueue_for_viewers(map_index, x, y, raw);
+                            }
                         }
 
                         let dmg = SDamageIndicator {
@@ -962,6 +965,23 @@ impl LoginConnection {
                             );
                             out.push(raw.clone());
                             self.enqueue_for_viewers(map_index, x, y, raw);
+                        }
+                    }
+                }
+                world::WorldEvent::Struck {
+                    attacker_session_id,
+                    target_id,
+                } => {
+                    // C#: Enqueue(new S.Struck { AttackerID = attacker.ObjectID });
+                    // This is sent only to the attacker to notify them of a successful hit
+                    // Note: C# uses target's ObjectID as AttackerID in the packet (confusing naming)
+                    if attacker_session_id == self.session_id {
+                        use crystal_shared_proto::user::SStruck;
+                        let struck = SStruck {
+                            attacker_id: target_id as u32,
+                        };
+                        if let Ok(pkt) = struck.encode() {
+                            out.push(Self::encode_raw(pkt));
                         }
                     }
                 }
@@ -1072,22 +1092,25 @@ impl LoginConnection {
                     damage,
                     damage_type,
                     health_percent,
+                    show_struck,
                 } => {
                     if session_id == self.session_id {
                         let object_id = self.session_id;
                         let attacker_id = attacker_monster_id as u32;
 
-                        let struck = SObjectStruck {
-                            object_id,
-                            attacker_id,
-                            location_x: x,
-                            location_y: y,
-                            direction,
-                        };
-                        if let Ok(pkt) = struck.encode() {
-                            let raw = Self::encode_raw(pkt);
-                            out.push(raw.clone());
-                            self.enqueue_for_viewers(map_index, x, y, raw);
+                        if show_struck {
+                            let struck = SObjectStruck {
+                                object_id,
+                                attacker_id,
+                                location_x: x,
+                                location_y: y,
+                                direction,
+                            };
+                            if let Ok(pkt) = struck.encode() {
+                                let raw = Self::encode_raw(pkt);
+                                out.push(raw.clone());
+                                self.enqueue_for_viewers(map_index, x, y, raw);
+                            }
                         }
 
                         let dmg = SDamageIndicator {
@@ -1251,6 +1274,29 @@ impl LoginConnection {
                         }
 
                         let pkt = SGainedGold { gold: amount };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+                world::WorldEvent::PlayerGainedCredit { session_id, amount } => {
+                    if session_id == self.session_id {
+                        if let Some(ref mut stats) = self.current_stats {
+                            let add = amount as i64;
+                            let new_credit = stats.credit.saturating_add(add);
+                            stats.credit = new_credit;
+
+                            if let (Some(ref account_id), Some(char_idx)) =
+                                (self.account_id.as_ref(), self.current_char_index)
+                            {
+                                let _ = self
+                                    .store
+                                    .save_character_stats(account_id, char_idx, stats);
+                            }
+                        }
+
+                        use crystal_shared_proto::user::status::SGainedCredit;
+                        let pkt = SGainedCredit { credit: amount };
                         if let Ok(raw) = pkt.encode() {
                             out.push(Self::encode_raw(raw));
                         }
@@ -1687,9 +1733,18 @@ impl LoginConnection {
                         out.push(Self::encode_raw(raw));
                     }
                 }
-                world::WorldEvent::QuestShared { .. } => {
-                    // TODO: Handle quest sharing UI updates
-                    // This might involve showing a notification or updating quest list
+                world::WorldEvent::QuestShared { session_id, quest_id, sharer_name } => {
+                    if session_id == self.session_id {
+                        // Send SShareQuest packet to notify client about shared quest
+                        use crystal_shared_proto::quest::SShareQuest;
+                        let pkt = SShareQuest {
+                            quest_index: quest_id,
+                            sharer_name,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
                 }
             }
         }

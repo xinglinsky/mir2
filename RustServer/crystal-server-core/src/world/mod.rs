@@ -26,6 +26,7 @@ pub mod movement;
 pub mod monster_runtime;
 pub mod pet_runtime;
 pub mod combat;
+mod combat_legacy;
 pub mod skills;
 pub mod party;
 
