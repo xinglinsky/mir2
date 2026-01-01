@@ -704,6 +704,34 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        // C#: SlashingBurst uses DelayedType.Magic with special AOE handling
+        // If monster_index == -1 and target_monster_id == 0, this is a SlashingBurst AOE hit
+        if spell_id == Spell::SlashingBurst as u8 && monster_index == -1 && target_monster_id == 0 {
+            self.apply_slashing_burst_aoe(attacker_session_id, map_index, damage, events);
+            return;
+        }
+
+        // C#: MagicBooster uses DelayedType.Magic to apply buff
+        // If monster_index == -2 and target_monster_id == 0, this is a MagicBooster buff
+        if spell_id == Spell::MagicBooster as u8 && monster_index == -2 && target_monster_id == 0 {
+            self.apply_magic_booster_buff(attacker_session_id, damage, events); // damage field contains bonus value
+            return;
+        }
+
+        // C#: TurnUndead uses DelayedType.Magic to kill undead monster
+        // If monster_index == -3, this is a TurnUndead instant kill
+        if spell_id == Spell::TurnUndead as u8 && monster_index == -3 {
+            self.apply_turn_undead_kill(attacker_session_id, map_index, target_monster_id, events);
+            return;
+        }
+
+        // C#: Vampirism uses DelayedType.Magic to deal damage and accumulate healing
+        // If monster_index == -4, this is a Vampirism hit
+        if spell_id == Spell::Vampirism as u8 && monster_index == -4 {
+            self.apply_vampirism_hit(attacker_session_id, map_index, target_monster_id, events);
+            return;
+        }
+
         // Look up monster definition for max HP, undead flag and drops/experience.
         let (monster_exp, max_hp, monster_drops) = if let Some(info) =
             self.provider.get_monster_info(monster_index)
@@ -1695,6 +1723,12 @@ impl<P: WorldProvider> World<P> {
                     self.remove_all_pets_for_session(target_sid);
                     self.clear_player_buffs_on_death(target_sid, events);
                     self.apply_player_death_drops(target_sid, map_index, events);
+                    
+                    // Call default NPC Die page after player death
+                    // C#: CallDefaultNPC(DefaultNPCType.Die)
+                    events.push(WorldEvent::PlayerDied {
+                        session_id: target_sid,
+                    });
                 }
             }
         }
@@ -2651,6 +2685,12 @@ impl<P: WorldProvider> World<P> {
                     self.remove_all_pets_for_session(target_sid);
                     self.clear_player_buffs_on_death(target_sid, events);
                     self.apply_player_death_drops(target_sid, map_index, events);
+                    
+                    // Call default NPC Die page after player death
+                    // C#: CallDefaultNPC(DefaultNPCType.Die)
+                    events.push(WorldEvent::PlayerDied {
+                        session_id: target_sid,
+                    });
                 }
             }
         }
@@ -3000,6 +3040,472 @@ impl<P: WorldProvider> World<P> {
                 }
             }
         }
+    }
+
+    fn apply_slashing_burst_aoe(&mut self, attacker_session_id: SessionId, map_index: i32, damage: i32, events: &mut Vec<WorldEvent>) {
+        // C#: Map.cs ProcessDelayedAction - SlashingBurst
+        // for (int i = 0; i < count; i++) {
+        //     location = Functions.PointMove(location, dir, 1);
+        //     ... hit targets at location ...
+        // }
+        
+        let (caster_x, caster_y, direction) = match self.players.get(&attacker_session_id) {
+            Some(p) => (p.x, p.y, p.direction),
+            None => return,
+        };
+
+        let (dx, dy) = match direction {
+            0 => (0, -1),
+            1 => (1, -1),
+            2 => (1, 0),
+            3 => (1, 1),
+            4 => (0, 1),
+            5 => (-1, 1),
+            6 => (-1, 0),
+            7 => (-1, -1),
+            _ => (0, 0),
+        };
+
+        // C#: count = 1 (from DelayedAction data[5])
+        let count = 1;
+        let mut location_x = caster_x;
+        let mut location_y = caster_y;
+        let mut train = false;
+
+        for _i in 0..count {
+            location_x += dx;
+            location_y += dy;
+
+            // C#: if (!ValidPoint(location)) continue;
+            if location_x < 0 || location_y < 0 {
+                continue;
+            }
+
+            let map = match self.get_or_load_map(map_index) {
+                Some(m) => m,
+                None => continue,
+            };
+
+            if location_x >= map.width as i32 || location_y >= map.height as i32 {
+                continue;
+            }
+
+            // C#: Check targets at this location
+            // Players
+            let player_targets: Vec<SessionId> = {
+                self.players
+                    .iter()
+                    .filter_map(|(target_sid, target_player)| {
+                        if target_sid == &attacker_session_id {
+                            return None; // Skip self
+                        }
+                        if target_player.map_index != map_index
+                            || target_player.x != location_x
+                            || target_player.y != location_y
+                        {
+                            return None;
+                        }
+                        if target_player.dead || target_player.hp <= 0 {
+                            return None;
+                        }
+                        if !self.can_attack_player(attacker_session_id, *target_sid) {
+                            return None;
+                        }
+                        Some(*target_sid)
+                    })
+                    .collect()
+            };
+
+            for target_sid in player_targets {
+                let (damage_taken, _) = crate::world::combat::damage::apply_damage_to_player(
+                    self,
+                    Some(attacker_session_id),
+                    target_sid,
+                    damage,
+                    crate::world::types::DamageType::Physical, // C#: DefenceType.AC
+                    map_index,
+                    events,
+                );
+
+                if damage_taken > 0 {
+                    train = true;
+                }
+            }
+
+            // Monsters - collect data first to avoid borrow conflicts
+            let monster_targets: Vec<(u64, i32, i32, Stats)> = {
+                let attacker_stats = self.players.get(&attacker_session_id).map(|p| p.stats.total.clone()).unwrap_or_default();
+                if let Some(monsters) = self.monsters.get(&map_index) {
+                    monsters.iter()
+                        .filter_map(|monster| {
+                            if monster.hp <= 0 || monster.x != location_x || monster.y != location_y {
+                                return None;
+                            }
+                            
+                            let monster_index = monster.monster_index;
+                            let monster_info = match self.provider.get_monster_info(monster_index) {
+                                Some(info) => info,
+                                None => return None,
+                            };
+                            
+                            let mut defender_stats = monster_info.stats.clone();
+                            defender_stats.add(&monster.buff_stats);
+                            
+                            let (hit, raw_damage, _) = compute_physical_melee_with_crit(
+                                &attacker_stats,
+                                &defender_stats,
+                            );
+                            
+                            if hit && raw_damage > 0 {
+                                Some((monster.id, monster_index, monster.hp, defender_stats))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                }
+            };
+
+            for (monster_id, monster_index, monster_hp, _defender_stats) in monster_targets {
+                let monster_info = match self.provider.get_monster_info(monster_index) {
+                    Some(info) => info,
+                    None => continue,
+                };
+                
+                let (hit, raw_damage, _) = compute_physical_melee_with_crit(
+                    &self.players.get(&attacker_session_id).map(|p| p.stats.total.clone()).unwrap_or_default(),
+                    &_defender_stats,
+                );
+                
+                if hit && raw_damage > 0 {
+                    let final_damage = damage.min(raw_damage);
+                    
+                    let (damage_done, new_hp, dead) = {
+                        if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                let old_hp = m.hp;
+                                if final_damage >= m.hp {
+                                    m.hp = 0;
+                                    m.target_session_id = Some(attacker_session_id);
+                                    (old_hp, 0, true)
+                                } else {
+                                    m.hp -= final_damage;
+                                    m.target_session_id = Some(attacker_session_id);
+                                    (final_damage, m.hp, false)
+                                }
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    };
+
+                    if damage_done > 0 {
+                        let max_hp = monster_info.stats.get(Stat::HP).max(1);
+                        let health_percent = if max_hp > 0 {
+                            ((new_hp as i64 * 100) / max_hp as i64).clamp(0, 100) as u8
+                        } else {
+                            100
+                        };
+
+                        events.push(WorldEvent::MonsterHitPlayer {
+                            attacker_monster_id: 0, // Not a monster attack
+                            session_id: attacker_session_id,
+                            map_index,
+                            x: location_x,
+                            y: location_y,
+                            direction,
+                            damage: damage_done,
+                            damage_type: crate::world::types::DamageType::Physical as u8,
+                            health_percent,
+                            show_struck: true,
+                        });
+
+                        if dead {
+                            if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                                if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                    m.hp = 0;
+                                }
+                            }
+                        }
+                        
+                        train = true;
+                    }
+                }
+            }
+        }
+
+        // C#: if (train) LevelMagic(magic);
+        if train {
+            self.level_up_magic_for_player(attacker_session_id, Spell::SlashingBurst as u8, events);
+        }
+    }
+
+    fn apply_magic_booster_buff(&mut self, session_id: SessionId, bonus: i32, events: &mut Vec<WorldEvent>) {
+        // C#: Map.cs ProcessDelayedAction - MagicBooster
+        // var stats = new Stats {
+        //     [Stat.MinMC] = (int)data[1],
+        //     [Stat.MaxMC] = (int)data[1],
+        //     [Stat.ManaPenaltyPercent] = 6 + magic.Level
+        // };
+        // AddBuff(BuffType.MagicBooster, this, Settings.Second * 60, stats, true);
+        
+        let (magic_level, duration_ms) = {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            let magic = match player.magics.iter().find(|m| m.spell == Spell::MagicBooster as u8) {
+                Some(m) => m,
+                None => return,
+            };
+
+            let level = magic.level;
+            // C#: Settings.Second * 60 (60 seconds duration)
+            let duration_ms: i64 = 60_000;
+
+            (level, duration_ms)
+        };
+
+        // C#: [Stat.MinMC] = (int)data[1], [Stat.MaxMC] = (int)data[1]
+        // C#: [Stat.ManaPenaltyPercent] = 6 + magic.Level
+        let mut stats = crate::stats::Stats::default();
+        stats.set(crate::stats::Stat::MinMC, bonus);
+        stats.set(crate::stats::Stat::MaxMC, bonus);
+        stats.set(crate::stats::Stat::ManaPenaltyPercent, 6 + magic_level as i32);
+
+        self.add_player_buff(
+            session_id,
+            crate::world::types::BuffType::MagicBooster,
+            duration_ms,
+            stats,
+            Vec::new(),
+            events,
+        );
+
+        // C#: LevelMagic(magic);
+        self.level_up_magic_for_player(session_id, Spell::MagicBooster as u8, events);
+    }
+
+    fn apply_turn_undead_kill(&mut self, session_id: SessionId, map_index: i32, monster_id: u64, events: &mut Vec<WorldEvent>) {
+        // C#: Map.cs ProcessDelayedAction - TurnUndead
+        // monster.LastHitter = this;
+        // monster.LastHitTime = Envir.Time + 5000;
+        // monster.EXPOwner = this;
+        // monster.EXPOwnerTime = Envir.Time + 5000;
+        // monster.Die();
+        // LevelMagic(magic);
+        
+        let (monster_index, monster_x, monster_y) = {
+            if let Some(monsters) = self.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == monster_id && m.hp > 0) {
+                    (m.monster_index, m.x, m.y)
+                } else {
+                    return; // Monster already dead or not found
+                }
+            } else {
+                return;
+            }
+        };
+
+        // Kill the monster
+        if let Some(monsters) = self.monsters.get_mut(&map_index) {
+            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                m.hp = 0;
+                m.dead = true;
+                m.dead_until_ms = self.time_ms.saturating_add(300_000); // 5 minutes corpse time
+                m.target_session_id = Some(session_id); // Set target for exp ownership
+            }
+        }
+
+        // Get monster info for experience
+        let monster_info = match self.provider.get_monster_info(monster_index) {
+            Some(info) => info,
+            None => {
+                self.level_up_magic_for_player(session_id, Spell::TurnUndead as u8, events);
+                return;
+            }
+        };
+
+        // Give experience using the same logic as normal monster death
+        let exp = monster_info.experience;
+        if exp > 0 {
+            // Send experience event (will be handled by connection layer)
+            events.push(WorldEvent::GainExperience {
+                session_id,
+                amount: exp as u32,
+            });
+        }
+        
+        // C#: LevelMagic(magic);
+        self.level_up_magic_for_player(session_id, Spell::TurnUndead as u8, events);
+
+        // Send death event (same format as normal monster death)
+        events.push(WorldEvent::MonsterDied {
+            object_id: monster_id,
+            map_index,
+            x: monster_x,
+            y: monster_y,
+            direction: 0, // Not used for TurnUndead
+        });
+    }
+
+    fn apply_vampirism_hit(&mut self, session_id: SessionId, map_index: i32, monster_id: u64, events: &mut Vec<WorldEvent>) {
+        // C#: Map.cs ProcessDelayedAction - Vampirism
+        // value = target.Attacked(this, value, DefenceType.MAC, false);
+        // if (value == 0) return;
+        // LevelMagic(magic);
+        // if (VampAmount == 0) VampTime = Envir.Time + 1000;
+        // VampAmount += (ushort)(value * (magic.Level + 1) * 0.25F);
+        
+        use crate::world::magic::magic_damage;
+        use rand::Rng;
+
+        let (magic_level, attacker_stats) = {
+            let player = match self.players.get(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            let magic = match player.magics.iter().find(|m| m.spell == Spell::Vampirism as u8) {
+                Some(m) => m,
+                None => return,
+            };
+
+            (magic.level, player.stats.total.clone())
+        };
+
+        // Calculate damage
+        let magic_info = match self.provider.get_magic_info(Spell::Vampirism as u8) {
+            Some(info) => info,
+            None => {
+                self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                return;
+            }
+        };
+
+        let min_mc = attacker_stats.get(crate::stats::Stat::MinMC).max(0);
+        let max_mc = attacker_stats.get(crate::stats::Stat::MaxMC).max(min_mc);
+        let mut rng = rand::thread_rng();
+        let attack_power = if max_mc > min_mc {
+            rng.gen_range(min_mc..=max_mc)
+        } else {
+            min_mc
+        };
+
+        let damage = magic_damage(&magic_info, magic_level, attack_power, &mut rng);
+
+        // Apply damage to monster using the standard magic damage calculation
+        let damage_taken = {
+            if let Some(monsters) = self.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == monster_id && m.hp > 0) {
+                    let monster_info = match self.provider.get_monster_info(m.monster_index) {
+                        Some(info) => info,
+                        None => {
+                            self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                            return;
+                        }
+                    };
+
+                    let mut defender_stats = monster_info.stats.clone();
+                    defender_stats.add(&m.buff_stats);
+
+                    // Calculate magic damage using the standard function
+                    let damage_base = crate::world::skills::compute_pure_magic_attack_damage(
+                        &self.provider,
+                        &attacker_stats,
+                        Spell::Vampirism as u8,
+                        magic_level,
+                    );
+
+                    if damage_base <= 0 {
+                        self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                        return;
+                    }
+
+                    let final_damage = damage.min(damage_base);
+
+                    // Apply damage
+                    if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                        if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                            if final_damage >= m.hp {
+                                m.hp = 0;
+                                m.dead = true;
+                                m.dead_until_ms = self.time_ms.saturating_add(300_000);
+                                m.hp
+                            } else {
+                                m.hp -= final_damage;
+                                final_damage
+                            }
+                        } else {
+                            self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                            return;
+                        }
+                    } else {
+                        self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                        return;
+                    }
+                } else {
+                    self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                    return;
+                }
+            } else {
+                self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                return;
+            }
+        };
+
+        if damage_taken > 0 {
+            // Accumulate vamp amount
+            if let Some(player) = self.players.get_mut(&session_id) {
+                if player.vamp_amount == 0 {
+                    player.vamp_time_ms = self.time_ms.saturating_add(1000);
+                }
+                let vamp_gain = ((damage_taken as f32) * (magic_level as f32 + 1.0) * 0.25) as u16;
+                player.vamp_amount = player.vamp_amount.saturating_add(vamp_gain);
+            }
+
+            // Send hit event
+            if let Some(monsters) = self.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == monster_id) {
+                    let monster_info = match self.provider.get_monster_info(m.monster_index) {
+                        Some(info) => info,
+                        None => {
+                            self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+                            return;
+                        }
+                    };
+
+                    let max_hp = monster_info.stats.get(crate::stats::Stat::HP).max(1);
+                    let new_hp = m.hp;
+                    let health_percent = if max_hp > 0 {
+                        ((new_hp as i64 * 100) / max_hp as i64).clamp(0, 100) as u8
+                    } else {
+                        100
+                    };
+
+                    events.push(WorldEvent::MonsterHitPlayer {
+                        attacker_monster_id: 0,
+                        session_id,
+                        map_index,
+                        x: m.x,
+                        y: m.y,
+                        direction: 0,
+                        damage: damage_taken,
+                        damage_type: crate::world::types::DamageType::Magical as u8,
+                        health_percent,
+                        show_struck: true,
+                    });
+                }
+            }
+        }
+
+        // C#: LevelMagic(magic);
+        self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
     }
 }
 

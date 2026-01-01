@@ -4,6 +4,7 @@ use crystal_shared_proto::login::{
     CFinishQuest,
     CShareQuest,
 };
+use crystal_shared_proto::npc::CCallNPC;
 use crystal_shared_proto::quest::{
     SChangeQuest,
     SCompleteQuest,
@@ -83,6 +84,18 @@ impl LoginConnection {
 
         const QUEST_STATE_ADD: u8 = 0;
         self.send_change_quest_bytes(quest_bytes, QUEST_STATE_ADD, true, out);
+
+        // Call default NPC OnAcceptQuest page after quest acceptance
+        // C#: CallDefaultNPC(DefaultNPCType.OnAcceptQuest, questIndex)
+        // C# generates key as: string.Format("OnAcceptQuest({0})", questIndex)
+        // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_OnAcceptQuest(questIndex)]"
+        let quest_key = format!("OnAcceptQuest({})", msg.quest_index);
+        let call_npc_msg = CCallNPC {
+            object_id: super::LoginConnection::DEFAULT_NPC_ID,
+            key: quest_key,
+        };
+        // Call handle_call_npc directly (it's pub(crate) and part of LoginConnection impl)
+        self.handle_call_npc(call_npc_msg, out);
     }
 
     pub(crate) fn handle_finish_quest(
@@ -136,6 +149,19 @@ impl LoginConnection {
             let mut events = Vec::new();
             let progress = world.complete_quest_for_player(self.session_id, msg.quest_index, now_ms);
             
+            // Step 3.5: Remove quest items (CarryItems and ItemTasks) after quest completion
+            // C#: foreach (QuestItemTask carryItem in quest.Info.CarryItems) { TakeQuestItem(carryItem.Item, carryItem.Count); }
+            // C#: foreach (QuestItemTask iTask in quest.Info.ItemTasks) { TakeQuestItem(iTask.Item, iTask.Count); }
+            if progress.is_some() {
+                world.remove_quest_items_for_completed_quest(self.session_id, msg.quest_index, &mut events);
+            }
+            
+            // Step 3.6: Recalculate quest bag after removing quest items
+            // C#: RecalculateQuestBag() - removes items that are no longer needed by any active quest
+            if progress.is_some() {
+                world.recalculate_quest_bag(self.session_id, &mut events);
+            }
+            
             // Step 4: Give quest rewards (we've already verified space is available)
             let rewards_given = if progress.is_some() {
                 world.give_quest_rewards(self.session_id, msg.quest_index, Some(msg.selected_item_index), reward_items, &mut events)
@@ -158,6 +184,24 @@ impl LoginConnection {
         let Some(progress) = progress_opt else {
             return;
         };
+
+        // Call default NPC OnFinishQuest page after quest completion
+        // C#: CallDefaultNPC(DefaultNPCType.OnFinishQuest, questIndex)
+        // C# generates key as: string.Format("OnFinishQuest({0})", questIndex)
+        // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_OnFinishQuest(questIndex)]"
+        if rewards_given {
+            // Call default NPC with OnFinishQuest key
+            // The key format matches C#: "OnFinishQuest(questIndex)" (the @_ prefix is added by handle_default_npc_call)
+            let quest_key = format!("OnFinishQuest({})", msg.quest_index);
+            // Use the existing handle_call_npc mechanism to call default NPC
+            // handle_call_npc is defined in npc.rs as part of LoginConnection impl
+            let call_npc_msg = CCallNPC {
+                object_id: super::LoginConnection::DEFAULT_NPC_ID,
+                key: quest_key,
+            };
+            // Call handle_call_npc directly (it's pub(crate) and part of LoginConnection impl)
+            self.handle_call_npc(call_npc_msg, out);
+        }
 
         let quest_bytes = match progress.to_client_progress_bytes(now_ms) {
             Ok(bytes) => bytes,
@@ -194,12 +238,22 @@ impl LoginConnection {
             return;
         }
 
-        let (progress_opt, now_ms) = {
+        let (progress_opt, now_ms, events) = {
             let mut world = self.world.lock().unwrap();
             let now_ms = world.current_time_ms();
             let progress = world.abandon_quest_for_player(self.session_id, msg.quest_index);
-            (progress, now_ms)
+            
+            // Recalculate quest bag after abandoning quest
+            // C#: RecalculateQuestBag() - removes items that are no longer needed by any active quest
+            let mut events = Vec::new();
+            if progress.is_some() {
+                world.recalculate_quest_bag(self.session_id, &mut events);
+            }
+            (progress, now_ms, events)
         };
+
+        // Send events (including quest item removals if any)
+        let _ = self.handle_world_events(events, out);
 
         let Some(progress) = progress_opt else {
             return;

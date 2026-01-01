@@ -11,7 +11,7 @@ use crate::world::magic::magic_power;
 use crate::stats::{Stat, Stats};
 use crate::world::monster::MonsterAiState;
 use crate::world::provider::WorldProvider;
-use crate::world::types::{BuffType, PetMode, PoisonType, DamageType};
+use crate::world::types::{BuffType, PetMode, PoisonType};
 use crate::world::{PendingMagicHit, SessionId, World, WorldEvent, Spell};
 use crate::world::combat::can_attack;
 use crate::world::skills::{
@@ -466,7 +466,63 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
-        // TODO: Handle other spells.
+        if spell == Spell::LionRoar as u8 {
+            use crate::world::skills::warrior::cast_lion_roar;
+            cast_lion_roar(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::BladeAvalanche as u8 {
+            use crate::world::skills::warrior::cast_blade_avalanche;
+            cast_blade_avalanche(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::ProtectionField as u8 {
+            use crate::world::skills::warrior::cast_protection_field;
+            cast_protection_field(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Repulsion as u8 {
+            use crate::world::skills::wizard::cast_repulsion;
+            cast_repulsion(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::SlashingBurst as u8 {
+            use crate::world::skills::warrior::cast_slashing_burst;
+            cast_slashing_burst(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::MagicBooster as u8 {
+            use crate::world::skills::wizard::cast_magic_booster;
+            cast_magic_booster(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::TurnUndead as u8 {
+            use crate::world::skills::wizard::cast_turn_undead;
+            cast_turn_undead(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        if spell == Spell::Vampirism as u8 {
+            use crate::world::skills::wizard::cast_vampirism;
+            cast_vampirism(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
+        // TODO: Handle other spells that are not yet implemented:
+        //   (Note: Entrapment is handled in attack flow via resolve_attack_spell_and_level_for_player)
+        // - Wizard: EnergyRepulsor, ElectricShock,
+        //   Mirroring, MeteorStrike, IceThrust
+        //   (Note: FrostCrunch is handled in attack flow via is_pure_magic_attack)
+        // - Taoist: Revelation, EnergyRepulsor, TrapHexagon, Purification, Curse, Plague, PoisonCloud
+        // - Assassin: (most assassin spells are already implemented)
+        // - Archer: (archer spells not yet implemented)
+        //
         // For now, just emit a visual effect to show something happened.
         events.push(WorldEvent::ObjectAttack {
             session_id,

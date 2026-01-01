@@ -1687,3 +1687,742 @@ pub fn cast_shoulder_dash<P: WorldProvider>(
         world.level_up_magic_for_player(session_id, spell_id, events);
     }
 }
+
+/// Cast LionRoar skill - 5x5 AOE that applies LRParalysis poison to monsters
+/// C#: Map.cs LionRoar case - applies LRParalysis poison to monsters in 5x5 area
+/// Only affects monsters, requires level check (player.Level + 3 >= target.Level)
+pub fn cast_lion_roar<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::LionRoar as u8;
+    
+    let (map_index, caster_x, caster_y, caster_level, magic_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(1_500); // Spell delay 1500ms
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            player.level,
+            level,
+        )
+    };
+
+    // C#: DelayedAction with 500ms delay, then Map.cs processes LionRoar
+    // In Rust, we apply the effect immediately (C# processes after delay in CompleteMagic)
+    let mut train = false;
+
+    // Get map dimensions first to avoid borrow conflicts
+    let (map_width, map_height) = {
+        let map = match world.get_or_load_map(map_index) {
+            Some(m) => m,
+            None => {
+                world.record_magic_cast_time(session_id, spell_id);
+                events.push(WorldEvent::MagicCast {
+                    session_id,
+                    spell_id,
+                });
+                return;
+            }
+        };
+        (map.width, map.height)
+    };
+
+    // C#: 5x5 area centered on location (location.Y - 2 to location.Y + 2, location.X - 2 to location.X + 2)
+    // Collect all monster targets first to avoid borrow conflicts
+    let mut monster_targets: Vec<(u64, i32)> = Vec::new();
+    for dy in -2..=2 {
+        let ty = caster_y + dy;
+        if ty < 0 || ty >= map_height as i32 {
+            continue;
+        }
+
+        for dx in -2..=2 {
+            let tx = caster_x + dx;
+            if tx < 0 || tx >= map_width as i32 {
+                continue;
+            }
+
+            // Find monsters at this location
+            if let Some(monsters) = world.monsters.get(&map_index) {
+                for monster in monsters.iter() {
+                    if monster.hp <= 0 || monster.x != tx || monster.y != ty {
+                        continue;
+                    }
+
+                    // C#: Only targets monsters, level check (player.Level + 3 >= target.Level)
+                    let monster_info = match world.provider.get_monster_info(monster.monster_index) {
+                        Some(info) => info,
+                        None => continue,
+                    };
+
+                    if caster_level + 3 < monster_info.level {
+                        continue;
+                    }
+
+                    monster_targets.push((monster.id, monster.monster_index));
+                }
+            }
+        }
+    }
+
+    // Apply poison to collected targets
+    for (monster_id, monster_index) in monster_targets {
+        // C#: Apply LRParalysis poison with duration = magic.Level + 2, tickSpeed = 1000
+        let duration_secs: i64 = (magic_level as i64).saturating_add(2);
+        let duration_ms = duration_secs.saturating_mul(1_000);
+        let tick_speed_ms: i64 = 1_000;
+
+        let applied = world.apply_poison_to_monster_from_player(
+            session_id,
+            map_index,
+            monster_id,
+            PoisonType::LRParalysis,
+            1,
+            duration_ms,
+            tick_speed_ms,
+        );
+
+        if applied {
+            // C#: target.OperateTime = 0 (reset monster action time)
+            if let Some(monsters) = world.monsters.get_mut(&map_index) {
+                if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                    m.next_attack_time_ms = 0;
+                }
+            }
+            train = true;
+        }
+    }
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+
+    if train {
+        world.level_up_magic_for_player(session_id, spell_id, events);
+    }
+}
+
+/// Cast BladeAvalanche skill - 3x3 AOE attack in front of player
+/// C#: HumanObject.BladeAvalanche - 3 columns (left, center, right), 3 rows forward
+/// Damage: 100% for first 2 rows, 60% for 3rd row
+pub fn cast_blade_avalanche<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use crate::world::magic::magic_damage;
+    
+    let spell_id = Spell::BladeAvalanche as u8;
+    
+    let (map_index, caster_x, caster_y, attacker_stats, magic_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(1_500); // Spell delay 1500ms
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            player.stats.total.clone(),
+            level,
+        )
+    };
+
+    // C#: Calculate base damage with crit chance
+    let mut rng = thread_rng();
+    let mut damage_base = compute_physical_melee_with_crit(&attacker_stats, &Stats::default()).1;
+    
+    // C#: if (Envir.Random.Next(0, 100) <= (1 + Stats[Stat.Luck])) damageBase += damageBase
+    let luck = attacker_stats.get(Stat::Luck);
+    let crit_chance = 1 + luck;
+    if rng.gen_range(0..100) <= crit_chance {
+        damage_base += damage_base;
+    }
+
+    // C#: int damageFinal = magic.GetDamage(damageBase);
+    let magic_info = match world.provider.get_magic_info(spell_id) {
+        Some(info) => info,
+        None => {
+            // If magic info not found, use base damage
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id,
+            });
+            return;
+        }
+    };
+    let damage_final = magic_damage(&magic_info, magic_level, damage_base, &mut rng);
+
+    // C#: 3 columns (left, center, right), 3 rows forward
+    // loc[0] = PreviousDir(Direction), loc[1] = Direction, loc[2] = NextDir(Direction)
+    let (dx, dy) = match direction {
+        0 => (0, -1),   // Up
+        1 => (1, -1),   // Up-Right
+        2 => (1, 0),    // Right
+        3 => (1, 1),    // Down-Right
+        4 => (0, 1),    // Down
+        5 => (-1, 1),   // Down-Left
+        6 => (-1, 0),   // Left
+        7 => (-1, -1),  // Up-Left
+        _ => (0, 0),
+    };
+
+    let (prev_dx, prev_dy) = match direction {
+        0 => (-1, -1),  // Up -> Up-Left
+        1 => (0, -1),   // Up-Right -> Up
+        2 => (1, -1),   // Right -> Up-Right
+        3 => (1, 0),    // Down-Right -> Right
+        4 => (1, 1),    // Down -> Down-Right
+        5 => (0, 1),    // Down-Left -> Down
+        6 => (-1, 1),   // Left -> Down-Left
+        7 => (-1, 0),   // Up-Left -> Left
+        _ => (0, 0),
+    };
+
+    let (next_dx, next_dy) = match direction {
+        0 => (1, -1),   // Up -> Up-Right
+        1 => (1, 0),    // Up-Right -> Right
+        2 => (1, 1),    // Right -> Down-Right
+        3 => (0, 1),    // Down-Right -> Down
+        4 => (-1, 1),   // Down -> Down-Left
+        5 => (-1, 0),   // Down-Left -> Left
+        6 => (-1, -1),  // Left -> Up-Left
+        7 => (0, -1),   // Up-Left -> Up
+        _ => (0, 0),
+    };
+
+    // C#: loc[0] = PointMove(CurrentLocation, PreviousDir(Direction), 1)
+    // loc[1] = PointMove(CurrentLocation, Direction, 1)
+    // loc[2] = PointMove(CurrentLocation, NextDir(Direction), 1)
+    let col_locations = [
+        (caster_x + prev_dx, caster_y + prev_dy),  // Left column
+        (caster_x + dx, caster_y + dy),            // Center column
+        (caster_x + next_dx, caster_y + next_dy), // Right column
+    ];
+
+    let mut train = false;
+
+    // Get map info once to avoid repeated borrows
+    let map_info = match world.get_or_load_map(map_index) {
+        Some(m) => (m.width, m.height),
+        None => {
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id,
+            });
+            return;
+        }
+    };
+    let (map_width, map_height) = map_info;
+
+    // C#: for each column, extend 3 rows forward
+    for (col_idx, (start_x, start_y)) in col_locations.iter().enumerate() {
+        for row in 0..3 {
+            // C#: Point hitPoint = Functions.PointMove(startPoint, Direction, j);
+            let hit_x = start_x + dx * row;
+            let hit_y = start_y + dy * row;
+
+            if hit_x < 0 || hit_y < 0 || hit_x >= map_width as i32 || hit_y >= map_height as i32 {
+                continue;
+            }
+
+            // C#: Damage calculation - j <= 1 ? damageFinal : (int)(damageFinal * 0.6)
+            let damage = if row <= 1 {
+                damage_final
+            } else {
+                (damage_final as f64 * 0.6) as i32
+            };
+
+            // Find targets at this location - monsters first
+            // Collect all monster targets first to avoid borrow conflicts
+            let mut monster_targets: Vec<(u64, i32, i32, Stats)> = Vec::new();
+            {
+                let monsters = match world.monsters.get(&map_index) {
+                    Some(ms) => ms,
+                    None => continue,
+                };
+                for monster in monsters.iter() {
+                    if monster.hp <= 0 || monster.x != hit_x || monster.y != hit_y {
+                        continue;
+                    }
+
+                    let monster_info = match world.provider.get_monster_info(monster.monster_index) {
+                        Some(info) => info,
+                        None => continue,
+                    };
+
+                    let mut defender_stats = monster_info.stats.clone();
+                    defender_stats.add(&monster.buff_stats);
+                    monster_targets.push((monster.id, monster.monster_index, monster.hp, defender_stats));
+                }
+            }
+
+            // Process monster targets
+            for (monster_id, monster_index, _monster_hp, defender_stats) in monster_targets {
+                // C#: DefenceType.MAC for normal monsters, DefenceType.Repulsion for AI=49
+                // Note: In C#, DefenceType.Repulsion is used for AI=49 monsters, but in Rust
+                // we use DamageType::Magical for MAC-based damage
+                let defence_type = crate::world::types::DamageType::Magical;
+
+                let (hit, raw_damage, _) = compute_physical_melee_with_crit(&attacker_stats, &defender_stats);
+                
+                if hit && raw_damage > 0 {
+                    let final_damage = damage.min(raw_damage);
+                    
+                    // Apply damage to monster - collect data first
+                    let (damage_done, new_hp, dead) = {
+                        if let Some(monsters) = world.monsters.get_mut(&map_index) {
+                            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                let old_hp = m.hp;
+                                if final_damage >= m.hp {
+                                    m.hp = 0;
+                                    m.target_session_id = Some(session_id);
+                                    (old_hp, 0, true)
+                                } else {
+                                    m.hp -= final_damage;
+                                    m.target_session_id = Some(session_id);
+                                    (final_damage, m.hp, false)
+                                }
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    };
+
+                    if damage_done > 0 {
+                        let monster_info = match world.provider.get_monster_info(monster_index) {
+                            Some(info) => info,
+                            None => continue,
+                        };
+                        let max_hp = monster_info.stats.get(Stat::HP).max(1);
+                        let health_percent = if max_hp > 0 {
+                            ((new_hp as i64 * 100) / max_hp as i64).clamp(0, 100) as u8
+                        } else {
+                            100
+                        };
+
+                        events.push(WorldEvent::MonsterHitPlayer {
+                            attacker_monster_id: 0, // Not a monster attack
+                            session_id: session_id,
+                            map_index,
+                            x: hit_x,
+                            y: hit_y,
+                            direction: direction,
+                            damage: damage_done,
+                            damage_type: defence_type.as_u8(),
+                            health_percent,
+                            show_struck: true,
+                        });
+
+                        if dead {
+                            // Handle monster death - trigger death processing
+                            if let Some(monsters) = world.monsters.get_mut(&map_index) {
+                                if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                    m.hp = 0;
+                                }
+                            }
+                            // Death will be processed in monster_runtime update loop
+                        }
+                        
+                        train = true;
+                    }
+                }
+            }
+
+            // Also check for player targets
+            // Collect player targets first to avoid borrow conflicts
+            let player_targets: Vec<SessionId> = {
+                world.players
+                    .iter()
+                    .filter_map(|(target_sid, target_player)| {
+                        if target_sid == &session_id {
+                            return None; // Don't hit self
+                        }
+                        if target_player.map_index != map_index
+                            || target_player.x != hit_x
+                            || target_player.y != hit_y
+                        {
+                            return None;
+                        }
+                        if target_player.dead || target_player.hp <= 0 {
+                            return None;
+                        }
+                        Some(*target_sid)
+                    })
+                    .collect()
+            };
+
+            // Apply damage to player targets (can_attack_player check is done inside apply_damage_to_player)
+            for target_sid in player_targets {
+                // C#: Uses DefenceType.MAC for BladeAvalanche
+                // Note: apply_damage_to_player will check can_attack_player internally
+                let (damage_taken, _) = crate::world::combat::damage::apply_damage_to_player(
+                    world,
+                    Some(session_id),
+                    target_sid,
+                    damage,
+                    crate::world::types::DamageType::Magical,
+                    map_index,
+                    events,
+                );
+
+                if damage_taken > 0 {
+                    train = true;
+                }
+            }
+        }
+    }
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+
+    if train {
+        world.level_up_magic_for_player(session_id, spell_id, events);
+    }
+}
+
+/// Cast ProtectionField skill - adds AC buff to player
+/// C#: HumanObject.ProtectionField - duration = 45 + (15 * magic.Level), addValue = MaxAC * (0.2 + 0.03 * level)
+pub fn cast_protection_field<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::ProtectionField as u8;
+    let (duration_ms, stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        // C#: OperateTime = 0 (reset action time)
+        player.next_action_time_ms = 0;
+
+        // C#: duration = 45 + (15 * magic.Level) seconds
+        let duration_sec = 45 + 15 * level as i64;
+        let duration_ms = duration_sec.saturating_mul(1_000);
+
+        // C#: addValue = (int)Math.Round(Stats[Stat.MaxAC] * (0.2 + (0.03 * magic.Level)))
+        let max_ac = player.stats.total.get(Stat::MaxAC) as f32;
+        let multiplier = 0.2 + 0.03 * level as f32;
+        let add_value = (max_ac * multiplier).round() as i32;
+
+        let mut stats = Stats::default();
+        stats.set(Stat::MaxAC, add_value);
+        stats.set(Stat::MinAC, add_value);
+
+        (duration_ms, stats)
+    };
+
+    world.record_magic_cast_time(session_id, spell_id);
+
+    world.add_player_buff(
+        session_id,
+        BuffType::ProtectionField,
+        duration_ms,
+        stats,
+        Vec::new(),
+        events,
+    );
+
+    // C#: LevelMagic(magic) - always level up on cast
+    world.level_up_magic_for_player(session_id, spell_id, events);
+}
+
+/// Cast SlashingBurst skill - dashes forward 2 tiles, then deals damage to targets along the path
+/// C#: HumanObject.SlashingBurst - moves forward 2 tiles, then DelayedAction deals damage along path
+pub fn cast_slashing_burst<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use crate::world::magic::magic_damage;
+    
+    let spell_id = Spell::SlashingBurst as u8;
+    
+    let (map_index, caster_x, caster_y, damage_final, magic_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+
+        // C#: int damageBase = GetAttackPower(Stats[Stat.MinDC], Stats[Stat.MaxDC]);
+        // C#: int damageFinal = magic.GetDamage(damageBase);
+        let damage_base = compute_physical_melee_with_crit(
+            &player.stats.total,
+            &crate::stats::Stats::default(),
+        ).1;
+        
+        let magic_info = match world.provider.get_magic_info(spell_id) {
+            Some(info) => info,
+            None => {
+                world.record_magic_cast_time(session_id, spell_id);
+                events.push(WorldEvent::MagicCast {
+                    session_id,
+                    spell_id,
+                });
+                return;
+            }
+        };
+        
+        let mut rng = rand::thread_rng();
+        let damage_final = magic_damage(&magic_info, level, damage_base, &mut rng);
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            damage_final,
+            level,
+        )
+    };
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => {
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id,
+            });
+            return;
+        }
+    };
+
+    // C#: Point location = Functions.PointMove(CurrentLocation, Direction, 2);
+    let (dx, dy) = match direction {
+        0 => (0, -1),
+        1 => (1, -1),
+        2 => (1, 0),
+        3 => (1, 1),
+        4 => (0, 1),
+        5 => (-1, 1),
+        6 => (-1, 0),
+        7 => (-1, -1),
+        _ => (0, 0),
+    };
+
+    let target_x = caster_x + dx * 2;
+    let target_y = caster_y + dy * 2;
+
+    // C#: if (!CurrentMap.ValidPoint(location)) return;
+    if target_x < 0 || target_y < 0 || target_x >= map.width as i32 || target_y >= map.height as i32 {
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    // C#: Check if target location is blocked
+    let ux = target_x as u16;
+    let uy = target_y as u16;
+    if !map.is_walkable(ux, uy) {
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    if world.is_cell_blocked(map_index, target_x, target_y) {
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    // C#: Move player forward 2 tiles
+    let old_x = caster_x;
+    let old_y = caster_y;
+    
+    {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+        player.x = target_x;
+        player.y = target_y;
+        player.direction = direction;
+        player.in_trap_rock = false; // C#: InTrapRock = false
+    }
+
+    world.remove_player_from_occupancy(session_id, map_index, old_x, old_y);
+    world.add_player_to_occupancy(session_id, map_index, target_x, target_y);
+
+    // C#: BroadcastInfo() and Enqueue(new S.UserLocation { ... })
+    events.push(WorldEvent::UserLocation {
+        session_id,
+        map_index,
+        x: target_x,
+        y: target_y,
+        direction,
+    });
+
+    // C#: DelayedAction action = new DelayedAction(DelayedType.Magic, Envir.Time + 500, this, magic, damageFinal, CurrentLocation, Direction, 1);
+    // Schedule delayed damage along the path
+    // The damage will be applied 500ms later, starting from the new location and moving forward
+    let delay_ms: i64 = 500;
+    let due_time_ms = world.time_ms.saturating_add(delay_ms);
+
+    // Store the delayed hit info - we'll process it in World::update
+    // For SlashingBurst, we need to hit targets along the path (1 step forward from new location)
+    // We'll use a custom event or extend PendingMagicHit to support AOE
+    // For now, let's create a simple delayed hit that processes the path
+    world.pending_magic_hits.push(crate::world::PendingMagicHit {
+        due_time_ms,
+        attacker_session_id: session_id,
+        map_index,
+        target_monster_id: 0, // Special marker for SlashingBurst AOE
+        monster_index: -1, // Special marker
+        spell_id,
+        damage: damage_final,
+        damage_type: crate::world::types::DamageType::Physical as u8,
+    });
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+}

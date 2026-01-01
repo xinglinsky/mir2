@@ -566,6 +566,19 @@ pub enum WorldEvent {
         quest_id: i32,
         sharer_name: String,
     },
+    /// Notify the connection layer that a quest item should be removed from inventory.
+    /// Mirrors C# S.DeleteQuestItem behavior. Since Rust server uses regular inventory
+    /// instead of QuestInventory, this event triggers inventory refresh.
+    QuestItemRemoved {
+        session_id: SessionId,
+        unique_id: u64,
+        count: u16,
+    },
+    /// Notify the connection layer that a player has died and should call default NPC Die page.
+    /// Mirrors C# PlayerObject.Die -> CallDefaultNPC(DefaultNPCType.Die) behavior.
+    PlayerDied {
+        session_id: SessionId,
+    },
     /// Object-level poison status change for monsters and other map
     /// objects, mirroring C# S.ObjectPoisoned. The `poison` field is a
     /// bitmask of active PoisonType flags.
@@ -1284,6 +1297,79 @@ impl<P: WorldProvider> World<P> {
         Some(progress)
     }
 
+    /// Recalculate quest bag and remove items that are no longer needed by any active quest.
+    /// Mirrors C# PlayerObject.RecalculateQuestBag behavior.
+    /// Since Rust server uses regular inventory instead of QuestInventory, we check all inventory
+    /// items and remove those that are no longer required by any active quest.
+    /// 
+    /// This function is called after quest completion or abandonment to clean up quest items
+    /// that are no longer needed.
+    pub fn recalculate_quest_bag(
+        &mut self,
+        session_id: SessionId,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        let player = match self.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        // Collect all active quest item requirements
+        let mut required_items: std::collections::HashSet<i32> = std::collections::HashSet::new();
+        
+        for quest_progress in player.quests.values() {
+            // Get quest info to check item requirements
+            if let Some(quest_info) = self.provider.get_quest_info(quest_progress.quest_id.0) {
+                // Add CarryItems
+                for carry_item in &quest_info.carry_items {
+                    required_items.insert(carry_item.item_index);
+                }
+                // Add ItemTasks
+                for item_task in &quest_info.item_tasks {
+                    required_items.insert(item_task.item_index);
+                }
+            }
+        }
+
+        // Check inventory and remove items that are no longer needed
+        // C#: for (int i = Info.QuestInventory.Length - 1; i >= 0; i--)
+        let mut items_to_remove: Vec<(usize, u64, u16)> = Vec::new();
+        
+        for (slot_index, slot) in player.inventory.slots.iter().enumerate() {
+            if let Some(item) = slot {
+                // Check if this item is still required by any active quest
+                if !required_items.contains(&item.item_index) {
+                    // Item is no longer needed, mark for removal
+                    items_to_remove.push((slot_index, item.unique_id, item.count));
+                }
+            }
+        }
+
+        // Remove items and send events (after releasing player borrow)
+        drop(player);
+        
+        for (slot_index, unique_id, count) in items_to_remove {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => break,
+            };
+            
+            // Remove item from inventory
+            if let Some(item) = &player.inventory.slots[slot_index] {
+                if item.unique_id == unique_id {
+                    player.inventory.slots[slot_index] = None;
+                    
+                    // Send DeleteQuestItem event (mirrors C# S.DeleteQuestItem)
+                    events.push(WorldEvent::QuestItemRemoved {
+                        session_id,
+                        unique_id,
+                        count,
+                    });
+                }
+            }
+        }
+    }
+
     pub fn complete_quest_for_player(
         &mut self,
         session_id: SessionId,
@@ -1336,6 +1422,108 @@ impl<P: WorldProvider> World<P> {
         self.expire_player_timer(session_id, &key);
 
         Some(completed_progress)
+    }
+
+    /// Remove quest items (CarryItems and ItemTasks) from player inventory when quest is completed.
+    /// Mirrors C# PlayerObject.FinishQuest behavior where CarryItems and ItemTasks are removed
+    /// via TakeQuestItem calls. Since Rust server uses regular inventory instead of QuestInventory,
+    /// we remove items from the main inventory.
+    /// 
+    /// Note: This function should be called after complete_quest_for_player but before giving rewards.
+    pub fn remove_quest_items_for_completed_quest(
+        &mut self,
+        session_id: SessionId,
+        quest_id: i32,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Extract quest item data first to avoid borrow conflicts
+        let (carry_items, item_tasks) = {
+            let info = match self.provider.get_quest_info(quest_id) {
+                Some(info) => info,
+                None => return,
+            };
+            (info.carry_items.clone(), info.item_tasks.clone())
+        };
+
+        // Remove CarryItems (items that must be carried during quest)
+        // C#: foreach (QuestItemTask carryItem in quest.Info.CarryItems) { TakeQuestItem(carryItem.Item, carryItem.Count); }
+        for carry_item in &carry_items {
+            self.remove_quest_item_from_inventory(
+                session_id,
+                carry_item.item_index,
+                carry_item.count,
+                events,
+            );
+        }
+
+        // Remove ItemTasks (items collected for quest completion)
+        // C#: foreach (QuestItemTask iTask in quest.Info.ItemTasks) { TakeQuestItem(iTask.Item, iTask.Count); }
+        for item_task in &item_tasks {
+            self.remove_quest_item_from_inventory(
+                session_id,
+                item_task.item_index,
+                item_task.count,
+                events,
+            );
+        }
+    }
+
+    /// Internal helper to remove a quest item from player inventory.
+    /// Mirrors C# PlayerObject.TakeQuestItem behavior.
+    /// Since Rust server uses regular inventory, we search and remove from inventory slots.
+    fn remove_quest_item_from_inventory(
+        &mut self,
+        session_id: SessionId,
+        item_index: i32,
+        mut count: u16,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // Collect items to remove first to avoid borrow conflicts
+        let mut items_to_remove: Vec<(u64, u16)> = Vec::new();
+        
+        {
+            let player = match self.players.get_mut(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            // Search inventory for items matching item_index and collect removal info
+            // C#: for (int o = 0; o < Info.QuestInventory.Length; o++) { ... }
+            for slot in &mut player.inventory.slots {
+                if count == 0 {
+                    break;
+                }
+
+                if let Some(ref mut item) = slot {
+                    if item.item_index != item_index {
+                        continue;
+                    }
+
+                    let remove_count = count.min(item.count);
+                    items_to_remove.push((item.unique_id, remove_count));
+
+                    if remove_count >= item.count {
+                        // Remove entire item
+                        *slot = None;
+                    } else {
+                        // Reduce item count
+                        item.count -= remove_count;
+                    }
+
+                    count -= remove_count;
+                }
+            }
+        }
+
+        // Send events after releasing player borrow
+        for (unique_id, remove_count) in items_to_remove {
+            // Send DeleteQuestItem event (mirrors C# S.DeleteQuestItem)
+            events.push(WorldEvent::QuestItemRemoved {
+                session_id,
+                unique_id,
+                count: remove_count,
+            });
+        }
     }
 
     /// Check if a player can gain multiple items, mirroring C# HumanObject.CanGainItems behavior.
@@ -5744,6 +5932,28 @@ impl<P: WorldProvider> World<P> {
         values: Vec<i32>,
         events: &mut Vec<WorldEvent>,
     ) {
+        self.add_player_buff_with_custom_stats(
+            session_id,
+            buff_type,
+            duration_ms,
+            stats,
+            values,
+            crystal_shared_proto::item_types::StatsMap { entries: Vec::new() },
+            events,
+        )
+    }
+
+    /// Add a buff to a player with optional custom stats (e.g., elemental damage)
+    pub fn add_player_buff_with_custom_stats(
+        &mut self,
+        session_id: SessionId,
+        buff_type: BuffType,
+        duration_ms: i64,
+        stats: Stats,
+        values: Vec<i32>,
+        custom_stats: crystal_shared_proto::item_types::StatsMap,
+        events: &mut Vec<WorldEvent>,
+    ) {
         let now_ms = self.time_ms;
 
         let player = match self.players.get_mut(&session_id) {
@@ -5848,6 +6058,7 @@ impl<P: WorldProvider> World<P> {
             let mut buff = crate::world::buff::PlayerBuff::new(buff_type, expire_time_ms);
             buff.stats = stats;
             buff.values = values;
+            buff.custom_stats = custom_stats;
             buff.visible = buff_info.visible;
             buff.infinite = infinite;
             buff.caster_id = Some(session_id);

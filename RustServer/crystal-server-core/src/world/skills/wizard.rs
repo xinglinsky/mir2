@@ -1574,3 +1574,862 @@ pub fn cast_teleport<P: WorldProvider>(
         level,
     });
 }
+
+/// Cast Vampirism skill - deals magic damage and accumulates healing
+/// C#: HumanObject.Vampirism - DelayedAction deals damage, then accumulates VampAmount
+pub fn cast_vampirism<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use crate::world::magic::magic_damage;
+    use rand::Rng;
+
+    let spell_id = Spell::Vampirism as u8;
+
+    // First, perform all mutable operations and collect data
+    let (map_index, magic_level, attacker_stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(600); // C# has 600ms action delay
+
+        (
+            player.map_index,
+            level,
+            player.stats.total.clone(),
+        )
+    };
+
+    // Now find targets (after releasing mutable borrow)
+    let map_index_for_target = map_index;
+    
+    // First, collect monster candidates
+    let monster_candidates: Vec<u64> = {
+        if let Some(monsters) = world.monsters.get(&map_index_for_target) {
+            monsters.iter()
+                .filter(|m| m.hp > 0 && m.x == x && m.y == y)
+                .map(|m| m.id)
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+    
+    // Check if can attack monsters
+    let target_monster_id = monster_candidates.into_iter()
+        .find(|&monster_id| world.can_attack_monster(session_id, map_index_for_target, monster_id));
+    
+    // Collect player candidates
+    let player_candidates: Vec<SessionId> = if target_monster_id.is_none() {
+        world.players.iter()
+            .filter(|(target_sid, target_player)| {
+                **target_sid != session_id
+                    && target_player.map_index == map_index_for_target
+                    && target_player.x == x
+                    && target_player.y == y
+                    && !target_player.dead
+                    && target_player.hp > 0
+            })
+            .map(|(target_sid, _)| *target_sid)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    
+    // Check if can attack players
+    let target_player_id = player_candidates.into_iter()
+        .find(|&target_sid| world.can_attack_player(session_id, target_sid));
+
+    // Schedule delayed damage application for monsters
+    if let Some(monster_id) = target_monster_id {
+        let delay_ms: i64 = 500;
+        let due_time_ms = world.time_ms.saturating_add(delay_ms);
+
+        world.pending_magic_hits.push(PendingMagicHit {
+            due_time_ms,
+            attacker_session_id: session_id,
+            map_index,
+            target_monster_id: monster_id,
+            monster_index: -4, // Special marker for Vampirism
+            spell_id,
+            damage: 0, // Will be calculated in delayed action
+            damage_type: crate::world::types::DamageType::Magical as u8,
+        });
+    } else if let Some(target_sid) = target_player_id {
+        // For player targets, calculate and apply damage immediately
+        let magic_info = match world.provider.get_magic_info(spell_id) {
+            Some(info) => info,
+            None => {
+                world.record_magic_cast_time(session_id, spell_id);
+                events.push(WorldEvent::MagicCast {
+                    session_id,
+                    spell_id,
+                });
+                return;
+            }
+        };
+
+        let min_mc = attacker_stats.get(Stat::MinMC).max(0);
+        let max_mc = attacker_stats.get(Stat::MaxMC).max(min_mc);
+        let mut rng = thread_rng();
+        let attack_power = if max_mc > min_mc {
+            rng.gen_range(min_mc..=max_mc)
+        } else {
+            min_mc
+        };
+
+        let damage = magic_damage(&magic_info, magic_level, attack_power, &mut rng);
+
+        let (damage_taken, _) = crate::world::combat::damage::apply_damage_to_player(
+            world,
+            Some(session_id),
+            target_sid,
+            damage,
+            crate::world::types::DamageType::Magical,
+            map_index,
+            events,
+        );
+        
+        if damage_taken > 0 {
+            // Accumulate vamp amount
+            if let Some(player) = world.players.get_mut(&session_id) {
+                if player.vamp_amount == 0 {
+                    player.vamp_time_ms = world.time_ms.saturating_add(1000);
+                }
+                let vamp_gain = ((damage_taken as f32) * (magic_level as f32 + 1.0) * 0.25) as u16;
+                player.vamp_amount = player.vamp_amount.saturating_add(vamp_gain);
+            }
+            
+            world.level_up_magic_for_player(session_id, spell_id, events);
+        }
+    } else {
+        // No valid target
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+}
+
+/// Cast Repulsion skill - pushes back targets within 1-tile radius
+/// C#: HumanObject.Repulsion - pushes targets away from caster
+pub fn cast_repulsion<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use crate::world::magic::magic_damage;
+    use crate::world::skills::direction_from_point;
+    use rand::Rng;
+
+    let spell_id = Spell::Repulsion as u8;
+
+    let (map_index, caster_x, caster_y, caster_level, magic_level) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(600); // C# has 600ms action delay
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            player.level,
+            level,
+        )
+    };
+
+    let map = match world.get_or_load_map(map_index) {
+        Some(m) => m,
+        None => {
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id,
+            });
+            return;
+        }
+    };
+
+    let mut result = false;
+    let mut rng = thread_rng();
+
+    // C#: for (int d = 0; d <= 1; d++) - check radius 0 and 1
+    for d in 0..=1 {
+        for dy in -d..=d {
+            let ty = caster_y + dy;
+            if ty < 0 || ty >= map.height as i32 {
+                continue;
+            }
+
+            // C#: x += Math.Abs(y - CurrentLocation.Y) == d ? 1 : d * 2
+            // This creates a diamond pattern: at d=0, check center; at d=1, check surrounding 8 tiles
+            let x_step = if d == 0 { 1 } else if dy.abs() == d { 1 } else { d * 2 };
+            let mut dx_current = -d;
+            while dx_current <= d {
+                let tx = caster_x + dx_current;
+                if tx < 0 || tx >= map.width as i32 {
+                    dx_current += x_step;
+                    continue;
+                }
+
+                // Skip caster's own position
+                if tx == caster_x && ty == caster_y {
+                    dx_current += x_step;
+                    continue;
+                }
+
+                // Collect targets at this location
+                let mut player_targets: Vec<SessionId> = Vec::new();
+                let mut monster_targets: Vec<(u64, i32, u16)> = Vec::new(); // (id, monster_index, level)
+
+                // Check players
+                for (target_sid, target_player) in world.players.iter() {
+                    if target_sid == &session_id {
+                        continue; // Skip self
+                    }
+                    if target_player.map_index != map_index || target_player.x != tx || target_player.y != ty {
+                        continue;
+                    }
+                    if target_player.dead || target_player.hp <= 0 {
+                        continue;
+                    }
+                    // C#: if (!ob.IsAttackTarget(this) || ob.Level >= Level) continue;
+                    if !world.can_attack_player(session_id, *target_sid) {
+                        continue;
+                    }
+                    if target_player.level >= caster_level {
+                        continue;
+                    }
+                    player_targets.push(*target_sid);
+                }
+
+                // Check monsters
+                if let Some(monsters) = world.monsters.get(&map_index) {
+                    for monster in monsters.iter() {
+                        if monster.hp <= 0 || monster.x != tx || monster.y != ty {
+                            continue;
+                        }
+                        let monster_info = match world.provider.get_monster_info(monster.monster_index) {
+                            Some(info) => info,
+                            None => continue,
+                        };
+                        // C#: if (!ob.IsAttackTarget(this) || ob.Level >= Level) continue;
+                        if monster_info.level >= caster_level {
+                            continue;
+                        }
+                        monster_targets.push((monster.id, monster.monster_index, monster_info.level));
+                    }
+                }
+
+                // Process player targets
+                for target_sid in player_targets {
+                    let target_level = {
+                        world.players.get(&target_sid).map(|p| p.level).unwrap_or(0)
+                    };
+
+                    // C#: if (Envir.Random.Next(20) >= 6 + magic.Level * 3 + Level - ob.Level) continue;
+                    let check = rng.gen_range(0..20);
+                    let threshold = 6 + magic_level as i32 * 3 + caster_level as i32 - target_level as i32;
+                    if check >= threshold {
+                        dx_current += x_step;
+                        continue;
+                    }
+
+                    // C#: int distance = 1 + Math.Max(0, magic.Level - 1) + Envir.Random.Next(2);
+                    let distance = 1 + (magic_level as i32 - 1).max(0) + rng.gen_range(0..2);
+
+                    // C#: MirDirection dir = Functions.DirectionFromPoint(CurrentLocation, ob.CurrentLocation);
+                    let push_dir = direction_from_point(caster_x, caster_y, tx, ty);
+
+                    // Push player
+                    let (push_dx, push_dy) = match push_dir {
+                        0 => (0, -1),
+                        1 => (1, -1),
+                        2 => (1, 0),
+                        3 => (1, 1),
+                        4 => (0, 1),
+                        5 => (-1, 1),
+                        6 => (-1, 0),
+                        7 => (-1, -1),
+                        _ => (0, 0),
+                    };
+
+                    let mut push_x = tx;
+                    let mut push_y = ty;
+                    let mut pushed_distance = 0;
+
+                    // Push step by step
+                    for _step in 0..distance {
+                        let next_x = push_x + push_dx;
+                        let next_y = push_y + push_dy;
+
+                        if next_x < 0 || next_y < 0 || next_x >= map.width as i32 || next_y >= map.height as i32 {
+                            break;
+                        }
+
+                        let ux = next_x as u16;
+                        let uy = next_y as u16;
+                        if !map.is_walkable(ux, uy) {
+                            break;
+                        }
+
+                        if let Some(info) = world.provider.get_map_info(map_index) {
+                            if World::<P>::point_in_safe_zone(info, next_x, next_y) {
+                                break;
+                            }
+                        }
+
+                        if world.is_cell_blocked(map_index, next_x, next_y) {
+                            break;
+                        }
+
+                        push_x = next_x;
+                        push_y = next_y;
+                        pushed_distance += 1;
+                    }
+
+                    if pushed_distance > 0 {
+                        let (old_x, old_y) = {
+                            world.players.get(&target_sid).map(|p| (p.x, p.y)).unwrap_or((tx, ty))
+                        };
+
+                        {
+                            let target = match world.players.get_mut(&target_sid) {
+                                Some(p) => p,
+                                None => {
+                                    dx_current += x_step;
+                                    continue;
+                                },
+                            };
+                            target.x = push_x;
+                            target.y = push_y;
+                            target.direction = push_dir;
+                        }
+
+                        world.remove_player_from_occupancy(target_sid, map_index, old_x, old_y);
+                        world.add_player_to_occupancy(target_sid, map_index, push_x, push_y);
+
+                        events.push(WorldEvent::PlayerPushed {
+                            session_id: target_sid,
+                            map_index,
+                            x: push_x,
+                            y: push_y,
+                            direction: push_dir,
+                        });
+
+                        // C#: ob.Attacked(this, magic.GetDamage(0), DefenceType.None, false);
+                        let magic_info = match world.provider.get_magic_info(spell_id) {
+                            Some(info) => info,
+                            None => {
+                                dx_current += x_step;
+                                continue;
+                            },
+                        };
+                        let damage = magic_damage(&magic_info, magic_level, 0, &mut rng);
+
+                        let (damage_taken, _) = crate::world::combat::damage::apply_damage_to_player(
+                            world,
+                            Some(session_id),
+                            target_sid,
+                            damage,
+                            crate::world::types::DamageType::Physical, // C#: DefenceType.None, but we use Physical
+                            map_index,
+                            events,
+                        );
+
+                        if damage_taken > 0 {
+                            result = true;
+                        }
+                    }
+                }
+
+                // Process monster targets
+                for (monster_id, monster_index, monster_level) in monster_targets {
+                    // C#: if (Envir.Random.Next(20) >= 6 + magic.Level * 3 + Level - ob.Level) continue;
+                    let check = rng.gen_range(0..20);
+                    let threshold = 6 + magic_level as i32 * 3 + caster_level as i32 - monster_level as i32;
+                    if check >= threshold {
+                        dx_current += x_step;
+                        continue;
+                    }
+
+                    // C#: int distance = 1 + Math.Max(0, magic.Level - 1) + Envir.Random.Next(2);
+                    let distance = 1 + (magic_level as i32 - 1).max(0) + rng.gen_range(0..2);
+
+                    // C#: MirDirection dir = Functions.DirectionFromPoint(CurrentLocation, ob.CurrentLocation);
+                    let push_dir = direction_from_point(caster_x, caster_y, tx, ty);
+
+                    // Push monster
+                    let (push_dx, push_dy) = match push_dir {
+                        0 => (0, -1),
+                        1 => (1, -1),
+                        2 => (1, 0),
+                        3 => (1, 1),
+                        4 => (0, 1),
+                        5 => (-1, 1),
+                        6 => (-1, 0),
+                        7 => (-1, -1),
+                        _ => (0, 0),
+                    };
+
+                    let mut push_x = tx;
+                    let mut push_y = ty;
+                    let mut pushed_distance = 0;
+
+                    // Push step by step
+                    for _step in 0..distance {
+                        let next_x = push_x + push_dx;
+                        let next_y = push_y + push_dy;
+
+                        if next_x < 0 || next_y < 0 || next_x >= map.width as i32 || next_y >= map.height as i32 {
+                            break;
+                        }
+
+                        let ux = next_x as u16;
+                        let uy = next_y as u16;
+                        if !map.is_walkable(ux, uy) {
+                            break;
+                        }
+
+                        if let Some(info) = world.provider.get_map_info(map_index) {
+                            if World::<P>::point_in_safe_zone(info, next_x, next_y) {
+                                break;
+                            }
+                        }
+
+                        if world.is_cell_blocked(map_index, next_x, next_y) {
+                            break;
+                        }
+
+                        push_x = next_x;
+                        push_y = next_y;
+                        pushed_distance += 1;
+                    }
+
+                    if pushed_distance > 0 {
+                        let (old_x, old_y) = {
+                            if let Some(monsters) = world.monsters.get(&map_index) {
+                                monsters.iter().find(|m| m.id == monster_id).map(|m| (m.x, m.y)).unwrap_or((tx, ty))
+                            } else {
+                                (tx, ty)
+                            }
+                        };
+
+                        {
+                            let monsters = match world.monsters.get_mut(&map_index) {
+                                Some(ms) => ms,
+                                None => {
+                                    dx_current += x_step;
+                                    continue;
+                                },
+                            };
+                            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                m.x = push_x;
+                                m.y = push_y;
+                                m.direction = push_dir;
+                            } else {
+                                dx_current += x_step;
+                                continue;
+                            }
+                        }
+
+                        world.remove_monster_from_occupancy(monster_id, map_index, old_x, old_y);
+                        world.add_monster_to_occupancy(monster_id, map_index, push_x, push_y);
+
+                        events.push(WorldEvent::ObjectPushed {
+                            object_id: monster_id,
+                            map_index,
+                            x: push_x,
+                            y: push_y,
+                            direction: push_dir,
+                        });
+
+                        result = true;
+                    }
+                }
+                dx_current += x_step;
+            }
+        }
+    }
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+
+    // C#: if (result) LevelMagic(magic);
+    if result {
+        world.level_up_magic_for_player(session_id, spell_id, events);
+    }
+}
+
+/// Cast MagicBooster skill - adds MC buff and ManaPenaltyPercent debuff
+/// C#: HumanObject.MagicBooster - DelayedAction adds buff with MinMC/MaxMC and ManaPenaltyPercent
+pub fn cast_magic_booster<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    let spell_id = Spell::MagicBooster as u8;
+    
+    let (magic_level, bonus) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+
+        // C#: int bonus = 6 + magic.Level * 6;
+        let bonus = 6 + level as i32 * 6;
+
+        (level, bonus)
+    };
+
+    // C#: ActionList.Add(new DelayedAction(DelayedType.Magic, Envir.Time + 500, magic, bonus));
+    // Schedule delayed buff application
+    let delay_ms: i64 = 500;
+    let due_time_ms = world.time_ms.saturating_add(delay_ms);
+
+    // Store the delayed buff info - we'll process it in World::update
+    // Use a special marker in PendingMagicHit to indicate MagicBooster buff
+    world.pending_magic_hits.push(PendingMagicHit {
+        due_time_ms,
+        attacker_session_id: session_id,
+        map_index: 0, // Not used for buffs
+        target_monster_id: 0, // Special marker for MagicBooster
+        monster_index: -2, // Special marker for MagicBooster (different from SlashingBurst's -1)
+        spell_id,
+        damage: bonus, // Store bonus value in damage field
+        damage_type: 0, // Not used
+    });
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+}
+
+/// Cast TurnUndead skill - kills undead monsters with a chance based on level difference
+/// C#: HumanObject.TurnUndead - checks if target is undead monster, then DelayedAction kills it
+pub fn cast_turn_undead<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    x: i32,
+    y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use rand::Rng;
+
+    let spell_id = Spell::TurnUndead as u8;
+
+    let (map_index, caster_x, caster_y, caster_level, magic_level, target_monster_id) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead
+            || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms)
+        {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level)
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+        player.next_action_time_ms = now_ms.saturating_add(600); // C# has 600ms action delay
+
+        // Find target monster (from packet or directional scan)
+        let target_id = if let Some(monsters) = world.monsters.get(&player.map_index) {
+            // Try to find monster at target location or in direction
+            let mut found: Option<u64> = None;
+            
+            // Check monsters at (x, y) first
+            for m in monsters.iter() {
+                if m.hp > 0 && m.x == x && m.y == y {
+                    found = Some(m.id);
+                    break;
+                }
+            }
+            
+            // If not found, scan in direction
+            if found.is_none() {
+                let (dx, dy) = match direction {
+                    0 => (0, -1),
+                    1 => (1, -1),
+                    2 => (1, 0),
+                    3 => (1, 1),
+                    4 => (0, 1),
+                    5 => (-1, 1),
+                    6 => (-1, 0),
+                    7 => (-1, -1),
+                    _ => (0, 0),
+                };
+                
+                let max_range: i32 = 9; // C#: Range = 9
+                for dist in 1..=max_range {
+                    let tx = player.x + dx * dist;
+                    let ty = player.y + dy * dist;
+                    
+                    for m in monsters.iter() {
+                        if m.hp > 0 && m.x == tx && m.y == ty {
+                            found = Some(m.id);
+                            break;
+                        }
+                    }
+                    if found.is_some() {
+                        break;
+                    }
+                }
+            }
+            
+            found
+        } else {
+            None
+        };
+
+        (
+            player.map_index,
+            player.x,
+            player.y,
+            player.level,
+            level,
+            target_id,
+        )
+    };
+
+    // Check if target is valid undead monster
+    let (monster_id, monster_index, monster_level) = {
+        if let Some(target_id) = target_monster_id {
+            if let Some(monsters) = world.monsters.get(&map_index) {
+                if let Some(m) = monsters.iter().find(|m| m.id == target_id && m.hp > 0) {
+                    let monster_info = match world.provider.get_monster_info(m.monster_index) {
+                        Some(info) => info,
+                        None => return,
+                    };
+                    
+                    // C#: target.Undead && target.IsAttackTarget(this)
+                    if !monster_info.undead {
+                        world.record_magic_cast_time(session_id, spell_id);
+                        events.push(WorldEvent::MagicCast {
+                            session_id,
+                            spell_id,
+                        });
+                        return;
+                    }
+                    
+                    if !world.can_attack_monster(session_id, map_index, target_id) {
+                        world.record_magic_cast_time(session_id, spell_id);
+                        events.push(WorldEvent::MagicCast {
+                            session_id,
+                            spell_id,
+                        });
+                        return;
+                    }
+                    
+                    (target_id, m.monster_index, monster_info.level)
+                } else {
+                    world.record_magic_cast_time(session_id, spell_id);
+                    events.push(WorldEvent::MagicCast {
+                        session_id,
+                        spell_id,
+                    });
+                    return;
+                }
+            } else {
+                world.record_magic_cast_time(session_id, spell_id);
+                events.push(WorldEvent::MagicCast {
+                    session_id,
+                    spell_id,
+                });
+                return;
+            }
+        } else {
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast {
+                session_id,
+                spell_id,
+            });
+            return;
+        }
+    };
+
+    // C#: if (Envir.Random.Next(2) + Level - 1 <= target.Level)
+    let mut rng = rand::thread_rng();
+    if rng.gen_range(0..2) + caster_level as i32 - 1 <= monster_level as i32 {
+        // Set monster target to caster (make it attack the caster)
+        if let Some(monsters) = world.monsters.get_mut(&map_index) {
+            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                m.target_session_id = Some(session_id);
+            }
+        }
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    // C#: int dif = Level - target.Level + 15;
+    // C#: if (Envir.Random.Next(100) >= (magic.Level + 1 << 3) + dif)
+    let dif = caster_level as i32 - monster_level as i32 + 15;
+    let threshold = ((magic_level as i32 + 1) << 3) + dif;
+    if rng.gen_range(0..100) >= threshold {
+        // Set monster target to caster
+        if let Some(monsters) = world.monsters.get_mut(&map_index) {
+            if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                m.target_session_id = Some(session_id);
+            }
+        }
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast {
+            session_id,
+            spell_id,
+        });
+        return;
+    }
+
+    // C#: DelayedAction action = new DelayedAction(DelayedType.Magic, Envir.Time + 500, magic, target);
+    // Schedule delayed kill
+    let delay_ms: i64 = 500;
+    let due_time_ms = world.time_ms.saturating_add(delay_ms);
+
+    // Use PendingMagicHit with special marker for TurnUndead kill
+    world.pending_magic_hits.push(PendingMagicHit {
+        due_time_ms,
+        attacker_session_id: session_id,
+        map_index,
+        target_monster_id: monster_id,
+        monster_index: -3, // Special marker for TurnUndead kill
+        spell_id,
+        damage: 0, // Not used for instant kill
+        damage_type: 0, // Not used
+    });
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast {
+        session_id,
+        spell_id,
+    });
+}

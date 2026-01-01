@@ -3,7 +3,7 @@
 //! Handles calculation and application of elemental damage (Fire, Ice, Lightning, etc.)
 
 use rand::{thread_rng, Rng};
-use crate::stats::{Stat, Stats};
+use crate::stats::Stat;
 use crate::world::types::DamageType;
 use crate::world::{SessionId, World, WorldEvent, WorldProvider};
 
@@ -85,12 +85,22 @@ impl<P: WorldProvider> World<P> {
         }
 
         // Add element damage from buffs (if any buffs provide element damage)
-        // Note: Buff system uses Stats (BTreeMap<Stat, i32>) which only supports
-        // standard Stat enum values, not custom stat IDs like element damage.
-        // If C# server has buffs that provide element damage, they would need to
-        // be implemented via a different mechanism (e.g., custom buff values or
-        // extended StatsMap support in buffs).
-        // For now, element damage is only collected from equipment.
+        // Buffs can provide element damage through their custom_stats StatsMap,
+        // which supports custom stat IDs (e.g., FireAttack=60, IceAttack=61, etc.)
+        for buff in &player.active_buffs {
+            for (stat_id, value) in &buff.custom_stats.entries {
+                match *stat_id {
+                    FIRE_ATTACK_STAT_ID => fire_damage += value,
+                    ICE_ATTACK_STAT_ID => ice_damage += value,
+                    LIGHTNING_ATTACK_STAT_ID => lightning_damage += value,
+                    WIND_ATTACK_STAT_ID => wind_damage += value,
+                    EARTH_ATTACK_STAT_ID => earth_damage += value,
+                    HOLY_ATTACK_STAT_ID => holy_damage += value,
+                    DARK_ATTACK_STAT_ID => dark_damage += value,
+                    _ => {}
+                }
+            }
+        }
 
         // Build result vector (only include non-zero damages)
         if fire_damage > 0 {

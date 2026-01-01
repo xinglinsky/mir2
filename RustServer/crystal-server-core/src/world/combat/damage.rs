@@ -649,6 +649,14 @@ pub fn apply_damage_to_player_internal<P: WorldProvider>(
         world.remove_all_pets_for_session(target_session_id);
         world.clear_player_buffs_on_death(target_session_id, events);
         world.apply_player_death_drops(target_session_id, map_index, events);
+        
+        // Call default NPC Die page after player death
+        // C#: CallDefaultNPC(DefaultNPCType.Die)
+        // C# generates key as: "Die" (no parameters)
+        // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_Die]"
+        events.push(WorldEvent::PlayerDied {
+            session_id: target_session_id,
+        });
     }
 
     // Counterattack / reflect buffs.

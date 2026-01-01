@@ -1,5 +1,6 @@
 use crate::stats::Stats;
 use crate::world::types::{BuffType, BuffProperty, BuffStackType};
+use crystal_shared_proto::item_types::StatsMap;
 
 #[derive(Clone, Debug)]
 pub struct PlayerBuff {
@@ -12,6 +13,10 @@ pub struct PlayerBuff {
     pub infinite: bool,
     pub paused: bool,
     pub pause_remaining_ms: i64,
+    /// Custom stats map for stats that are not in the standard Stat enum
+    /// (e.g., elemental damage stat IDs like FireAttack=60, IceAttack=61, etc.)
+    /// This mirrors C# server's buff.Stats which can contain custom stat IDs.
+    pub custom_stats: StatsMap,
 }
 
 impl PlayerBuff {
@@ -26,6 +31,7 @@ impl PlayerBuff {
             infinite: false,
             paused: false,
             pause_remaining_ms: 0,
+            custom_stats: StatsMap { entries: Vec::new() },
         }
     }
 

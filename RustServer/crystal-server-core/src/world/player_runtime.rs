@@ -447,6 +447,23 @@ impl<P: WorldProvider> World<P> {
             let mut hp_regen: i32 = 0;
             let mut mp_regen: i32 = 0;
 
+            // C#: Process Vampirism healing (VampAmount -> healthRegen)
+            // C#: if (Envir.Time > VampTime) { VampTime = Envir.Time + VampDelay; ... }
+            const VAMP_DELAY_MS: i64 = 500; // C# HumanObject.VampDelay
+            if player.vamp_amount > 0 && now_ms >= player.vamp_time_ms {
+                player.vamp_time_ms = now_ms.saturating_add(VAMP_DELAY_MS);
+                
+                // C#: if (VampAmount > 10) { healthRegen += 10; VampAmount -= 10; }
+                // C#: else { healthRegen += VampAmount; VampAmount = 0; }
+                if player.vamp_amount > 10 {
+                    hp_regen = hp_regen.saturating_add(10);
+                    player.vamp_amount -= 10;
+                } else {
+                    hp_regen = hp_regen.saturating_add(player.vamp_amount as i32);
+                    player.vamp_amount = 0;
+                }
+            }
+
             if player.hp < max_hp {
                 // Base: 3% of Max HP + 1, mirroring `(Stats[HP] * 0.03F) + 1`.
                 let base = ((max_hp as f32 * 0.03_f32) as i32).saturating_add(1);
@@ -456,7 +473,7 @@ impl<P: WorldProvider> World<P> {
                 } else {
                     0
                 };
-                hp_regen = base.saturating_add(bonus);
+                hp_regen = hp_regen.saturating_add(base).saturating_add(bonus);
             }
 
             if player.mp < max_mp {
@@ -477,6 +494,8 @@ impl<P: WorldProvider> World<P> {
                 let amount = new_hp.saturating_sub(old_hp);
                 if amount > 0 {
                     player.hp = new_hp;
+                    // C#: BroadcastDamageIndicator(DamageType.Hit, healthRegen) for Vampirism healing
+                    // Show healing effect for any healing (including Vampirism)
                     events.push(WorldEvent::PlayerHealed {
                         session_id: player.session_id,
                         map_index: player.map_index,
@@ -484,7 +503,7 @@ impl<P: WorldProvider> World<P> {
                         y: player.y,
                         amount,
                         new_hp,
-                        show_healing_effect: false,
+                        show_healing_effect: true, // Show healing indicator
                     });
                 }
             }

@@ -304,3 +304,29 @@ pub fn apply_fatal_sword_and_undead<P: WorldProvider>(
 
     raw_damage
 }
+
+/// Calculate direction from one point to another, mirroring C# Functions.DirectionFromPoint
+pub fn direction_from_point(from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> u8 {
+    let dx = to_x - from_x;
+    let dy = to_y - from_y;
+    
+    if dx == 0 && dy < 0 {
+        0 // North
+    } else if dx > 0 && dy < 0 {
+        1 // Northeast
+    } else if dx > 0 && dy == 0 {
+        2 // East
+    } else if dx > 0 && dy > 0 {
+        3 // Southeast
+    } else if dx == 0 && dy > 0 {
+        4 // South
+    } else if dx < 0 && dy > 0 {
+        5 // Southwest
+    } else if dx < 0 && dy == 0 {
+        6 // West
+    } else if dx < 0 && dy < 0 {
+        7 // Northwest
+    } else {
+        0 // Default to North
+    }
+}

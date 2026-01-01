@@ -874,6 +874,14 @@ impl<P: WorldProvider> World<P> {
             self.remove_all_pets_for_session(target_sid);
             self.clear_player_buffs_on_death(target_sid, events);
             self.apply_player_death_drops(target_sid, map_index, events);
+            
+            // Call default NPC Die page after player death
+            // C#: CallDefaultNPC(DefaultNPCType.Die)
+            // C# generates key as: "Die" (no parameters)
+            // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_Die]"
+            events.push(WorldEvent::PlayerDied {
+                session_id: target_sid,
+            });
         }
 
         if !allow_pk_points || damage <= 0 || !dead {

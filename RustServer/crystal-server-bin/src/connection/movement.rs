@@ -802,6 +802,19 @@ impl LoginConnection {
                                 raw,
                             );
                         }
+
+                        // Call default NPC LevelUp page after level up
+                        // C#: CallDefaultNPC(DefaultNPCType.LevelUp)
+                        // C# generates key as: "LevelUp" (no parameters)
+                        // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_LevelUp]"
+                        use crystal_shared_proto::npc::CCallNPC;
+                        let level_up_key = "LevelUp".to_string();
+                        let call_npc_msg = CCallNPC {
+                            object_id: super::LoginConnection::DEFAULT_NPC_ID,
+                            key: level_up_key,
+                        };
+                        // Call handle_call_npc directly (it's pub(crate) and part of LoginConnection impl)
+                        self.handle_call_npc(call_npc_msg, out);
                     }
                 }
                 world::WorldEvent::ObjectAttack {
@@ -1744,6 +1757,55 @@ impl LoginConnection {
                         if let Ok(raw) = pkt.encode() {
                             out.push(Self::encode_raw(raw));
                         }
+                    }
+                }
+                world::WorldEvent::QuestItemRemoved { session_id, unique_id, count } => {
+                    if session_id == self.session_id {
+                        // Send SDeleteQuestItem packet to notify client about quest item removal
+                        // Mirrors C# S.DeleteQuestItem behavior
+                        use crystal_shared_proto::quest::SDeleteQuestItem;
+                        let pkt = SDeleteQuestItem {
+                            unique_id,
+                            count,
+                        };
+                        if let Ok(raw) = pkt.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                        
+                        // Since Rust server uses regular inventory instead of QuestInventory,
+                        // we also send SUserSlotsRefresh to ensure inventory is synchronized
+                        let (inv, eq) = {
+                            let world = self.world.lock().unwrap();
+                            world
+                                .player_items(self.session_id)
+                                .unwrap_or((
+                                    crystal_server_core::item::Inventory::new_default(),
+                                    crystal_server_core::item::Equipment::new_default(),
+                                ))
+                        };
+                        let refresh = SUserSlotsRefresh {
+                            inventory: inv.slots,
+                            equipment: eq.slots,
+                        };
+                        if let Ok(raw) = refresh.encode() {
+                            out.push(Self::encode_raw(raw));
+                        }
+                    }
+                }
+                world::WorldEvent::PlayerDied { session_id } => {
+                    if session_id == self.session_id {
+                        // Call default NPC Die page after player death
+                        // C#: CallDefaultNPC(DefaultNPCType.Die)
+                        // C# generates key as: "Die" (no parameters)
+                        // Then wraps it as: string.Format("[@_{0}]", key) -> "[@_Die]"
+                        use crystal_shared_proto::npc::CCallNPC;
+                        let die_key = "Die".to_string();
+                        let call_npc_msg = CCallNPC {
+                            object_id: super::LoginConnection::DEFAULT_NPC_ID,
+                            key: die_key,
+                        };
+                        // Call handle_call_npc directly (it's pub(crate) and part of LoginConnection impl)
+                        self.handle_call_npc(call_npc_msg, out);
                     }
                 }
             }

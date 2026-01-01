@@ -55,6 +55,10 @@ pub struct PlayerState {
     pub next_regen_time_ms: i64,
     /// Accumulated fractional life-steal (HPDrain) like C# HumanObject.HpDrain.
     pub hp_drain: f32,
+    /// Accumulated vampirism healing amount (mirroring C# HumanObject.VampAmount)
+    pub vamp_amount: u16,
+    /// Next time (ms since epoch) when vampirism healing should be applied (mirroring C# HumanObject.VampTime)
+    pub vamp_time_ms: i64,
     pub dead: bool,
     pub hidden: bool,
     pub inventory: Inventory,
@@ -208,6 +212,8 @@ impl<P: WorldProvider> World<P> {
                     mp: max_mp,
                     next_regen_time_ms: 0,
                     hp_drain: 0.0,
+                    vamp_amount: 0,
+                    vamp_time_ms: 0,
                     dead: false,
                     hidden: false,
                     inventory,
