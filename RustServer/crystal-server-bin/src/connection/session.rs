@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicU32;
 use std::time::Instant;
@@ -75,6 +75,7 @@ impl LoginConnection {
             last_active: Instant::now(),
             timeout_ms,
             closing: false,
+            pending_moves: VecDeque::new(),
             last_move_kind: None,
             can_create_guild: false,
             is_gm: false,

@@ -514,10 +514,16 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        if spell == Spell::IceThrust as u8 {
+            use crate::world::skills::wizard::cast_ice_thrust;
+            cast_ice_thrust(self, session_id, spell, direction, x, y, events);
+            return;
+        }
+
         // TODO: Handle other spells that are not yet implemented:
         //   (Note: Entrapment is handled in attack flow via resolve_attack_spell_and_level_for_player)
         // - Wizard: EnergyRepulsor, ElectricShock,
-        //   Mirroring, MeteorStrike, IceThrust
+        //   Mirroring, MeteorStrike
         //   (Note: FrostCrunch is handled in attack flow via is_pure_magic_attack)
         // - Taoist: Revelation, EnergyRepulsor, TrapHexagon, Purification, Curse, Plague, PoisonCloud
         // - Assassin: (most assassin spells are already implemented)

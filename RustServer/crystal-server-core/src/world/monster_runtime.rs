@@ -732,6 +732,13 @@ impl<P: WorldProvider> World<P> {
             return;
         }
 
+        // C#: IceThrust uses DelayedType.Magic to create 3x3 damage area
+        // If monster_index == -5, this is an IceThrust AOE hit
+        if spell_id == Spell::IceThrust as u8 && monster_index == -5 {
+            self.apply_ice_thrust_aoe(attacker_session_id, map_index, damage, target_monster_id, damage_type, events);
+            return;
+        }
+
         // Look up monster definition for max HP, undead flag and drops/experience.
         let (monster_exp, max_hp, monster_drops) = if let Some(info) =
             self.provider.get_monster_info(monster_index)
@@ -3506,6 +3513,362 @@ impl<P: WorldProvider> World<P> {
 
         // C#: LevelMagic(magic);
         self.level_up_magic_for_player(session_id, Spell::Vampirism as u8, events);
+    }
+
+    fn apply_ice_thrust_aoe(
+        &mut self,
+        session_id: SessionId,
+        map_index: i32,
+        near_damage: i32,
+        packed_location: u64,
+        direction: u8,
+        events: &mut Vec<WorldEvent>,
+    ) {
+        // C#: Map.cs ProcessDelayedAction - IceThrust
+        // Creates 3 columns x 3 rows damage area
+        // Each column starts 1 tile away in left/center/right directions, then extends 3 tiles forward
+        // Near damage (j <= 1) vs far damage (j > 1), with chance to apply Slow and Frozen poison
+        
+        use crate::world::types::PoisonType;
+        use rand::Rng;
+
+        let (caster_level, magic_level) = {
+            let player = match self.players.get(&session_id) {
+                Some(p) => p,
+                None => return,
+            };
+
+            let magic = match player.magics.iter().find(|m| m.spell == Spell::IceThrust as u8) {
+                Some(m) => m,
+                None => return,
+            };
+
+            (player.level, magic.level)
+        };
+
+        let caster_x = (packed_location & 0xFFFF_FFFF) as u32 as i32;
+        let caster_y = (packed_location >> 32) as u32 as i32;
+
+        let map = match self.get_or_load_map(map_index) {
+            Some(m) => m,
+            None => return,
+        };
+
+        // C#: Calculate previous and next directions
+        let (dx, dy) = match direction {
+            0 => (0, -1),
+            1 => (1, -1),
+            2 => (1, 0),
+            3 => (1, 1),
+            4 => (0, 1),
+            5 => (-1, 1),
+            6 => (-1, 0),
+            7 => (-1, -1),
+            _ => (0, 0),
+        };
+
+        let (prev_dx, prev_dy) = match direction {
+            0 => (-1, -1),  // Up -> Up-Left
+            1 => (0, -1),   // Up-Right -> Up
+            2 => (1, -1),   // Right -> Up-Right
+            3 => (1, 0),    // Down-Right -> Right
+            4 => (1, 1),    // Down -> Down-Right
+            5 => (0, 1),    // Down-Left -> Down
+            6 => (-1, 1),   // Left -> Down-Left
+            7 => (-1, 0),   // Up-Left -> Left
+            _ => (0, 0),
+        };
+
+        let (next_dx, next_dy) = match direction {
+            0 => (1, -1),   // Up -> Up-Right
+            1 => (1, 0),    // Up-Right -> Right
+            2 => (1, 1),    // Right -> Down-Right
+            3 => (0, 1),    // Down-Right -> Down
+            4 => (-1, 1),   // Down -> Down-Left
+            5 => (-1, 0),   // Down-Left -> Left
+            6 => (-1, -1),  // Left -> Up-Left
+            7 => (0, -1),   // Up-Left -> Up
+            _ => (0, 0),
+        };
+
+        // C#: Point[] loc = new Point[col]; //0 = left 1 = center 2 = right
+        let col_locations = [
+            (caster_x + prev_dx, caster_y + prev_dy),  // Left column
+            (caster_x + dx, caster_y + dy),            // Center column
+            (caster_x + next_dx, caster_y + next_dy), // Right column
+        ];
+
+        let mut trained = false;
+        let mut rng = rand::thread_rng();
+        let far_damage = near_damage.saturating_mul(6) / 10;
+
+        // C#: for (int i = 0; i < col; i++) - 3 columns
+        for (col_idx, &(start_x, start_y)) in col_locations.iter().enumerate() {
+            // C#: for (int j = 0; j < row; j++) - 3 rows forward
+            for row_idx in 0..3 {
+                let hit_x = start_x + dx * row_idx;
+                let hit_y = start_y + dy * row_idx;
+
+                if hit_x < 0 || hit_y < 0 || hit_x >= map.width as i32 || hit_y >= map.height as i32 {
+                    continue;
+                }
+
+                // C#: j <= 1 ? nearDamage : farDamage
+                let damage = if row_idx <= 1 { near_damage } else { far_damage };
+
+                // Collect targets at this location
+                let mut player_targets: Vec<SessionId> = Vec::new();
+                let mut monster_targets: Vec<(u64, i32, u16)> = Vec::new(); // (id, monster_index, level)
+
+                // Check players
+                for (target_sid, target_player) in self.players.iter() {
+                    if target_sid == &session_id {
+                        continue;
+                    }
+                    if target_player.map_index != map_index || target_player.x != hit_x || target_player.y != hit_y {
+                        continue;
+                    }
+                    if target_player.dead || target_player.hp <= 0 {
+                        continue;
+                    }
+                    if !self.can_attack_player(session_id, *target_sid) {
+                        continue;
+                    }
+                    player_targets.push(*target_sid);
+                }
+
+                // Check monsters
+                if let Some(monsters) = self.monsters.get(&map_index) {
+                    for monster in monsters.iter() {
+                        if monster.hp <= 0 || monster.x != hit_x || monster.y != hit_y {
+                            continue;
+                        }
+                        if !self.can_attack_monster(session_id, map_index, monster.id) {
+                            continue;
+                        }
+                        let monster_info = match self.provider.get_monster_info(monster.monster_index) {
+                            Some(info) => info,
+                            None => continue,
+                        };
+                        monster_targets.push((monster.id, monster.monster_index, monster_info.level));
+                    }
+                }
+
+                // Process player targets
+                for target_sid in player_targets {
+                    let target_level = self.players.get(&target_sid).map(|p| p.level).unwrap_or(0);
+
+                    let old_hp = self.players.get(&target_sid).map(|p| p.hp).unwrap_or(0);
+                    self.apply_player_hit_from_player(
+                        session_id,
+                        target_sid,
+                        map_index,
+                        damage,
+                        crate::world::types::DamageType::Magical as u8,
+                        Some(hit_x),
+                        Some(hit_y),
+                        Some(direction),
+                        true,
+                        events,
+                    );
+                    let new_hp = self.players.get(&target_sid).map(|p| p.hp).unwrap_or(0);
+                    let damage_taken = (old_hp - new_hp).max(0);
+
+                    if damage_taken > 0 {
+                        trained = true;
+
+                        let level_diff = caster_level as i32 + 2 - target_level as i32;
+                        if level_diff >= 0 {
+                            if rng.gen_range(0..100) <= magic_level as i32 {
+                                let duration = 4;
+                                self.apply_poison_to_player_from_monster(
+                                    0,
+                                    map_index,
+                                    target_sid,
+                                    PoisonType::Slow,
+                                    0,
+                                    duration as i64,
+                                    1000,
+                                    false,
+                                    false,
+                                );
+                                if let Some(target) = self.players.get_mut(&target_sid) {
+                                    target.operate_time_ms = 0;
+                                }
+                            }
+                        }
+
+                        if level_diff >= 0 {
+                            if rng.gen_range(0..100) <= magic_level as i32 {
+                                let freezing = self
+                                    .players
+                                    .get(&session_id)
+                                    .map(|p| p.stats.total.get(crate::stats::Stat::Freezing).max(0))
+                                    .unwrap_or(0);
+                                let duration = 2 + rng.gen_range(0..freezing.max(1) as usize);
+                                self.apply_poison_to_player_from_monster(
+                                    0,
+                                    map_index,
+                                    target_sid,
+                                    PoisonType::Frozen,
+                                    0,
+                                    duration as i64,
+                                    1000,
+                                    false,
+                                    false,
+                                );
+                                if let Some(target) = self.players.get_mut(&target_sid) {
+                                    target.operate_time_ms = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Process monster targets
+                for (monster_id, monster_index, monster_level) in monster_targets {
+                    // Apply damage
+                    let damage_taken = {
+                        if let Some(monsters) = self.monsters.get(&map_index) {
+                            if let Some(m) = monsters.iter().find(|m| m.id == monster_id && m.hp > 0) {
+                                let monster_info = match self.provider.get_monster_info(m.monster_index) {
+                                    Some(info) => info,
+                                    None => continue,
+                                };
+
+                                let mut defender_stats = monster_info.stats.clone();
+                                defender_stats.add(&m.buff_stats);
+
+                                // Calculate magic damage
+                                let attacker_stats = {
+                                    self.players.get(&session_id).map(|p| p.stats.total.clone()).unwrap_or_default()
+                                };
+
+                                let damage_base = crate::world::skills::compute_pure_magic_attack_damage(
+                                    &self.provider,
+                                    &attacker_stats,
+                                    Spell::IceThrust as u8,
+                                    magic_level,
+                                );
+
+                                if damage_base <= 0 {
+                                    continue;
+                                }
+
+                                let final_damage = damage.min(damage_base);
+
+                                // Apply damage
+                                if let Some(monsters) = self.monsters.get_mut(&map_index) {
+                                    if let Some(m) = monsters.iter_mut().find(|m| m.id == monster_id) {
+                                        if final_damage >= m.hp {
+                                            m.hp = 0;
+                                            m.dead = true;
+                                            m.dead_until_ms = self.time_ms.saturating_add(300_000);
+                                            m.hp
+                                        } else {
+                                            m.hp -= final_damage;
+                                            final_damage
+                                        }
+                                    } else {
+                                        continue;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    };
+
+                    if damage_taken > 0 {
+                        trained = true;
+
+                        // C#: if (player.Level + (target.Race == ObjectType.Player ? 2 : 10) >= target.Level && Envir.Random.Next(target.Race == ObjectType.Player ? 100 : 20) <= magic.Level)
+                        // Apply Slow poison
+                        let level_diff = caster_level as i32 + 10 - monster_level as i32;
+                        if level_diff >= 0 {
+                            if rng.gen_range(0..20) <= magic_level as i32 {
+                                let duration = 5 + rng.gen_range(0..5); // C#: 5 + Envir.Random.Next(5)
+                                self.apply_poison_to_monster_from_player(
+                                    session_id,
+                                    map_index,
+                                    monster_id,
+                                    PoisonType::Slow,
+                                    0, // value (Slow poison doesn't deal damage)
+                                    duration as i64,
+                                    1000, // tick_speed_ms
+                                );
+                                
+                                // C#: target.OperateTime = 0;
+                                // Note: MonsterInstance doesn't have operate_time_ms field, so we skip this
+                            }
+                        }
+
+                        // C#: if (player.Level + (target.Race == ObjectType.Player ? 2 : 10) >= target.Level && Envir.Random.Next(target.Race == ObjectType.Player ? 100 : 40) <= magic.Level)
+                        // Apply Frozen poison
+                        if level_diff >= 0 {
+                            if rng.gen_range(0..40) <= magic_level as i32 {
+                                let freezing = {
+                                    self.players.get(&session_id).map(|p| p.stats.total.get(crate::stats::Stat::Freezing).max(0)).unwrap_or(0)
+                                };
+                                let duration = 5 + rng.gen_range(0..freezing.max(1) as usize); // C#: 5 + Envir.Random.Next(player.Stats[Stat.Freezing])
+                                self.apply_poison_to_monster_from_player(
+                                    session_id,
+                                    map_index,
+                                    monster_id,
+                                    PoisonType::Frozen,
+                                    0, // value (Frozen poison doesn't deal damage)
+                                    duration as i64,
+                                    1000, // tick_speed_ms
+                                );
+                                
+                                // C#: target.OperateTime = 0;
+                                // Note: MonsterInstance doesn't have operate_time_ms field, so we skip this
+                            }
+                        }
+
+                        // Send hit event
+                        if let Some(monsters) = self.monsters.get(&map_index) {
+                            if let Some(m) = monsters.iter().find(|m| m.id == monster_id) {
+                                let monster_info = match self.provider.get_monster_info(m.monster_index) {
+                                    Some(info) => info,
+                                    None => continue,
+                                };
+
+                                let max_hp = monster_info.stats.get(crate::stats::Stat::HP).max(1);
+                                let new_hp = m.hp;
+                                let health_percent = if max_hp > 0 {
+                                    ((new_hp as i64 * 100) / max_hp as i64).clamp(0, 100) as u8
+                                } else {
+                                    100
+                                };
+
+                                events.push(WorldEvent::MonsterHitPlayer {
+                                    attacker_monster_id: 0,
+                                    session_id,
+                                    map_index,
+                                    x: m.x,
+                                    y: m.y,
+                                    direction: 0,
+                                    damage: damage_taken,
+                                    damage_type: crate::world::types::DamageType::Magical as u8,
+                                    health_percent,
+                                    show_struck: true,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // C#: if (train) LevelMagic(magic);
+        if trained {
+            self.level_up_magic_for_player(session_id, Spell::IceThrust as u8, events);
+        }
     }
 }
 

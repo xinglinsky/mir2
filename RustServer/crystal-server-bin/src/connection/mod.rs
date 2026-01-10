@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use std::sync::atomic::AtomicU32;
@@ -93,6 +93,20 @@ pub(crate) struct PlayerVisual {
     pub(crate) hair: u8,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum PendingMoveKind {
+    Turn,
+    Walk,
+    Run,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct PendingMove {
+    pub(crate) due_time_ms: i64,
+    pub(crate) kind: PendingMoveKind,
+    pub(crate) direction: u8,
+}
+
 pub(crate) struct LoginConnection {
     pub(crate) stage: Stage,
     pub(crate) session_id: world::SessionId,
@@ -131,6 +145,7 @@ pub(crate) struct LoginConnection {
     pub(crate) last_active: Instant,
     pub(crate) timeout_ms: u64,
     pub(crate) closing: bool,
+    pub(crate) pending_moves: VecDeque<PendingMove>,
     #[allow(dead_code)]
     pub(crate) last_move_kind: Option<u8>,
     #[allow(dead_code)]

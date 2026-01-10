@@ -1751,6 +1751,146 @@ pub fn cast_vampirism<P: WorldProvider>(
     });
 }
 
+pub fn cast_ice_thrust<P: WorldProvider>(
+    world: &mut World<P>,
+    session_id: SessionId,
+    spell: u8,
+    direction: u8,
+    _x: i32,
+    _y: i32,
+    events: &mut Vec<WorldEvent>,
+) {
+    use crate::world::magic::magic_damage;
+
+    let spell_id = Spell::IceThrust as u8;
+    if spell != spell_id {
+        return;
+    }
+
+    let (map_index, caster_x, caster_y, magic_level, attacker_stats) = {
+        let player = match world.players.get_mut(&session_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        let now_ms = world.time_ms;
+        if player.dead || (player.next_action_time_ms != 0 && now_ms < player.next_action_time_ms) {
+            return;
+        }
+
+        let magic = match player.magics.iter().find(|m| m.spell == spell_id) {
+            Some(m) => m,
+            None => return,
+        };
+
+        let level = magic.level;
+        let cost = match compute_magic_mana_cost(&world.provider, &player.stats.total, spell_id, level) {
+            Some(c) => c,
+            None => return,
+        };
+
+        if player.mp < cost {
+            return;
+        }
+
+        player.mp -= cost;
+        player.direction = direction;
+
+        (player.map_index, player.x, player.y, level, player.stats.total.clone())
+    };
+
+    let mut rng = thread_rng();
+    let min_mc = attacker_stats.get(Stat::MinMC).max(0);
+    let max_mc = attacker_stats.get(Stat::MaxMC).max(min_mc);
+    let mut damage_base = if max_mc > min_mc {
+        rng.gen_range(min_mc..=max_mc)
+    } else {
+        min_mc
+    };
+
+    // C#: if (Random.Next(100) < (1 + Luck)) damageBase += damageBase;
+    let luck = attacker_stats.get(Stat::Luck);
+    let threshold = 1_i32.saturating_add(luck);
+    if threshold > 0 && rng.gen_range(0..100) < threshold {
+        damage_base = damage_base.saturating_add(damage_base);
+    }
+
+    let magic_info = match world.provider.get_magic_info(spell_id) {
+        Some(info) => info,
+        None => {
+            world.record_magic_cast_time(session_id, spell_id);
+            events.push(WorldEvent::MagicCast { session_id, spell_id });
+            return;
+        }
+    };
+
+    let near_damage = magic_damage(&magic_info, magic_level, damage_base, &mut rng).max(0);
+    if near_damage <= 0 {
+        world.record_magic_cast_time(session_id, spell_id);
+        events.push(WorldEvent::MagicCast { session_id, spell_id });
+        return;
+    }
+
+    // location = one tile in front of caster.
+    let (dx, dy) = match direction {
+        0 => (0, -1),
+        1 => (1, -1),
+        2 => (1, 0),
+        3 => (1, 1),
+        4 => (0, 1),
+        5 => (-1, 1),
+        6 => (-1, 0),
+        7 => (-1, -1),
+        _ => (0, 0),
+    };
+    let loc_x = caster_x.saturating_add(dx);
+    let loc_y = caster_y.saturating_add(dy);
+
+    let packed_location: u64 = ((loc_y as u32 as u64) << 32) | (loc_x as u32 as u64);
+
+    // Delay: 1500ms. Use PendingMagicHit marker -5 for AoE processing.
+    let due_time_ms = world.time_ms.saturating_add(1500);
+    world.pending_magic_hits.push(PendingMagicHit {
+        due_time_ms,
+        attacker_session_id: session_id,
+        map_index,
+        target_monster_id: packed_location,
+        monster_index: -5,
+        spell_id,
+        damage: near_damage,
+        damage_type: direction,
+    });
+
+    // Visuals (ObjectMagic + Magic) and cooldown tracking.
+    events.push(WorldEvent::ObjectMagic {
+        session_id,
+        map_index,
+        x: caster_x,
+        y: caster_y,
+        direction,
+        spell: spell_id,
+        level: magic_level,
+        target_id: 0,
+        target_x: loc_x,
+        target_y: loc_y,
+    });
+    events.push(WorldEvent::Magic {
+        session_id,
+        spell_id,
+        target_id: 0,
+        x: loc_x,
+        y: loc_y,
+        cast: true,
+        level: magic_level,
+        secondary_target_ids: Vec::new(),
+    });
+
+    world.record_magic_cast_time(session_id, spell_id);
+    events.push(WorldEvent::MagicCast { session_id, spell_id });
+
+    let _ = map_index;
+}
+
 /// Cast Repulsion skill - pushes back targets within 1-tile radius
 /// C#: HumanObject.Repulsion - pushes targets away from caster
 pub fn cast_repulsion<P: WorldProvider>(

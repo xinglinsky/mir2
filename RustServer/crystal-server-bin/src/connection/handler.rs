@@ -1098,6 +1098,56 @@ impl ConnectionHandler for LoginConnection {
         let mut out = Vec::new();
 
         if self.stage == Stage::InGame && self.current_map_index != 0 {
+            // Mirror C# MirConnection retryList semantics: once the player's
+            // action cooldown expires, replay deferred movement commands.
+            // This avoids client-side prediction being corrected later via
+            // an unsolicited UserLocation snap.
+            if !self.pending_moves.is_empty() {
+                let (now_ms, next_action_ms) = {
+                    let world = self.world.lock().unwrap();
+                    (
+                        world.current_time_ms(),
+                        world.player_next_action_time_ms(self.session_id).unwrap_or(0),
+                    )
+                };
+
+                if next_action_ms == 0 || now_ms >= next_action_ms {
+                    if let Some(p) = self.pending_moves.pop_front() {
+                        if p.due_time_ms <= now_ms {
+                            match p.kind {
+                                super::PendingMoveKind::Turn => {
+                                    self.handle_turn(
+                                        crystal_shared_proto::login::CTurn {
+                                            direction: p.direction,
+                                        },
+                                        &mut out,
+                                    );
+                                }
+                                super::PendingMoveKind::Walk => {
+                                    self.handle_walk(
+                                        crystal_shared_proto::login::CWalk {
+                                            direction: p.direction,
+                                        },
+                                        &mut out,
+                                    );
+                                }
+                                super::PendingMoveKind::Run => {
+                                    self.handle_run(
+                                        crystal_shared_proto::login::CRun {
+                                            direction: p.direction,
+                                        },
+                                        &mut out,
+                                    );
+                                }
+                            }
+                        } else {
+                            // Not due yet; put it back.
+                            self.pending_moves.push_front(p);
+                        }
+                    }
+                }
+            }
+
             self.update_visibility(&mut out);
         }
 

@@ -1018,6 +1018,10 @@ impl<P: WorldProvider> World<P> {
         self.time_ms
     }
 
+    pub fn player_next_action_time_ms(&self, session_id: SessionId) -> Option<i64> {
+        self.players.get(&session_id).map(|p| p.next_action_time_ms)
+    }
+
     /// Create or replace a timer with the given full key. This mirrors the
     /// C# Timer constructor which sets RelativeTime based on Envir.Time and
     /// the requested number of seconds.

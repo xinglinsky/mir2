@@ -397,7 +397,10 @@ impl LoginConnection {
                     while i < lines.len() {
                         let l = lines[i];
                         let t = l.trim_start();
-                        if t.starts_with("[@") || (t.starts_with('#') && !t.eq_ignore_ascii_case("#SAY")) {
+                        if t.starts_with("[@")
+                            || (t.starts_with('[') && !t.starts_with("[@"))
+                            || (t.starts_with('#') && !t.eq_ignore_ascii_case("#SAY"))
+                        {
                             break;
                         }
                         page_lines.push(l.to_string());
@@ -524,7 +527,10 @@ impl LoginConnection {
                 while i < lines.len() {
                     let l = lines[i];
                     let t = l.trim_start();
-                    if t.starts_with("[@") || (t.starts_with('#') && !t.eq_ignore_ascii_case("#SAY")) {
+                    if t.starts_with("[@")
+                        || (t.starts_with('[') && !t.starts_with("[@"))
+                        || (t.starts_with('#') && !t.eq_ignore_ascii_case("#SAY"))
+                    {
                         break;
                     }
                     out_lines.push(l.to_string());
@@ -584,7 +590,10 @@ impl LoginConnection {
                 continue;
             }
 
-            if trimmed.starts_with("[@") || trimmed.starts_with('#') {
+            if trimmed.starts_with("[@")
+                || (trimmed.starts_with('[') && !trimmed.starts_with("[@"))
+                || trimmed.starts_with('#')
+            {
                 break;
             }
 
@@ -1851,6 +1860,17 @@ impl LoginConnection {
 
                 let key = Self::normalize_npc_key(&msg.key);
                 let key_upper = key.as_str();
+
+                // Many scripts use <Exit/@Exit> without defining a dedicated [@EXIT] page.
+                // The C# server still responds in a way that closes the NPC dialog.
+                // To stay compatible, treat @EXIT/@CLOSE as an explicit close request.
+                if key_upper == "@EXIT" || key_upper == "@CLOSE" {
+                    let resp = SNpcResponse { page: Vec::new() };
+                    if let Ok(raw) = resp.encode() {
+                        out.push(Self::encode_raw(raw));
+                    }
+                    return;
+                }
 
                 if key_upper == "@MANAGEHERO" {
                     self.send_manage_heroes(out);

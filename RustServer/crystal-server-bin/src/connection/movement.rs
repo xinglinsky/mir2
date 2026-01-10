@@ -78,9 +78,42 @@ use crystal_shared_proto::user::group::{
 };
 use tracing::debug;
 
-use super::{hero_object_id, LoginConnection, Stage};
+use super::{hero_object_id, LoginConnection, PendingMove, PendingMoveKind, Stage};
 
 impl LoginConnection {
+    fn enqueue_pending_move(&mut self, kind: PendingMoveKind, direction: u8) {
+        let (now_ms, due_time_ms) = {
+            let world = self.world.lock().unwrap();
+            let now_ms = world.current_time_ms();
+            let due = world
+                .player_next_action_time_ms(self.session_id)
+                .unwrap_or(now_ms);
+            (now_ms, due)
+        };
+
+        let due = due_time_ms.max(now_ms);
+        self.pending_moves.push_back(PendingMove {
+            due_time_ms: due,
+            kind,
+            direction,
+        });
+
+        // Avoid unbounded growth if the client spams movement during cooldown.
+        while self.pending_moves.len() > 10 {
+            self.pending_moves.pop_front();
+        }
+    }
+
+    fn is_action_blocked_now(&self) -> bool {
+        let world = self.world.lock().unwrap();
+        let now_ms = world.current_time_ms();
+        if let Some(next) = world.player_next_action_time_ms(self.session_id) {
+            next != 0 && now_ms < next
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn enqueue_for_viewers(&self, map_index: i32, x: i32, y: i32, raw: Vec<u8>) {
         let viewers = {
             let world = self.world.lock().unwrap();
@@ -143,6 +176,11 @@ impl LoginConnection {
             return;
         }
 
+        if self.is_action_blocked_now() {
+            self.enqueue_pending_move(PendingMoveKind::Turn, msg.direction);
+            return;
+        }
+
         let events = {
             let mut world = self.world.lock().unwrap();
             world.handle_command(world::WorldCommand::Turn {
@@ -190,6 +228,11 @@ impl LoginConnection {
 
     pub(crate) fn handle_walk(&mut self, msg: CWalk, out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
+            return;
+        }
+
+        if self.is_action_blocked_now() {
+            self.enqueue_pending_move(PendingMoveKind::Walk, msg.direction);
             return;
         }
 
@@ -247,6 +290,11 @@ impl LoginConnection {
 
     pub(crate) fn handle_run(&mut self, msg: CRun, out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
+            return;
+        }
+
+        if self.is_action_blocked_now() {
+            self.enqueue_pending_move(PendingMoveKind::Run, msg.direction);
             return;
         }
 
