@@ -9,15 +9,17 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use crystal_server_core::account::{
     AccountStatus,
-    AccountStore,
     AccountStorage,
-    StoreError,
-    CharacterSummary,
-    CharacterStats,
+    AccountStore,
     CharacterPosition,
     CharacterRankRow,
-    StoredMail,
+    CharacterStats,
+    CharacterSummary,
+    StoredAccount,
     StoredFriend,
+    StoredHeroState,
+    StoredMail,
+    StoreError,
     hash_password,
     verify_password_hash,
 };
@@ -245,6 +247,14 @@ impl SqliteAccountStore {
                     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS character_hero_state (
+                    account_id   TEXT NOT NULL,
+                    idx          INTEGER NOT NULL,
+                    hero_json    TEXT NOT NULL,
+                    PRIMARY KEY(account_id, idx),
+                    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+                );
+
                 CREATE TABLE IF NOT EXISTS guilds (
                     id          INTEGER PRIMARY KEY,
                     name        TEXT NOT NULL UNIQUE,
@@ -278,6 +288,47 @@ impl SqliteAccountStore {
                 "ALTER TABLE accounts ADD COLUMN wrong_password_count INTEGER NOT NULL DEFAULT 0",
                 [],
             );
+            Ok(())
+        })
+    }
+
+    fn load_character_hero_state_inner(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<StoredHeroState>, StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = Self::map_sql_err(conn.prepare(
+                "SELECT hero_json FROM character_hero_state WHERE account_id = ?1 AND idx = ?2 LIMIT 1",
+            ))?;
+            let mut rows = Self::map_sql_err(stmt.query((account_id, index)))?;
+            if let Some(row) = Self::map_sql_err(rows.next())? {
+                let json: String = Self::map_sql_err(row.get(0))?;
+                let state: StoredHeroState = serde_json::from_str(&json)
+                    .map_err(|e| StoreError::Serde(e.to_string()))?;
+                Ok(Some(state))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
+    fn save_character_hero_state_inner(
+        &self,
+        account_id: &str,
+        index: i32,
+        hero_state: &StoredHeroState,
+    ) -> Result<(), StoreError> {
+        let json = serde_json::to_string(hero_state)
+            .map_err(|e| StoreError::Serde(e.to_string()))?;
+
+        self.with_conn(|conn| {
+            Self::map_sql_err(conn.execute(
+                "INSERT INTO character_hero_state (account_id, idx, hero_json)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(account_id, idx) DO UPDATE SET hero_json = excluded.hero_json",
+                (account_id, &index, &json),
+            ))?;
             Ok(())
         })
     }
@@ -1022,6 +1073,23 @@ impl AccountStore for SqliteAccountStore {
         })
     }
 
+    fn load_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<StoredHeroState>, StoreError> {
+        self.load_character_hero_state_inner(account_id, index)
+    }
+
+    fn save_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+        hero_state: &StoredHeroState,
+    ) -> Result<(), StoreError> {
+        self.save_character_hero_state_inner(account_id, index, hero_state)
+    }
+
     fn load_all_guilds(&self) -> Result<Vec<GuildInfo>, StoreError> {
         self.with_conn(|conn| {
             let mut stmt = Self::map_sql_err(conn.prepare(
@@ -1240,6 +1308,11 @@ enum SaveTask {
         idx: i32,
         friends: Vec<StoredFriend>,
     },
+    CharacterHeroState {
+        account_id: String,
+        idx: i32,
+        hero_state: StoredHeroState,
+    },
     SaveGuild {
         guild: GuildInfo,
     },
@@ -1259,6 +1332,7 @@ struct PendingCharacter {
     guild: Option<(String, u8)>,
     mail: Option<Vec<StoredMail>>,
     friends: Option<Vec<StoredFriend>>,
+    hero_state: Option<StoredHeroState>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1315,6 +1389,14 @@ fn apply_save_task(
         SaveTask::CharacterFriends { account_id, idx, friends } => {
             let entry = chars.entry((account_id, idx)).or_default();
             entry.friends = Some(friends);
+        }
+        SaveTask::CharacterHeroState {
+            account_id,
+            idx,
+            hero_state,
+        } => {
+            let entry = chars.entry((account_id, idx)).or_default();
+            entry.hero_state = Some(hero_state);
         }
         SaveTask::SaveGuild { guild } => {
             let entry = guilds.entry(guild.id.0).or_default();
@@ -1381,6 +1463,10 @@ fn flush_pending(
 
         if let Some(friends) = pending.friends {
             let _ = AccountStore::save_character_friends(&store, &account_id, idx, &friends);
+        }
+
+        if let Some(hero_state) = pending.hero_state {
+            let _ = AccountStore::save_character_hero_state(&store, &account_id, idx, &hero_state);
         }
     }
 
@@ -1769,6 +1855,31 @@ impl AccountStore for AsyncAccountStore {
         self.tx
             .send(task)
             .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_friends failed: {}", e))))
+    }
+
+    fn load_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<StoredHeroState>, StoreError> {
+        let inner = self.sync_store();
+        AccountStore::load_character_hero_state(&inner, account_id, index)
+    }
+
+    fn save_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+        hero_state: &StoredHeroState,
+    ) -> Result<(), StoreError> {
+        let task = SaveTask::CharacterHeroState {
+            account_id: account_id.to_string(),
+            idx: index,
+            hero_state: hero_state.clone(),
+        };
+        self.tx
+            .send(task)
+            .map_err(|e| StoreError::Io(io::Error::new(io::ErrorKind::Other, format!("async save_character_hero_state failed: {}", e))))
     }
 
     fn load_ranking_page(

@@ -696,13 +696,15 @@ impl LoginConnection {
         self.known_players = next_known_players;
 
         // Heroes in view.
-        let mut heroes_in_view: Vec<(world::SessionId, i32, i32, u8)> = players_in_view.clone();
-        heroes_in_view.push((
-            self.session_id,
-            self.current_x,
-            self.current_y,
-            self.direction,
-        ));
+        let mut heroes_in_view: Vec<(world::SessionId, i32, i32, u8)> = Vec::new();
+        if self.hero_spawn_state >= 2 {
+            heroes_in_view.push((
+                self.session_id,
+                self.current_x,
+                self.current_y,
+                self.direction,
+            ));
+        }
 
         let mut visible_hero_owner_ids: HashSet<world::SessionId> = HashSet::new();
         let mut next_known_heroes: HashSet<world::SessionId> = HashSet::new();

@@ -129,6 +129,7 @@ pub(crate) struct LoginConnection {
     pub(crate) hero_next_index: i32,
     pub(crate) hero_current: Option<HeroSummary>,
     pub(crate) hero_storage: Vec<Option<HeroSummary>>,
+    pub(crate) hero_behaviour: u8,
     pub(crate) hero_spell_toggles: HashSet<u8>,
     pub(crate) known_monsters: HashSet<u64>,
     pub(crate) known_npcs: HashSet<i32>,

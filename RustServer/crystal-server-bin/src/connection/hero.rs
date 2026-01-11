@@ -17,9 +17,46 @@ use crystal_shared_proto::hero::{
 use crystal_shared_proto::item::{STakeBackHeroItem, STransferHeroItem};
 use crystal_shared_proto::io::{write_bool, write_i32_le, write_string, write_u16_le};
 
+use crystal_server_core::account::{StoredHeroState, StoredHeroSummary};
+
 use super::{HeroSummary, LoginConnection, Stage};
 
 impl LoginConnection {
+    pub(crate) fn save_hero_state_to_store(&self) {
+        let (Some(account_id), Some(char_idx)) = (self.account_id.as_ref(), self.current_char_index) else {
+            return;
+        };
+
+        let heroes: Vec<Option<StoredHeroSummary>> = self
+            .hero_storage
+            .iter()
+            .take(8)
+            .map(|h| {
+                h.as_ref().map(|hh| StoredHeroSummary {
+                    index: hh.index,
+                    name: hh.name.clone(),
+                    level: hh.level,
+                    class: hh.class,
+                    gender: hh.gender,
+                })
+            })
+            .collect();
+
+        let current_hero_index = self.hero_current.as_ref().map(|h| h.index).unwrap_or(0);
+        let hero_spawned = self.hero_spawn_state >= 2;
+
+        let state = StoredHeroState {
+            maximum_count: self.hero_maximum_count,
+            next_index: self.hero_next_index,
+            current_hero_index,
+            hero_spawned,
+            hero_behaviour: self.hero_behaviour,
+            heroes,
+        };
+
+        let _ = self.store.save_character_hero_state(account_id, char_idx, &state);
+    }
+
     fn encode_client_hero_information(info: &HeroSummary) -> std::io::Result<Vec<u8>> {
         let mut buf = Vec::new();
         write_i32_le(&mut buf, info.index)?;
@@ -33,31 +70,6 @@ impl LoginConnection {
     pub(crate) fn send_manage_heroes(&mut self, out: &mut Vec<Vec<u8>>) {
         if self.stage != Stage::InGame {
             return;
-        }
-
-        if self.hero_current.is_none() {
-            let snapshot_opt = {
-                let world = self.world.lock().unwrap();
-                world.player_inspect_snapshot(self.session_id)
-            };
-
-            if let Some((_name, _guild_name, class, gender, _hair, level, _equipment, _allow_observe)) = snapshot_opt {
-                let hero = HeroSummary {
-                    index: self.hero_next_index,
-                    name: "Hero".to_string(),
-                    level,
-                    class,
-                    gender,
-                };
-                self.hero_next_index = self.hero_next_index.saturating_add(1);
-                self.hero_current = Some(hero.clone());
-                if self.hero_storage.is_empty() {
-                    self.hero_storage = vec![None; 8];
-                }
-                if !self.hero_storage.is_empty() {
-                    self.hero_storage[0] = Some(hero);
-                }
-            }
         }
 
         let mut heroes_bytes = Vec::new();
@@ -142,6 +154,8 @@ impl LoginConnection {
         let pkt = SNewHero { result: 10 };
         out.push(Self::encode_raw(pkt.encode()));
         self.send_manage_heroes(out);
+
+        self.save_hero_state_to_store();
     }
 
     pub(crate) fn handle_set_hero_behaviour(&mut self, msg: CSetHeroBehaviour, out: &mut Vec<Vec<u8>>) {
@@ -149,10 +163,14 @@ impl LoginConnection {
             return;
         }
 
+        self.hero_behaviour = msg.behaviour;
+
         let pkt = SSetHeroBehaviour {
             behaviour: msg.behaviour,
         };
         out.push(Self::encode_raw(pkt.encode()));
+
+        self.save_hero_state_to_store();
     }
 
     pub(crate) fn handle_change_hero(&mut self, msg: CChangeHero, out: &mut Vec<Vec<u8>>) {
@@ -177,6 +195,8 @@ impl LoginConnection {
         if self.hero_spawn_state >= 2 {
             self.send_hero_bootstrap(out);
         }
+
+        self.save_hero_state_to_store();
     }
 
     pub(crate) fn handle_set_auto_pot_value(&mut self, msg: CSetAutoPotValue, out: &mut Vec<Vec<u8>>) {

@@ -73,6 +73,15 @@ impl<P: WorldProvider> World<P> {
             }
         };
 
+        // Match C# MonsterObject.FindTarget: target acquisition is limited by
+        // the pet monster's configured ViewRange.
+        let view_range: i32 = self
+            .provider
+            .get_monster_info(monster.monster_index)
+            .map(|info| info.view_range as i32)
+            .unwrap_or(0)
+            .max(1);
+
         let mut handled = false;
 
         // Guard-style monsters share a small set of AI codes. When the pet's
@@ -117,6 +126,9 @@ impl<P: WorldProvider> World<P> {
 
                 let dx = tx - monster.x;
                 let dy = ty - monster.y;
+                if dx.abs() > view_range || dy.abs() > view_range {
+                    continue;
+                }
                 let ax = dx.abs();
                 let ay = dy.abs();
 
@@ -501,6 +513,9 @@ impl<P: WorldProvider> World<P> {
 
                 let dx = tx - monster.x;
                 let dy = ty - monster.y;
+                if dx.abs() > view_range || dy.abs() > view_range {
+                    continue;
+                }
 
                 if dx == 0 && dy == 0 {
                     continue;
@@ -849,7 +864,18 @@ impl<P: WorldProvider> World<P> {
 
         // If the pet has strayed too far from its owner, snap it back to the
         // owner's current tile.
-        if !handled && dist > leash_distance {
+        //
+        // Match C# MonsterObject.ProcessAI: recall is checked before the rest
+        // of the AI tick and is not suppressed by attack/chase actions.
+        // We approximate that behaviour by recalling even if this tick already
+        // emitted an attack/location event, but only when the owner's PetMode
+        // permits movement.
+        if dist > leash_distance
+            && matches!(
+                pet_mode,
+                PetMode::Both | PetMode::MoveOnly | PetMode::FocusMasterTarget
+            )
+        {
             debug!(
                 "pet_ai_recall_to_owner: pet_id={} kind={:?} map={} from=({}, {}) owner=({}, {}) dist={} leash={} now_ms={}",
                 monster.id,

@@ -120,6 +120,25 @@ pub struct StoredFriend {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StoredHeroSummary {
+    pub index: i32,
+    pub name: String,
+    pub level: u16,
+    pub class: u8,
+    pub gender: u8,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StoredHeroState {
+    pub maximum_count: i32,
+    pub next_index: i32,
+    pub current_hero_index: i32,
+    pub hero_spawned: bool,
+    pub hero_behaviour: u8,
+    pub heroes: Vec<Option<StoredHeroSummary>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StoredAccount {
     pub id: String,
     pub password_hash: String,
@@ -353,6 +372,19 @@ pub trait AccountStore: Send + Sync {
         account_id: &str,
         index: i32,
         friends: &[StoredFriend],
+    ) -> Result<(), StoreError>;
+
+    fn load_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+    ) -> Result<Option<StoredHeroState>, StoreError>;
+
+    fn save_character_hero_state(
+        &self,
+        account_id: &str,
+        index: i32,
+        hero_state: &StoredHeroState,
     ) -> Result<(), StoreError>;
 
     /// Load a page of global character ranking entries for the given RankType.

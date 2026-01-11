@@ -28,15 +28,15 @@ impl LoginConnection {
             world.player_inspect_snapshot(self.session_id)
         };
 
-        let Some((_name, _guild_name, class, gender, hair, level, _equipment, _allow_observe)) = snapshot_opt else {
+        let Some((_name, _guild_name, _class, _gender, hair, _level, _equipment, _allow_observe)) = snapshot_opt else {
             return;
         };
 
-        let (hero_name, hero_class, hero_gender, hero_level) = if let Some(h) = &self.hero_current {
-            (h.name.as_str(), h.class, h.gender, h.level)
-        } else {
-            ("Hero", class, gender, level)
+        let Some(h) = &self.hero_current else {
+            return;
         };
+
+        let (hero_name, hero_class, hero_gender, hero_level) = (h.name.as_str(), h.class, h.gender, h.level);
 
         let Some(stats) = self.current_stats.clone() else {
             return;
@@ -134,6 +134,14 @@ impl LoginConnection {
         let mut linked_user_items: Vec<crystal_shared_proto::item_types::UserItemData> = Vec::new();
 
         if trimmed.eq_ignore_ascii_case("@SUMMONHERO") {
+            if self.hero_current.is_none() {
+                self.hero_spawn_state = 0;
+                let pkt = SUpdateHeroSpawnState { state: 0 };
+                out.push(Self::encode_raw(pkt.encode()));
+                self.save_hero_state_to_store();
+                return;
+            }
+
             let next = if self.hero_spawn_state >= 2 { 1 } else { 2 };
             self.hero_spawn_state = next;
 
@@ -143,6 +151,7 @@ impl LoginConnection {
 
             let pkt = SUpdateHeroSpawnState { state: next };
             out.push(Self::encode_raw(pkt.encode()));
+            self.save_hero_state_to_store();
             return;
         }
 

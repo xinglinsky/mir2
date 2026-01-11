@@ -4328,6 +4328,12 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
 
+                // Match C# summoning behaviour: dead pets do not count towards
+                // summon limits and can be re-summoned.
+                if m.dead || m.hp <= 0 {
+                    continue;
+                }
+
                 total_pets = total_pets.saturating_add(1);
 
                 if m.pet_kind == Some(pet_kind) {
@@ -4497,6 +4503,10 @@ impl<P: WorldProvider> World<P> {
                     continue;
                 }
                 if m.pet_kind != Some(pet_kind) {
+                    continue;
+                }
+                // Match C# Summon* behaviour: only recall a living pet.
+                if m.dead || m.hp <= 0 {
                     continue;
                 }
 

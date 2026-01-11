@@ -9,6 +9,7 @@ use crystal_server_core::account::{
     CharacterSummary,
     StoredMail,
     StoredFriend,
+    StoredHeroState,
 };
 use crystal_server_core::world::{self, WorldProvider};
 use crystal_server_core::world::configs::base_stats;
@@ -103,6 +104,41 @@ impl LoginConnection {
                     out.push(Self::encode_raw(SNewCharacter { result: 0 }.encode()));
                 }
             }
+        }
+    }
+
+    fn apply_loaded_hero_state(&mut self, state: StoredHeroState) {
+        self.hero_maximum_count = state.maximum_count;
+        self.hero_next_index = state.next_index;
+        self.hero_behaviour = state.hero_behaviour;
+        self.hero_spawn_state = if state.hero_spawned {
+            2
+        } else if state.heroes.iter().any(|h| h.is_some()) {
+            1
+        } else {
+            0
+        };
+
+        let mut storage: Vec<Option<super::HeroSummary>> = vec![None; 8];
+        for (i, entry) in state.heroes.into_iter().take(8).enumerate() {
+            storage[i] = entry.map(|h| super::HeroSummary {
+                index: h.index,
+                name: h.name,
+                level: h.level,
+                class: h.class,
+                gender: h.gender,
+            });
+        }
+        self.hero_storage = storage;
+
+        self.hero_current = self
+            .hero_storage
+            .iter()
+            .filter_map(|h| h.clone())
+            .find(|h| h.index == state.current_hero_index);
+
+        if self.hero_current.is_none() {
+            self.hero_current = self.hero_storage.iter().filter_map(|h| h.clone()).next();
         }
     }
 
@@ -273,6 +309,23 @@ impl LoginConnection {
             } else {
                 None
             };
+
+            if let Some(ref account_id) = self.account_id {
+                match self.store.load_character_hero_state(account_id, ch.index) {
+                    Ok(Some(state)) => {
+                        self.apply_loaded_hero_state(state);
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        tracing::debug!(
+                            "load_character_hero_state failed for account_id={} idx={} err={:?}",
+                            account_id,
+                            ch.index,
+                            e,
+                        );
+                    }
+                }
+            }
 
             let stored_friends: Vec<StoredFriend> = if let Some(ref account_id) = self.account_id {
                 self
@@ -687,8 +740,8 @@ impl LoginConnection {
                 experience: stats.experience,
                 max_experience,
                 level_effects: 0,
-                has_hero: true,
-                hero_behaviour: 0,
+                has_hero: self.hero_spawn_state >= 2,
+                hero_behaviour: self.hero_behaviour,
                 gold: stats.gold as u32,
                 credit: stats.credit as u32,
                 has_expanded_storage: account_storage.has_expanded_storage,
@@ -703,76 +756,12 @@ impl LoginConnection {
                 out.push(Self::encode_raw(raw));
             }
 
-            // Minimal hero bootstrap: send HeroInformation so the client can
-            // construct GameScene.Hero (UserHeroObject) and open hero UI.
-            {
-                let hero_id = super::hero_object_id(self.session_id);
-                let mut core_bytes = Vec::new();
-                if write_u32_le(&mut core_bytes, hero_id).is_ok()
-                    && write_string(&mut core_bytes, "Hero").is_ok()
-                {
-                    core_bytes.push(ch.class);
-                    core_bytes.push(ch.gender);
-                    let _ = write_u16_le(&mut core_bytes, ch.level);
-                    core_bytes.push(hair);
-
-                    let _ = write_i32_le(&mut core_bytes, stats.hp);
-                    let _ = write_i32_le(&mut core_bytes, stats.mp);
-
-                    let _ = write_i64_le(&mut core_bytes, stats.experience);
-                    let _ = write_i64_le(&mut core_bytes, max_experience);
-
-                    // Inventory (fixed 46 slots)
-                    let _ = write_bool(&mut core_bytes, true);
-                    let _ = write_i32_le(&mut core_bytes, 46);
-                    for _ in 0..46 {
-                        let _ = write_bool(&mut core_bytes, false);
-                    }
-
-                    // Equipment (fixed 14 slots)
-                    let _ = write_bool(&mut core_bytes, true);
-                    let _ = write_i32_le(&mut core_bytes, 14);
-                    for _ in 0..14 {
-                        let _ = write_bool(&mut core_bytes, false);
-                    }
-
-                    // Magics: count + raw ClientMagic bytes
-                    let _ = write_i32_le(&mut core_bytes, magic_bytes.len() as i32);
-                    for m in &magic_bytes {
-                        core_bytes.extend_from_slice(m);
-                    }
-
-                    let hero_pkt = SHeroInformation {
-                        core_bytes,
-                        auto_pot: false,
-                        auto_hp_percent: 0,
-                        auto_mp_percent: 0,
-                        hp_item_index: -1,
-                        mp_item_index: -1,
-                    };
-                    if let Ok(raw) = hero_pkt.encode() {
-                        out.push(Self::encode_raw(raw));
-                    }
-
-                    let hero_base_stats_bytes = base_stats::encode_base_stats_for_job(job);
-                    let hero_base_stats_pkt = SHeroBaseStatsInfo {
-                        stats_bytes: hero_base_stats_bytes,
-                    };
-                    out.push(Self::encode_raw(hero_base_stats_pkt.encode()));
-
-                    let hero_hc_pkt = SHeroHealthChanged {
-                        hp: stats.hp,
-                        mp: stats.mp,
-                    };
-                    if let Ok(raw) = hero_hc_pkt.encode() {
-                        out.push(Self::encode_raw(raw));
-                    }
-
-                    // Tell the client that the hero is spawned so hero panels
-                    // become visible.
-                    let state_pkt = SUpdateHeroSpawnState { state: 2 };
-                    out.push(Self::encode_raw(state_pkt.encode()));
-                }
+            if self.hero_spawn_state >= 2 {
+                self.send_hero_bootstrap(out);
+                let state_pkt = SUpdateHeroSpawnState {
+                    state: self.hero_spawn_state,
+                };
+                out.push(Self::encode_raw(state_pkt.encode()));
             }
 
             if !map_info_core.no_teleport {
